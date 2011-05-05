@@ -8,34 +8,64 @@ uuid: 2d33c4ab-0986-4815-87c9-8833aa1eb148
 All my projects are hosted on
 [GitHub](https://github.com/vincentbernat). Here is a few of them:
 
- * [lldpd][1] is a [802.1AB][2] daemon. It sends and receives LLDP
-   frames which enables remote L2 equipments to determine which
-   equipment is remotely present. Those frames contain information
-   like the equipment name, the portname, VLAN, etc. This daemon
-   features SNMP support and also supports additional protocols like
-   [CDP][3], SONMP and EDP.
- * [wiremaps][4] is a web application similar to [NetDisco][5]. Its
-   main aim is to answer questions about your network like “where is
-   this machine plugged in my datacenter” or “what equipment is
-   plugged on the port 10 of this switch”. Various bit of information
-   are retrieved using SNMP such as LLDP, FDB and ARP databases.
- * [snimpy][6] is a Python tool targeted at writting simple tool using
-   SNMP queries. It features a very pythonic interface. Any Python
-   developer should feel at home with it. Here is a use example:
+# lldpd
 
-        #!python
-        load("IP-FORWARD-MIB")
-        m=M()
+*[lldpd][1]* is a [802.1AB][2] daemon. It sends and receives *LLDP*
+frames which enables remote L2 equipments to determine which equipment
+is remotely present. Those frames contain information like the
+equipment name, the portname, VLAN, etc. This daemon features SNMP
+support and also supports additional protocols like [CDP][3], SONMP
+and EDP.
 
-        print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
-        routes = m.ipCidrRouteNextHop
-        for x in routes:
-             net, netmask, tos, src = x
-             print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
+Here is an example of output:
 
- * *[udpproxy][7]* allows to tunnel *UDP* datagrams into a SSH tunnel
-   with the help of `NFQUEUE` target from Netfilter. This enables easy
-   selection of flow to be tunneled.   
+    Interface: tun-cisco
+     ChassisID: ciscotest (local)
+     SysName:   ciscotest
+     SysDescr:  
+       cisco 7206VXR running on
+       Cisco Internetwork Operating System Software 
+       IOS (tm) 7200 Software (C7200-P-M), Version 12.2(46), RELEASE SOFTWARE (fc1)
+       Copyright (c) 1986-2007 by cisco Systems, Inc.
+       Compiled Thu 26-Apr-07 21:56 by pwade
+     MgmtIP:    172.19.18.2
+     Caps:      Station(E) 
+
+     PortID:    ca:00:50:7b:00:00 (MAC)
+     PortDescr: FastEthernet0/0
+
+       Autoneg: not supported/not enabled
+       MAU oper type: unknown (0)
+
+# Wiremaps
+
+*[wiremaps][4]* is a web application similar to [NetDisco][5]. Its
+main aim is to answer questions about your network like “where is
+this machine plugged in my datacenter” or “what equipment is
+plugged on the port 10 of this switch”. Various bit of information
+are retrieved using SNMP such as LLDP, FDB and ARP databases.
+
+# snimpy
+   
+*[snimpy][6]* is a Python tool targeted at writting simple tool using
+SNMP queries. It features a very pythonic interface. Any Python
+developer should feel at home with it. Here is a use example:
+
+    #!python
+    load("IP-FORWARD-MIB")
+    m=M()
+
+    print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
+    routes = m.ipCidrRouteNextHop
+    for x in routes:
+         net, netmask, tos, src = x
+         print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
+
+# udpproxy
+
+*[udpproxy][7]* allows to tunnel *UDP* datagrams into a SSH tunnel
+with the help of `NFQUEUE` target from Netfilter. This enables easy
+selection of flow to be tunneled.   
 
 [1]: https://github.com/vincentbernat/lldpd/wiki
 [2]: http://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol
@@ -43,6 +73,7 @@ All my projects are hosted on
 [4]: https://github.com/vincentbernat/wiremaps/wiki
 [5]: http://www.netdisco.org
 [6]: https://github.com/vincentbernat/snimpy
+[7]: https://github.com/vincentbernat/udpproxy
 
 
 {% endmarkdown %}

@@ -8,37 +8,67 @@ uuid: 2d33c4ab-0986-4815-87c9-8833aa1eb148
 Les projets auxquels je contribue sont hébergés sur
 [GitHub](https://github.com/vincentbernat). En voici quelques uns :
 
- * *[lldpd][1]* est un démon implémentant la norme [802.1AB][2]. Il
-   permet d'envoyer des trames *LLDP* afin de notifier aux équipements
-   connectés à la machine des informations telles que le nom de la
-   machine, le nom du port, les VLAN présents, etc. Il gère également
-   la réception ce qui autorise à déterminer que la machine est
-   branchée sur tel port de tel équipement. Parmi les fonctionnalités
-   intéressantes de ce démon, on notera le support de SNMP ainsi que
-   des protocoles [CDP][3], SONMP et EDP.
- * *[wiremaps][4]* est une application web similaire à [NetDisco][5]
-   dont le but principal est de répondre aux questions du type
-   « quelle machine est branchée sur le port de ce switch » ou « sur
-   quel switch se trouve cette machine ». Diverses informations sont
-   collectées par SNMP telles que les bases LLDP, FDB ou ARP.
- * *[snimpy][6]* est un outil Python destiné à faciliter la création
-   d'outils simples utilisant des requêtes SNMP. Son interface est
-   très naturelle. Voici un example d'utilisation :
+# lldpd
 
-        #!python
-        load("IP-FORWARD-MIB")
-        m=M()
+*[lldpd][1]* est un démon implémentant la norme [802.1AB][2]. Il
+permet d'envoyer des trames *LLDP* afin de notifier aux équipements
+connectés à la machine des informations telles que le nom de la
+machine, le nom du port, les VLAN présents, etc. Il gère également
+la réception ce qui autorise à déterminer que la machine est
+branchée sur tel port de tel équipement. Parmi les fonctionnalités
+intéressantes de ce démon, on notera le support de SNMP ainsi que
+des protocoles [CDP][3], SONMP et EDP.
 
-        print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
-        routes = m.ipCidrRouteNextHop
-        for x in routes:
-             net, netmask, tos, src = x
-             print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
+Voici un example de sortie :
 
- * *[udpproxy][7]* permet de tunneler des requêtes *UDP* dans des
-   tunnels SSH en utilisant la cible `NFQUEUE` de Netfilter. Il est
-   ainsi possible de choisir quels sont les flux UDP à envoyer via le
-   proxy.
+    Interface: tun-cisco
+     ChassisID: ciscotest (local)
+     SysName:   ciscotest
+     SysDescr:  
+       cisco 7206VXR running on
+       Cisco Internetwork Operating System Software 
+       IOS (tm) 7200 Software (C7200-P-M), Version 12.2(46), RELEASE SOFTWARE (fc1)
+       Copyright (c) 1986-2007 by cisco Systems, Inc.
+       Compiled Thu 26-Apr-07 21:56 by pwade
+     MgmtIP:    172.19.18.2
+     Caps:      Station(E) 
+
+     PortID:    ca:00:50:7b:00:00 (MAC)
+     PortDescr: FastEthernet0/0
+
+       Autoneg: not supported/not enabled
+       MAU oper type: unknown (0)
+
+# wiremaps
+
+*[wiremaps][4]* est une application web similaire à [NetDisco][5]
+dont le but principal est de répondre aux questions du type
+« quelle machine est branchée sur le port de ce switch » ou « sur
+quel switch se trouve cette machine ». Diverses informations sont
+collectées par SNMP telles que les bases LLDP, FDB ou ARP.
+
+# snimpy
+
+*[snimpy][6]* est un outil Python destiné à faciliter la création
+d'outils simples utilisant des requêtes SNMP. Son interface est
+très naturelle. Voici un example d'utilisation :
+
+     #!python
+     load("IP-FORWARD-MIB")
+     m=M()
+
+     print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
+     routes = m.ipCidrRouteNextHop
+     for x in routes:
+          net, netmask, tos, src = x
+          print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
+
+# udpproxy
+
+*[udpproxy][7]* permet de tunneler des requêtes *UDP* dans des
+tunnels SSH en utilisant la cible `NFQUEUE` de Netfilter. Il est
+ainsi possible de choisir quels sont les flux UDP à envoyer via le
+ proxy.
    
 [1]: https://github.com/vincentbernat/lldpd/wiki
 [2]: http://fr.wikipedia.org/wiki/Link_Layer_Discovery_Protocol
