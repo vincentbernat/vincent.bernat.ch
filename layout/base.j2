@@ -98,12 +98,19 @@
     </ul>
   </footer>
 
-
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.5/jquery.min.js"></script>
+  {# Load remaining scripts #}
   <script>
-    window.jQuery || document.write('<script src="js/libs/jquery-1.5.2.min.js">\x3C/script>')
+    yepnope([{
+       load: '//ajax.googleapis.com/ajax/libs/jquery/1.5.2/jquery.min.js',
+       complete: function () {
+           if (!window.jQuery) {
+	       yepnope('{{ media_url("js/libs/jquery-1.5.2.min.js") }}');
+	   }
+       }
+     },{
+       load: '{{ media_url("js/luffy.js") }}',
+     }]);
   </script>
-  <script src="{{ media_url('js/luffy.js') }}"></script>
 
   {% include "analytics.j2" %}
 </body>
