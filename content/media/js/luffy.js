@@ -5,6 +5,8 @@ combine:
     remove: yes
 ---
 
-luffy.effects();
-luffy.search();
-luffy.timeago();
+$(function() {
+    luffy.effects();
+    luffy.search();
+    luffy.timeago();
+});

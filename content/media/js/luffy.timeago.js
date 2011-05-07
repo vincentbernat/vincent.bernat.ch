@@ -23,14 +23,12 @@ luffy.timeago = function() {
     };
 
     return (function() {
-	$(function() {
-	    /* Grab current language from `lang` attribute */
-	    var lang = $("html").attr("lang") || "en";
-	    if ('undefined' !== typeof translations[lang]) {
-		jQuery.timeago.settings.strings = translations[lang];
-	    }
-	    $("time.timeago").timeago();
-	});
+	/* Grab current language from `lang` attribute */
+	var lang = $("html").attr("lang") || "en";
+	if ('undefined' !== typeof translations[lang]) {
+	    jQuery.timeago.settings.strings = translations[lang];
+	}
+	$("time.timeago").timeago();
     });
 }();
 
