@@ -1,0 +1,123 @@
+---
+title: Migrating from Trac to GitHub
+keywords: "trac, github"
+uuid: db62a779-a462-43a5-971f-0c06287c2944
+---
+
+I was hosting my [projects][1] on several
+[Trac](http://trac.edgewall.org/) instances on a dedicated
+server. However, since several months, spam was pourring.
+
+[1]: [[en/projets.html]]
+
+# Trac & spam
+
+## How to fight spam with Trac
+
+There is not built-in mechanism in Trac to fight spam. However, 
+[plugins](http://trac.edgewall.org/wiki/SpamFilter) enable to setup
+several ways to stop spam (or at least, reduce it).
+
+One of them is [Akismet](http://akismet.com/), a web service
+who can tell you if some message is a spam or not. It is able to catch
+most of the spam. A bayesian filter complement this service. A
+learning step is mandatory and can become cumbersome when the vast
+majority of the tickets you receive is just spam. I used those two
+mechanisms on my Trac instances.
+
+Another path is to require an account to post a ticket. Creating an
+account each time you want to create a ticket for some software is
+burdensome. I did not want to do this to the poor souls that have
+found a bug in one of my projects. An alternative is to setup a public
+account and adding somewhere in the page some instructions on how to
+use it when you want to open a ticket but don't want to open an account.
+
+## Removing spam
+
+Despite Akismet and the bayesian filter, I still got two or three
+spams a day. I catched them in my RSS flow or in my email if they were
+not classified as spam.
+
+There are two steps to remove the spam:
+
+ * tell the bayesian filter by using the administration panel in the
+   web interface,
+ * remove the spam from the database using some SQLite commands
+   directly on the server hosting the Trac instance.
+
+Indeed, Trac does not propose the possibility to remove a ticket. Of
+course, there are plugins, but you must find them, install them, find
+how to configure them, etc.
+
+Cumbersome.
+
+# GitHub
+
+[GitHub](https://github.com) is a popular source code hosting service
+which uses [Git](http://git-scm.com/) as a backend. This is a
+proprietary platform but a lot of open source projects have migrated
+to it, thanks to its features and the good performances.
+
+Everybody is on GitHub. This was the ideal opportunity.
+
+## Features
+
+First, GitHub allows to host Git repository. You push your Git
+repositories. There is a nice and fast web interface to browse
+them. However, I still keep an instance of
+[cgit](http://cgit.luffy.cx).
+
+Then, GitHub is very popular because they drive people to fork
+projects. With one single click, you can fork your favorite
+project. You get a copy which is synchronised with the forked project.
+
+There is also a wiki (accepting many markup syntaxes). This wiki is
+also available through Git.
+
+At last, GitHub offers a minimalistic ticket system. You open a
+ticket, you make some comments, you can add a tag or two and you can
+close it. That's all. Quite light. But enough for small projects like
+mine.
+
+However, there is more! Do not open a ticket to send a patch. There is
+no way to attach files to tickets. You need to fork the project,
+create a branch with your patch and request a "pull" for your
+branch. This will appear as a ticket but your commits will be linked
+to it. The author can then review and comment your branch, ask for
+some changes and if he wants to integrate it, a simple merge is
+sufficient. He can even do it using the web interface. Convenient.
+
+Socially, you can comment commits, tickets, projects and subscribe to
+a lot of events. You can receive and answers tickets by mail.
+
+However, an accound is mandatory to open a ticket. Since there is a
+lot of projects on GitHub, this account should be useful for a lot of
+software.
+
+To cut a long story short, even if GitHub is a proprietary platform,
+it offers nice and interesting features. More and more projects
+migrate from [Google Code](http://code.google.com) to GitHub even if
+there is less features on the latter.
+
+## Migration
+
+I have searched for tools to migrate automatically tickets from Trac
+to GitHub. For example, there is [SD](http://syncwith.us/sd/).
+
+At last, I have done it manually. GitHub API is well documented and
+there exists bindings in various languages including Python but it is
+a very limited API. You can't choose the number of the ticket nor its
+date.
+
+I have also rewritten `README` files to use the markdown markup and
+avoid the use of wiki pages when possible.
+
+I have also put some URL redirections with the help of nginx.
+
+In conclusion, even if maintaining Trac instances was not a lot of
+work, one thing that I do not have to do anymore. And no spam on
+GitHub, I assume.
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

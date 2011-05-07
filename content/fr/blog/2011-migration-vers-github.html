@@ -1,0 +1,137 @@
+---
+title: Migration de Trac vers GitHub
+keywords: "trac, github"
+uuid: db62a779-a462-43a5-971f-0c06287c2944
+---
+
+J'hébergeais jusqu'à récemment l'ensemble de mes [projets][1] sur des
+instances de [Trac](http://trac.edgewall.org/) sur un serveur
+dédié. Toutefois, depuis quelques mois, le spam dans les tickets
+devenait envahissant.
+
+[1]: [[fr/projets.html]]
+
+# Le spam & Trac
+
+## Les mécanismes pour combattre le spam
+
+Par défaut, Trac ne propose pas de mécanisme pour lutter contre le
+spam. Il existe cependant des
+[plugins](http://trac.edgewall.org/wiki/SpamFilter) qui permettent de
+conjuguer plusieurs mécanismes pour arrêter le spam.
+
+Un de ces mécanismes est [Akismet](http://akismet.com/) un web service
+qui décide si le contenu soumis est un spam ou non. Ce service permet
+de capturer la majorité du spam. En complément, il est possible de
+mettre en œuvre un filtre bayésien. Ce dernier nécessite un
+apprentissage pour être efficace, ce qui peut s'avérer difficile quand
+la majeure partie du contenu est du spam. Ce sont ces deux mécanismes
+que j'utilisais sur mes instances de Trac.
+
+Une autre approche est d'imposer la création d'un compte pour poster
+des tickets. C'est une approche que je ne voulais pas utiliser. En
+effet, il est assez pénible de devoir s'inscrire sur un site rien que
+pour pouvoir envoyer un rapport de bug. Une solution alternative était
+de créer un compte générique avec des instructions quelque part sur la
+page pour indiquer aux personnes susceptibles de créer un ticket qu'il
+était possible d'utiliser ce compte.
+
+## Retirer le spam
+
+Malgré les diverses protections, deux ou trois spams parvenaient à
+passer par jour. Je les voyais passer dans mon flux RSS, parfois dans
+ma boîte email s'ils n'étaient pas considéré comme des spams.
+
+Une fois le spam repéré, il y a deux étapes distinctes à effectuer :
+
+ * indiquer au filtre bayésien que le ticket en question est un spam
+   en se rendant dans le panel d'administration de l'interface web,
+ * retirer le ticket de la base de données à l'aide de quelques
+   commandes SQLite directement sur le serveur hébergeant l'instance
+   Trac.
+
+En effet, Trac ne propose pas la possibilité pour un administrateur de
+supprimer un ticket. Il existe bien sûr des plugins, mais il faut les
+installer, les maintenir, etc.
+
+Bref, c'était pénible.
+
+# GitHub
+
+[GitHub](https://github.com) est une plateforme d'hébergement de code
+très prisée et centrée autour de [Git](http://git-scm.com/). Malgré le
+fait qu'il s'agisse d'une plate-forme fermée, beaucoup de projets
+libres ont été séduits par les fonctionnalités et les performances de
+celle-ci.
+
+Tout le monde est sur GitHub. Voilà l'occasion d'y passer aussi.
+
+## Fonctionnalités
+
+Avant tout, GitHub est un hébergement de dépôts Git. On y pousse une
+copie de ses dépôts Git. Il propose de plus une interface web assez
+sympa et réactive pour naviguer dedans. Je garde toutefois mon
+instance de [cgit](http://cgit.luffy.cx).
+
+Ensuite, GitHub s'est rendu très populaire en poussant au maximum les
+gens à forker les projets. Ainsi, en un seul clic, il est possible de
+clôner un projet qui nous paraît sympathique et le voilà dans notre
+liste de projets.
+
+GitHub propose également un petit wiki acceptant diverses syntaxes. Ce
+wiki est également accessible via Git.
+
+Enfin, GitHub propose une gestion des tickets très minimaliste. On
+ouvre un ticket, on commente un peu, on peut ajouter des tags et on
+peut fermer le ticket. Rien de plus. C'est parfois un peu léger, mais
+cela permet de s'en sortir pour des projets assez simples.
+
+Ce n'est pas tout. Si on veut proposer un patch, inutile d'ouvrir un
+ticket. D'ailleurs, on ne peut pas attacher de fichiers quand on ouvre
+un ticket. Ce qu'il faut faire, c'est forker, créer une branche,
+mettre son patch et réclamer un « pull request » sur la branche en
+question. Cela crée automatiquement un ticket avec les références de
+la branche. L'auteur peut intégrer le patch avec un simple clic et le
+bug se ferme à ce moment là. Très pratique. Faut juste jongler avec
+les branches.
+
+Niveau social, on peut commenter les commits, les tickets, les
+projets et s'abonner à tout un tas d'évènements. Il n'est pas
+nécessaire de se coltiner l'interface web toute la journée puisqu'il
+est possible d'interagir par mail avec le système de tickets en
+répondant simplement aux messages que l'on reçoit.
+
+Notons toutefois qu'il faut avoir un compte pour ouvrir un
+ticket. Cependant, cela devient assez courant de nos jours et cela
+servira pour tout un tas d'autres projets.
+
+Bref, bien que propriétaire, GitHub propose des fonctionnalités très
+intéressantes et bien réalisées. On voit de plus en plus de projets
+qui migre de [Google Code](http://code.google.com) vers GitHub bien
+que ce dernier soit beaucoup plus basique.
+
+## Migration
+
+J'ai cherché des outils permettant de migrer automatiquement les bugs
+enregistrés au niveau de Trac dans le projet correspondant sur
+GitHub. Il existe notamment [SD](http://syncwith.us/sd/).
+
+Au final, j'ai tout fait à la main en recopiant les quelques pages des
+wikis et les tickets quand ceux-ci étaient encore ouvert. L'API de
+GitHub est certes bien documentée (il existe des outils pour
+l'utiliser) mais elle est on ne peut plus minimaliste. On ne peut pas
+choisir le numéro du ticket qu'on ouvre, ni sa date.
+
+J'ai également réécrit les fichiers `README` des différents projets
+pour exploiter la syntaxe markdown et éviter l'utilisation du wiki
+si possible.
+
+Enfin, j'ai mis en place une redirection des instances Trac vers
+GitHub au niveau du nginx.
+
+Au final, même si cela n'était pas beaucoup de travail, plus besoin de
+maintenir les instances Trac. Et, a priori, pas de spam sur GitHub.
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
