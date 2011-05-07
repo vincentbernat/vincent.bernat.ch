@@ -1,0 +1,124 @@
+---
+title: Nouveau site avec Hyde
+keywords: "hyde, web, python, statique"
+uuid: 5f6db065-38d1-4b64-af20-de632ad0f39b
+---
+
+Mon site web était jusqu'à récemment géré par le `mod_autoindex`
+d'Apache. Plutôt basique. Voilà donc un nouveau site, entièrement
+statique et généré par [Hyde](https://github.com/hyde/hyde), un
+générateur de site statique en Python.
+
+# Statique ou dynamique ?
+
+Depuis que nous sommes entrés dans le nouveau millénaire, la mode est
+plutôt aux sites dynamiques. Souvent en PHP avec un moteur comme
+[DotClear](http://fr.dotclear.org) ou
+[WordPress](http://fr.wordpress.com/), parfois faits à la main dans son
+langage préféré. Aujourd'hui, la problématique de l'hebergément est
+beaucoup plus simple : pour pas très cher, il est possible d'obtenir
+un serveur virtuel sur lequel on fait ce que l'on veut.
+
+Toutefois, les sites dynamiques ont plusieurs défauts :
+
+ * Il faut surveiller de manière très attentive les mises à jour de
+   sécurité, certaines plateformes étant plus vulnérables que d'autres.
+ * La montée en charge peut être très problématique, même pour un
+   petit site qui pourrait avoir à absorber momentanément un pic de
+   charge.
+
+Avec un site statique, les problèmes de sécurité sont moindre vu qu'il
+y a moins d'élements qui entrent en jeu. La montée en charge est aussi
+beaucoup plus simple. Un site sous [nginx](http://wiki.nginx.org/)
+peut supporter des milliers de connexions par seconde sans aucun
+problème (mais limité par la bande passante). Pour un site dynamique,
+les performances seront beaucoup plus basses : quelques centaines de
+connexions par seconde.
+
+L'hébergement peut de plus se faire sur des plateformes plus simple,
+comme par exemple [Amazon S3](http://aws.amazon.com/s3/).
+
+De plus, même avec un site statique, il est possible d'opter pour un
+système de commentaires en utilisant un système comme
+[Disqus](http://disqus.com/). L'omniprésence de Javascript permet
+un peu de marier les deux mondes.
+
+# Hyde
+
+[Hyde](https://github.com/hyde/hyde) est un générateur de site
+statique écrit en Python. Il en existe beaucoup d'autres. Il y a une
+[question sur le sujet][1] qui a obtenu pas mal de réponses sur
+[StackOverflow][2]. Il y a également une liste assez complète sur
+[ce blog][3]. Si vous êtes plutôt Ruby, il me semble que [nanoc][4] et
+[Webgen][5] sont de bons candidats.
+
+Revenons à Hyde. Il a été réécrit récemment et la documentation n'est
+pas encore tout à fait à jour. Il faut donc lire le code source pour
+bien comprendre ce qu'il peut faire et comment. Tout s'articule autour
+de plugins et j'espère que ce ne sera pas trop le bazar dans un an
+(j'y [contribue][6]).
+
+## Fonctionnalités
+
+Il vous prend donc vos fichiers et vous les fait passer dans tout un
+tas de moulinettes pour arriver au site final. Il utilise [Jinja][7]
+comme système de templating, [Markdown][10] comme syntaxe pour écrire
+les textes, [Less][8] pour écrire du CSS de manière assez pratique (et
+le minifier), [UglifyJS][9] pour minimiser le Javascript, etc. Il est
+possible d'attacher des métadonnées aux fichiers (titre, auteur, date
+de création).
+
+[1]: http://stackoverflow.com/questions/186290/best-static-website-generator
+[2]: http://stackoverflow.com/
+[3]: http://iwantmyname.com/blog/2011/02/list-static-website-generators.html
+[4]: http://nanoc.stoneship.org/
+[5]: http://webgen.rubyforge.org/
+[6]: https://github.com/vincentbernat/hyde
+[7]: http://jinja.pocoo.org/
+[8]: http://lesscss.org/
+[9]: https://github.com/mishoo/UglifyJS
+[10]: http://daringfireball.net/projects/markdown/
+
+Au final, on fait un peu ce qu'on veut. Du coup, il faut aussi un peu
+tout faire soi-même.
+
+Dans les aspects pratiques, un petit serveur web est fourni et il
+regenère les fichiers à la volée quand on fait des
+modifications. C'est vraiment pratique mais classique pour ce genre de
+logiciel.
+
+# Nouveau site
+
+Voilà donc un site supplémentaire réalisé avec Hyde. Parmi les
+caractéristiques notables, il faut noter que la plupart des articles
+sont en Anglais et en Français. Ceci est géré par un petit
+[plugin](https://github.com/vincentbernat/hyde/tree/multi-language-plugin)
+dans Hyde. Je suis assez content du résultat.
+
+Niveau technique, je ne sers un seul fichier CSS (minifié) et le
+gros du Javascript et servi dans un seul fichier (minifié aussi) et
+chargé avec ses dépendances ([jQuery](http://jquery.com/)) à l'aide
+d'un petit loader qui fait partie de
+[Modernizr](http://www.modernizr.com/) et qui est
+[yepnope.js](http://yepnopejs.com/). Je vais tenter de mettre en œuvre
+les bonnes pratiques du moment. Je vise la compatibilité avec Firefox
+3, Internet Explorer 7 (pas d'Internet Explorer 6 !), Chrome et Safari
+dans des versions suffisamment récents.
+
+Niveau habillage, j'ai toujours été indécis. Je suis impressionné par
+[certains][11] [sites][12] [très sobres][13] mais aussi par d'autres
+plus [sophistiqués][14]. J'ai tenté de choisir un juste milieu, plutôt
+côté sobre vu que cela permet de ne pas trop mettre à contribution mes
+talents graphiques.
+
+Les sources sont disponibles sur [GitHub pour les curieux][15] !
+
+[11]: http://cloudhead.io
+[12]: http://diveintohtml5.org/
+[13]: http://blog.stackoverflow.com/
+[14]: http://www.marcofolio.net/
+[15]: https://github.com/vincentbernat/www.luffy.cx
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
