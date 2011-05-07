@@ -7,3 +7,4 @@ combine:
 
 luffy.effects();
 luffy.search();
+luffy.timeago();
