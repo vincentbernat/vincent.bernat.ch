@@ -1,0 +1,29 @@
+{% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
+{% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
+{% if resource.translations or previous or next %}
+  <nav id="lf-links">
+{# Translations #}
+{% if resource.translations %}
+    <p>{{ resource.meta.l10n.translations }}</p>
+    <ul>
+      {% for translation in resource.translations %}
+      <li><a href="{{ translation.full_url }}">
+	  {{ languages[translation.meta.language] }}
+	</a></li>
+      {% endfor %}
+    </ul>
+{% endif %}
+{# Navigation in blog posts #}
+{% if previous or next %}
+    <p>{{ resource.meta.l10n.posts }}</p>
+    <ul>
+{% if previous %}
+<li><a href="{{ previous.full_url }}">{{ resource.meta.l10n.previous }}</a></li>
+{% endif %}
+{% if next %}
+<li><a href="{{ next.full_url }}">{{ resource.meta.l10n.next }}</a></li>
+{% endif %}
+    </ul>
+{% endif %}
+  </nav>
+{% endif %}

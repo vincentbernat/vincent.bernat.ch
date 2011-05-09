@@ -1,17 +1,15 @@
 {# List blog posts pertaining to a given language #}
 
 {% macro list_posts(site, lang) %}
-{% filter typogrify %}
 <ul>
-{% for resource in site.content.walk_resources_sorted_by_time()
-   if resource.relative_path[:2] == lang -%}
+{% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang) %}
+{% for resource in sort() -%}
   <li>
-<a href="{{ resource.name }}">{{ resource.meta.title }}</a>
+<a href="{{ resource.full_url }}">{{ resource.meta.title }}</a>
 <span style="float: right">{{ resource_date(resource) }}</span>
   </li>
 {% endfor %}
 </ul>
-{% endfilter %}
 {% endmacro %}
 
 {% macro resource_date(resource) %}
