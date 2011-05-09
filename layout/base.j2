@@ -43,18 +43,13 @@
     <div id="lf-page">
       <article>
 	<header>
-	  {% block header %}
 	  <h1>{{resource.meta.title}}</h1>
-	  <h2>{{resource.meta.author}}</h2>
-	  {% if resource.meta.created is defined %}
-	  <time class="timeago" datetime="{{ resource.meta.created.strftime('%Y-%m-%dT%H:%M:%S%z') }}" pubdate>
-	    {{ resource.meta.created.strftime('%a, %d %b %Y') }}
-	  </time>
-	  {% endif %}
-	  {% endblock header %}
+	  {% if resource.meta.author != None %}<h2>{{resource.meta.author}}</h2>{% endif %}
+{% from "macros.j2" import resource_date %}
+{{ resource_date(resource) }}
 	</header>
 {% filter markdown|typogrify -%}
-{% block main -%}{%- endblock main %}
+{% block article -%}{%- endblock article %}
 {%- endfilter %}
       </article>
     </div>
