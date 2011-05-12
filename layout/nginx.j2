@@ -1,0 +1,41 @@
+{# nginx configuration to be included #}
+index         index.html;
+try_files     $uri $uri/;
+error_page    404 = {{content_url('/en/404.html')}};
+
+location = /nginx.conf {
+  expires     max;
+  return      404;
+}
+
+{# language selection #}
+{% for code, lang in languages %}
+location /{{code}} {
+  error_page  404 = {{content_url('/' + code + '/404.html')}};
+}
+{% endfor %}
+location = / {
+{% for code, lang in languages %}
+  if ($http_accept_language ~* ^{{code}}) {
+    add_header Vary Accept-Language;
+    rewrite ^ /{{code}}/ permanent;
+  }
+{% endfor %}
+{# If not found in the first language, redirect to english #}
+  add_header  Vary Accept-Language;
+  rewrite ^   /en/ permanent;
+}
+
+{# expiration #}
+location ~ ^{{content_url('/media/js/libs')}}/.*\.js$ {
+  expires     max;
+}
+location {{content_url('/media/fonts')}} {
+  expires     max;
+}
+location ~ ^{{content_url('/media/favicon.ico')}}$ {
+  expires     max;
+}
+location {{content_url('/media')}} {
+  expires     10d;
+}
