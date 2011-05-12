@@ -9,4 +9,5 @@ $(function() {
     luffy.effects();
     luffy.search();
     luffy.timeago();
+    luffy.comments();
 });
