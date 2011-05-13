@@ -6,7 +6,7 @@ luffy.effects = function() {
     $("#lf-page-1,#lf-page-2")
 	.css("height",$("#lf-page").innerHeight()).show();
     /* Animate the language box */
-    $("#lf-translations").css('left',
-			      '-' + $("#lf-translations").css('width'))
+    $("#lf-links").css('left',
+		       '-' + $("#lf-links").css('width'))
 	.animate({left: 0}, 'slow');
 };
