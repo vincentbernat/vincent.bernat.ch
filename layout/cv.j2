@@ -1,0 +1,35 @@
+{# -*- html -*- #}
+{% extends "base.j2" %}
+
+{% block stylesheets %}
+  <link rel="stylesheet" href="{{ media_url('css/cv.css') }}" type="text/css" />
+{% endblock %}
+
+{% block header %}
+  <h1>Vincent Bernat</h1>
+  <div class="lf-cv-phone">+33 6 18 39 27 54</div>
+  <a href="mailto:vincent@bernat.im">vincent@bernat.im</a><br/>
+  <a href="http://bernat.im">http://bernat.im</a>
+  <address>
+    39 quai de l'Ourcq<br />
+    93500 Pantin<br />France
+  </address>
+  <img src="{{ media_url('images/vcard.png')}}" />
+{% endblock %}
+
+{% block main %}
+<div id="lf-cv">
+{{ super() }}
+</div>
+{% endblock %}
+
+{% macro cvblock(label, place=None, position=None) %}
+  <div class="lf-cv-block">
+    <div class="lf-cv-label">{{ label }}</div>
+    <div class="lf-cv-content">
+      {% if place %}<h3>{{ place }}</h3>{% endif %}
+      {% if position %}<div class="lf-cv-position">{{ position }}</div>{% endif %}
+      <div class="lf-cv-description">{{ caller() }}</div>
+    </div>
+  </div>
+{% endmacro %}

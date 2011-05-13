@@ -15,7 +15,7 @@
   <link rel="shortcut icon" href="{{ media_url('favicon.ico') }}" />
   <link rel="alternate" href="{{ content_url( resource.meta.language + '/blog/atom.xml') }}" type="application/atom+xml" title="ATOM feed" />
   <link rel="stylesheet" href="{{ media_url('css/luffy.css') }}" type="text/css" />
-
+{% block stylesheets %}{% endblock %}
   <script src="{{ media_url('js/libs/modernizr-1.7.min.js') }}"></script>
 </head>
 <body {% if resource.meta.class is defined %}class="lf-{{ resource.meta.class }}"{% endif %}>
@@ -44,15 +44,19 @@
     <div id="lf-page">
       <article>
 	<header>
+{% block header %}
 	  <h1>{{resource.meta.title}}</h1>
 	  {% if resource.meta.author != None %}<h2>{{resource.meta.author}}</h2>{% endif %}
 {% from "macros.j2" import resource_date with context %}
 {{ resource_date(resource) }}
+{% endblock %}
 	</header>
+{% block main %}
 {% filter markdown|typogrify -%}
 {% mark article -%}{% block article -%}{%- endblock %}{%- endmark %}
 {%- endfilter %}
 {% include "comments.j2" %}
+{% endblock %}
       </article>
     </div>
   </div>
