@@ -1,6 +1,7 @@
+{# -*- html -*- #}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
-{% if resource.translations or previous or next %}
+{% if resource.translations or previous or next or resource.meta.attachments %}
   <nav id="lf-links">
 {# Translations #}
 {% if resource.translations %}
@@ -23,6 +24,15 @@
 {% if next %}
 <li><a href="{{ content_url(next.url) }}">{{ resource.meta.l10n.next }}</a></li>
 {% endif %}
+    </ul>
+{% endif %}
+{# Attachments #}
+{% if resource.meta.attachments %}
+    <p>{{ resource.meta.l10n.attachments }}</p>
+    <ul>
+{% for file, description in resource.meta.attachments %}
+<li><a href="{{ media_url('files/' + file) }}">{{ description }}</a></li>
+{% endfor %}
     </ul>
 {% endif %}
   </nav>
