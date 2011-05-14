@@ -1,0 +1,104 @@
+---
+title: FVWM configuration
+keywords: "fvwm, xrandr, xinerama, multi-head, desktop, wallpapers"
+uuid: 5cb0c837-8ded-4433-96da-c710fddfbbf1
+---
+
+There is actually some buzz around [Gnome 3][gnome3]
+and the new release of Ubuntu switching to [Unity][unity]. I thought
+this was a good occasion to make this small post to tell that I still
+uses [FVWM][fvwm] whose latest version was released a month ago.
+
+[gnome3]: http://www.gnome3.org/
+[unity]: http://en.wikipedia.org/wiki/Unity_%28desktop_environment%29
+[fvwm]: http://www.fvwm.org/
+[fvwm261]: http://permalink.gmane.org/gmane.comp.window-managers.fvwm.announce/31
+
+FVWM is a very old window manager. So old that nobody really knows
+what the *F* stands for. It comes with a ugly configuration by default
+and can be configured to [look even uglier][ugly]. However, FVWM is
+powerful and highly configurable. Moreover, it is pretty lightweight.
+
+[ugly]: http://www.fvwm.org/screenshots/desktops/GlenLeeEdwards-desk4-1024x768/screenshot.gif
+
+# My FVWM configuration
+
+My [configuration of FVWM][config] is available on GitHub. It requires
+the use of `fvwm-crystal`. If you are running Debian or Ubuntu, there
+is a package for this. This is a set of powerful configuration files
+for FVWM which add a lot of goodies and themes. Unfortunately, the
+project site seems to have disappared. You can still grab the
+[sources from your nearest Debian mirror][sources].
+
+[config]: https://github.com/vincentbernat/fvwm-configuration
+[sources]: http://ftp.de.debian.org/debian/pool/main/f/fvwm-crystal/fvwm-crystal_3.0.5.dfsg.orig.tar.gz
+
+While those configuration files were great, I did not like to have
+such a complex desktop with all those icons and menus. However, what
+is great with _fvwm-crystal_ is you can overlay your own
+configuration. If a file is present in your home directory, it will
+take precedence over the one installed on the system. So, I just wrote
+a new recipe.
+
+What you may want to steal from my configuration is the ability to
+alter the configuration depending on the fact that you are using one
+or two screens. With one screen, you get:
+
+ * an application panel (a launcher bar) on the upper left corner,
+ * an icon manager (which will contained minified windows) on the
+   upper right corner,
+ * a systray on the left of the icon manager
+ * a pager (which shows various desktops) just below it,
+ * two icon managers (which act as a taskbar) on the bottom, one for
+   regular applications and the other one for terminal windows.
+
+![One screen setup of FVWM][s1]
+[s1]: [[!!images/fvwm/screenshot-20110102_0513.jpg]]
+
+With two screens, the organization is different. The two icon managers
+at the bottom are on their own screens. The pager is between the two
+screens and the other elements are on the upper left of the right
+screen.
+
+![Dual screen setup of FVWM][s2]
+[s2]: [[!!images/fvwm/screenshot-20110514_1128.jpg]]
+
+
+If I am using a single screen and I plug another one, I do something
+like this to get my setup updated:
+
+    #!console
+    $ xrandr --output  VGA-1 --auto --output DVI-I-1 --auto --right-of VGA-1
+    $ killall trayer ; FvwmCommand Restart
+
+I also uses [conky][conky], a light-weight system monitor. It is
+started in my `.xsession`, not through FVWM.
+
+[conky]: http://conky.sourceforge.net/
+
+# Building wallpapers for dual-screen
+
+One difficulty with a multi-head setup is "how to get the background
+set properly?". I have made a
+[small script for generating one][wallpaper]. Use it like this:
+
+    #!console
+    $ ./build-wallpaper.py -d ~/.fvwm/wallpapers -c -t ~/tmp/mywallpaper.png
+
+It will randomly select two wallpapers and put them together to look
+nice on your dual-screen setup. It will also correct the aspect ratio,
+either by cropping the image or centering the image.
+
+You need the following dependencies to make script work: `python-xpyb`
+and `python-imaging`.
+
+[wallpaper]: https://github.com/vincentbernat/fvwm-configuration/blob/master/scripts/build-wallpaper.py
+
+Nowadays, I grab most of my wallpapers from
+[InterfaceLIFT][interfacelift].
+
+[interfacelift]: http://interfacelift.com/wallpaper/index.php?sort=date
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
