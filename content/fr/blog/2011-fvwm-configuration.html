@@ -1,0 +1,119 @@
+---
+title: Configuration de FVWM
+keywords: "fvwm, xrandr, xinerama, multi-head, bureau, fonds d'écran"
+uuid: 5cb0c837-8ded-4433-96da-c710fddfbbf1
+---
+
+Il y a actuellement pas mal de bruit autour de [Gnome 3][gnome3] ainsi
+que de la dernière release d'Ubuntu qui utilise désormais
+[Unity][unity] au lieu de Gnome. Cela me paraît donc le moment idéal
+de poster un billet pour indiquer que j'utilise toujours [FVWM][fvwm]
+dont la dernière version a été publiée il y a un mois.
+
+[gnome3]: http://www.gnome3.org/
+[unity]: http://fr.wikipedia.org/wiki/Unity_%28gestionnaire_de_bureau%29
+[fvwm]: http://www.fvwm.org/
+[fvwm261]: http://permalink.gmane.org/gmane.comp.window-managers.fvwm.announce/31
+
+FVWM est un gestionnaire de fenêtres très vieux. Tellement vieux que
+personne ne sait vraiment ce que signifie le *F*. Il est livré avec
+une configuration par défaut plutôt désuète mais il est possible de le
+rendre [encore plus moche][ugly]. Toutefois, FVWM est très puissant et
+totalement paramétrable. De plus, il est désormais plutôt léger en
+mémoire et en CPU.
+
+[ugly]: http://www.fvwm.org/screenshots/desktops/GlenLeeEdwards-desk4-1024x768/screenshot.gif
+
+# Ma configuration
+
+Ma [configuration de FVWM][config] est disponible sur GitHub. Elle
+nécessite l'installation de `fvwm-crystal`. Si vous utilisez Debian ou
+Ubuntu, il y a déjà un paquet pour ça. _fvwm-crystal_ est un ensemble
+de fichiers de configuration particulièrement corsés. Cela permet de
+choisir parmi de nombreux thèmes et de configurer pas mal de
+détails. Malheureusement, il semble que le site du projet a
+disparu. Les
+[sources sont toujours disponibles sur les miroirs Debian][sources].
+
+[config]: https://github.com/vincentbernat/fvwm-configuration
+[sources]: http://ftp.de.debian.org/debian/pool/main/f/fvwm-crystal/fvwm-crystal_3.0.5.dfsg.orig.tar.gz
+
+Tout ceci est assez impressionnant, mais si, comme moi, vous aimez
+plutôt les trucs minimalistes sans crouler sous les icônes et les
+menus, il va falloir écrire sa propre _recette_ pour obtenir quelque
+chose de plus simple. Ce qui est assez bien
+pensé avec _fvwm-crystal_ est qu'il est possible de superposer sa
+configuration pour en modifier le comportement. Si un fichier de
+configuration existe dans votre _home_, c'est celui-ci qui sera
+utilisé au lieu de celui du système. Modifier ce qui nous déplaît est
+donc généralement facile.
+
+Ce qui est intéressant à voler dans ma configuration est la
+possibilité de modifier la configuration selon que vous soyiez dans
+une configuration avec un ou deux écrans. Avec un écran, on a :
+
+ * une barre de lancement en haut à gauche,
+ * un gestionnaire d'icônes (qui accueille les applications
+   minimisées) en haut à droite,
+ * la barre de notification juste à sa gauche,
+ * les bureaux virtuels juste en-dessous,
+ * deux barres des tâches, l'une pour les applications normales et
+   l'autre pour les terminaux (que j'ai souvent en plus grand nombre).
+
+![Configuration de FVWM avec un écran][s1]
+[s1]: [[!!images/fvwm/screenshot-20110102_0513.jpg]]
+
+Avec deux écrans, l'agencement est différent. Les barres des tâches
+sont chacune sur leurs propres écrans. Les bureaux virtuels se
+retrouvent à cheval entre les deux écrans et le reste se trouve en
+haut à gauche sur l'écran de droite.
+
+![Configuration de FVWM avec deux écrans][s2]
+[s2]: [[!!images/fvwm/screenshot-20110514_1128.jpg]]
+
+Si je suis sur mon portable avec un seul écran et que je branche un
+écran externe, il me suffit de deux commandes pour reconfigurer mon
+environnement de travail sans fermer une seule application :
+
+    #!console
+    $ xrandr --output  VGA-1 --auto --output DVI-I-1 --auto --right-of VGA-1
+    $ killall trayer ; FvwmCommand Restart
+
+J'utilise également [conky][conky], un moniteur système plutôt
+léger. Il est toutefois démarré via mon `.xsession` et non pas via
+FVWM.
+
+[conky]: http://conky.sourceforge.net/
+
+# Fonds d'écran & dual-screen
+
+En dual-screen, la construction d'un fond d'écran peut s'avérer assez
+compliquée. Les deux écrans peuvent être de tailles différentes et ne
+pas avoir le même ratio. Comme je change mes fonds d'écran toutes les
+heures, j'ai écrit
+[un petit script pour gérer ce problème][wallpaper]. Il s'utilise
+comme ceci :
+
+    #!console
+    $ ./build-wallpaper.py -d ~/.fvwm/wallpapers -c -t ~/tmp/mywallpaper.png
+
+Il va :
+
+ * sélectionner autant de fonds d'écran qu'il n'y a d'écrans,
+ * assigner chaque fond à un écran,
+ * redimensionner l'image pour s'adapter à l'écran (en la coupant ou
+   en la centrant au besoin si le ratio n'est pas adapté à l'écran).
+
+Ce script a besoin des paquets `python-xpyb` et `python-imaging` pour
+fonctionner.
+
+[wallpaper]: https://github.com/vincentbernat/fvwm-configuration/blob/master/scripts/build-wallpaper.py
+
+Je récupère désormais la plupart de mes fonds d'écran sur
+[InterfaceLIFT][interfacelift].
+
+[interfacelift]: http://interfacelift.com/wallpaper/index.php?sort=date
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
