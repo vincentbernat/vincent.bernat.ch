@@ -1,0 +1,726 @@
+---
+title: 'Installation de Debian sur un Thinkpad Edge 11"'
+keywords: "debian, thinkpad, lenovo, installation, edge"
+uuid: 9ee4cb58-cd0c-4aeb-a32b-a6404fee4548
+---
+
+Depuis plusieurs mois, mon portable, un Asus S5N, présentait de
+nombreuses faiblesses, dont notamment de nombreux problèmes avec Xorg
+liés à l'ancienneté du chipset graphique i855GME. Ce dernier
+supportait mal les diverses évolutions technologiques liées à Xorg,
+notamment l'utilisation de [GEM][2] et de [KMS][3]. Celles-ci
+révélaient de nombreux bugs dans le chipset.
+
+Mon usage pour un portable étant plutôt limité, je n'ai pas tenté
+d'investir dans un portable plus récent jusqu'à croiser une
+[promotion sur les Thinkpad Edge][1] de la part de Lenovo. Me voilà donc
+propriétaire d'un [Thinkpad Edge 11"][4].
+
+*[GEM]: Graphics Execution Manager
+*[KMS]: Kernel-based Mode-Setting
+[1]: https://www.lenovo-promotions.com/fr/notebook
+[2]: http://fr.wikipedia.org/wiki/Graphics_Execution_Manager
+[3]: http://fr.wikipedia.org/wiki/Kernel-based_mode-setting
+[4]: http://www.thinkwiki.org/wiki/Category:Edge_11%22
+
+# Matériel
+
+Le Thinkpad Edge représente le bas de gamme de la série Thinkpad chez
+Lenovo. Il est courant de l'obtenir pour 500 € environ.
+
+![Emballage du Thinkpad Edge 11"][i1]
+[i1]: [[!!images/thinkpad-edge-enclosure.jpg]]
+
+## Caractéristiques techniques
+
+En France, Lenovo ne vend pas directement ses portables et il n'est
+alors pas possible de les configurer à sa guise. On doit donc choisir
+parmi les quelques modèles disponibles. Cela contraste fortement avec
+ce que pouvait proposer IBM.
+
+![Éléments du Thinkpad Edge 11"][i2]
+[i2]: [[!!images/thinkpad-edge-top.jpg]]
+
+Voici les principales caractéristiques de celui que j'ai acquis :
+
+ * un CPU [Intel Core i3][5] 380UM cadencé à 1,33 GHz.
+ * écran 11.6" à LED, résolution de 1366x768
+ * 4 Go de RAM
+ * 320 Go de disque dur
+ * Wifi (Centrino Wireless-N) et bluetooth
+ * Carte 3G
+ 
+C'est un petit portable mais son poids n'est pas négligeable (1,5
+kg). Il n'est livré qu'avec son alimentation. Asus avait fourni avec
+mon ancien portable une souris sans fil, une housse, une sacoche, une
+clef USB, un graveur de CD et sans d'autres choses. Ici, le portable
+et l'alimentation. C'est tout.
+
+D'un côté, deux ports USB, de l'autre côté, un port USB, un port HDMI,
+le port réseau et une prisque casque. Une prise VGA se trouve à
+l'arrière, tout comme le connecteur d'alimentation.
+
+![Thinkpad Edge 11" ouvert][i3]
+[i3]: [[!!images/thinkpad-edge.jpg]]
+ 
+## BIOS
+
+Première étape au niveau du BIOS, vérifier les réglages principaux. Ce
+dernier propose de désactiver tous les périphériques superflus (WiMAX
+par exemple). Le clavier peut également se configurer pour que les
+touches de fonction soient accessibles directement sans utiliser la
+touche « Fn ».
+
+Notons une option nommée _Computrace_ qui semble liée au produit du
+même nom de la [société AbsoluteSoftware][6]. Il s'agirait de tracer
+le portable où qu'il soit. Je désactive cette fonctionnalité.
+
+[5]: http://fr.wikipedia.org/wiki/Intel_Core_i3
+[6]: http://www.absolute.com/fr-FR/products/computrace/features.aspx
+
+# Installation de Debian
+
+Je décide d'installer [Debian][7] depuis une clef USB (il n'y a pas de
+lecteur de CD de toute façon). La manipulation est relativement
+simple. Il suffit de récupérer l'image ISO que l'on souhaite installer
+(dans mon cas, [celle pour AMD64 en testing][8] car je compte mettre à
+jour en _unstable_ ensuite) et de la copier sur la clef USB ainsi :
+
+    #!console
+    # dd if=debian-testing-amd64-netinst.iso of=/dev/sdb
+
+La méthode consistant à rendre la clef USB bootable, y installer un
+noyau et un initrd n'est plus d'actualité.
+
+Je m'évite d'ailleurs sans doute quelques ennuis en utilisant ainsi la
+version de développement de Debian vu qu'il semble que la carte réseau
+ne soit pas reconnue correctement avec le 2.6.32 de Squeeze. Un
+problème de moins à gérer.
+
+Lors de l'installation, j'opte pour un partitionnement guidé utilisant
+LVM et le chiffrement. Je choisis de séparer toutes les partitions car
+je trouve cela très pratique que `/tmp` et `/var` ne viennent pas se
+marcher dessus. Toutefois, j'ai noté à de nombreuses reprises que
+dédier une partition pour `/usr` posait de plus en plus de problèmes
+et que de nombreux dévelopeurs souhaitaient la disparition de cette
+pratique. Je modifie donc le partitionnement proposé pour intégrer
+`/usr` dans la racine et laisser de la place libre sur le LVM pour des
+usages futurs.
+
+L'installeur Debian n'est d'ailleurs pas d'une brillante simplicité
+pour modifier le partionnement puisqu'il faut détruire les volumes
+existants pour les recréer si on veut en changer simplement les
+tailles. Il est toutefois toujours plus rapide d'effectuer cette
+opération que de coder le correctif qui permettrait de l'accélérer.
+
+Je n'aime n'avoir que le strict minimum. Je me passe donc de `tasksel`
+au cours de l'installation pour installer moi-même le reste de
+l'environnement à coup de `aptitude`. Le reste de l'installation se
+déroule sans problème.
+
+Le système reboote sur un 2.6.38, me demande le mot de passe pour le
+déchiffrement du LVM et me présente ensuite le prompt de login en mode
+texte.
+
+# Configuration du système
+
+À première vue, le matériel semble bien supporté. Il n'y a donc pas
+d'incatations mystérieuses à lancer avant d'obtenir le support du
+sous-système disque ou du réseau. Je peux donc commencer par mettre en
+place mon environnement de travail habituel.
+
+## Mise en place de l'environnement
+
+Je configure généralement mon système au fil de l'eau. La
+configuration de base est donc très rapide. Je commence par changer
+`/etc/apt/sources.list` pour utiliser _unstable_ :
+
+    deb http://ftp.fr.debian.org/debian/ unstable main
+    deb-src http://ftp.fr.debian.org/debian/ unstable main
+    deb http://ftp.fr.debian.org/debian/ experimental main contrib non-free
+
+Je veux ensuite que si je prends quelque chose dans _experimental_,
+les mises à jour soient effectuées également dans _experimental_. Cela
+évite d'avoir à se retrouver avec une vieille version de Firefox. Pour
+réaliser ceci, il suffit de créer un fichier
+`/etc/apt/preferences.d/experimental` :
+
+    Package: *
+    Pin: release experimental
+    Pin-Priority: 101
+
+J'installe ensuite les paquets suivants :
+
+ * `zsh`, mon shell de prédilection pour lequel je reprends la config
+   sur un autre système. Il faudra sans doute que je mette ça un jour
+   sur [GitHub](https://github.com/vincentbernat).
+ * `mg`, mon éditeur léger pour éditer sous root les fichiers de
+   configuration. Je n'aime pas `vi` que j'utilise en dernier
+   recours. J'ai longtemps utilisé `jed` mais la configuration par
+   défaut est plutôt casse-pied à couper les lignes et il manque pas
+   mal de bindings emacs.
+ * `emacs`, mon environnement de travail. Je l'utilise comme éditeur
+   de texte et lecteur de mail (avec [Gnus](http://www.gnus.org)). Je
+   ne navigue pas avec et je ne lui confie pas mes shells. J'ai aussi
+   des fichiers de configuration tout fait. Pareil, faudra que je trie
+   un peu un jour.
+ * `fvwm`, mon environnement graphique depuis pas mal de temps. Je
+   copie aussi la configuration depuis une autre machine. Cela
+   mériterait sans doute d'attérir sur GitHub. J'ai également besoin
+   de `fvwm-crystal` vu que ma [configuration de FVWM][fvwm] dérive de cette
+   personnalisation. J'utilise également `conky`.
+ * `rxvt-unicode`, mon terminal. Il supporte la transparence (en
+   émulation ou par compositing). Il est léger, rapide, on peut
+   facilement rechercher dans le _backbuffer_. Il a un système client
+   serveur qui fait que s'il crashe, on perd toutes les fenêtres d'un
+   coup. Cela n'arrive quasiment jamais.
+ * `unison`, l'outil que j'utilise pour synchroniser mes différentes
+   machines. En gros, je dois pouvoir travailler sur le portable comme
+   je travaille sur mon fixe. Unison est un outil formidable pour ça.
+ * `sudo` car je ne me loggue quasiment jamais en root.
+ * `gdm3` comme programme d'accueil, c'est en effet le seul à savoir
+   communiquer correctement avec _ConsoleKit_ et donc configurer
+   correctement les droits, y compris quand on passe d'une console à
+   l'autre.
+
+[fvwm]: [[fr/blog/2011-fvwm-configuration.html]]
+
+À noter également que je ne compile plus mon noyau depuis un petit
+bout de temps. Les noyaux fournis par Debian me conviennent
+parfaitement et la passion de recompiler mon noyau avant de brancher
+un périphérique USB m'est passée.
+
+J'enlève ensuite les paquets `rpcbind` et `nfs-common` qui ne me sont
+d'aucune utilité. Je mets de plus en place un firewall basique avec le
+paquet `ferm`. Voici mon `ferm.conf` :
+
+    domain (ip ip6) {
+      table filter {
+	chain INPUT {
+	    policy DROP;
+	    mod state state INVALID DROP;
+	    mod state state (ESTABLISHED RELATED) ACCEPT;
+	    interface lo ACCEPT;
+	    proto tcp dport ssh ACCEPT;
+	}   
+	chain OUTPUT {
+	    policy ACCEPT;
+	    mod state state (ESTABLISHED RELATED) ACCEPT;
+	}   
+	chain FORWARD {
+	    policy DROP;
+	}   
+      }  
+    }
+
+Une fois les paquets installés, je configure `unison` pour effectuer
+la synchronisation. Le gros de la configuration est alors fini.
+
+## Configuration des différents éléments matériels
+
+Viens ensuite la partie assez pénible sur les portables récents :
+configurer l'ensemble des périphériques pour que tout fonctionne (y
+compris la webcam que l'on n'utilisera plus jamais ensuite). Un coup
+de `lspci` et de `lsusb` plus tard et on se rend compte que les
+éléments les plus importants vont fonctionner sans trop de problèmes.
+
+En ce qui concerne `lspci` :
+
+    00:00.0 Host bridge: Intel Corporation Core Processor DRAM Controller (rev 02)
+    00:02.0 VGA compatible controller: Intel Corporation Core Processor Integrated Graphics Controller (rev 02)
+    00:16.0 Communication controller: Intel Corporation 5 Series/3400 Series Chipset HECI Controller (rev 06)
+    00:1a.0 USB Controller: Intel Corporation 5 Series/3400 Series Chipset USB2 Enhanced Host Controller (rev 06)
+    00:1b.0 Audio device: Intel Corporation 5 Series/3400 Series Chipset High Definition Audio (rev 06)
+    00:1c.0 PCI bridge: Intel Corporation 5 Series/3400 Series Chipset PCI Express Root Port 1 (rev 06)
+    00:1c.1 PCI bridge: Intel Corporation 5 Series/3400 Series Chipset PCI Express Root Port 2 (rev 06)
+    00:1c.5 PCI bridge: Intel Corporation 5 Series/3400 Series Chipset PCI Express Root Port 6 (rev 06)
+    00:1d.0 USB Controller: Intel Corporation 5 Series/3400 Series Chipset USB2 Enhanced Host Controller (rev 06)
+    00:1e.0 PCI bridge: Intel Corporation 82801 Mobile PCI Bridge (rev a6)
+    00:1f.0 ISA bridge: Intel Corporation Mobile 5 Series Chipset LPC Interface Controller (rev 06)
+    00:1f.2 SATA controller: Intel Corporation 5 Series/3400 Series Chipset 4 port SATA AHCI Controller (rev 06)
+    00:1f.3 SMBus: Intel Corporation 5 Series/3400 Series Chipset SMBus Controller (rev 06)
+    00:1f.6 Signal processing controller: Intel Corporation 5 Series/3400 Series Chipset Thermal Subsystem (rev 06)
+    03:00.0 Network controller: Intel Corporation Centrino Wireless-N 1000
+    09:00.0 Ethernet controller: Realtek Semiconductor Co., Ltd. RTL8111/8168B PCI Express Gigabit Ethernet controller (rev 03)
+    ff:00.0 Host bridge: Intel Corporation Core Processor QuickPath Architecture Generic Non-core Registers (rev 02)
+    ff:00.1 Host bridge: Intel Corporation Core Processor QuickPath Architecture System Address Decoder (rev 02)
+    ff:02.0 Host bridge: Intel Corporation Core Processor QPI Link 0 (rev 02)
+    ff:02.1 Host bridge: Intel Corporation Core Processor QPI Physical 0 (rev 02)
+    ff:02.2 Host bridge: Intel Corporation Core Processor Reserved (rev 02)
+    ff:02.3 Host bridge: Intel Corporation Core Processor Reserved (rev 02)
+
+Et pour `lsusb` (à noter que j'ai désactivé la carte 3G qui n'apparaît
+donc pas ici) :
+
+    Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 001 Device 002: ID 8087:0020 Intel Corp. Integrated Rate Matching Hub
+    Bus 002 Device 002: ID 8087:0020 Intel Corp. Integrated Rate Matching Hub
+    Bus 001 Device 003: ID 0bda:0158 Realtek Semiconductor Corp. USB 2.0 multicard reader
+    Bus 001 Device 004: ID 0a5c:217f Broadcom Corp. Bluetooth Controller
+    Bus 002 Device 003: ID 5986:01a7 Acer, Inc Lenovo Integrated Webcam
+
+On prendra également sous le coude la
+[page dédiée au Thinkpad Edge 11" sur ThinkWiki][10] (ce wiki est un
+des gros avantages à acheter un ThinkPad, même si la multiplication
+des modèles par Lenovo dilue un peu l'information).
+
+Le noyau fourni par Debian charge ainsi nombre de modules par
+défaut. Certains d'entre eux aideront à différents moments de la
+configuration, notammant `thinkpad_acpi`.
+
+À noter que je n'utilise pas un environnement de bureau type Gnome et
+que je fais donc appel aux outils en ligne de commande pour configurer
+la majeure partie des éléments. Je place les commandes adéquates dans
+mon `.xsession` quand la configuration est liée au serveur X. Il
+existe la plupart du temps un équivalent graphique des commandes en
+question.
+
+### Mise à jour du BIOS
+
+`lshw` m'indique que mon BIOS est version 1.09 datée de février
+2011. Il semble donc inutile de mettre à jour le BIOS. Lenovo fournit
+des images ISO que l'on peut booter avec GRUB en utilisant un loader
+intermédiaire fourni par syslinux. ThinkWiki fournit
+[la procédure à suivre][biosupgrade]. L'image `memdisk` demandée est
+dans le paquet `syslinux`.
+
+[biosupgrade]: http://www.thinkwiki.org/wiki/BIOS_Upgrade#Booting_using_GRUB
+
+### Carte graphique
+
+La carte graphique est intégrée directement dans le processeur. Comme
+Intel a pour habitude de contribuer à Xorg sauf pour
+[quelques épisodes malheureux][11], le support est généralement assez
+bon à condition d'avoir un Xorg assez récent. [ThinkWiki][12] nous
+indique :
+
+> A very recent Linux distribution with kernel 2.6.33 and Intel Xorg
+> driver 2.11 or newer is recommended. Note that XVideo (Xv) playback
+> at certain frame sizes does not work properly unless you have at
+> least version 2.12 of the Intel Xorg driver.
+
+Sous Debian Wheezy, on est déjà à la version 2.15 et il n'y a donc
+aucune difficulté à faire fonctionner le serveur X. La présence du
+paquet `xserver-xorg-video-intel` et l'absence du fichier
+`/etc/X11/xorg.conf` conduit directement à un serveur X fonctionnel.
+
+Concernant les sorties VGA et HDMI, là encore, aucuns soucis, tout est
+reconnu directement par `xrandr` :
+
+    Screen 0: minimum 320 x 200, current 1366 x 768, maximum 8192 x 8192
+    LVDS1 connected 1366x768+0+0 (normal left inverted right x axis y axis) 256mm x 144mm
+       1366x768       60.0*+   50.0  
+       1360x768       59.8     60.0  
+       1024x768       60.0  
+       800x600        60.3     56.2  
+       640x480        59.9  
+    VGA1 disconnected (normal left inverted right x axis y axis)
+    HDMI1 disconnected (normal left inverted right x axis y axis)
+    DP1 disconnected (normal left inverted right x axis y axis)
+
+Le compositing est parfaitement supporté (je n'utilise que la
+transparence, je ne sais donc pas quelle est la vitesse de l'ensemble
+sur un bureau plus moderne que le mien).
+
+Enfin, en ce qui concerne l'accélération vidéo, l'extension _XVideo_
+est supportée ainsi que le décodage matériel, comme l'atteste `vainfo`
+une fois le paquet `i965-va-driver` installé.
+
+    libva: libva version 0.32.0
+    libva: va_getDriverName() returns 0
+    libva: Trying to open /usr/lib/dri/i965_drv_video.so
+    libva: va_openDriver() returns 0
+    vainfo: VA API version: 0.32
+    vainfo: Driver version: i965 Driver 0.1
+    vainfo: Supported profile and entrypoints
+	  VAProfileMPEG2Simple            :	VAEntrypointVLD
+	  VAProfileMPEG2Main              :	VAEntrypointVLD
+	  VAProfileH264Baseline           :	VAEntrypointVLD
+	  VAProfileH264Main               :	VAEntrypointVLD
+	  VAProfileH264High               :	VAEntrypointVLD
+
+Sous Debian, on peut utiliser [VLC][VLC] pour tester. Il faut activer
+l'accélération matérielle en mettant `ffmpeg-hw=1` dans
+`~/.config/vlc/vlcrc`. On est alors salué par :
+
+    [0x2629040] avcodec decoder: Using VA API version 0.32 for hardware decoding.
+
+[VLC]: http://www.videolan.org
+
+### Réseau
+
+La carte réseau fonctionne sans manipulation particulière. Elle ne
+semble pas nécessiter de firmware du tout. [ThinkWiki][13] indique que
+la carte réseau a des problèmes de stabilité en 2.6.36. Je n'ai pas
+rencontré de problème avec le 2.6.37 utilisé par l'installeur Debian
+et rien non plus avec le 2.6.38 qui tourne actuellement. Je suppose
+donc qu'il s'agit d'un problème qui n'est plus d'actualité.
+
+### UltraNav
+
+L'[UltraNav][15] est la combinaison du trackpad (que l'on retrouve sur de
+nombreux portables) et du [trackpoint][16] qui est généralement un
+périphérique propre aux portables IBM et qui se présente sous la forme
+d'un ergot que l'on pilote par pression du doigt.
+
+La configuration d'un périphérique de pointage se fait désormais avec
+l'utilitaire `xinput` (ou avec un équivalent graphique). Voici la
+sortie de `xinput list` :
+
+    ⎡ Virtual core pointer                    	id=2	[master pointer  (3)]
+    ⎜   ↳ Virtual core XTEST pointer              	id=4	[slave  pointer  (2)]
+    ⎜   ↳ SynPS/2 Synaptics TouchPad              	id=11	[slave  pointer  (2)]
+    ⎜   ↳ TPPS/2 IBM TrackPoint                   	id=12	[slave  pointer  (2)]
+    ⎣ Virtual core keyboard                   	id=3	[master keyboard (2)]
+	↳ Virtual core XTEST keyboard             	id=5	[slave  keyboard (3)]
+	↳ Power Button                            	id=6	[slave  keyboard (3)]
+	↳ Video Bus                               	id=7	[slave  keyboard (3)]
+	↳ Power Button                            	id=8	[slave  keyboard (3)]
+	↳ Integrated Camera                       	id=9	[slave  keyboard (3)]
+	↳ AT Translated Set 2 keyboard            	id=10	[slave  keyboard (3)]
+	↳ ThinkPad Extra Buttons                  	id=13	[slave  keyboard (3)]
+
+On y trouve donc le touchpad et le trackpoint. On peut ensuite
+utiliser la commande `xinput list-props` pour obtenir des infos sur
+chacun des périphériques ainsi découverts. On utilise ensuite `xinput
+set-prop` pour modifier celles qui nous intéressent. Je veux par
+exemple activer le scrolling en utilisant les côtés et activer la
+détection de la paume :
+
+    #!console
+    $ xinput set-int-prop "SynPS/2 Synaptics TouchPad" 'Synaptics Edge Scrolling' 8 1 1 0
+    $ xinput set-int-prop "SynPS/2 Synaptics TouchPad" 'Synaptics Palm Detection' 8 1
+
+Ou alors, si on ne veut pas de touchpad du tout :
+
+    #!console
+    $ xinput set-int-prop "SynPS/2 Synaptics TouchPad" 'Synaptics Off' 8 1
+
+Les explications sur les différents paramètres possibles, ainsi que
+leurs types et leurs formats sont décrits dans `man 4 synaptics`. Le
+principe est le même pour le trackpoint mais on regardera `man 4
+evdev` pour avoir plus de renseignements. Par exemple, pour activer
+le scrolling en utilisant le bouton du milieu, on peut faire :
+
+    #!console
+    $ xinput set-int-prop "TPPS/2 IBM TrackPoint" "Evdev Wheel Emulation" 8 1
+    $ xinput set-int-prop "TPPS/2 IBM TrackPoint" "Evdev Wheel Emulation Button" 8 2
+
+On place tout ceci dans son `~/.xsession`.
+
+### Touches spéciales du clavier
+
+Les touches situées en haut du clavier et s'activant à l'aide de la
+touche _Fn_ permettent d'accéder rapidement à certaines
+fonctionnalités :
+
+ * ajustement du volume sonore
+ * ajustement de la luminosité de l'écran
+ * activation de la caméra ou de l'écran externe
+ * activation du wifi
+ * touches multimédia
+
+Tous les systèmes de touches ont été uniformisés au niveau du noyau. La
+commande `xinput list` donne une liste de claviers. Chaque touche va
+arriver sur l'un de ces claviers. Ainsi, les touches de volume et les
+touche multimédia arrivent directement sur le clavier
+physique. L'activation du wifi, de la webcam et de l'écran externe
+arrivent sur un clavier virtuel `ThinkPad Extra Buttons`. Les touches
+de luminosités arrivent sur le clavier `Video bus`. Tout ceci peut se
+vérifier avec l'utilitaire `evtest`.
+
+Le démon `acpid` écoute sur tous les « claviers » pour obtenir les
+évènements correspondant. C'est ainsi que la touche pour le wifi
+déclenche le script `ibm-wireless.sh` de la part de `acpid`.
+
+Le serveur X écoute également tous ces claviers et peut donc fournir
+aux applications les évènements associés. Tout fonctionne donc tout
+seul.
+
+### Carte son
+
+Comme pour la carte réseau, la carte son est reconnue et fonctionnelle
+directement.
+
+J'utilise [PulseAudio][17] notamment car il permet de configurer les
+volumes application par application mais également parce qu'il permet
+de passer une application d'une carte son à une autre (par exemple
+vers une oreillette Bluetooth). Je place donc dans mon `~/.asoundrc`
+les lignes suivantes :
+
+    pcm.!default {
+      type pulse
+    }
+
+    ctl.!default {
+      type pulse
+    }
+
+Cela permet de rendre compatible la plupart des applications avec
+PulseAudio. J'utilise ensuite `pavucontrol` comme mixer. Tout semble
+fonctionner. Il est possible de choisir simplement la sortie HDMI au
+cas où on branche le PC sur une télévision.
+
+### Wifi
+
+Un firmware est nécessaire pour faire fonctionner la carte
+wifi. Celui-ci est contenu dans le paquet `firmware-iwlwifi`. On peut
+ensuite charger le driver `iwlagn`. La commande `rfkill list` nous
+indique si le wifi est bien activé.
+
+La commande `iw list` nous donnera l'état de la carte wifi :
+
+    Wiphy phy0
+	Band 1:
+		Capabilities: 0x872
+			HT20/HT40
+			Static SM Power Save
+			RX Greenfield
+			RX HT20 SGI
+			RX HT40 SGI
+			No RX STBC
+			Max AMSDU length: 3839 bytes
+			No DSSS/CCK HT40
+		Maximum RX AMPDU length 65535 bytes (exponent: 0x003)
+		Minimum RX AMPDU time spacing: 4 usec (0x05)
+		HT RX MCS rate indexes supported: 0-15, 32
+		TX unequal modulation not supported
+		HT TX Max spatial streams: 1
+		HT TX MCS rate indexes supported may differ
+		Frequencies:
+			* 2412 MHz [1] (14.0 dBm)
+			* 2417 MHz [2] (14.0 dBm)
+			* 2422 MHz [3] (14.0 dBm)
+			* 2427 MHz [4] (14.0 dBm)
+			* 2432 MHz [5] (14.0 dBm)
+			* 2437 MHz [6] (14.0 dBm)
+			* 2442 MHz [7] (14.0 dBm)
+			* 2447 MHz [8] (14.0 dBm)
+			* 2452 MHz [9] (14.0 dBm)
+			* 2457 MHz [10] (14.0 dBm)
+			* 2462 MHz [11] (14.0 dBm)
+			* 2467 MHz [12] (14.0 dBm) (passive scanning, no IBSS)
+			* 2472 MHz [13] (14.0 dBm) (passive scanning, no IBSS)
+		Bitrates (non-HT):
+			* 1.0 Mbps
+			* 2.0 Mbps (short preamble supported)
+			* 5.5 Mbps (short preamble supported)
+			* 11.0 Mbps (short preamble supported)
+			* 6.0 Mbps
+			* 9.0 Mbps
+			* 12.0 Mbps
+			* 18.0 Mbps
+			* 24.0 Mbps
+			* 36.0 Mbps
+			* 48.0 Mbps
+			* 54.0 Mbps
+	max # scan SSIDs: 20
+	Supported interface modes:
+		 * IBSS
+		 * managed
+		 * monitor
+
+Dans mon cas, tous les canaux 802.11a ont été désactivés.
+
+    iwlagn 0000:03:00.0: Detected Intel(R) Centrino(R) Wireless-N 1000 BGN, REV=0x6C
+    iwlagn 0000:03:00.0: device EEPROM VER=0x15d, CALIB=0x6
+    iwlagn 0000:03:00.0: Device SKU: 0X9
+    iwlagn 0000:03:00.0: Valid Tx ant: 0X1, Valid Rx ant: 0X3
+    iwlagn 0000:03:00.0: Tunable channels: 13 802.11bg, 0 802.11a channels
+    iwlagn 0000:03:00.0: irq 44 for MSI/MSI-X
+    iwlagn 0000:03:00.0: loaded firmware version 128.50.3.1 build 13488
+
+Cela doit sans doute pouvoir se régler quelque part mais étant donné
+que je n'ai jamais eu l'usage du 802.11a, je ne cherche pas plus loin.
+
+Pour tout ce qui est wifi, j'utiliser _Network Manager_. Il me semble
+que c'est beaucoup plus simple que de s'amuser en ligne de commande
+avec `iw`, lister les AP, en trouver une, s'y associer, jouer avec
+`wpa_supplicant`, etc. Pour une connexion 3G, il devient carrément
+indispensable.
+
+Il y a de plus eu un large débat dans [debian-devel@ldo][ddldo] sur le
+fait que Network Manager puisse être utilisé sur des serveurs. A
+priori, cela parait choquant mais c'est dans le domaine du
+possible. Je vais tenter de capitaliser dessus.
+
+[ddldo]: http://lists.debian.org/debian-devel/2011/04/msg00051.html
+
+### Bluetooth
+
+Le chipset Bluetooth est monté sur un adaptateur USB et est reconnu
+par le driver `hci_usb`. Il supporte la norme AD2P qui permet
+d'écouter de la musique dans les casques adéquats. Il
+est possible de vérifier le bon fonctionnement du chipset avec la
+commance `hciconfig`.
+
+Le bluetooth fait partie des périphériques qu'il vaut mieux configurer
+avec une application graphique plutôt qu'en ligne de
+commande. [BlueZ][19], la pile Bluetooth de Linux, repose énormément
+sur DBus pour fonctionner et les utilitaires en ligne de commande ont
+été dépréciés. Si vous ne voulez pas vous battre avec un binding DBus
+pour piloter votre dongle Bluetooth, il semble donc préférable d'opter
+pour un utilitaire graphique.
+
+Le paquet `gnome-bluetooth` est fourni avec une applet qui assure le
+strict minimum mais qui permet de s'associer sans problème avec un
+périphérique Bluetooth. Après installation du paquet
+`pulseaudio-module-bluetooth`, le casque audio apparaît au niveau de
+PulseAudio.
+
+### 3G
+
+Je n'ai pas de SIM sous la main pour tester la partie 3G. Il
+semblerait que ce soit une partie compliquée. À noter que les
+adaptateurs à large bande comme celui-ci sont en plus équipés d'un
+AGPS.
+
+### Webcam
+
+Les webcams USB se sont standardisées autour du standard UVC et Linux
+dispose d'un [driver pour piloter ce type de webcam][18]. Il n'y a
+donc aucune difficulté à faire fonctionner la webcam. On vérifie que
+le module `uvcvideo` a été chargé et qu'il détecte bien la webcam :
+
+    uvcvideo: Found UVC 1.00 device Integrated Camera (5986:01a7)
+
+On peut tester rapidement le bon fonctionnement de celle-ci avec
+l'utilitaire `cheese`.
+
+### Lecteur de cartes
+
+Encore une fois, il n'y a rien à faire. On insère la carte dans le
+lecteur et elle est tout de suite reconnue.
+
+### Mise en veille
+
+J'opte pour le paquet `uswsusp` qui permet de gérer la mise en veille
+en mémoire ainsi que la mise en veille prolongée. On exploite ensuite
+les commandes du paquet `pm-utils`.
+
+La commande `pm-suspend` active la veille en mémoire. Le retour de
+veille est alors un peu fastidieux (une minute en tout). Le noyau
+indique :
+
+    r8169 0000:09:00.0: eth0: unable to apply firmware patch
+    PM: resume of devices complete after 60786.035 msecs
+    PM: Finishing wakeup.
+
+L'installation du paquet `firmware-realtek` permet de résoudre ce
+problème en attendant qu'il soit résolu dans le noyau. De temps en
+temps, le retour de veille s'accompagne du message suivant :
+
+    [drm:i915_hangcheck_ring_idle] *ERROR* Hangcheck timer elapsed... render ring idle [waiting on 9297, at 9297], missed IRQ?
+
+Ce message est accompagné d'un serveur X qui devient alors très
+lent. Passer `i915.semaphores=1` comme paramètre au noyau fait
+disparaître ce message mais la lenteur persiste. Démarrer `powertop`
+résoud le problème ! Il s'agirait d'un [problème connu][slow].
+
+[slow]: http://lists.freedesktop.org/archives/intel-gfx/2011-March/009579.html
+
+Notons que le portable tient plutôt bien la batterie quand il est en
+veille. Au bout de 6 heures, il ne perd que 2% de batterie. Il est
+donc possible de le laisser plusieurs jours ainsi.
+
+La commande `pm-hibernate` active la veille sur disque. L'hibernation
+se passe sans problème. Le retour d'hibernation ne fonctionne
+cependant pas. L'image est bien chargée en mémoire mais le système est
+alors freezé. Il existe un peu de
+[documentation pour déterminer le problème][debug] mais le 2.6.39
+sortant bientôt, il me semble plus simple d'attendre de voir si cela
+corrige le problème.
+
+### Gestion de l'énergie
+
+Penchons nous ensuite sur l'efficacité énergétique. L'installation du
+paquet `cpufrequtils` permet de changer le gouverneur utilisé par le
+processeur pour utiliser `ondemand` qui va descendre la vitesse du
+processeur de 1,33 GHz à 666 MHz lorsque celui-ci n'est pas sollicité.
+
+Pour le reste, il y a plusieurs approches possibles :
+
+ * L'utilisation du paquet `pm-utils` qui effectue un certain nombre
+   d'actions selon les événements ACPI reçus, comme par exemple
+   activer certaines fonction d'économie d'énergie comme le mode
+   « laptop ». Il n'agit toutefois que sur les évènements ACPI. Donc,
+   pas d'ajustement de la luminosité de l'écran en cas d'inactivité et
+   pas de mise en veille en cas de longue inactivité. On peut donc y
+   adjoindre `sleepd` mais je n'ai rien trouvé pour la luminosité de
+   l'écran.
+ * L'utilisation du paquet `laptop-mode-tools` est très similaire,
+   mais comme `pm-utils` doit de toute façon être installé, cela
+   devient un peu redondant.
+ * L'utilisation de `gnome-power-manager` qui s'interface avec le
+   démon `upowerd`. A priori, `gnome-power-manager` est assez léger,
+   du moment que l'on utilise aussi un environnement graphique
+   fortement orienté GTK. Il couvre les fonctionnalités des deux
+   précédents mais permet aussi d'amorcer une mise en veille en cas
+   d'inactivité et de diminuer la luminosité de l'écran.
+
+Il semblerait que l'avenir du desktop Linux se tourne vers la dernière
+solution. À noter que `upowerd` invoque le script `pm-powersave` du
+paquet `pm-utils` et qu'il est donc possible d'exécuter des actions
+supplémentaires lorsqu'on passe sur batterie. Cela paraît donc la
+solution la plus complète.
+
+Pour `pm-utils`, les scripts utilisés lorsqu'on passe sur batterie ou
+sur secteur se trouvent dans `/usr/lib/pm-utils/power.d`. On peut en
+ajouter dans `/etc/pm/power.d`. Il est possible de changer le
+comportement de certains scripts en ajoutant des fichiers de
+configuration dans `/etc/pm/config.d`. Par exemple pour activer le
+mode SATA ALPM, il faut mettre la variable `SATA_ALPM_ENABLE` à
+`true`.
+
+Pour vérifier le bien fondé des optimisations mises en place, la
+commande `powertop` peut montrer ce qu'il reste à faire. Pour aller
+plus loin, le site [Less Watts][lesswatts] donne des astuces
+supplémentaires qu'il est possible de transformer en scripts à placer
+dans `/etc/pm/power.d`.
+
+En laissant tout dans la configuration par défaut, il semble aisé
+d'atteindre cinq heures d'autonomie en ne faisant pas grand chose et
+quatre heures dans une utilisation plus poussée. Le constructeur
+annonce six heures d'autonomie.
+
+[debug]: http://lxr.linux.no/#linux+v2.6.38/Documentation/power/basic-pm-debugging.txt
+[lesswatts]: http://www.lesswatts.org/
+
+*[LVM]: Logical Volume Manager
+*[ACPI]: Advanced Configuration and Power Interface
+*[UVC]: USB Video Class
+*[AGPS]: Assisted Global Positioning System
+*[A2DP]: Advanced Audio Distribution Profile
+
+[7]: http://www.debian.org/
+[8]: http://cdimage.debian.org/cdimage/daily-builds/daily/arch-latest/amd64/iso-cd/debian-testing-amd64-netinst.iso
+[9]: http://bugs.debian.org/cgi-bin/bugreport.cgi?msg=15;bug=614749
+[10]: http://www.thinkwiki.org/wiki/Category:Edge_11%22
+[11]: https://wiki.archlinux.org/index.php/Poulsbo
+[12]: http://www.thinkwiki.org/wiki/Intel_HD_Graphics
+[13]: http://www.thinkwiki.org/wiki/Realtek_Gigabit_Ethernet_%2810/100/1000%29
+[14]: http://www.thinkwiki.org/wiki/How_to_get_special_keys_to_work
+[15]: http://www.thinkwiki.org/wiki/UltraNav
+[16]: http://fr.wikipedia.org/wiki/Trackpoint
+[17]: http://www.pulseaudio.org/
+[18]: http://www.ideasonboard.org/uvc/
+[19]: http://www.bluez.org/
+[20]: http://blueman-project.org/
+
+# Conclusion
+
+Ce Lenovo Edge semble d'un bon rapport qualité prix. Il dispose d'un
+équipement plutôt complet et d'un très bon clavier pour un portable de
+cette taille. Il n'est ni aussi fin, ni aussi léger que ce que
+j'aurais souhaité, mais cela reste raisonnable. Son autonomie est
+également assez bonne pour un portable de cette catégorie.
+
+Le support logiciel sous GNU/Linux est très bon puisque presque tout
+marche sans nécessiter de configuration particulière. Il est possible
+que le 2.6.39 améliore les quelques points qui n'apportent pas encore
+satisfaction comme la mise en veille sur disque.
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
