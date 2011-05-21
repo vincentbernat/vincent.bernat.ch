@@ -1,0 +1,587 @@
+---
+title: 'Labo virtuel avec User Mode Linux'
+keywords: "réseau, uml, labo, linux, test, vde, aufs"
+uuid: 0f03b189-3f10-485c-b222-ad3351aaa2c9
+---
+
+Pour monter un réseau virtuel de test, il existe un certain nombre
+d'alternatives intéressantes telles que [GNS3][gns3], [Netkit][netkit],
+[Marionnet][marionnet] ou [VNUML][vnuml]. Certains de ces outils,
+notamment [GNS3][gns3], permettent en plus d'ajouter à votre labo des
+équipements propriétaires tels qu'un Cisco 7200.
+
+Tous ces outils permettent de mettre en place simplement et rapidement
+un réseau virtuel. *Jetez-y un coup d'oeil !* Si vous souhaitez mettre
+en place pour des TP d'enseignement un environnement virtuel, l'un
+d'eux conviendra forcément. Toutefois, aucun d'eux ne répondait
+parfaitement à mes besoins. Je voulais notamment pouvoir garder toute
+la configuration du labo dans un seul répertoire. Je ne voulais pas
+non plus maintenir des images disque, notamment à cause de l'espace
+disque important qu'elles peuvent occuper. La possibilité d'inclure
+des routeurs Cisco avec [Dynamips/Dynagen][dynagen] m'est aussi très
+importante.
+
+J'ai donc entrepris de monter un lab à partir de rien avec l'aide de
+[User Mode Linux][uml]. Il ne s'agit pas d'une solution clef en main
+mais vraiment d'une solution à adapter à ses besoins. Encore une fois,
+il est sans doute préférable de capitaliser sur l'une des solutions
+présentées ci-dessus.
+
+Je vais vous expliquer pas à pas comment cette solution est
+construite. Si vous êtes pressé, le résultat est disponible dans un
+dépôt [GitHub][networklab].
+
+# User Mode Linux
+
+[User Mode Linux][uml] (ou UML) est un noyau Linux. Celui-ci ne tourne
+pas sur un processeur physique tel que celui de votre machine mais en
+tant que simple processus, au même titre qu'un navigateur web. Avec
+Debian, un tel noyau est disponible dans le paquet `user-mode-linux`
+qui fournit une commande `linux`. Il est tout à fait inutile (voire
+dangereux dans notre cas) de la lancer en tant que root !
+
+    #!console
+    $ linux
+    Core dump limits :
+        soft - 0
+        hard - NONE
+    Checking that ptrace can change system call numbers...OK
+    Checking syscall emulation patch for ptrace...OK
+    Checking advanced syscall emulation patch for ptrace...OK
+    Checking for tmpfs mount on /dev/shm...nothing mounted on /dev/shm
+    Checking PROT_EXEC mmap in /tmp/user/500/...OK
+    Checking for the skas3 patch in the host:
+      - /proc/mm...not found: No such file or directory
+      - PTRACE_FAULTINFO...not found
+      - PTRACE_LDT...not found
+    UML running in SKAS0 mode
+    Adding 5632000 bytes to physical memory to account for exec-shield gap
+    Initializing cgroup subsys cpuset
+    Linux version 2.6.32 (2.6.32) (root@tito) (gcc version 4.4.5 (Debian 4.4.5-10) ) #2 Thu Jan 27 12:49:46 UTC 2011
+    [...]
+    console [mc-1] enabled
+    Couldn't stat "root_fs" : err = 2
+    Failed to initialize ubd device 0 :Couldn't determine size of device's file
+    registered taskstats version 1
+    VFS: Cannot open root device "98:0" or unknown-block(98,0)
+    Please append a correct "root=" boot option; here are the available partitions:
+    Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(98,0)
+
+Le noyau finit sur un _panic_ car on ne lui a pas fourni d'image
+disque sur laquelle démarrer. Nous allons voir comment nous passer de
+cette image disque.
+
+## Configuration de base
+
+Il est en effet possible d'utiliser votre propre système comme image
+disque. Toutefois, on ne va pas laisser le noyau démarrer normalement,
+mais on va lui indiquer d'utiliser `/bin/sh` comme `init`. Ainsi, une
+fois le noyau démarré, on obtient un simple shell :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs
+    [...]
+    Linux version 2.6.32 (2.6.32) (root@tito) (gcc version 4.4.5 (Debian 4.4.5-10) ) #2 Thu Jan 27 12:49:46 UTC 2011
+    [...]
+    VFS: Mounted root (hostfs filesystem) readonly on device 0:12.
+    IRQ 3/console-write: IRQF_DISABLED is not guaranteed on shared IRQs
+    IRQ 2/console: IRQF_DISABLED is not guaranteed on shared IRQs
+    IRQ 10/winch: IRQF_DISABLED is not guaranteed on shared IRQs
+    /bin/sh: can't access tty; job control turned off
+    # uname -a
+    Linux (none) 2.6.32 #2 Thu Jan 27 12:49:46 UTC 2011 x86_64 GNU/Linux
+    # echo $$
+    1
+
+Il faut passer quelques commandes pour normaliser un peu
+l'environnement pour les programmes qui seront lancés par la suite :
+
+    #!console
+    # hostname -b R1
+    # export TERM=xterm
+    # export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/local/sbin:/usr/sbin
+    # mount -t proc proc /proc
+    # mount -t sysfs sysfs /sys
+    # mount -t tmpfs tmpfs /var/run -o rw,nosuid,nodev
+    # mount -t tmpfs tmpfs /var/log -o rw,nosuid,nodev
+    # mount -o bind /usr/lib/uml/modules /lib/modules
+    # mount -t hostfs hostfs /home/bernat/mylab -o /home/bernat/mylab
+
+On monte ainsi les pseudo systèmes de fichier `/proc` et `/sys` et on
+place des `tmpfs` pour un certain nombre de répertoires. Cela devrait
+permettre aux démons de démarrer normalement sur ce système.
+
+La ligne à propos de `/lib/modules` permet de placer les modules dans
+un endroit que `modprobe` saura trouver. On monte de plus le `/home`
+via `hostfs`, en lecture/écriture. Le reste du système reste en
+lecture seule.
+
+Les droits ont une importance toute particulière sur ce système. En
+effet, on se trouve root à l'intérieur de l'UML mais celle-ci tourne
+en tant que processus utilisateur sur votre système. Ainsi, si elle
+tente de modifier un fichier, les droits classiques s'appliquent. Par
+exemple :
+
+    #!console
+    # mount -o remount,rw /
+    # touch /tmp/test1
+    # touch /etc/test1
+    touch: cannot touch `/etc/test1': Permission denied
+
+C'est un garde-fou important pour éviter de détruire votre système
+lors de vos tests.
+
+Il est très intéressant de configurer ainsi son système car il est
+alors très simple de partager des fichiers de configuration entre le
+système hôte et l'UML. Pas besoin de les copier dans un sens ou dans
+l'autre. Ils sont accessibles et modifiables des deux côtés !
+
+## Console & gestion des tâches
+
+Il y a un inconvénient majeur à l'environnement que nous venons de
+mettre en place. Peut-être le connaissez-vous déjà si vous avez un
+jour démarré votre système en `init=/bin/sh` : nous ne disposons pas
+de « job control ». Il s'agit du mécanisme qui permet d'interrompre ou
+de mettre en tâche de fond un processus. Par exemple, on peut
+normalement stopper un programme avec `^C`. Pas possible ici :
+
+    #!console
+    # cat
+    ^C^C^C^C
+
+La seule solution est de tuer le processus `linux` sur votre machine.
+
+Ce mécanisme est un grand mystère pour moi, Je ne sais pas exactement
+ce qui l'active. Il se trouver que `getty` est capable de
+l'activer. On peut donc utiliser cette commande :
+
+    #!console
+    # exec getty -n -l /bin/bash 38400 /dev/tty0
+
+Et voilà, problème résolu. On en a profité pour utiliser `/bin/bash`
+car `/bin/sh` est beaucoup trop minimaliste.
+
+## Écrire sur la partition racine
+
+Retournons à notre partition racine. Elle est en lecture seule mais
+nous avons aménagé ce qu'il faut pour que la plupart des démons
+fonctionnent sans problème. Par exmple, on peut démarrer
+[Nginx][nginx], un serveur web assez populaire :
+
+    #!console
+    # mkdir /var/log/nginx
+    # /etc/init.d/nginx start
+    Starting nginx: nginx.
+
+Toutefois, il va utiliser la configuration présente dans `/etc/nginx`
+et il n'est pas raisonnable d'aller modifier cette configuration pour
+chaque labo. On peut lui préciser un autre fichier de configuration :
+
+    #!console
+    # /etc/init.d/nginx stop
+    # nginx -c /home/bernat/mylab/nginx.conf
+
+On garde ainsi les fichiers de configuration importants de notre labo
+dans le répertoire de celui-ci. Toutefois, il n'est alors plus
+possible d'utiliser le script de démarrage de Nginx. Sans compter que
+certains démons n'acceptent pas de recevoir un fichier de
+configuration en argument.
+
+C'est un problème assez courant sur les  [Live CD][livecd] et cela a
+été résolu en utilisant un système de fichiers capable de fusionner
+plusieurs systèmes de fichiers en un seul. L'un de ces systèmes de
+fichiers est [AUFS][aufs]. Il faut installer le paquet `aufs-tools`
+pour continuer. On recommence du début pour cet exemple :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs
+    [...]
+    # mount -n -t proc proc /proc
+    # mount -n -t sysfs sysfs /sys
+    # mount -o bind /usr/lib/uml/modules /lib/modules
+    # mount -n -t tmpfs tmpfs /tmp -o rw,nosuid,nodev
+    # mkdir /tmp/ro /tmp/rw /tmp/aufs
+    # mount -n -t hostfs hostfs /tmp/ro -o /,ro
+    # mount -n -t aufs aufs /tmp/aufs -o noatime,dirs=/tmp/rw:/tmp/ro=ro
+    # exec chroot /tmp/aufs /bin/bash
+
+Il aurait été assez sympa de pouvoir fusionner la racine avec un
+répertoire de votre `/home` : cela permettrait de garder les
+modifications dans le répertoire dédié à votre lab. Toutefois, AUFS ne
+semble pas bien s'etendre avec `hostfs` et le kernel émet des _panics_
+intempestifs.
+
+Reprenons notre exemple avec Nginx et disons que nous avons placé la
+configuration dans `/home/bernat/lab/nginx`. Nous remplaçons
+simplement le répertoire `/etc/nginx` par un lien symbolique vers ce
+nouveau répertoire :
+
+    #!console
+    # rm -rf /etc/nginx
+    # ln -s /home/bernat/mylab/nginx /etc/nginx
+
+L'effacement de `/etc/nginx` n'a lieu en réalité que sur le `tmpfs`
+que nous avons mis en place pour recueillir les modifications
+effectuées sur la racine. En contre-partie, cette modification est
+perdue dès l'arrêt du lab. Il faut donc l'intégrer au script de mise
+en place du lab.
+
+# Réseau
+
+Maintenant que nous savons comme démarrer une machine UML, nous allons
+tenter d'ajouter quelques câbles. UML supporte quelques interfaces
+réseau virtuelles et notamment les interfaces TAP et les switchs VDE.
+
+## TAP
+
+Une [interface TAP][tap] est une interface virtuelle qui peut être
+utilisée par un processus utilisateur pour injecter des trames
+Ethernet. Tout ce que le noyau envoie dans cette interface est reçu
+par l'application qui y écoute et vice-versa. Le noyau considère cette
+interface comme une simple interface Ethernet. Il est donc possible
+d'y faire des `tcpdump` ou de la _bridger_. L'inconvénient est qu'il
+faut être root pour les créer, mais il n'est pas nécessaire de lancer
+les applications qui vont les utiliser en tant que root.
+
+J'ai une fonction shell que j'utilise quand je veux créer une telle
+interface :
+
+    #!sh
+    __add_to_bridge() {
+        # Optionally, add it to given bridge
+        [ -z "$2" ] || {
+            [ -f /sys/class/net/$2/brforward ] || {
+                sudo brctl addbr $2
+                sudo brctl stp $2 off
+                sudo ip link set $2 up
+            }
+            [ -f /sys/class/net/$2/brif/$1 ] || {
+                # We need to check if it is in another bridge
+                bridge=$(echo /sys/class/net/*/brif/$1 2> /dev/null | \
+                    sed 's+/sys/class/net/\([^/]*\)/.*+\1+') 2> /dev/null
+                [ -n "$bridge" ] && \
+                    sudo brctl delif $bridge $1
+                sudo brctl addif $2 $1
+            }
+        }
+    }
+    tap() {
+        sudo tunctl -b -u $(whoami) -t $1 > /dev/null
+        sudo ip link set up dev $1
+        __add_to_bridge $1 $2
+    }
+
+Cette fonction va créer l'interface et éventuellement la placer dans
+un bridge. Voici comment créer deux interfaces et les lier entre elle
+par un câble virtuel :
+
+    #!console
+    $ tap tap-R1 br-R1R2
+    $ tap tap-R2 br-R1R2
+
+Il est ensuite très simple de démarrer deux UML qui vont communiquer
+entre elles. Pour la première :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R1
+    [...]
+    # ip link set up dev eth0
+    # ip addr add 192.168.0.1/24 dev eth0
+
+Et pour la seconde :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R2
+    [...]
+    # ip link set up dev eth0
+    # ip addr add 192.168.0.2/24 dev eth0
+    # ping 192.168.0.1
+    PING 192.168.0.1 (192.168.0.1) 56(84) bytes of data.
+    Warning: time of day goes back (-13832us), taking countermeasures.
+    64 bytes from 192.168.0.1: icmp_req=20 ttl=64 time=0.633 ms
+    64 bytes from 192.168.0.1: icmp_req=21 ttl=64 time=0.157 ms
+
+Attention, si vous avez un firewall sur votre machine, celui-ci
+intercepte les paquets qui traversent le bridge. Attention de vérifier
+qu'il les laissera passer.
+
+## VDE
+
+Un  [switch VDE][vde]  est une émulation logicielle assez basique d'un
+switch classique. C'est un composant qui tourne entièrement en espace
+utilisateur et qui ne nécessite pas les droits root. Il faut installer
+le paquet `vde2` pour en profiter. Il est alors possible de lancer le
+switch avec la commande `vde_switch`. On obtient une console en
+pressant la touche _Entrée_. Il est possible d'effectuer quelques
+opérations de configuration, mais on ne va pas s'y attarder.
+
+Reprenons notre exemple précédent et essayons de faire communiquer
+deux UML à travers ce switch. Première UML :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs eth0=vde
+    [...]
+    # ip link set up dev eth0
+    # ip addr add 192.168.0.1/24 dev eth0
+
+Deuxième UML :
+
+    #!console
+    $ linux init=/bin/sh rootfstype=hostfs eth0=vde
+    [...]
+    # ip link set up dev eth0
+    # ip addr add 192.168.0.2/24 dev eth0
+    # ping 192.168.0.1
+    PING 192.168.0.1 (192.168.0.1) 56(84) bytes of data.
+    64 bytes from 192.168.0.1: icmp_req=1 ttl=64 time=2.93 ms
+    Warning: time of day goes back (-8101us), taking countermeasures.
+    64 bytes from 192.168.0.1: icmp_req=2 ttl=64 time=0.503 ms
+
+# Le labo
+
+Maintenant que l'on a passé en revue les grandes briques nécessaires
+pour montrer notre labo, nous devons coller tout ça ensemble dans un
+script. Tout est disponible sur [GitHub][networklab]. Jetez un coup
+d'oeil et _forkez_ si cela vous tente.
+
+Dans notre labo, nous allons mettre en place un VPN redondant entre
+deux sites distant. Chaque site utilise OSPF pour le routage
+interne. BGP sera utilisé pour échanger les routes entre les deux
+sites.
+
+![Labo VPN redondants][1]
+[1]: [[!!images/uml-lab.png]]
+
+Pour voir comment j'ai implémenté ce lab, récupérez les sources de
+celui-ci :
+
+    #!console
+    $ git clone https://github.com/vincentbernat/network-lab.git
+    $ cd network-lab/lab-redundant-vpn
+
+Vous obtenez un script `setup` qui permet de démarrer le lab. Les
+répertoires au nom des machines contiennent les fichiers de
+configuration pour [Quagga][quagga] (un démon de routage) et racoon
+(un démon IKE pour IPsec). Il faut donc que vous installiez les
+paquets `quagga` et `racoon` sur votre mahcine.
+
+## Configuration des UML
+
+Regardez d'abord la fin du script. Il se présente ainsi :
+
+    #!sh
+    case $$ in
+        1)
+            # Inside UML. Three states:
+            [...]
+            ;;
+        *)
+            TMP=$(mktemp -d)
+            trap "rm -rf $TMP" EXIT
+            check_dependencies
+            setup_screen
+            # Setup switches
+            setup_switch site1
+            setup_switch site101
+            setup_switch internet
+            # Start VM
+            start_vm R1 eth0=vde,$TMP/switch-site1.sock
+            start_vm R2 eth0=vde,$TMP/switch-site101.sock
+            start_vm V1 eth0=vde,$TMP/switch-site1.sock eth1=vde,$TMP/switch-internet.sock
+            start_vm V2 eth0=vde,$TMP/switch-site1.sock eth1=vde,$TMP/switch-internet.sock
+            start_vm V3 eth0=vde,$TMP/switch-site101.sock eth1=vde,$TMP/switch-internet.sock
+            start_vm V4 eth0=vde,$TMP/switch-site101.sock eth1=vde,$TMP/switch-internet.sock
+            start_vm I1 eth0=vde,$TMP/switch-internet.sock
+            display_help
+            cleanup
+            screen -X quit
+            ;;
+    esac
+
+Il vérifie quel est son PID (`$$`). S'il a le PID 1, cela signifie
+qu'il a été invoqué en tant que `init` pour une UML. Sinon, c'est
+qu'il est lancé par un utilisateur. Dans ce cas, il effectue quelques
+vérifications et configure `screen`. En effet, tout le lab va tourner
+dans `screen` et il ne va pas y avoir plein de fenêtres partout.
+Ensuite, le script configure les 3 switchs nécessaires pour le lab et
+démarrer les machines UML.
+
+Pour chaque machine à lancer, on précise quelles sont les interfaces
+réseau que l'on veut mettre en place. Pour _R1_ et _R2_, on utilisera
+une interface `dummy0` pour le réseau interne. On ne demande donc
+qu'une seule interface. Une machine, _I1_, est destinée à émuler
+[« Internet »](http://www.youtube.com/watch?v=UTBsm0LzSP0).
+
+Chaque UML va utiliser comme `init` ce même script. Ce dernier va
+effectuer la configuration propre à chaque UML à l'aide d'une
+instruction `case` :
+
+    #!sh
+    echo "[+] Setup UML"
+    sysctl -w net.ipv4.ip_forward=1
+    case ${uts} in
+        R1)
+            modprobe dummy
+            ip link set up dev dummy0
+            ip addr add 192.168.15.1/24 dev dummy0
+            ip addr add 192.168.1.10/24 dev eth0
+            setup_quagga
+            ;;
+        R2)
+            modprobe dummy
+            ip link set up dev dummy0
+            ip addr add 192.168.115.1/24 dev dummy0
+            ip addr add 192.168.101.10/24 dev eth0
+            setup_quagga
+            ;;
+        V1)
+            ip addr add 192.168.1.11/24 dev eth0
+            ip addr add 1.1.2.1/24 dev eth1
+            ip route add default via 1.1.2.10
+            setup_quagga
+            setup_racoon 1.1.2.1 1.1.1.1 192.168.0.0/19-192.168.100.0/19
+            ;;
+        V2)
+            ip addr add 192.168.1.12/24 dev eth0
+            ip addr add 1.1.2.2/24 dev eth1
+            ip route add default via 1.1.2.10
+            setup_quagga
+            setup_racoon 1.1.2.2 1.1.1.2 192.168.0.0/19-192.168.100.0/19
+            ;;
+        V3)
+            ip addr add 192.168.101.13/24 dev eth0
+            ip addr add 1.1.1.1/24 dev eth1
+            ip route add default via 1.1.1.10
+            setup_quagga
+            setup_racoon 1.1.1.1 1.1.2.1 192.168.100.0/19-192.168.0.0/19
+            ;;
+        V4)
+            ip addr add 192.168.101.14/24 dev eth0
+            ip addr add 1.1.1.2/24 dev eth1
+            ip route add default via 1.1.1.10
+            setup_quagga
+            setup_racoon 1.1.1.2 1.1.2.2 192.168.100.0/19-192.168.0.0/19
+            ;;
+        I1)
+            ip addr add 1.1.1.10/24 dev eth0
+            ip addr add 1.1.2.10/24 dev eth0
+            ;;
+    esac
+
+Enfin, il un shell est lancé quand tout est fini pour permettre
+d'invoquer de manière interactive des commandes pour examiner ou
+interagir avec chaque machine.
+
+## Tests
+
+Une fois démarré, il faut attendre la mise en place de toutes les
+adjacences. Le timing est un peu faussé sur des UML et il faut
+attendre une bonne minute. On peut ensuite examiner la table de
+routage de _R1_ :
+
+    #!console
+    R1# show ip route
+    Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
+           I - ISIS, B - BGP, > - selected route, * - FIB route
+
+    C>* 127.0.0.0/8 is directly connected, lo
+    O   192.168.1.0/24 [110/10] is directly connected, eth0, 00:25:42
+    C>* 192.168.1.0/24 is directly connected, eth0
+    O   192.168.15.0/24 [110/10] is directly connected, dummy0, 00:25:42
+    C>* 192.168.15.0/24 is directly connected, dummy0
+    O>* 192.168.115.0/24 [110/20] via 192.168.1.11, eth0, 00:02:24
+      *                           via 192.168.1.12, eth0, 00:02:24
+
+Pour contacter _R2_, il a appris une route _multipath_ : il peut soit
+passer par _V1_, soit par _V2_, comme prévu. Regardons la table de
+routage de _V3_ :
+
+    #!console
+    V3# show ip route
+    Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
+           I - ISIS, B - BGP, > - selected route, * - FIB route
+
+    K>* 0.0.0.0/0 via 1.1.1.10, eth1
+    C>* 1.1.1.0/24 is directly connected, eth1
+    C>* 127.0.0.0/8 is directly connected, lo
+    O   192.168.15.0/24 [110/20] via 192.168.101.14, eth0, 00:04:26
+    B>* 192.168.15.0/24 [20/20] via 192.168.1.11 (recursive via 1.1.1.10), 00:07:16
+    O   192.168.101.0/24 [110/10] is directly connected, eth0, 00:07:30
+    C>* 192.168.101.0/24 is directly connected, eth0
+    O>* 192.168.115.0/24 [110/20] via 192.168.101.10, eth0, 00:07:18
+
+Pour contacter _R1_, _V3_ connaît deux routes. L'une via BGP à travers
+le VPN. C'est cette route qui sera utilisée. L'autre route passe par
+son collègue, _V4_, et ne sera utilisée que si la première route est
+perdue (si le VPN est indisponible par exemple).
+
+Pinguons _R2_ depuis _R1_ :
+
+    #!console
+    R1# ping -I 192.168.15.1 192.168.115.1
+    PING 192.168.115.1 (192.168.115.1) from 192.168.15.1 : 56(84) bytes of data.
+    Warning: time of day goes back (-459129us), taking countermeasures.
+    64 bytes from 192.168.115.1: icmp_req=1 ttl=62 time=1.10 ms
+
+Si nous cassons le lien entre _V1_ et « Internet » (avec
+`ip link set down eth1` sur _V1_), la route _multipath_ sur _R1_ se
+transforme en une route simple vers _V2_. De plus, _V3_ a perdu sa
+route BGP vers _V1_ et utilise donc sa route OSPF vers _V4_ :
+
+    #!console
+    V3# show ip route
+    Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
+           I - ISIS, B - BGP, > - selected route, * - FIB route
+
+    K>* 0.0.0.0/0 via 1.1.1.10, eth1
+    C>* 1.1.1.0/24 is directly connected, eth1
+    C>* 127.0.0.0/8 is directly connected, lo
+    O>* 192.168.15.0/24 [110/20] via 192.168.101.14, eth0, 00:10:13
+    O   192.168.101.0/24 [110/10] is directly connected, eth0, 00:13:17
+    C>* 192.168.101.0/24 is directly connected, eth0
+    O>* 192.168.115.0/24 [110/20] via 192.168.101.10, eth0, 00:13:05
+
+Il est possible très simplement d'améliorer la tolérance aux pannes de
+ce réseau en plaçant une interconnexion entre _V1_ et _V2_ et entre
+_V3_ et _V4_. Il est ainsi possible de supporter plusieurs pannes sur
+notre réseau.
+
+# Conclusion
+
+Il est assez simple de monter d'autres labs en adaptant légèrement le
+script. Notons toutefois que son bon fonctionnement dépend de
+la configuration de votre machine. Cela autorise toutefois de contenir
+le lab en entier dans un simple répertoire qui peut tout à fait
+transiter par mail ou être publié sur [GitHub][networklab].
+
+Il est possible de le modifier pour y inclure des équipements Cisco en
+utilisant [Dynagen][dynagen] pour, par exemple, expérimenter avec VRF
+ou MPLS.
+
+[vnuml]: http://www.dit.upm.es/vnumlwiki/index.php/Main_Page
+[marionnet]: http://www.marionnet.org/
+[netkit]: http://www.netkit.org
+[gns3]: http://www.gns3.net/
+[dynagen]: http://www.dynagen.org/
+[uml]: http://user-mode-linux.sourceforge.net/
+[nginx]: http://wiki.nginx.org
+[livecd]: http://fr.wikipedia.org/wiki/Live_CD
+[aufs]: http://fr.wikipedia.org/wiki/Aufs
+[tap]: http://en.wikipedia.org/wiki/TUN/TAP
+[vde]: http://wiki.virtualsquare.org/wiki/index.php/VDE_Basic_Networking
+[networklab]: https://github.com/vincentbernat/network-lab/tree/master/lab-redundant-vpn
+[bird]: http://bird.network.cz/
+[quagga]: http://www.quagga.net/
+*[UML]: User Mode Linux
+*[VDE]: Virtual Distributed Ethernet
+*[OSPF]: Open Shortest Path First
+*[IGP]: Interior Gateway Protocol
+*[BGP]: Border Gateway Protocol
+*[PID]: Process Identifier
+*[VPN]: Virtual Private Network
+*[VRF]: Virtual Routing and Forwarding
+*[MPLS]: Multiprotocol Label Switching
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
