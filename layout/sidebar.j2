@@ -31,7 +31,11 @@
     <p>{{ resource.meta.l10n.attachments }}</p>
     <ul>
 {% for file, description in resource.meta.attachments %}
+{% if file.startswith('http://') or file.startswith('https://') %}
+<li><a href="{{ file }}">{{ description }}</a></li>
+{% else %}
 <li><a href="{{ media_url('files/' + file) }}">{{ description }}</a></li>
+{% endif %}
 {% endfor %}
     </ul>
 {% endif %}
