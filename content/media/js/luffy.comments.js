@@ -3,8 +3,11 @@
 var luffy = luffy || {};
 luffy.comments = function() {
     $("#lf-disqus").click(function() {
-	$(this).hide();
+	var loading = $(this).text('Loading/Chargement...');
         var src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
-	yepnope(src);
+	yepnope({ load: src,
+		  complete: function() {
+		      loading.hide();
+		  }});
     });
 };
