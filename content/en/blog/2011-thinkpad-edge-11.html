@@ -45,7 +45,7 @@ Here is the configuration that I bought:
  * 4 GB RAM.
  * 320 GB hard drive.
  * Wireless network (Centrino Wireless-N) and bluetooth.
- * Broadband modem.
+ * Broadband modem (WWAN)
 
 It's a small laptop but it is not as light as it should be (1.5 kg or
 3.3 pounds). Apart from the power supply, you don't get any extra. My
@@ -502,11 +502,33 @@ quickly pair to any device. If you install
 `pulseaudio-module-bluetooth` package, any bluetooth headset should
 work out of the box.
 
-### Broadband
+### Broadband (WWAN)
 
-I don't have a SIM card to test the broadband modem. It seems that it
-is a rather tricky piece of hardware to configure. It also comes with
-an AGPS chipset.
+To configure the broadband modem, the most difficult thing to do is to
+grab the appropriate firmware. [ThinkWiki][gobi] comes with various
+instructions to get it. I did not keep my Windows installation and
+therefore, I grabbed the
+[Qualcomm Gobi 2000 Wireless WAN driver][qualcomm] and I unpacked it
+with some Windows host with `msiexec` as instructed (I did have to
+execute the installation program first, otherwise, `msiexec` tells
+that the file is invalid). I choosed the default firmware since my
+laptop is unlocked. [ThinkWiki page][gobi] explains which firmware to
+choose in which situation.
+
+The package `gobi-loader` needs to be installed. The firmware files
+`amss.mbn`, `apps.mbn` and `UQCN.mbn` should be placed in
+`/lib/firmware/gobi`. They will be loaded by `udev`. To avoid to
+reboot, I used this command:
+
+    #!console
+    # /lib/udev/gobi_loader -2000 /dev/ttyUSB0 /lib/firmware/gobi
+
+To configure the 3G connection, I just used *Network Manager*. Ensure
+with `rfkill list` that your WWAN card is not blocked. I did
+not test the GPS part that needs to be enabled on Windows.
+
+[gobi]: http://www.thinkwiki.org/wiki/Qualcomm_Gobi_2000
+[qualcomm]: http://www-307.ibm.com/pc/support/site.wss/MIGR-72938.html
 
 ### Webcam
 

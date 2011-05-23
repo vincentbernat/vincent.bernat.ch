@@ -571,10 +571,38 @@ PulseAudio.
 
 ### 3G
 
-Je n'ai pas de SIM sous la main pour tester la partie 3G. Il
-semblerait que ce soit une partie compliquée. À noter que les
-adaptateurs à large bande comme celui-ci sont en plus équipés d'un
-AGPS.
+Pour configurer la carte 3G, le plus difficile est de récupérer les
+firmwares adéquats. [La page ThinkWiki][gobi] dédiée fournie les
+informations nécessaires pour les obtenir. Je n'ai pas gardé le
+Windows qui était installé sur la machine. J'ai donc récupérés les
+[drivers Qualcomm Gobi 2000 Wireless WAN][qualcomm] et je les ai
+décompactés avec le premier Windows qui passait par là avec l'aide de
+`msiexec`. Contrairement à ce qui est dit sur le wiki, `msiexec` ne
+prend pas directement l'exécutable. Il faut l'exécuter pour obtenir le
+`.msi`.
+
+Pour le firmware, j'ai pris celui par défaut étant donné que mon
+portable n'est pas SIM locké. Encore une fois, la
+[page sur ThinkWiki][gobi] explique quel firmware choisir.
+
+Le paquet `gobi-loader` doit être installé pour pouvoir faire
+fonctionner la carte 3G. Les trois fichiers `amss.mbn`, `apps.mbn` et
+`UQCN.mbn` doivent être placés dans `/lib/firmware/gobi`. Ils seront
+alors chargés automatiquement par `udev` au prochain boot. Pour les
+charger dès mainetnant, on peut utiliser :
+
+    #!console
+    # /lib/udev/gobi_loader -2000 /dev/ttyUSB0 /lib/firmware/gobi
+
+La configuration 3G peut ensuite être configurée avec *Network
+Manager* qui est très pratique pour ça. Attention à vérifier que la
+carte 3G n'est pas bloquée avec `rfkill list`.
+
+Pour le GPS, il faut l'activer depuis Windows. Je n'ai donc pas testé
+cette partie.
+
+[gobi]: http://www.thinkwiki.org/wiki/Qualcomm_Gobi_2000
+[qualcomm]: http://www-307.ibm.com/pc/support/site.wss/MIGR-72938.html
 
 ### Webcam
 
