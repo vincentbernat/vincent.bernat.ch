@@ -10,4 +10,5 @@ $(function() {
     luffy.search();
     luffy.timeago();
     luffy.comments();
+    luffy.gallery();
 });
