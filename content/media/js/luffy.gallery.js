@@ -136,8 +136,8 @@ luffy.gallery = function() {
 	$(number).html((((images.length > 1) && options.counterText) || "")
 		       .replace(/{x}/, activeImage + 1).replace(/{y}/, images.length));
 
-	if (prevImage >= 0) preloadPrev.src = images[prevImage][0];
-	if (nextImage >= 0) preloadNext.src = images[nextImage][0];
+	if (prevImage >= 0) preloadPrev.src = images[prevImage].href;
+	if (nextImage >= 0) preloadNext.src = images[nextImage].href;
 
 	centerWidth = image.offsetWidth;
 	centerHeight = image.offsetHeight;
