@@ -1,5 +1,7 @@
 /* Handle image gallery */
-/* Stripped from slimbox. http://code.google.com/p/slimbox/ */
+/* Stripped from slimbox. http://code.google.com/p/slimbox/
+   Also released under MIT license.
+ */
 
 var luffy = luffy || {};
 luffy.gallery = function() {
