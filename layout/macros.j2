@@ -22,13 +22,13 @@
 {% endif %}
 {% endmacro %}
 
-{% macro gallery(directory) %}
+{% macro gallery(directory,description) %}
 <div class="lf-gallery">
 {% for image in site.content.walk_resources()
    if image.source_file.kind in ("jpg","png") and
    (image.name.startswith(directory) or image.source_file.parent.name == directory) %}
 {% set thumb = image.thumb(height=150) %}
-<a href="/{{ image.get_relative_deploy_path() }}"><img src="/{{ thumb }}" height="{{ thumb.height }}" width="{{ thumb.width }}"></a>
+<a href="/{{ image.get_relative_deploy_path() }}"><img src="/{{ thumb }}" height="{{ thumb.height }}" width="{{ thumb.width }}" alt="{{ description|e }}"></a>
 {% endfor %}
 </div>
 {% endmacro %}
