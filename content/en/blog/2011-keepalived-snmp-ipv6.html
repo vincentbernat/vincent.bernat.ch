@@ -1,0 +1,261 @@
+---
+title: 'SNMP support for keepalived'
+keywords: "snmp, keepalived, network, load balancing, ipvs, linux, uml"
+uuid: 12d51063-f3e8-442a-9e28-8f61c5436d08
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp": "Complete lab"
+  "https://github.com/vincentbernat/keepalived/tree/snmp-1.2.0": "Source of keepalived with SNMP support"
+---
+
+# keepalived
+
+[keepalived][keepalived] is an high-availability and load-balacing
+solution. Using [VRRP][vrrp], it allows you to share IP addresses
+between several servers or routers. At a given moment, only one of
+them (the *master*) will be handed the IP address. VRRP is usually
+setup for redundant routers, but you can also setup redundant
+services. If the master becomes unavailable or fails, one of the
+*backups* will take over the IP address. VRRP is not a cluster
+resource manager. It is targeted at sharing one (or several) IP
+between a set of hosts. If you want to share other resources with
+complex conditions like "at least two web servers should run and the
+database should not run on the same node as a web server", you should
+look at [heartbeat][ha] instead.
+
+For load-balancing, keepalived relies on [IPVS][ipvs], a Linux
+subsystem featuring layer-4 switching. keepalived will check if your
+servers are alive and tell it to IPVS. IPVS will handle incoming
+connections and send them on the appropriate alive server depending on
+the policy you can configure. For example, one policy is
+*round-robin*: servers are handled new connections in circular order.
+
+# keepalived & SNMP
+
+keepalived did not feature a native SNMP support. I have added
+complete SNMP support and I hope those patches will be accepted into
+mainstream. Meanwhile, you can grab
+[keepalived with SNMP support source code][source] from
+GitHub. Currently, it is based on the latest version of keepalived.
+
+Here is what you can do :
+
+ - query the configuration of the running keepalived without parsing
+   configuration files;
+ - query runtime status (like VRRP status, priority or current state
+   of a virtual server) without looking in the logs;
+ - query runtime statistics about virtual servers (how many
+   connections were handled by this real server, for example) without
+   parsing the output of `ipvsadm`;
+ - get noticed with the help of SNMP traps when something changed
+   (VRRP transition or a real server that became unavailable);
+ - changing the priority of a VRRP instance (to force a transition as
+   master);
+ - changing the weight of a real server (to remove it from a pool of
+   servers).
+
+## Compilation
+
+To use it:
+
+    #!console
+    $ git clone https://github.com/vincentbernat/keepalived.git
+    $ cd keepalived
+    $ git checkout snmp-1.2.0
+    $ ./configure --enable-snmp
+    $ make
+
+You get `bin/keepalived` which is the SNMP enabled keepalived
+daemon. You can use it directly or install it with `make install` as
+root.
+
+On RHEL, SNMP is not properly packaged. Try the following command
+instead of `make`:
+
+    #!console
+    $ make LDFLAGS="$(net-snmp-config --agent-libs) -lpopt -lssl -lcrypto"
+
+## Use
+
+To use it, you need to ensure that your main `snmpd` daemon can become
+a master agent. Check for the presence of `master agentx` line in
+`snmpd.conf`. The next step is to start keepalived with the `-x`
+switch. keepalived will connect to your main `snmpd` daemon. You can
+check the logs for a ligne like this:
+
+    May 28 17:21:19 L1 Keepalived_vrrp: NET-SNMP version 5.4.3 AgentX subagent connected
+
+## Lab
+
+To test it, we can setup a little lab with UML. You can find
+additional details about this kind of lab in my post about
+[network lab with UML][lab1]. Grab the
+[complete lab from GitHub][lab2]. Ensure that you correct the path to
+keepalived sources at the top of the `setup` script.
+
+![keepalived & SNMP lab][1]
+[1]: [[!!images/keepalived-lab.png]]
+
+The lab features four web servers that will be merged into a single
+web service with the help of keepalived. Since, keepalived now
+supports full IPv6 support, we will also use IPv6 in our lab.
+
+Here is the VRRP configuration of the first keepalived :
+
+    vrrp_instance VI_1 {
+       state MASTER
+       interface eth2
+       dont_track_primary
+       track_interface {
+          eth0
+          eth1
+       }
+       virtual_router_id 1
+       priority 150
+       advert_int 2
+       authentication {
+          auth_type PASS
+          auth_pass blibli
+       }
+       virtual_ipaddress {
+          1.1.1.15/24 dev eth0
+          2001:db8::15/64 dev eth0
+          192.168.1.1/24 dev eth1
+          fd00::1/64 dev eth1
+      }
+    }
+
+We define two virtual servers, one for IPv4, one for IPv6. Here is an
+excerpt of the configuration :
+
+    virtual_server_group VS_GROUP_IPv4 {
+       1.1.1.15 80
+    }
+    virtual_server group VS_GROUP_IPv4 {
+       delay_loop 10
+       lb_algo rr
+       lb_kind NAT
+       protocol TCP
+       real_server 192.168.1.10 80 {
+          weight 1
+          HTTP_GET {
+            url {
+              path /
+              status_code 200
+            }
+            connect_timeout 10
+          }
+       }
+       [...]
+    }
+
+When running the lab (with `./setup`), we can check that everything
+works as expected. From the client node, we can make several requests,
+both with IPv4 and IPv6:
+
+    #!console
+    C1# curl  http://1.1.1.15 
+    W3
+    C1# curl  http://1.1.1.15
+    W2
+    C1# wget -o /dev/null -O - 'http://[2001:db8::15]'
+    W3
+    C1# wget -o /dev/null -O - 'http://[2001:db8::15]'
+    W2
+
+If we put down `eth1` on `L1`, `L2` becomes master and everything
+works as expected. Our client node can still do the requests.
+
+## SNMP
+
+We can query the configuration of our running keepalived from
+`L1`. The appropriate MIB is [KEEPALIVED-MIB][mib]. The base OID for
+this MIB is `.1.3.6.1.4.1.9586.100.5`. It is hosted in the
+[OID space allocated by IANA to the Debian project][oid].
+
+For example, to get the configuration of our VRRP instance:
+
+    #!console
+    # snmpwalk -v2c -cpublic localhost KEEPALIVED-MIB::vrrpInstanceTable
+    KEEPALIVED-MIB::vrrpInstanceName.1 = STRING: VI_1
+    KEEPALIVED-MIB::vrrpInstanceVirtualRouterId.1 = Gauge32: 1
+    KEEPALIVED-MIB::vrrpInstanceState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceInitialState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceWantedState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceBasePriority.1 = INTEGER: 150
+    KEEPALIVED-MIB::vrrpInstanceEffectivePriority.1 = INTEGER: 150
+    KEEPALIVED-MIB::vrrpInstanceVipsStatus.1 = INTEGER: allSet(1)
+    KEEPALIVED-MIB::vrrpInstancePrimaryInterface.1 = STRING: eth2
+    KEEPALIVED-MIB::vrrpInstanceTrackPrimaryIf.1 = INTEGER: tracked(1)
+    KEEPALIVED-MIB::vrrpInstanceAdvertisementsInt.1 = Gauge32: 2 seconds
+    KEEPALIVED-MIB::vrrpInstancePreempt.1 = INTEGER: preempt(1)
+    KEEPALIVED-MIB::vrrpInstancePreemptDelay.1 = Gauge32: 0 seconds
+    KEEPALIVED-MIB::vrrpInstanceAuthType.1 = INTEGER: password(1)
+    KEEPALIVED-MIB::vrrpInstanceLvsSyncDaemon.1 = INTEGER: disabled(2)
+    KEEPALIVED-MIB::vrrpInstanceGarpDelay.1 = Gauge32: 0 seconds
+    KEEPALIVED-MIB::vrrpInstanceSmtpAlert.1 = INTEGER: disabled(2)
+    KEEPALIVED-MIB::vrrpInstanceNotifyExec.1 = INTEGER: disabled(2)
+
+We can get statistics from IPVS subsystem:
+
+    #!console
+    # snmpwalk -v 2c -c public localhost KEEPALIVED-MIB::virtualServerTable | grep Stats
+    KEEPALIVED-MIB::virtualServerStatsConns.1 = Gauge32: 6 connections
+    KEEPALIVED-MIB::virtualServerStatsConns.2 = Gauge32: 6 connections
+    KEEPALIVED-MIB::virtualServerStatsInPkts.1 = Counter32: 36 packets
+    KEEPALIVED-MIB::virtualServerStatsInPkts.2 = Counter32: 36 packets
+    KEEPALIVED-MIB::virtualServerStatsOutPkts.1 = Counter32: 24 packets
+    KEEPALIVED-MIB::virtualServerStatsOutPkts.2 = Counter32: 24 packets
+    KEEPALIVED-MIB::virtualServerStatsInBytes.1 = Counter64: 2970 bytes
+    KEEPALIVED-MIB::virtualServerStatsInBytes.2 = Counter64: 3312 bytes
+    KEEPALIVED-MIB::virtualServerStatsOutBytes.1 = Counter64: 2592 bytes
+    KEEPALIVED-MIB::virtualServerStatsOutBytes.2 = Counter64: 3072 bytes
+
+We can also disable a real server, for example `W1`:
+
+    #!console
+    # snmpget -v2c -cpublic localhost KEEPALIVED-MIB::realServerAddrType.1.1 \
+                                    KEEPALIVED-MIB::realServerAddress.1.1
+    KEEPALIVED-MIB::realServerAddrType.1.1 = INTEGER: ipv4(1)
+    KEEPALIVED-MIB::realServerAddress.1.1 = Hex-STRING: C0 A8 01 0A 
+    # snmpget -v2c -cpublic localhost KEEPALIVED-MIB::realServerAddress.2.1 \
+                                    KEEPALIVED-MIB::realServerAddress.2.1
+    KEEPALIVED-MIB::realServerAddress.2.1 = Hex-STRING: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 10 
+    KEEPALIVED-MIB::realServerAddress.2.1 = Hex-STRING: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 10 
+    # snmpset -v2c -cprivate localhost KEEPALIVED-MIB::realServerWeight.1.1 = 0
+    KEEPALIVED-MIB::realServerWeight.1.1 = INTEGER: 0
+    # snmpset -v2c -cprivate localhost KEEPALIVED-MIB::realServerWeight.2.1 = 0
+    KEEPALIVED-MIB::realServerWeight.2.1 = INTEGER: 0
+
+From `C1`, you can now check that `W1` is not queried anymore.
+
+Let's graph the number of connections per second each real server
+gets. With a [simple script using `rrdtool`][rrd], we can get the
+following graph:
+
+![rrdtool graph built from stats returned by keepalived SNMP agent][2]
+[2]: [[!!images/keepalived-rrd.png]]
+
+[keepalived]: http://www.keepalived.org/
+[vrrp]: http://en.wikipedia.org/wiki/Virtual_Router_Redundancy_Protocol
+[ha]: http://www.linux-ha.org/
+[ipvs]: http://www.linuxvirtualserver.org/software/ipvs.html
+[snmp]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol
+[ifmib]: http://www.net-snmp.org/docs/mibs/IF-MIB.txt
+[cacti]: http://www.cacti.net/
+[source]: https://github.com/vincentbernat/keepalived/tree/snmp-1.2.0
+[lab1]: [[en/blog/2011-uml-network-lab.html]]
+[lab2]: https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp
+[mib]: http://cgit.luffy.cx/keepalived/tree/doc/KEEPALIVED-MIB?h=snmp-1.2.0
+[oid]: http://dsa.debian.org/iana/
+[rrd]: https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp/rrd
+*[VRRP]: Virtual Router Redundancy Protocol
+*[IPVS]: IP Virtual Server
+*[SNMP]: Simple Management Protocol
+*[MIB]: Management Information Database
+*[OID]: Object Identifier
+*[RHEL]: Redhat Enterprise Linux
+*[UML]: User-Mode Linux
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

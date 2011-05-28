@@ -1,0 +1,270 @@
+---
+title: 'Support SNMP pour keepalived'
+keywords: "snmp, keepalived, network, load balancing, répartition de charge, ipvs, linux, uml"
+uuid: 12d51063-f3e8-442a-9e28-8f61c5436d08
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp": "Lab complet"
+  "https://github.com/vincentbernat/keepalived/tree/snmp-1.2.0": "Source de keepalived avec support SNMP"
+---
+
+# keepalived
+
+[keepalived][keepalived] est une solution de haute disponibilité et de
+répartition de charge. [VRRP][vrrp] est utilisé pour partager une
+adresse IP entre différents routeurs. À un moment donné, un seul
+d'entre eux dispose de cette IP. Il s'agit du routeur *maître*. Les
+autres se tiennent prêts à prendre le relai en cas de défaillance. Ce
+sont les routeurs de *secours*.
+
+VRRP n'est toutefois pas un gestionnaire de ressources pour les
+clusters. Bien qu'il soit possible de gérer des services en plus des
+IP, il n'est pas possible de répondre à des problématiques complexes
+telles que « s'assurer de la présence d'au moins 10 serveurs web dans la
+grappe et de deux bases de données tout en essayant de ne pas faire
+tourner les bases de données sur les mêmes serveurs que les frontaux
+web ». Dans ce cas, [heartbeat][ha] est une solution plus appropriée.
+
+Pour la répartition de charge, keepalived s'appuie sur [IPVS][ipvs],
+un sous-système du noyau Linux pouvant effectuer de la répartition de
+charge TCP et UDP. keepalived va vérifier si les services vers
+lesquels les requêtes doivent être réparties sont fonctionnels et
+configurer IPVS correctement. IPVS va ensuite choisir pour chaque
+requête entrante le serveur qui va s'en occuper selon une politique
+que l'on peut configurer. La plus courante est la politique
+*round-robin* qui envoie la première requête sur le premier serveur,
+la seconde sur le second et ainsi de suite. Quand on arrive au bout de
+la chaîne, on recommence depuis le début.
+
+# keepalived & SNMP
+
+Afin de pouvoir interroger keepalived en SNMP, j'ai ajouté un support
+complet de SNMP directement dans keepalived. Ce support n'est pas
+encore intégré dans les sources officielles. En
+attendant, il est possible de récupérer
+[les sources complètes de keepalived avec support SNMP][source] depuis
+GitHub. Celles-ci sont actuellement synchronisées avec la dernière
+version disponible de keepalived.
+
+Voici ce que l'on peut faire avec un tel support :
+
+ - récupérer la configuration complète de keepalived sans avoir besoin
+   d'analyser le fichier de configuration ;
+ - récupérer l'état de keepalived (le statut des instances VRRP,
+   l'état des frontaux) sans regarder les logs ;
+ - récupérer des statistiques sur les serveurs virtuels (nombre de
+   connexions envoyées sur tel frontal) sans avoir à interpréter la
+   sortie de `ipvsadm` ;
+ - être averti en cas de changement d'état (bascule
+   VRRP ou arrêt d'un frontal) avec les traps SNMP ;
+ - modifier le poids d'un frontal (pour le désactiver par exemple) ou
+   changer la priorité d'une instance VRRP (pour provoquer une
+   bascule).
+
+## Compilation
+
+    #!console
+    $ git clone https://github.com/vincentbernat/keepalived.git
+    $ cd keepalived
+    $ git checkout snmp-1.2.0
+    $ ./configure --enable-snmp
+    $ make
+
+On obtient un exécutable `bin/keepalived`. Il est possible de
+l'utiliser directement ou de l'installer avec `make install`. Avec
+RHEL, SNMP n'est pas correctement packagé et cela provoque des
+difficultés lors de la compilation. Il faut installer quelques RPM
+supplémentaires (`sensors-devel` par exemple) et utiliser cette
+commande à la place de `make`:
+
+    #!console
+    $ make LDFLAGS="$(net-snmp-config --agent-libs) -lpopt -lssl -lcrypto"
+
+## Utilisation
+
+Avant de pouvoir profiter du support SNMP, il faut vérifier la
+présence de la ligne `master agentx` dans `snmpd.conf`. Cette ligne
+permet à des programmes comme keepalived de se connecter à l'agent
+principal (`snmpd`) et d'en étendre les fonctionnalités. Ensuite,
+keepalived doit être lancé avec l'option `-x`. On doit trouver une
+ligne de ce type dans les logs:
+
+    May 28 17:21:19 L1 Keepalived_vrrp: NET-SNMP version 5.4.3 AgentX subagent connected
+
+## Lab
+
+Pour mettre en œuvre keepalived, nous allons monter un lab avec
+UML. Pour mieux comprendre en quoi cela consiste, je vous invite à
+lire mon article précédent sur
+[comment créer un lab réseau avec UML][lab1]. Les
+[sources pour ce lab][lab2] sont sur GitHub. Changez dès maintenant le
+chemin vers les sources de keepalived en tête du script `setup`.
+
+![keepalived & SNMP lab][1]
+[1]: [[!!images/keepalived-lab.png]]
+
+Le lab comprend quatre serveurs web qui seront vus comme un unique
+service virtuel grâce à keepalived. Étant donné que ce dernier
+supporte désormais l'IPv6, nous allons aussi faire un peu d'IPv6.
+
+Voici la configuration VRRP du premier keepalived :
+
+    vrrp_instance VI_1 {
+       state MASTER
+       interface eth2
+       dont_track_primary
+       track_interface {
+          eth0
+          eth1
+       }
+       virtual_router_id 1
+       priority 150
+       advert_int 2
+       authentication {
+          auth_type PASS
+          auth_pass blibli
+       }
+       virtual_ipaddress {
+          1.1.1.15/24 dev eth0
+          2001:db8::15/64 dev eth0
+          192.168.1.1/24 dev eth1
+          fd00::1/64 dev eth1
+      }
+    }
+
+On définit deux serveurs virtuels. L'un en IPv6, l'autre en
+IPv4. Voici un extrait de la configuration :
+
+    virtual_server_group VS_GROUP_IPv4 {
+       1.1.1.15 80
+    }
+    virtual_server group VS_GROUP_IPv4 {
+       delay_loop 10
+       lb_algo rr
+       lb_kind NAT
+       protocol TCP
+       real_server 192.168.1.10 80 {
+          weight 1
+          HTTP_GET {
+            url {
+              path /
+              status_code 200
+            }
+            connect_timeout 10
+          }
+       }
+       [...]
+    }
+
+Une fois le lab démarré (avec la commande `./setup`), il est possible
+de vérifier que tout fonctionne comme attendu en se plaçant sur le
+nœud `C1` et en interrogeant les services virtuels :
+
+    #!console
+    C1# curl  http://1.1.1.15 
+    W3
+    C1# curl  http://1.1.1.15
+    W2
+    C1# wget -o /dev/null -O - 'http://[2001:db8::15]'
+    W3
+    C1# wget -o /dev/null -O - 'http://[2001:db8::15]'
+    W2
+
+On peut provoquer une bascule en faisant tomber sur `L1` l'interface
+`eth1` (par exemple). Tout continue alors à fonctionner.
+
+## SNMP
+
+Pour vérifier le bon fonctionnement de la partie SNMP, on se place
+directement sur `L1`. La MIB à utiliser est
+[KEEPALIVED-MIB][mib]. L'OID de base pour celle-ci a été
+[obtenue via le projet Debian][oid]. Il s'agit de
+`.1.3.6.1.4.1.9586.100.5`.
+
+Par exemple, pour obtenir la configuration de notre instance VRRP :
+
+    #!console
+    # snmpwalk -v2c -cpublic localhost KEEPALIVED-MIB::vrrpInstanceTable
+    KEEPALIVED-MIB::vrrpInstanceName.1 = STRING: VI_1
+    KEEPALIVED-MIB::vrrpInstanceVirtualRouterId.1 = Gauge32: 1
+    KEEPALIVED-MIB::vrrpInstanceState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceInitialState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceWantedState.1 = INTEGER: master(2)
+    KEEPALIVED-MIB::vrrpInstanceBasePriority.1 = INTEGER: 150
+    KEEPALIVED-MIB::vrrpInstanceEffectivePriority.1 = INTEGER: 150
+    KEEPALIVED-MIB::vrrpInstanceVipsStatus.1 = INTEGER: allSet(1)
+    KEEPALIVED-MIB::vrrpInstancePrimaryInterface.1 = STRING: eth2
+    KEEPALIVED-MIB::vrrpInstanceTrackPrimaryIf.1 = INTEGER: tracked(1)
+    KEEPALIVED-MIB::vrrpInstanceAdvertisementsInt.1 = Gauge32: 2 seconds
+    KEEPALIVED-MIB::vrrpInstancePreempt.1 = INTEGER: preempt(1)
+    KEEPALIVED-MIB::vrrpInstancePreemptDelay.1 = Gauge32: 0 seconds
+    KEEPALIVED-MIB::vrrpInstanceAuthType.1 = INTEGER: password(1)
+    KEEPALIVED-MIB::vrrpInstanceLvsSyncDaemon.1 = INTEGER: disabled(2)
+    KEEPALIVED-MIB::vrrpInstanceGarpDelay.1 = Gauge32: 0 seconds
+    KEEPALIVED-MIB::vrrpInstanceSmtpAlert.1 = INTEGER: disabled(2)
+    KEEPALIVED-MIB::vrrpInstanceNotifyExec.1 = INTEGER: disabled(2)
+
+Ou pour obtenir des statistiques via IPVS :
+
+    #!console
+    # snmpwalk -v 2c -c public localhost KEEPALIVED-MIB::virtualServerTable | grep Stats
+    KEEPALIVED-MIB::virtualServerStatsConns.1 = Gauge32: 6 connections
+    KEEPALIVED-MIB::virtualServerStatsConns.2 = Gauge32: 6 connections
+    KEEPALIVED-MIB::virtualServerStatsInPkts.1 = Counter32: 36 packets
+    KEEPALIVED-MIB::virtualServerStatsInPkts.2 = Counter32: 36 packets
+    KEEPALIVED-MIB::virtualServerStatsOutPkts.1 = Counter32: 24 packets
+    KEEPALIVED-MIB::virtualServerStatsOutPkts.2 = Counter32: 24 packets
+    KEEPALIVED-MIB::virtualServerStatsInBytes.1 = Counter64: 2970 bytes
+    KEEPALIVED-MIB::virtualServerStatsInBytes.2 = Counter64: 3312 bytes
+    KEEPALIVED-MIB::virtualServerStatsOutBytes.1 = Counter64: 2592 bytes
+    KEEPALIVED-MIB::virtualServerStatsOutBytes.2 = Counter64: 3072 bytes
+
+Il est aussi possible de désactiver un frontal :
+
+    #!console
+    # snmpget -v2c -cpublic localhost KEEPALIVED-MIB::realServerAddrType.1.1 \
+                                    KEEPALIVED-MIB::realServerAddress.1.1
+    KEEPALIVED-MIB::realServerAddrType.1.1 = INTEGER: ipv4(1)
+    KEEPALIVED-MIB::realServerAddress.1.1 = Hex-STRING: C0 A8 01 0A 
+    # snmpget -v2c -cpublic localhost KEEPALIVED-MIB::realServerAddress.2.1 \
+                                    KEEPALIVED-MIB::realServerAddress.2.1
+    KEEPALIVED-MIB::realServerAddress.2.1 = Hex-STRING: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 10 
+    KEEPALIVED-MIB::realServerAddress.2.1 = Hex-STRING: FD 00 00 00 00 00 00 00 00 00 00 00 00 00 00 10 
+    # snmpset -v2c -cprivate localhost KEEPALIVED-MIB::realServerWeight.1.1 = 0
+    KEEPALIVED-MIB::realServerWeight.1.1 = INTEGER: 0
+    # snmpset -v2c -cprivate localhost KEEPALIVED-MIB::realServerWeight.2.1 = 0
+    KEEPALIVED-MIB::realServerWeight.2.1 = INTEGER: 0
+
+Depuis `C1`, on peut alors vérifier que nous ne sommes plus renvoyés
+sur `W1`.
+
+Enfin, il est possible de grapher le nombre de connexions par seconde
+à l'aide [d'un script basé sur `rrdtool`][rrd]. Voici le graphique que
+nous obtenons :
+
+![graphique obtenu avec rrdtool depuis des données récupérées via l'agent SNMP de keepalived][2]
+[2]: [[!!images/keepalived-rrd.png]]
+
+[keepalived]: http://www.keepalived.org/
+[vrrp]: http://fr.wikipedia.org/wiki/Virtual_Router_Redundancy_Protocol
+[ha]: http://www.linux-ha.org/
+[ipvs]: http://www.linuxvirtualserver.org/software/ipvs.html
+[snmp]: http://fr.wikipedia.org/wiki/Simple_network_management_protocol
+[ifmib]: http://www.net-snmp.org/docs/mibs/IF-MIB.txt
+[cacti]: http://www.cacti.net/
+[source]: https://github.com/vincentbernat/keepalived/tree/snmp-1.2.0
+[lab1]: [[en/blog/2011-uml-network-lab.html]]
+[lab2]: https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp
+[mib]: http://cgit.luffy.cx/keepalived/tree/doc/KEEPALIVED-MIB?h=snmp-1.2.0
+[oid]: http://dsa.debian.org/iana/
+[rrd]: https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp/rrd
+*[VRRP]: Virtual Router Redundancy Protocol
+*[IPVS]: IP Virtual Server
+*[SNMP]: Simple Management Protocol
+*[MIB]: Management Information Database
+*[OID]: Object Identifier
+*[RHEL]: Redhat Enterprise Linux
+*[UML]: User-Mode Linux
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
