@@ -7,6 +7,14 @@
     echo "${fg[green]} [+] Regenerate all files${fg[default]}"
     rm -rf deploy
     hyde gen
+    for file in deploy/media/js/*.js deploy/media/css/*.css ; do
+	file=${file#deploy/media/}
+	echo "${fg[green]} [+] MD5 hash for $file${fg[default]}"
+	md5=$(md5sum deploy/media/${file} | cut -c1-8)
+	newname=${file%.*}.${md5}.${file##*.}
+	ln -s $(basename ${file}) deploy/media/${newname}
+	sed -i "s+\([\"']\)/media/${file}\1+\1/media/${newname}\1+g" deploy/**/*.html
+    done
     echo "${fg[green]} [+] Compare with current target${fg[default]}"
     rsync --exclude=.git -a --delete deploy/ .final/
     cd .final
