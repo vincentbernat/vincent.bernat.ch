@@ -213,6 +213,20 @@ modifications dans le répertoire dédié à votre lab. Toutefois, AUFS ne
 semble pas bien s'etendre avec `hostfs` et le kernel émet des _panics_
 intempestifs.
 
+**MISE À JOUR :** Il y a d'autres défauts avec cette
+configuration. Pour une raison qui m'échappe, si votre partition
+`/usr` est séparée de la partition racine sur votre système, il ne
+sera pas possible d'y modifier des fichiers. L'option `noxino` d'AUFS
+permet de contourner ce problème. Un autre soucis que vous pouvez
+rencontrer vient du fait que AUFS ne remarque pas la plupart des
+changements effectués directement sur votre système à moins d'utiliser
+l'option `udba=inotify`. Cependant, cette option est incompatible avec
+`noxino`. Il faut donc choisir ce qui convient le mieux à votre
+utilisation. À noter que vous pouvez monter avec `hostfs` d'autres
+parties de votre `/home` pour contourner ces limitations (par exemple,
+le répertoire contenant le code source d'un logiciel que vous voulez
+tester).
+
 Reprenons notre exemple avec Nginx et disons que nous avons placé la
 configuration dans `/home/bernat/lab/nginx`. Nous remplaçons
 simplement le répertoire `/etc/nginx` par un lien symbolique vers ce

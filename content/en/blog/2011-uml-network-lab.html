@@ -225,6 +225,17 @@ in a `tmpfs` filesystem. This means that any change to the root
 filesystem will be lost. I also was unable to issue a correct
 `pivot_root` before `chroot`. This is not really important here.
 
+**UPDATED:** It seems that there are other drawbacks to this
+setup. For some reason, if you have a separate `/usr` partition on
+your host system, you won't be able to write to it until you specify
+the `noxino` option to AUFS. Another issue is that AUFS does not
+notice most changes on the hostfs filesystem. You can fix this with
+option `udba=inotify`. However, this is incompatible with the `noxino`
+option. Therefore, you need to choose what is best for your
+lab. You can also mount some parts of your home with `hostfs` (for
+example, the source directory of the piece of software that you would
+like to test).
+
 Let's consider that Nginx configuration is in
 `/home/bernat/lab/nginx`. We simply uses a symbolic link:
 
