@@ -5,8 +5,8 @@
 
 var luffy = luffy || {};
 luffy.gallery = function() {
-    /* Don't run on mobile */
-    if (/android|iphone|ipod|series60|symbian|windows ce|blackberry/i.test(navigator.userAgent)) {
+    /* Don't run on small viewport if background-size attribute is not supported */
+    if (!Modernizr.backgroundsize && $(window).width() < 900) {
 	return;
     }
 
@@ -130,10 +130,21 @@ luffy.gallery = function() {
     }
 
     function animateBox() {
+	var targetWidth = preload.width, targetHeight = preload.height;
+	var maxWidth = win.width() * 0.9, maxHeight = win.height() * 0.9;
 	center.className = "";
 	$(image).css({backgroundImage: "url(" + activeURL + ")", visibility: "hidden", display: ""});
-	$(sizer).width(preload.width);
-	$([sizer, prevLink, nextLink]).height(preload.height);
+	/* Resize the image if needed */
+	if (targetWidth > maxWidth) {
+	    targetHeight = targetHeight * maxWidth / targetWidth;
+	    targetWidth = maxWidth;
+	}
+	if (targetHeight > maxHeight) {
+	    targetWidth = targetWidth * maxHeight / targetHeight;
+	    targetHeight = maxHeight;
+	}
+	$(sizer).width(targetWidth);
+	$([sizer, prevLink, nextLink]).height(targetHeight);
 
 	$(number).html((((images.length > 1) && options.counterText) || "")
 		       .replace(/{x}/, activeImage + 1).replace(/{y}/, images.length));
