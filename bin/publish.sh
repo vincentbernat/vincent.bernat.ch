@@ -6,7 +6,7 @@
     git checkout master
     echo "${fg[green]} [+] Regenerate all files${fg[default]}"
     rm -rf deploy
-    hyde gen
+    hyde gen -c site-production.yaml
     for file in deploy/media/js/*.js deploy/media/css/*.css ; do
 	file=${file#deploy/media/}
 	echo "${fg[green]} [+] MD5 hash for $file${fg[default]}"
@@ -17,6 +17,7 @@
     done
     echo "${fg[green]} [+] Compare with current target${fg[default]}"
     rsync --exclude=.git -a --delete deploy/ .final/
+    rm -rf deploy
     cd .final
     git add *
     git diff --stat HEAD
