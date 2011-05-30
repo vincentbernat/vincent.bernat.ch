@@ -28,41 +28,8 @@ location = / {
 
 {# redirections #}
 location = /favicon.ico {
-  rewrite ^  {{media_url('favicon.ico')}};
+  rewrite ^  /media/favicon.ico break;
 }
-location = {{media_url('images/thinkpad-edge.jpg')}} {
-  rewrite ^  {{media_url('images/thinkpad-edge/open.jpg')}};
-}
-location = {{media_url('images/thinkpad-edge-top.jpg')}} {
-  rewrite ^  {{media_url('images/thinkpad-edge/elements.jpg')}};
-}
-location = {{media_url('images/thinkpad-edge-enclosure.jpg')}} {
-  rewrite ^  {{media_url('images/thinkpad-edge/package.jpg')}};
-}
-
-{# expiration #}
-location ~ ^{{media_url('js/libs')}}/.*\.js$ {
-  expires     max;
-}
-location {{media_url('fonts')}} {
-  expires     max;
-  types {
-    font/x-woff   woff;
-    font/ttf      ttf;
-    font/otf      otf;
-    application/vnd.ms-fontobject eot;
-    image/svg+xml svg;
-  }
-}
-location ~ ^{{media_url('favicon.ico')}}$ {
-  expires     max;
-}
-location {{media_url('files')}} {
-  expires     1d;
-}
-location {{media_url('images')}} {
-  expires     30d;
-}
-location {{media_url('')}} {
-  expires     10d;
+location /media {
+  rewrite ^/media/(.*)$ {{media_url('')}}$1 permanent;
 }

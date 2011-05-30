@@ -13,7 +13,7 @@
 	md5=$(md5sum deploy/media/${file} | cut -c1-8)
 	newname=${file%.*}.${md5}.${file##*.}
 	ln -s $(basename ${file}) deploy/media/${newname}
-	sed -i "s+\([\"']\)/media/${file}\1+\1/media/${newname}\1+g" deploy/**/*.html
+	sed -i "s+\([\"']\)//media.luffy.cx/${file}\1+\1//media.luffy.cx/${newname}\1+g" deploy/**/*.html
     done
     echo "${fg[green]} [+] Compare with current target${fg[default]}"
     rsync --exclude=.git -a --delete deploy/ .final/
