@@ -1,0 +1,93 @@
+---
+title: 'Version mobile avec les CSS Media Queries'
+keywords: "css, web, mobile, media query, w3c"
+uuid: bdac0365-04ce-4cca-8aff-3881913530e8
+---
+
+De nombreux sites proposent désormais une version mobile, comme
+[Wikipedia](http://fr.m.wikipedia.org/), destinée à fournir le contenu
+sur des appareils avec une faible bande passante et un écran de taille
+réduite. Les [CSS Media Queries][w3c] sont une future recommendation
+du W3C permettant d'utiliser des feuilles de style différentes selon
+la façon dont le document est affiché. Cela permet d'adapter
+l'affichage d'un site à un écran de téléphone mobile.
+
+# Utilisation
+
+Il y a deux façons différentes de mettre en œuvre les CSS media
+queries. La première est de fournir une feuille de style additionnelle
+qui sera utilisée sous conditions :
+
+    #!html
+    <link rel="stylesheet" media="screen and (max-width: 700px)" href="mobile.css">
+
+Quand la largeur de l'affichage est inférieure à 700 pixels, la
+feuille de style `mobile.css` est alors utilisée. La seconde façon est
+de déclarer une section à l'intérieur d'une feuille de style existante :
+
+    #!css
+    @media screen and (max-width: 700px) {
+        #article {
+           margin: 0.3em 0.2em;
+        }
+    }
+
+Bien qu'il existe un certain nombre de propriétés qui peuvent être
+utilisées dans les conditions, les deux plus courantes sont
+`max-width` et `min-width`. Il est possible d'utiliser cette
+fonctionnalité pour modifier certains aspects de votre site web, comme
+par exemple réduire les marges ou cacher certains blocs de navigation.
+
+# Support dans les navigateurs
+
+Les navigateurs mobiles actuels
+[supportent les CSS media queries][browser]: Safari, Android et Opera
+dans leur version mobile comprendront sans problème ces instructions
+supplémentaires. Ainsi, si le but est de fournir une présentation
+adaptée à un téléphone portable, il n'y a pas grand chose à se soucier.
+
+Il existe des [polyfills][polyfill] qui permettent d'activer cette
+fonctionnalité dans des navigateurs plus antiques comme Internet
+Explorer 8. L'un d'eux est [Respond][respond] qui ne comprend que les
+mots-clefs `min-width` et `max-width` et ajoute leur support dans
+Internet Explorer 6, 7 et 8.
+
+# Exemple
+
+Sur mon site web, j'ai modifié mes feuilles de style pour tirer parti
+de cette fonctionnalité. Il est possible de tester le résultat dans un
+navigateur classique en changeant la taille de la fenêtre. Essayez !
+Voici quelques uns des changements qui doivent apparaître
+progressivement en réduisant la taille de la fenêtre :
+
+ - la barre latérale se transforme en une barre en haut de l'écran
+   plus compacte,
+ - la boîte de recherche sur le site en haut à gauche disparaît,
+ - les marges sont réduites à plusieurs endroits.
+
+Voici à quoi cela ressemble avec un navigateur classique :
+
+![Vue par défaut avec une largeur usuelle][s1]
+[s1]: [[!!images/css-media-query-large.png]]
+
+En réduisant la taille de la fenêtre, on obtient ceci :
+
+![Vue avec une fenêtre fortement réduite en largeur][s2]
+[s2]: [[!!images/css-media-query-small.png]]
+
+Jetez un coup d'œil à [mes fichiers CSS][css] pour d'autres exemples
+(il faut regarder vers la fin des fichiers). Pour un article plus
+détaillé sur les possibilités, rendez-vous
+[chez CSS Tricks][css-tricks].
+
+[w3c]: http://www.w3.org/TR/css3-mediaqueries/
+[css-tricks]: http://css-tricks.com/css-media-queries/
+[respond]: https://github.com/scottjehl/Respond
+[polyfill]: http://remysharp.com/2010/10/08/what-is-a-polyfill/
+[browser]: http://caniuse.com/#feat=css-media
+[css]: https://github.com/vincentbernat/www.luffy.cx/tree/master/content/media/css
+*[W3C]: World Wide Web Consortium
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
