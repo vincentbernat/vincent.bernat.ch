@@ -94,6 +94,7 @@ luffy.gallery = function() {
 	var fn = open ? "bind" : "unbind";
 	win[fn]("scroll resize", position);
 	$(document)[fn]("keydown", keyDown);
+	$(center)[fn]("touchstart touchmove touchend", touch);
     }
 
     function keyDown(event) {
@@ -104,6 +105,25 @@ luffy.gallery = function() {
 	    : (fn(code, options.previousKeys) >= 0) ? previous()
 	    : false;
     }
+
+    var touch = function () {
+	var down_x = null, up_x = null;
+	return function(event) {
+	    if (event.type == "touchstart") {
+		down_x = event.originalEvent.touches[0].pageX;
+	    } else if (event.type == "touchmove") {
+		event.preventDefault();
+		up_x = event.originalEvent.touches[0].pageX;
+	    } else {
+		if (down_x - up_x > $(center).width()/3) {
+		    next();
+		} else if (up_x - down_x > $(center).width()/3) {
+		    previous();
+		}
+		down_x = up_x = null;
+	    }
+	}
+    }();
 
     function previous() {
 	return changeImage(prevImage);
