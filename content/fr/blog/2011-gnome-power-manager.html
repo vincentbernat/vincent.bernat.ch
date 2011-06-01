@@ -1,0 +1,195 @@
+---
+title: 'GNOME Power Manager sans environnement GNOME'
+keywords: "gnome, power, énergie, batterie, desktop, debian, bureau"
+uuid: b8fe36e5-59cc-4ede-923e-2065f04687f0
+---
+
+Quand j'ai installé mon [nouveau portable][thinkpad], j'en ai profité
+pour passer de [sleepd][sleepd] à [GNOME Power Manager][gpm] (*GPM*). La
+principale raison derrière ce choix était de profiter de la
+possibilité de réduire la luminosité de l'écran en cas d'inactivité
+(et économiser de la batterie). Sur le moment, il me semblait que je
+ne perdais rien à faire ce choix car, en coulisses, *GPM* utilise
+[*UPower*][upower] qui utilise lui-même les utilitaires `pm-suspend` et
+`pm-powersave`. Il était donc possible de faire à peu près ce qu'on
+voulait en ajoutant les scripts adéquats dans `/etc/pm`.
+
+Je ne fais pas tourner un environnement GNOME complet. J'utilise
+[FVWM][fvwm] qui n'est qu'un simple gestionnaire de
+fenêtres. Cependant, j'avais déjà inséré des bouts de GNOME :
+
+* GDM pour se connecter en mode graphique car c'est le seul à savoir
+  ouvrir proprement une session avec *ConsoleKit* **et** la rendre
+  active. Sans cela, on se retrouve comme un étranger devant sa
+  machine, celle-ci considérant que l'on n'a pas le droit d'interagir
+  avec tous les périphériques que l'on a amassés au fil des années. En
+  effet, DBus utilise comme critère principal le fait que *ConsoleKit*
+  nous considère ou non physiquement devant l'écran (propriété
+  `at_console`). Sans cela, il faut se rajouter à de nombreux groupes.
+* Network Manager pour gérer à la fois les connexions filaires et sans
+  fil. Sur un portable, il est assez fastidieux de chercher les
+  réseaux sans fil dans les environs en utilisant la ligne de
+  commande. Une connexion 3G est très simple à configurer avec Network
+  Manager (en tandem avec Modem Manager).
+* L'applet GNOME pour le bluetooth. La pile BlueZ n'interagit
+  désormais que via DBus et les utilitaires en ligne de commande se
+  font rare. Il faut donc soit utiliser ce type d'applet, soit écrire
+  ses propres utilitaires.
+
+# Ce qui marche
+
+En fait, pas grand chose ne fonctionne. Quand on ferme le portable, il
+se met bien en veille. L'icône qui indique la charge de la batterie
+marche (presque) parfaitement. Le fait que la luminosité de l'écran
+est diminuée en cas d'inactivité fonctionne pas trop mal. Enfin, quand
+on utilise les touches pour régler la luminosité, on a un petit niveau
+visual qui s'affiche.
+
+# Ce qui ne marche pas
+
+Il y a rudement de choses qui ne fonctionnent pas et il semble que *GPM*
+laisse perplexe un certain nombre d'utilisateurs comme en témoignent
+les
+[115 bugs actuellement ouverts dans le BTS de Debian][bugs]. Notons
+que `gnome-power-manager` peut être assez verbeux si on lui donne
+`--verbose` sur sa ligne de commande. Il ne faut surtout pas mettre
+`--debug` qui le rend muet.
+
+## Rien ne se produit quand on presse le bouton de l'alimentation
+
+J'avais configuré *GPM* pour me demander ce que je voulais faire quand
+j'appuyais sur le bouton d'alimentation. Je m'attendais ainsi à
+obtenir une boîte de dialogue me laissant le choix entre la mise en
+veille et l'hibernation. Mais rien. Dans le code source, on trouve
+ceci :
+
+    #!c
+    if (policy == GPM_ACTION_POLICY_INTERACTIVE) {
+        GpmSession *session;
+        egg_debug ("logout, reason: %s", reason);
+        session = gpm_session_new ();
+        gpm_session_logout (session);
+        g_object_unref (session);
+    }
+
+Donc en fait, *GPM* ne demande rien et c'est normal. Il se contente de
+provoquer une demande de déconnexion de la session en cours, ce qui va
+provoquer l'apparition d'une boîte de dialogue demandant ce que l'on
+veut faire, à condition bien sûr d'être dans une session GNOME classique.
+
+Pour contourner ce problème, j'ai simplement configuré *GPM* pour mettre
+le portable en veille quand j'appuie sur ce foutu bouton.
+
+## Pas de mise en veille en cas d'inactivité
+
+*GPM* est configuré pour une mise en veille après deux heures
+d'inactivité sur secteur et trente minutes sur batterie. Cela ne
+fonctionne pas car la détection de l'inactivité est déléguée. *GPM*
+utilise quatre variables pour déterminer son état :
+
+ * `session_idle` indique si *ConsoleKit* pense que la sesion est inactive,
+ * `idle_inhibited` indique qu'un programme demande à ne pas
+   tenter d'actions en cas d'inactivité (par exemple, un lecteur vidéo
+   qui ne voudrait pas que la luminosité de l'écran baisse toutes les
+   10 secondes),
+ * `suspend_inhibited` indique qu'un programme s'oppose à la mise en
+   veille (un lecteur de musique, par exemple),
+ * `x_idle` indique si X détecte une activité sur le clavier ou la souris.
+
+*GPM* ne considère le temps d'inactivité pour la mise en veille qu'à
+condition que `x_idle` et `session_idle` soient à 1 et que
+`suspend_inhibited` et `idle_inhibited` à 0. En ce qui concerne la
+luminosité de l'écran, il suffit que `x_idle` soit à 1 et
+`idle_inhibited` à 0.
+
+Pour le moment, seule *GNOME Screensaver* semble capable de dire à
+*ConsoleKit* s'il doit ou non considérer la session comme
+active. *XScreenSaver* ne contient rien à ce sujet et `xautolock` et
+`xlock` que j'utilise ne savent même pas ce que c'est que DBus.
+
+Pour contourner ce problème, on peut utiliser ces deux commandes pour
+indiquer à *ConsoleKit* que la session est inactive :
+
+    #!console
+    $ dbus-send --system --dest=org.freedesktop.ConsoleKit \
+    >   --type=method_call --print-reply --reply-timeout=2000 \
+    >   /org/freedesktop/ConsoleKit/Manager \
+    >   org.freedesktop.ConsoleKit.Manager.GetCurrentSession
+    method return sender=:1.6 -> dest=:1.106 reply_serial=2
+       object path "/org/freedesktop/ConsoleKit/Session1"
+    $ dbus-send --system --dest=org.freedesktop.ConsoleKit \
+    >   --type=method_call --print-reply --reply-timeout=2000 \
+    >   /org/freedesktop/ConsoleKit/Session1 \
+    >   org.freedesktop.ConsoleKit.Session.SetIdleHint boolean:true          
+    method return sender=:1.6 -> dest=:1.108 reply_serial=2
+
+Je comprends bien pourquoi *GPM* adopte ce comportement : on évite de
+dupliquer du code et on donne un moyen assez standard aux autres
+programmes d'indiquer leurs préférences. Cependant, il aurait été
+appréciable d'avoir pendant un certain temps une solution de secours
+si on n'utiliser pas *GNOME Screensaver* qui est la pièce maîtresse de
+cette machinerie.
+
+## La luminosité n'est pas restaurée à sa valeur précédente
+
+Quand *GPM* rétablit la luminosité de l'écran sur action de
+l'utilisateur, il se trompe de valeur. Il semble que ce soit le bug
+[bug #617310][617310] qui est corrigé en amont. Pas d'investigation de
+ce côté.
+
+## Nombre incorrect de batteries
+
+Je n'ai qu'une seule batterie mais après un cycle de mise en veille,
+*GPM* pense que j'en ai deux. Peut-être s'agit-t'il d'un bug dans
+*UPower*. Ou peut-être est-ce le [bug #606434][606434]. Je n'ai pas
+cherché plus loin. Ce bug est peut-être également annulé par le
+[bug #456280][456280].
+
+## Actions en cas de passage sur onduleur non configurables
+
+Il s'agit du [bug #390602][390602]. Il se trouve que *UPower* supporte
+également les onduleurs. Dans ce cas, *GPM* affiche une icône adéquate
+et indique la charge de l'onduleur. Toutefois, il n'y a pas de
+possibilité de configurer ce qui doit se passer quand on est sur
+onduleur, notamment quand la batterie commence à se vider. Cela semble
+être un problème d'interface car les réglages sont disponibles via
+`gconftool-2`. On y trouve les variables `low_ups` et `critical_ups`.
+
+De plus, l'icône de l'onduleur n'apparaît qu'après un cycle de mise en
+veille. Je n'ai pas cherché plus loin vu que le problème ne paraît pas
+très important.
+
+# Conclusion
+
+Il s'avère que *GPM* n'est pas si buggué mais il faut le faire tourner
+dans un environnement GNOME complet. Petite disgression. On voit
+arriver sur nos bureaux tout un tas de technologies intéressantes,
+telles que *UPower* et *ConsoleKit*, via l'initiative
+freedesktop.org. Elles sont implémentées dans GNOME (et je suppose
+également dans KDE) car ils ont plein de monde pour suivre ce qui se
+passe mais toutes les alternatives peinent à suivre derrière en raison
+du manque de documentation sur ce qu'il faut faire pour supporter de
+telles technologies.
+
+[thinkpad]: [[fr/blog/2011-thinkpad-edge-11.html]]
+[fvwm]: [[fr/blog/2011-fvwm-configuration.html]]
+[sleepd]: http://packages.debian.org/sid/sleepd
+[gpm]: http://projects.gnome.org/gnome-power-manager/
+[upower]: http://upower.freedesktop.org/
+[bugs]: http://bugs.debian.org/gnome-power-manager
+[390602]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=390602
+[493318]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=493318
+[628755]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=628755
+[594706]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=594706
+[617310]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=617310
+[606434]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=606434
+[456280]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=456280
+*[GPM]: GNOME Power Manager
+*[GDM]: GNOME Display Manager
+*[AP]: Access Point
+*[UPS]: Uninterruptible Power Supply
+
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

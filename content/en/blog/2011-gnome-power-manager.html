@@ -1,0 +1,184 @@
+---
+title: 'GNOME Power Manager without GNOME desktop'
+keywords: "gnome, power, management, desktop, debian"
+uuid: b8fe36e5-59cc-4ede-923e-2065f04687f0
+---
+
+When I installed my [new laptop][thinkpad], I decided to switch from
+[sleepd][sleepd] to [GNOME Power Manager][gpm] (*GPM*). The rationale
+behind this decision was to get screen dimming for free while keeping
+other features because *GPM* uses [*UPower*][upower] which uses
+`pm-suspend` and `pm-powersave` behind the scene. This means that it
+is easy to execute scripts on suspend or when the AC is unplugged by
+putting them in `/etc/pm`.
+
+I don't use a full GNOME desktop. My desktop is running [FVWM][fvwm]
+which is just a window manager. However, I already use some parts of
+the GNOME environment:
+
+* GDM as a display manager because it is the only one that is able to
+  handle *ConsoleKit* correctly. This means that GDM is able to register
+  your session to *ConsoleKit* **and** make it active. Without that, you
+  won't be considered as the user sitting in front of the screen and
+  DBus won't allow you to interact with most of your hardware unless
+  you add yourself to a lot of groups. *ConsoleKit* enables the
+  `at_console` property used by most policies.
+* Network Manager to handle both wired and wireless
+  connections. Connecting to some random AP using only command line
+  tools is rather cumbersome (assume that the AP is using
+  WPA). Connecting to a broadband network with a 3G dongle is even
+  more cumbersome.
+* GNOME bluetooth applet because interacting with BlueZ bluetooth
+  stack is now done with DBus only and the command line tools have
+  been removed. Therefore, you need to write your own tools or use
+  this small applet that do most of the work for you.
+
+# What's working
+
+It happens that most of the features just do not work. However,
+suspend when closing the lid works fine. The icon in the systray works
+fine too (but there is a small bug). The screen dimming feature on idle
+also works (but there are annoying bugs with it). The visual feedback when
+pressing brightness keys works too.
+
+# What's not working
+
+It seems that I am not the only one to have problem with *GPM*: there
+are currently [115 bugs opened in the Debian BTS][bugs]. If you want
+to get some debug output from `gnome-power-manager`, run it with
+`--verbose` flag. `--debug` flag does nothing (and supersedes
+`--verbose`).
+
+## Nothing happens when pressing the power button
+
+I have configured *GPM* to ask me what to do when I press the power
+button. But when I press the button, nothing happens. Looking at the
+source, here is the snippet of code that is executed:
+
+    #!c
+    if (policy == GPM_ACTION_POLICY_INTERACTIVE) {
+        GpmSession *session;
+        egg_debug ("logout, reason: %s", reason);
+        session = gpm_session_new ();
+        gpm_session_logout (session);
+        g_object_unref (session);
+    }
+
+In fact, this is not *GPM* that will ask you the question, but GNOME
+session manager because *GPM* triggers logout. If you don't run a full
+GNOME session, nothing will happen.
+
+My workaround is just to set the action to "Suspend".
+
+## Does not sleep when idle
+
+*GPM* is configured to go to sleep after 2 hours on AC or 30 minutes on
+battery. This does not work for me because idle detection is delegated
+to external programs. There are four variables used by *GPM*
+to determine if we are idle:
+
+ * `session_idle` which is the idle hint from *ConsoleKit*,
+ * `idle_inhibited` which is set when another program asks to disable
+   idle detection (a video player which does not want the screen to be
+   dimmed),
+ * `suspend_inhibited` which means a program do not want we going to
+   sleep (a music player for example)
+ * `x_idle` which tells if X is idle or not (someone is moving the
+   mouse or typing on the keyboard).
+
+To allow *GPM* to suspend when we are idle, `x_idle` and `session_idle`
+must be true while `suspend_inhibited` and `idle_inhibited` must be
+false. For screen dimming purpose, you just need to have `x_idle` set
+to true and `idle_inhibited` set to false.
+
+Currently, only *GNOME Screensaver* seems to tell *ConsoleKit* if the
+session is idle or not. *XScreenSaver* does not contain anything about
+this. I am using `xautolock` with `xlock` and I am pretty sure they
+won't tell *GPM* if I am idle.
+
+You can use `dbus-send` to circumvent this problem:
+
+    #!console
+    $ dbus-send --system --dest=org.freedesktop.ConsoleKit \
+    >   --type=method_call --print-reply --reply-timeout=2000 \
+    >   /org/freedesktop/ConsoleKit/Manager \
+    >   org.freedesktop.ConsoleKit.Manager.GetCurrentSession
+    method return sender=:1.6 -> dest=:1.106 reply_serial=2
+       object path "/org/freedesktop/ConsoleKit/Session1"
+    $ dbus-send --system --dest=org.freedesktop.ConsoleKit \
+    >   --type=method_call --print-reply --reply-timeout=2000 \
+    >   /org/freedesktop/ConsoleKit/Session1 \
+    >   org.freedesktop.ConsoleKit.Session.SetIdleHint boolean:true          
+    method return sender=:1.6 -> dest=:1.108 reply_serial=2
+
+While I understand what is the rationale behind those choices (no code
+duplicate and allowing external programs to hinder power management),
+it lacks some fallback in case you don't use *GNOME Screensaver* (which
+is the key component here).
+
+I first though this was [bug #594706][594706] but this is not the
+case. I have opened (and closed) [bug #628755][628755]. My current
+workaround is to use `dbus-send` before and after the invocation of
+`xlock`.
+
+## Brightness is not restored to the previous value after idle
+
+When *GPM* undims the screen, it does not restore the previous value. It
+seems to be [bug #617310][617310] which is marked as fixed in
+upstream. I did not investigate it.
+
+## Wrong number of batteries reported
+
+I only have one battery but after one suspend/resume cycle, *GPM* thinks
+I have two. Maybe this is a bug of *UPower*. Maybe this is
+[bug #606434][606434]. I did not investigate it. Maybe there is an
+happy interaction with [bug #456280][456280].
+
+## Inability to set configure actions when the UPS runs out of battery
+
+This is [bug #390602][390602]. In addition to laptop batteries, *UPower*
+also supports UPS. In this case, *GPM* displays a special icon to tell
+if the UPS is fully charged. However, there is no possibility to
+execute special actions when the UPS is unplugged, like hibernate
+after 10 minutes or something like this. This seems to be a problem
+with the interface because looking with `gconftool-2`, we can spot
+variables like `low_ups` or `critical_ups` which allow to set actions
+when the UPS is almost out of battery.
+
+Moreover, the UPS icon only displays after one suspend/resume cycle
+but I am too lazy to report and debug this issue. Since, the icon
+disappear if I restart *GPM*, I am confident that the
+bug is in *GPM*.
+
+# Conclusion
+
+The conclusion is that *GPM* is not really that buggy but it really
+needs to be run in a full-blown GNOME desktop. The main problem is not
+really *GPM*. New technologies like *UPower* and *ConsoleKit* get pushed by
+freedesktop.org initiative, they get implemented by GNOME (and, I
+suppose, KDE) because they have tons of people following the
+appropriate mailing lists and any alternative just gets crushed by all
+those unpublicized changes.
+
+[thinkpad]: [[en/blog/2011-thinkpad-edge-11.html]]
+[fvwm]: [[en/blog/2011-fvwm-configuration.html]]
+[sleepd]: http://packages.debian.org/sid/sleepd
+[gpm]: http://projects.gnome.org/gnome-power-manager/
+[upower]: http://upower.freedesktop.org/
+[bugs]: http://bugs.debian.org/gnome-power-manager
+[390602]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=390602
+[493318]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=493318
+[628755]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=628755
+[594706]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=594706
+[617310]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=617310
+[606434]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=606434
+[456280]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=456280
+*[GPM]: GNOME Power Manager
+*[GDM]: GNOME Display Manager
+*[AP]: Access Point
+*[UPS]: Uninterruptible Power Supply
+
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
