@@ -1,19 +1,57 @@
-{# List blog posts pertaining to a given language #}
+{# -*- html -*- #}
 
+{# List blog posts pertaining to a given language #}
 {% macro list_posts(lang) %}
-<ul>
-{% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang) %}
-{% for resource in sort() -%}
-  <li style="clear: both">
-<a href="{{ content_url(resource.url) }}">
-{{ resource.meta.title|e }}
-</a>
-<span style="float: right">{{ resource_date(resource) }}</span>
+<ul class="lf-list-titles">
+{% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
+{% for resource in sort -%}
+  <li>
+    <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
+    {{ resource_date(resource) }}
+    {% if resource.tags %}
+    <div class="lf-tags">
+      {% for tag in resource.tags|sort %}
+      <span class="lf-sprite lf-sprite-tag"></span>
+      <a class="lf-tag" href="#tag-{{ tag }}">
+	{{ tag|attr("descr_" + lang)|e }}{{ tag.descr|e  }}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
   </li>
 {% endfor %}
 </ul>
 {% endmacro %}
 
+{# Display all the categories #}
+{% macro list_tags(lang) %}
+
+<div class="lf-list-tags">
+{% for tag, resources in site.tagger.tags|sort %}
+{% set rr = [] %}
+{% for resource in site.content.walk_resources_tagged_with(tag)
+   if resource.meta.language == lang %}
+{% do rr.append(resource) %}
+{% endfor %}
+{% if rr %}
+<div class="lf-tag" id="tag-{{tag}}">
+  <div class="lf-one-tag">
+    <span class="lf-sprite lf-sprite-tag"></span>
+    {{ site.tagger.tags[tag]|attr("descr_" + lang)|e }}{{ site.tagger.tags[tag].descr|e }}
+  </div>
+  <ul class="lf-list-titles">
+    {% for resource in rr %}
+    <li><a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title }}</a></li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endfor %}
+</div>
+
+{% endmacro %}
+
+{# Display date of the resource #}
 {% macro resource_date(resource) %}
 {% if resource.meta.created != None %}
 <time class="timeago"
@@ -24,6 +62,7 @@
 {% endif %}
 {% endmacro %}
 
+{# Display a photo gallery; directory may be a directory or a prefix #}
 {% macro gallery(directory,description) %}
 <div class="lf-gallery">
 {% for image in site.content.walk_resources_sorted_by_name()

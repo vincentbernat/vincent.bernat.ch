@@ -1,5 +1,5 @@
 {# -*- html -*- #}
-{% if resource.translations or previous or next or resource.meta.attachments %}
+{% if resource.translations or previous or next or resource.meta.attachments or resource.tags %}
 <nav id="lf-links">
   {# Translations #}
   {% if resource.translations %}
@@ -34,6 +34,25 @@
 	{% else %}
 	<li><a href="{{ media_url('files/' + file) }}">{{ description|e }}</a></li>
 	{% endif %}
+	{% endfor %}
+      </ul>
+    </div></div>
+  </div>
+  {% endif %}
+  {# Tags #}
+  {% if resource.tags %}
+  <div class="lf-link">
+    <a href="#" class="lf-sprite lf-sprite-tag lf-link-icon"
+       title="{{ resource.meta.l10n.attachments }}"></a>
+    <div class="lf-link-details"><div class="lf-link-inner">
+      <i class="lf-sprite lf-sprite-arrow-left"></i>
+      <p>{{ resource.meta.l10n.tags }}</p>
+      <ul>
+	{% for tag in resource.tags|sort %}
+	<li>
+	  <a href="{{ content_url(resource.meta.language + '/blog/') }}#tag-{{ tag }}">
+	    {{ tag|attr("descr_" + resource.meta.language)|e }}{{ tag.descr|e  }}
+	</a></li>
 	{% endfor %}
       </ul>
     </div></div>

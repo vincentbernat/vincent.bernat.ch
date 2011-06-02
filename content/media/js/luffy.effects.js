@@ -74,4 +74,15 @@ luffy.effects = function() {
 	    });
 	});
     }();
+
+    /* -- Effect 5:
+          Highlight appropriate tag block
+       -- */
+    e = function() {
+	if (location.hash.match("^#tag-")) {
+	    $(".lf-list-tags .lf-tag").filter(function() {
+		return $(this).prop("id") == location.hash.substr(1);
+	    }).addClass("lf-tag-selected");
+	}
+    }();
 };
