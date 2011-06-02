@@ -58,6 +58,23 @@
 	</div>
 {% endblock %}
       </article>
+{% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
+{% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
+{% if previous or next %}
+      <nav id="lf-prevnext">
+{% if previous %}
+<div class="lf-prev">
+<a href="{{ content_url(previous.url) }}"><span title="{{ resource.meta.l10n.previous }}" class="lf-sprite lf-sprite-slimbox-left">←</span> {{ previous.meta.title }}</a>
+</div>
+{% endif %}
+{% if next %}
+<div class="lf-next">
+<a href="{{ content_url(next.url) }}">{{ next.meta.title }} <span title="{{ resource.meta.l10n.next }}" class="lf-sprite lf-sprite-slimbox-right">→</span></a>
+</div>
+{% endif %}
+<div style="clear: both">
+      </nav>
+{% endif %}
 {% include "comments.j2" %}
     </div>
   </div>
