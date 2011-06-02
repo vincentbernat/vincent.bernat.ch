@@ -5,7 +5,10 @@
     echo "${fg[green]} [+] Switch to master branch${fg[default]}"
     git checkout master
     echo "${fg[green]} [+] Regenerate all files${fg[default]}"
-    rm -rf deploy
+    [ ! -d deploy ] || { 
+	bckp=deploy.$(date +%s)
+	mv deploy $bckp
+    }
     hyde gen -c site-production.yaml
     for file in deploy/media/js/*.js deploy/media/css/*.css ; do
 	file=${file#deploy/media/}
@@ -18,6 +21,7 @@
     echo "${fg[green]} [+] Compare with current target${fg[default]}"
     rsync --exclude=.git -a --delete deploy/ .final/
     rm -rf deploy
+    [ -z "$bckp" ] || mv $bckp deploy
     cd .final
     git add *
     git diff --stat HEAD
