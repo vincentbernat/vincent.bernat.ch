@@ -130,24 +130,8 @@ appréciable d'avoir pendant un certain temps une solution de secours
 si on n'utiliser pas *GNOME Screensaver* qui est la pièce maîtresse de
 cette machinerie.
 
-**MISE À JOUR :** [Julien Valroff][c1] indique que *GNOME Screensaver*
-a également besoin de `gnome-session` pour fonctionner. Il fournit
-également un article sur
-[comment utiliser *GNOME Screensaver* dans un environnement non GNOME][a1].
-Ce dernier fournit un script Python destiné à émuler
-`gnome-session`. Julien [l'a réécrit][a2] en partie pour son propre
-usage. D'autres [ont suggéré][c3] d'utiliser `gnome-session` (et
-`gnome-screensaver`) et de démarrer FVWM avec. C'est loin d'être aussi
-simple. J'ai exposé mon adaptation de cette méthode dans
-[les commentaires][c4]. Ce n'est vraiment pas beau et peut-être est-il
-préférable d'adopter la méthode de Julien ou celle proposée en fin
-d'article.
-
-[c1]: [[fr/blog/2011-gnome-power-manager.html#comment-216330927]]
-[c3]: [[en/blog/2011-gnome-power-manager.html#comment-217111054]]
-[c4]: [[en/blog/2011-gnome-power-manager.html#comment-217470530]]
-[a1]: http://www.narf.ssji.net/~shtrom/wiki/projets/gnomescreensavernosession
-[a2]: http://git.kirya.net/?p=dotfiles/scripts.git;a=blob;f=SessionManager.py
+**MISE À JOUR :** Des informations complémentaires sur ce point sont
+disponibles après la conclusion.
 
 ## La luminosité n'est pas restaurée à sa valeur précédente
 
@@ -190,16 +174,56 @@ passe mais toutes les alternatives peinent à suivre derrière en raison
 du manque de documentation sur ce qu'il faut faire pour supporter de
 telles technologies.
 
-**MISE À JOUR :** Dans un [commentaire][c2],
-[Sylvain Collilieux](http://collilieux.net/blog) indique qu'il utilise
-désormais `xfce4-power-manager` à la place de GPM. Il y a
-effectivement du mieux, notamment, plus besoin d'un économiseur
-d'écran et d'un gestionnaire de session pour détecter l'inactivité. De
-plus, la gestion de la luminosité marche parfaitement. Toutefois, je
-suis resté à GPM pour ne pas embarquer un bout d'un second
-environnement de bureau...
+**MISE À JOUR :** J'ai obtenu dans les commentaires quelques pistes
+très intéressantes. En gros, il y a deux solutions possibles :
 
+ 1. Utiliser `xfce4-power-manager`. Le contrôle de la luminosité y est
+ mieux géré et il n'y a pas besoin de programmes supplémentaires pour
+ détecter l'inactivité de la session. Il faut toutefois toujours un
+ gestionnaire de session si on désire être interrogé sur l'action à
+ effectuer quand on appuie sur le bouton d'alimentation. Le seul
+ soucis avec cette solution, c'est que vous ajoutez des bouts d'un
+ autre environnement de bureau au votre. Vous aviez déjà des bouts de
+ GNOME, vous voilà avec des bouts de XFCE. Cette solution a été
+ [proposée][c2] par [Sylvain Collilieux](http://collilieux.net/blog).
+ 
+ 2. Utiliser `gnome-session`, `gnome-screensaver` et garder
+ `gnome-power-manager`. Comme [indiqué par Julien Valroff][c1],
+ `gnome-screensaver` a en plus besoin de `gnome-session` pour détecter
+ l'inactivité. Cependant, `gnome-session` va démarrer une session
+ complète GNOME. Encore une fois, il y a alors deux solutions. La
+ première est de
+ [remplacer `gnome-session` par quelque chose de plus léger][a1]
+ fournissant le minimum vital pour satisfaire `gnome-screensaver`.
+ [Une autre possibilité][c3] est de configurer `gnome-session` pour
+ démarrer votre environnement favori. Je démarre le mien à l'aide de
+ `~/.xsession` et j'ai donc fini par le réécrire comme ceci :
+
+    #!sh
+    # If not done, restart ourself with gnome-session
+    if [ -z "$SESSION_MANAGER" ]; then
+        [ -d ~/.config/autostart ] || mkdir ~/.config/autostart
+        rm -f ~/.config/autostart/*
+        cat <<EOF > ~/.config/autostart/xsession.desktop
+    [Desktop Entry]
+    Name=Xsession
+    Comment=Start .xsession
+    Exec=$(readlink -f $0)
+    Type=Application
+    X-GNOME-Autostart-enabled=true
+    EOF
+        exec gnome-session --autostart=$HOME/.config/autostart
+    fi
+    # Otherwise, keep starting stuff
+    # [...]
+    exec fvwm-crystal
+
+[c1]: [[fr/blog/2011-gnome-power-manager.html#comment-216330927]]
 [c2]: [[fr/blog/2011-gnome-power-manager.html#comment-215943480]]
+[c3]: [[en/blog/2011-gnome-power-manager.html#comment-217111054]]
+[c4]: [[en/blog/2011-gnome-power-manager.html#comment-217470530]]
+[a1]: http://www.narf.ssji.net/~shtrom/wiki/projets/gnomescreensavernosession
+[a2]: http://git.kirya.net/?p=dotfiles/scripts.git;a=blob;f=SessionManager.py
 
 [thinkpad]: [[fr/blog/2011-thinkpad-edge-11.html]]
 [fvwm]: [[fr/blog/2011-fvwm-configuration.html]]
