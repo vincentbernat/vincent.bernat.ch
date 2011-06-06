@@ -1,0 +1,163 @@
+---
+title: 'Ready for World IPv6 day?'
+keywords: "ipv6, ipv6 day, nginx, dovecot, netfilter, broker"
+uuid: 6360ae4c-a2e7-465c-9511-36035bb3ff17
+---
+
+On June 8, 2011, will be [World IPv6 Day][ipv6day]. Major
+web companies like Google, Yahoo! and Facebook will serve their
+content through IPv6. While some of them already provide IPv6 content,
+you either need to use a special URL or get your connection from some
+selected providers, known to provide working IPv6 connection (the
+selection is done through DNS).
+
+# What's World IPv6 Day about?
+
+World IPv6 Day is mostly about major content providers and network
+operators. End users are not expected to take any special actions. The
+content will be provided for one day on IPv6 and IPv4 without any
+special trick to circumvent broken IPv6 setup. If you have an IPv4
+only connectivity, all will continue to work (this day is not about
+switching Internet to IPv6 only). If you have a working
+IPv6 connectivity of any kind, you will use it to access
+content. However, if you have a broken IPv6 connectivity, you will
+find yourself isolated during one day until you solve the problem. You
+can [check your connectivity][ipv6test] and determine if you will run
+into trouble on World IPv6 Day.
+
+The main point of this day is to check if IPv6 native content can be
+provided to anybody without leaving out a large part of the users (the
+ones with a broken connectivity) which is reason why we don't already
+have IPv6 native content everywhere. [Google explains it][ipv6faq] this way:
+
+> We continuously conduct detailed measurements on the quality of IPv6
+> connectivity, and our latest results show that making Google services
+> generally available over IPv6 at this time would lead to connection
+> problems and increased latency for a small number of users. User
+> experience is very important to us, and we do not want to impact users
+> on networks that do not yet fully support IPv6. We will continue to
+> re-evaluate the situation as the IPv6 Internet evolves.
+
+While content provider are invited to provide IPv6 content, network
+operator are expected to troubleshoot their customers' problem (and
+they cannot withdraw themselves from this operation since the main
+change is done by content providers). If they can enable IPv6
+connectivity, that would be great too but this is not mandatory.
+
+# What can I do?
+
+Even if you are neither a network operator nor a major player in web
+content publishing, it is expected that World IPv6 Day will also be
+the playground for most IPv6 related things.
+
+## As a user
+
+Check if your ISP provides native IPv6 connectivity. This can be an
+opt-in option. For example, in France, [Free][free] allows its users to
+enable native IPv6 connectivity if they choose the appropriate
+option. That's easy to do and you get IPv6 in a matter of minutes.
+
+If your ISP does not provide native IPv6 connectivity, you can try to
+bug them about this. This is unlikely to work. You can also get IPv6
+through a tunnel broker like [SixXS][sixxs] (create an account and
+`apt-get install aiccu`) or [Hurricane Electric][he6]. Wikipedia has a
+[list of IPv6 tunnel brokers][brokers]. Don't rely on any other
+transition mechanism, they are unreliable.
+
+## As a service provider
+
+If you host yourself some services, like your web page or your own
+mail server, you can enable IPv6 connectivity for those as well. Get
+an IPv6 connectivity for your services, either native or through a
+[tunnel broker][brokers].
+
+Then, enable IPv6 on each service you provide. Check that they are
+listening on IPv6 with `ss -6l`. All the tips below are meant for very
+simple setup. Ensure that `net.ipv6.bindv6only` is set to 0. Here is
+what I have done:
+
+ - Enable **SSH** access through IPv6. With the default configuration
+   of OpenSSH, this is already done. Check your `ListenAddress`
+   directive if you have one.
+ - Serve **Web** content through IPv6. I am using [Nginx][nginx] as
+   a web server and you can mix IPv4 and IPv6 in the same virtual
+   host. Setting up IPv6 is easy. Ensure that IPv6 support is compiled
+   in (`nginx -V`) use `listen [::]:80` instead of `listen 80`. Apache
+   is equally easy to configure and should even work out of the box
+   since the `Listen 80` directive will listen to both IPv4 and IPv6
+   by default. [lighttpd][lighttpd] also supports IPv6. An easy way to
+   get started is to use `server.use-ipv6 = "enable"`.
+ - Enable IPv6 in **Postfix**, **Dovecot**, **BIND**. For all of
+   those, this works out of the box. Nowadays, most daemons will work
+   fine with IPv6 without any special configuration since they will
+   listen to `::` by default which means "any IPv4 or IPv6 address" as
+   long as `net.ipv6.bindv6only` is set to 0. Unfortunately, there is
+   still some daemons that do not support IPv6.
+ - Add appropriate `AAAA` record to your **DNS** because providing
+   IPv6 services is of little use if your users (including you) cannot
+   access them without typing the appropriate IP address. You may also
+   want to provide a `NS` record reachable through IPv6.
+ - Update your **monitoring** to use IPv6 as well. If you advertise
+   IPv6 service and only IPv4 is working, most IPv6 client will be
+   unable to access them.
+ - Adapt your **firewall**. In Linux, Netfilter handles IPv4 and IPv6
+   separately. You need to ensure you setup a correct firewall for
+   IPv6 as you have done with IPv4.
+
+Here is a minimal firewall that you can adapt:
+
+    #!sh
+    ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    for chain in INPUT OUTPUT; do
+      ip6tables -A $chain -m rt --rt-type 0 -j DROP
+      ip6tables -A $chain -p icmpv6 --icmpv6-type neighbor-solicitation \
+         -m hl --hl-eq 255 -j ACCEPT
+      ip6tables -A $chain -p icmpv6 --icmpv6-type neighbor-advertisement \
+         -m hl --hl-eq 255 -j ACCEPT
+      ip6tables -A $chain -m state --state NEW \
+         -p icmpv6 --icmpv6-type echo-request -j ACCEPT
+    done
+    ip6tables -A INPUT -i lo -j ACCEPT
+    ip6tables -A OUTPUT -o lo -j ACCEPT
+
+    # Put your rules here!
+
+    ip6tables -N REJECT_ALL
+    ip6tables -A REJECT_ALL -p tcp -j REJECT --reject-with tcp-reset
+    ip6tables -A REJECT_ALL -p udp -j REJECT --reject-with icmp6-adm-prohibited
+    ip6tables -A REJECT_ALL -j DROP
+    for chain in INPUT OUTPUT FORWARD; do
+        ip6tables -A $chain -j LOG --log-prefix "$chain-reject: "
+        ip6tables -A $chain -j REJECT_ALL
+    done
+
+# Debian status
+
+There is still a
+[long way for full IPv6 support of all applications][bugipv6] in
+Debian but it is a release goal since Etch. This is not an easy task
+since adding IPv6 support on some software can be really
+difficult. [DSA][dsa] also enabled IPv6 support on many servers used
+by the Debian project including the main web server, the main mirror,
+the security mirror and the name servers. You should be able to use
+Debian with an IPv6 only access.
+
+[ipv6day]: http://www.worldipv6day.org/
+[ipv6test]: http://test-ipv6.com/
+[stats]: http://www.google.com/intl/en/ipv6/statistics/
+[ipv6faq]: http://www.google.com/intl/en/ipv6/faq.html
+[free]: http://www.free.fr
+[sixxs]: http://www.sixxs.net/
+[he6]: http://tunnelbroker.net/
+[brokers]: http://en.wikipedia.org/wiki/List_of_IPv6_tunnel_brokers
+[nginx]: http://nginx.net/
+[lighttpd]: http://www.lighttpd.net/
+[debian]: http://anonscm.debian.org/gitweb/?p=mirror/domains.git;a=blob;f=debian.org;hb=HEAD
+[bugipv6]: http://bugs.debian.org/cgi-bin/pkgreport.cgi?which=tag&data=ipv6&archive=no
+[dsa]: http://dsa.debian.org/
+*[DSA]: Debian System Administrators
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

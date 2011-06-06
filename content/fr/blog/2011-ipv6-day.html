@@ -1,0 +1,180 @@
+---
+title: "Prêt pour la journée mondiale de l'IPv6 ?"
+keywords: "ipv6, ipv6 day, nginx, dovecot, netfilter, broker"
+uuid: 6360ae4c-a2e7-465c-9511-36035bb3ff17
+---
+
+Le 8 juin 2011 aura lieu la [journée mondiale de l'IPv6][ipv6day]. Les
+géants du web tels que Google, Yahoo! et Facebook proposeront pendant
+24 heures leur contenu à travers IPv6. Certains d'entre eux le
+faisaient déjà mais il fallait soit utiliser une URL dédiée à cet
+effet, soit faire partie des quelques fournisseurs d'accès connus pour
+gérer correctement l'IPv6 au sein de leur réseau (la sélection se fait
+à travers le DNS).
+
+# En quoi consiste cette journée ?
+
+Cette journée concerne principalement les fournisseurs de contenu les
+plus gros ainsi que les opérateurs. Les utilisateurs n'ont rien à
+faire pour participer (malgré eux) à cette initiative. Les contenus
+seront proposés à la fois en IPv6 et en IPv4 sans restreindre l'accès
+à la partie IPv6. Les personnes ne disposant que d'un accès IPv4
+pourront toujours accéder aux contenus habituels. Il ne s'agit pas
+d'une journée où seul IPv6 sera utilisé. Les personnes disposant d'un
+accès IPv6, quel qu'il soit, accéderont au même contenu en IPv6. Par
+contre, si leur connectivité est non fonctionnelle, ces personnes
+seront soit isolées, soit ralenties, le temps d'une journée (ou de
+régler le problème).
+
+Il est possible de [tester dès maintenant sa connectivité][ipv6test]
+afin de savoir si on rencontrera un problème le jour J.
+
+Le principe de ces journées est de déterminer s'il est désormais
+possible de fournir le même contenu en IPv6 sans laisser certains
+utilisateurs sur le bord du chemin. En effet, il s'agit de la
+principale réseau pour laquelle ce n'est pas encore fait, comme
+[l'explique Google][ipv6faq] (traduction libre) :
+
+> Nous effectuons continuellement des mesures de qualité de la
+> connectivité IPv6 et nos derniers résultats montrent qu'activer de
+> manière globale IPv6 pour les services Google conduirait à des
+> problèmes de connexion et des latences accrues pour un petit nombre
+> d'utilisateurs. L'expérience utilisateur est très importante pour
+> nous et nous ne voulons pas gêner les utilisateurs sur des réseaux
+> ne gérant pas entièrement IPv6. Nous réévaluons régulièrement cette
+> situation au fur et à mesure que la situation évolue.
+
+Alors que les fournisseurs de contenu doivent fournir du contenu en
+IPv6, les opérateurs réseau sont également attendus, notamment en
+fournissant du support à leurs utilisateurs pour régler tous les
+problèmes qui pourraient survenir, notamment les problèmes de
+connectivité ou de lenteur. Fournir IPv6 serait formidable, mais ce
+n'est pas obligatoire.
+
+# Que puis-je faire ?
+
+Même en n'étant ni géant du web, ni opérateur réseau, cette journée
+est aussi l'occasion d'avancer de manière globale sur l'IPv6.
+
+## En tant qu'utilisateur
+
+Vérifiez si votre fournisseur d'accès fournit une connexion native à
+IPv6. Il est possible que ce soit une option à activer dans sa console
+d'administration, comme c'est le cas chez le fournisseur d'accès
+français [Free][free]. Dans ce cas, obtenir une connexion IPv6 ne
+prend que quelques minutes.
+
+Dans le cas contraire, vous pouvez indiquer à votre fournisseur
+d'accès qu'une connectivité IPv6 serait très sympathique afin qu'il la
+mette en place. Il est fort improbable que cela ait un quelconque
+effet. Il est alors possible d'obtenir une connectivité via un
+fournisseur de tunnel IPv6 comme [SixXS][sixxs] (il suffit de créer un
+compte et de taper `apt-get install aiccu`) ou
+[Hurricane Electric][he6]. Wikipedia dispose d'une
+[liste des fournisseurs de tunnel IPv6][brokers]. Il est inutile de se
+reposer sur d'autres mécanismes de transition : ceux-ci ne sont pas
+fiables.
+
+## En tant que fournisseur de service
+
+Si vous hébergez vous-même des services comme votre page web ou votre
+mail, vous pouvez également activer IPv6 pour ceux-ci. Il faut d'abord
+obtenir une connexion IPv6, soit native, soit via un tunnel.
+
+Ensuite, il convient d'activer IPv6 sur chaque service. Il est
+possible de vérifier qu'un service écoute en IPv6 avec la commande `ss
+-6l`. Les astuces fournies ci-dessous ne s'appliquent que sur des
+configurations très simples. Vérifiez que la valeur de
+`net.ipv6.bindv6only` est bien 0.
+
+ - Activer **SSH** en IPv6. C'est automatique dans la configuration
+   par défaut. Dans le cas contraire, vérifiez la présence de
+   directives `ListenAddress`.
+ - Servir du contenu **Web** via IPv6. J'utilise le serveur web
+   [Nginx][nginx] qui permet de définir des serveurs virtuels
+   mélangeant IPv4 et IPv6. Il faut d'abord s'assurer que
+   celui-ci est compilé avec le support d'IPv6 (`nginx -V`) et ensuite
+   d'utiliser la directive `listen [::]:80` au lieu de `listen
+   80`. Apache est également très simple à utiliser en IPv6 vu que,
+   par défaut, la directive `Listen 80` écoute également en
+   IPv6. Enfin, [lighttpd][lighttpd] supporte également IPv6 en
+   utilisant `server.use-ipv6 = "enable"`.
+ - Activer IPv6 dans **Postfix**, **Dovecot**, **BIND**. Pour toutes
+   ces applications, le support d'IPv6 est activé automatiquement sans
+   actions particulières. De nos jours, la plupart des démons écoutent
+   par défaut sur l'adresse `::` qui signifie « n'importe quelle
+   adresse IPv4 ou IPv6 » du moment que le paramètre
+   `net.ipv6.bindv6only` est placé à 0. Toutefois, il existe encore
+   des démons qui ne supportent pas du tout IPv6.
+ - Ajouter des enregistrements `AAAA` au niveau du **DNS** car fournir
+   des services IPv6 sans permettre aux utilisateurs de les trouver
+   facilement n'est pas très utile. Un enregistrement `NS` accessible
+   en IPv6 pour une zone est aussi possible.
+ - Mettre à jour la **supervision** pour vérifier la bonne marche des
+   services IPv6. En effet, un service accessible en IPv6 mais non
+   fonctionnel mettra en échec la plupart des clients IPv6 (en dehors
+   des navigateurs, il n'y a généralement pas de seconde tentative en
+   IPv4).
+ - Adaptation du **pare-feu**. Dans Linux, les parties IPv4 et IPv6
+   dans Netfilter sont totalement séparées. Il faut donc mettre en
+   place les règles appropriées pour IPv6 comme cela a été fait pour
+   IPv4.
+
+Voici un exemple de firewall que l'on peut adapter :
+
+    #!sh
+    ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    for chain in INPUT OUTPUT; do
+      ip6tables -A $chain -m rt --rt-type 0 -j DROP
+      ip6tables -A $chain -p icmpv6 --icmpv6-type neighbor-solicitation \
+         -m hl --hl-eq 255 -j ACCEPT
+      ip6tables -A $chain -p icmpv6 --icmpv6-type neighbor-advertisement \
+         -m hl --hl-eq 255 -j ACCEPT
+      ip6tables -A $chain -m state --state NEW \
+         -p icmpv6 --icmpv6-type echo-request -j ACCEPT
+    done
+    ip6tables -A INPUT -i lo -j ACCEPT
+    ip6tables -A OUTPUT -o lo -j ACCEPT
+
+    # Règles supplémentaires ici !
+
+    ip6tables -N REJECT_ALL
+    ip6tables -A REJECT_ALL -p tcp -j REJECT --reject-with tcp-reset
+    ip6tables -A REJECT_ALL -p udp -j REJECT --reject-with icmp6-adm-prohibited
+    ip6tables -A REJECT_ALL -j DROP
+    for chain in INPUT OUTPUT FORWARD; do
+        ip6tables -A $chain -j LOG --log-prefix "$chain-reject: "
+        ip6tables -A $chain -j REJECT_ALL
+    done
+
+# IPv6 chez Debian
+
+Au niveau des applications, la
+[route est encore longue pour un support complet d'IPv6][bugipv6] mais
+il s'agit d'un but mis en placé depuis Etch. Cela n'est pas aussi
+facile que cela peut paraître car il ne suffit pas d'écouter en IPv6
+pour supporter IPv6. Les [administrateurs Debian][dsa] ont aussi
+activé IPv6 sur de nombreux serveurs du projets dont notamment le
+serveur web, les principaux mirroirs, le mirroir de sécurité ainsi que
+les serveurs de noms. Ainsi, Debian peut être utilisé alors que l'on
+ne dispose que d'une connexion en IPv6.
+
+[ipv6day]: http://www.worldipv6day.org/
+[ipv6test]: http://test-ipv6.com/
+[stats]: http://www.google.com/intl/en/ipv6/statistics/
+[ipv6faq]: http://www.google.com/intl/en/ipv6/faq.html
+[free]: http://www.free.fr
+[sixxs]: http://www.sixxs.net/
+[he6]: http://tunnelbroker.net/
+[brokers]: http://en.wikipedia.org/wiki/List_of_IPv6_tunnel_brokers
+[nginx]: http://nginx.net/
+[lighttpd]: http://www.lighttpd.net/
+[debian]: http://anonscm.debian.org/gitweb/?p=mirror/domains.git;a=blob;f=debian.org;hb=HEAD
+[bugipv6]: http://bugs.debian.org/cgi-bin/pkgreport.cgi?which=tag&data=ipv6&archive=no
+[dsa]: http://dsa.debian.org/
+*[DSA]: Debian System Administrators
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
