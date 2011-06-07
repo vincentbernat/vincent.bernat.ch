@@ -1,0 +1,214 @@
+---
+title: 'Accélérer la navigation sur le web en 3G'
+keywords: "sfr, 3g, vitesse, optimisation, neutralité, réécriture, pagespeed, mod_pagespeed, flashnetworks"
+uuid: 3870852e-8399-48b9-93dd-0542cc0a9006
+---
+
+Mon portable disposant d'une connectivité 3G, j'ai décidé de prendre
+l'abonnement le plus économique possible sans que celui-ci soit limité
+en temps. J'ai finalement opté pour un abonnement à 10 € pour 250 Mo par
+mois chez [SFR][sfr].
+
+# Proxy transparent et optimisant selon SFR
+
+En naviguant un peu sur le site [Le Monde][lemonde], j'ai remarqué que
+certaines requêtes étaient destinées à des IP du type
+`10.141.0.4`. J'ai regardé rapidement avec les outils adéquats de
+Chromium (onglet « Réseau ») ce que cela signifiait. Toutes les
+images étaient servies depuis l'IP en question. Un proxy transparent
+(repérable à l'entête `Via` qu'il ajoute) avait réécrit les balises
+`<img>`. Les images ainsi servies étaient identiques aux originales
+pour les plus petites ou de qualité réduite pour les autres.
+
+Les balises `<style>` et `<script>` recevait également un traitement
+de choc quand elles pointaient sur des ressources externes : le
+contenu était reporté à l'intérieur du fichier HTML. Avant :
+
+    #!html
+    <script src="http://s1.lemde.fr/js/lib/jquery/1.5.1/jquery.js"></script>
+
+Après :
+
+    #!html
+    <script oldSrc="http://s1.lemde.fr/js/lib/jquery/1.5.1/jquery.js" NG="replaced">
+    /*!
+     * jQuery JavaScript Library v1.5.1
+     *
+     * Copyright 2011, John Resig
+     * Dual licensed under the MIT or GPL Version 2 licenses.
+     * http://jquery.org/license
+     * [...] */
+    </script>
+
+Cela signifie que si un site fait appel à [jQuery][jquery], une
+bibliothèque Javascript très populaire, on se retrouve à télécharger
+l'intégralité du code dans chacune des pages, soit un surpoids de 85 Ko !
+
+Tous les navigateurs modernes supportent le
+[pipelining HTTP][pipelining] qui permet de demander plusieurs
+ressources au sein d'une même requête, ce qui est fort utile dès que
+la latence augmente un peu. Il y a alors deux cas possibles :
+
+ 1. Si la ressource est servie depuis le même serveur que la page
+ HTML, il est possible d'utiliser la même connexion pour obtenir
+ celle-ci (bien qu'il est probable qu'une nouvelle connexion soit
+ ouverte pour continuer à charger le reste du document, dans ce cas,
+ on se retrouve dans le second cas). On obtient donc un résultat
+ similaire à l'inclusion dans la page mais on peut utiliser le cache
+ du navigateur pour économiser la bande passante.
+ 
+ 2. Si la ressource provient d'un autre serveur (comme dans l'exemple
+ ci-dessus), le navigateur va ouvrir une nouvelle connexion en
+ parallèle. Cela va induire un coût d'environ 300 ms (pour une
+ connexion 3G) afin d'établir cette nouvelle connexion HTTP. Ces
+ 300 ms sont incroyablement moins coûteuses que les 10 secondes
+ nécessaires pour retélécharger 85 Ko à chaque requête ! De plus, les
+ autres ressources statiques sont sans doute téléchargées depuis ce
+ serveur et cette connexion ne sera donc pas perdue. Il est même
+ probable qu'elle ait été nécessaire de toute façon (pour télécharger
+ les images par exemple).
+
+En cherchant un peu sur le web avec les mots clefs `oldSrc` et
+`NG="replced"`, on ne trouve pas grand chose sur le sujet. Au passage,
+il semblerait de plus que cette technique casse certains composants,
+comme TinyMCE, qui reposent sur la connaissance de leur emplacement
+pour télécharger les ressources supplémentaires dont ils ont
+besoin. SFR utiliserait un produit de  [Flash Networks][flashnetworks] appelé
+[Harmony Gateway][harmony]. J'ai demandé au service client des
+renseignements supplémentaires, notamment s'il était possible de
+débrayer cette fonctionnalité. Je n'ai à ce jour pas obtenu de
+réponse.
+
+En essayant un peu plus tard, je me suis rendu compte que la
+réécriture du Javascript n'avait plus lieu. Par contre, les images
+étaient toujours servies depuis un serveur tiers. Le lendemain, un
+autre essai m'a conduit à constater que le proxy transparent avait
+disparu (plus d'entête `Via`). Étant donné que chaque essai a été
+effectué à un endroit différent, il est possible que les serveurs
+soient installés au plus près de l'abonné et que leurs configurations
+soient différentes. Une autre explication est que SFR a désactivé
+cette fonctionnalité pour moi, sans m'en avertir.
+
+Configuré correctement, un tel accélérateur pourrait être proposé en
+option par défaut aux abonnés. La plupart apprécieront le gain de
+vitesse procuré par un tel équipement et ceux qui se soucient de la
+[neutralité du net][neutrality] pourront désactiver cette option. Bien
+sûr, il faut que celle-ci soit mise en avant de manière correcte, par
+exemple en la présentant comme une option gratuite rattachée au
+forfait.
+
+# Mettre en place son propre proxy optimisant
+
+Google fournit [`mod_pagespeed`][pagespeed], un logiciel pour
+optimiser un site web à la volée. Il s'agit d'un module pour Apache
+destiné à optimiser un unique site web. Cependant, comme Apache peut
+agir en tant que serveur mandataire (avec `mod_proxy`), il est
+possible de
+[mettre en place `mod_pagespeed` pour n'importe quel site][pagespeedproxy].
+
+Ce n'est pas très compliqué à configurer, à condition de se contenter
+d'une version précompilée de
+`mod_pagespeed`. [Téléchargez `mod_pagespeed`][1]. J'ai opté pour la
+version Debian 64bit.
+
+    #!console
+    # touch /etc/default/mod-pagespeed
+    # dpkg -i ~/download/mod-pagespeed-beta_current_amd64.deb
+    Selecting previously deselected package mod-pagespeed-beta.
+    (Reading database ... 277699 files and directories currently installed.)
+    Unpacking mod-pagespeed-beta (from .../mod-pagespeed-beta_current_amd64.deb) ...
+    dpkg: dependency problems prevent configuration of mod-pagespeed-beta:
+     mod-pagespeed-beta depends on apache2.2-common; however:
+      Package apache2.2-common is not installed.
+    dpkg: error processing mod-pagespeed-beta (--install):
+     dependency problems - leaving unconfigured
+    Errors were encountered while processing:
+     mod-pagespeed-beta
+    # apt-get install -f
+    [...]
+    Unpacking apache2.2-common (from .../apache2.2-common_2.2.19-1_amd64.deb) ...
+    Processing triggers for man-db ...
+    Setting up apache2.2-common (2.2.19-1) ...
+    [...]
+    # apt-get install apache2-mpm-worker
+    [...]
+    Unpacking apache2-mpm-worker (from .../apache2-mpm-worker_2.2.19-1_amd64.deb) ...
+    Setting up apache2-mpm-worker (2.2.19-1) ...
+    Starting web server: apache2.
+    # a2enmod proxy_http
+    Considering dependency proxy for proxy_http:
+    Enabling module proxy.
+    Enabling module proxy_http.
+    To to activate the new configuration, you need to run:
+      /etc/init.d/apache2 restart
+
+Il faut ensuite modifier le fichier `/etc/apache2/mods-enabled/proxy.conf`:
+
+    #!apache
+    ProxyRequests On
+    <Proxy *>
+	    AddDefaultCharset off
+	    Order deny,allow
+	    Deny from all
+	    Allow from 127.0.0.1
+    </Proxy>
+
+Étant donné que placer le proxy sur le portable n'est pas très utile
+(vous ne voulez pas rapatrier la version non optimisée du site web à
+travers votre lien 3G), il faudrait installer tout ceci sur un autre
+serveur et autoriser le portable à l'utiliser comme proxy. Dans
+l'idéal, il serait sans doute aussi préférable de tout passer en
+HTTPS. Cependant, nous gardons cet exemple simpliste à titre
+d'illustration.
+
+Il faut également modifier `/etc/apache2/mods-enabled/pagespeed.conf`
+pour ajouter la directive `ModPagespeedDomain *` et ainsi autoriser
+`mod_pagespeed` à réécrire n'importe quelle page. Redémarrez Apache
+quand tout est fini et vérifiez que tout fonctionne correctement :
+
+    #!console
+    $ curl -six http://localhost:80 http://www.lemonde.fr/ | grep ^X-Mod-Pagespeed
+    X-Mod-Pagespeed: 0.9.17.7-716
+
+Parfait ! Essayons maintenant de nous rendre sur un site assez simple, comme
+[Debian Backports](http://backports.debian.org/). Il sert une page
+HTML avec deux feuilles de style :
+
+![Debian Backports sans optimisation][s1]
+[s1]: [[!!images/pagespeed-disabled.png]]
+
+On a téléchargé les trois fichiers pour un total de 8 Ko, compression
+comprise. Passons désormais par notre proxy :
+
+![Debian Backports avec optimisation][s2]
+[s2]: [[!!images/pagespeed-enabled.png]]
+
+`mod_pagespeed` a diminué la taille du fichier HTML mais a surtout
+combiné les deux fichiers CSS dont la taille globale a été réduite en
+les *minifiant*. Il semble qu'un bug dans Chromium fausse l'affichage
+de la quantité de données transférées quand on passe par un
+proxy. J'ai vérifié avec Wireshark que Chromium reçoit bien des données
+compressées pour environ 8 Ko. Le gain est assez ténu mais il devrait
+être meilleur sur des sites plus complexes.
+
+Naviguer sur Internet avec `mod_pagespeed` ne semble pas poser de
+problèmes particuliers. Il semblerait donc qu'il s'agisse d'une
+solution viable. Un bémol cependant : il n'optimise que les pages
+qu'il a placées dans son cache. Cela signifie que la première fois que
+l'on demande une page, on dispose d'une version non
+optimisée. J'ignore s'il s'agit d'un comportement normal.
+
+[1]: http://code.google.com/intl/fr/speed/page-speed/download.html
+[sfr]: http://www.sfr.fr
+[flashnetworks]: http://www.flashnetworks.com/
+[harmony]: http://www.flashnetworks.com/Content.aspx?Page=harmony_gateway
+[lemonde]: http://mobile.lemonde.fr
+[pagespeedproxy]: http://www.517sou.net/Article/mod_pagespeed-for-Apache2.aspx
+[pagespeed]: http://code.google.com/p/modpagespeed/
+[jquery]: http://jquery.com
+[pipelining]: http://fr.wikipedia.org/wiki/Pipelining_HTTP
+[neutrality]: http://fr.wikipedia.org/wiki/Neutralit%C3%A9_du_r%C3%A9seau
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

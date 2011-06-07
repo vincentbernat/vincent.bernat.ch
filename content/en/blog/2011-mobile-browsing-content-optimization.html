@@ -1,0 +1,201 @@
+---
+title: 'Mobile browsing & content optimization'
+keywords: "sfr, 3g, neutrality, optimization, rewrite, pagespeed, mod_pagespeed, flashnetworks"
+uuid: 3870852e-8399-48b9-93dd-0542cc0a9006
+---
+
+Since my laptop features WWAN connectivity, I purchased a 3G mobile
+broadband plan from [SFR][sfr], a French mobile phone company. I took
+the cheapest one available: 250 MB per month for 10 €.
+
+# Optimizing transparent proxy by SFR
+
+While browsing, I was curious about the fact that there were multiple
+accesses to non-public IP, like `10.141.0.4`. I was browsing the mobile
+version of [Le Monde][lemonde], a French daily newspaper. I enabled
+Chromium *developer tools* and watched what happened in the "Network"
+tab. All images were served from IP like `10.141.0.4`. Looking at the
+HTML source code, I discovered that `<img>` tags were rewritten to
+point to those images. The smaller one were identical to the original
+one but the larger ones (more than 50 KB) were of reduced quality (and
+therefore reduced size).
+
+`<img>` tags were not the only one to be rewritten. `<style>` and
+`<script>` tags that were pointing to external resources (with a `src`
+attribute) were also rewritten to include the CSS or the javascript
+*inline*. Before:
+
+    #!html
+    <script src="http://s1.lemde.fr/js/lib/jquery/1.5.1/jquery.js"></script>
+
+After:
+
+    #!html
+    <script oldSrc="http://s1.lemde.fr/js/lib/jquery/1.5.1/jquery.js" NG="replaced">
+    /*!
+     * jQuery JavaScript Library v1.5.1
+     *
+     * Copyright 2011, John Resig
+     * Dual licensed under the MIT or GPL Version 2 licenses.
+     * http://jquery.org/license
+     * [...] */
+    </script>
+
+This means that each page that includes [jQuery][jquery], a popular
+javascript library, as an external resource, will be turned into a page
+that includes the **whole** jQuery code which is about 85 KB. Each page
+will weight more than 85 KB instead of relying on an external and
+cacheable resource. That's crazy!
+
+Nowadays, most browsers support [HTTP/1.1 pipelining][pipelining]
+which allows to serve multiple resources into a single request. There
+are two cases:
+
+ 1. If the resource is served from the same server as the HTML page,
+ pipelining would enable to get the same result without hindering the
+ cache. The browser may decide to open another connection because the
+ initial document is not loaded yet. Therefore, we fall in the second
+ case.
+ 
+ 2. If the resource is served from another server (like in the example
+ above), the browser would download the resource in parallel with the
+ help of another connection. It will only costs about 300 ms of
+ additional time due to the establishment of a new HTTP connection
+ with the server. Those 300 ms are a very small price to pay
+ compared to the 10 seconds needed to download 85 KB for each
+ page. Moreover, other static resources will likely be downloaded from
+ the same server and therefore, this is 300 ms the first time and
+ nothing more for the other resources.
+
+Searching on the web for `oldSrc` and `NG="replaced"`, I find very little
+information about what is used. It seems that such a feature may also
+break some scripts, like TinyMCE, trying to get additional resources
+relative to the path where the script is installed. It appears that
+SFR is using a product from [Flash Networks][flashnetworks] called
+[Harmony Gateway][harmony]. I have asked SFR more info about this and
+if it was possible to disable the use of this feature but got no
+answer so far.
+
+I have retried a bit later and there was no rewriting for Javascript
+and CSS. Images were still degraded and served by a special
+server. The next day, my requests did not travel through a transparent
+proxy anymore (no more `Via` header in answers). Each try was done at
+a different location. The proxies may be installed at some locations
+only and configured differently. Another explanation is that SFR
+silently disabled this functionality for my account.
+
+If it was done correctly, such an accelerator service could be be
+proposed as an opt-out option since most users would appreciate faster
+page downloads. If you care about [network neutrality][neutrality],
+you can disable this option. Of course, it needs to be properly
+advertised, for example as a free option in your mobile plan.
+
+# Setting up our own optimizing proxy
+
+Google provides [`mod_pagespeed`][pagespeed] as a solution to optimize
+a website on the fly. This is an Apache module. It is targeted at
+optimizing your own website but since Apache can act as a regular
+proxy, it seems possible to
+[enable `mod_pagespeed` for any website][pagespeedproxy].
+
+That's pretty easy to setup if you don't mind using a precompiled
+version of `mod_pagespeed`. [Download `mod_pagespeed`][1]. I have
+downloaded the 64bit version for Debian.
+
+    #!console
+    # touch /etc/default/mod-pagespeed
+    # dpkg -i ~/download/mod-pagespeed-beta_current_amd64.deb
+    Selecting previously deselected package mod-pagespeed-beta.
+    (Reading database ... 277699 files and directories currently installed.)
+    Unpacking mod-pagespeed-beta (from .../mod-pagespeed-beta_current_amd64.deb) ...
+    dpkg: dependency problems prevent configuration of mod-pagespeed-beta:
+     mod-pagespeed-beta depends on apache2.2-common; however:
+      Package apache2.2-common is not installed.
+    dpkg: error processing mod-pagespeed-beta (--install):
+     dependency problems - leaving unconfigured
+    Errors were encountered while processing:
+     mod-pagespeed-beta
+    # apt-get install -f
+    [...]
+    Unpacking apache2.2-common (from .../apache2.2-common_2.2.19-1_amd64.deb) ...
+    Processing triggers for man-db ...
+    Setting up apache2.2-common (2.2.19-1) ...
+    [...]
+    # apt-get install apache2-mpm-worker
+    [...]
+    Unpacking apache2-mpm-worker (from .../apache2-mpm-worker_2.2.19-1_amd64.deb) ...
+    Setting up apache2-mpm-worker (2.2.19-1) ...
+    Starting web server: apache2.
+    # a2enmod proxy_http
+    Considering dependency proxy for proxy_http:
+    Enabling module proxy.
+    Enabling module proxy_http.
+    To to activate the new configuration, you need to run:
+      /etc/init.d/apache2 restart
+
+Then, we modify `/etc/apache2/mods-enabled/proxy.conf`:
+
+    #!apache
+    ProxyRequests On
+    <Proxy *>
+	    AddDefaultCharset off
+	    Order deny,allow
+	    Deny from all
+	    Allow from 127.0.0.1
+    </Proxy>
+
+Of course, this makes little sense to run the proxy on your
+laptop since you don't want to download the non-optimized content over
+your WWAN link. You need to run it on another server and therefore allow your
+laptop to access it. Most probably, you want to run it over HTTPS
+too. But this is not the point here.
+
+Also, we need to modify `/etc/apache2/mods-enabled/pagespeed.conf` to
+add the directive `ModPagespeedDomain *` to let `mod_pagespeed`
+rewrite any page. You should restart Apache after that. Now, check if
+the proxy is working:
+
+    #!console
+    $ curl -six http://localhost:80 http://www.lemonde.fr/ | grep ^X-Mod-Pagespeed
+    X-Mod-Pagespeed: 0.9.17.7-716
+
+All is working! Let's try a very simple site, like
+[Debian Backports](http://backports.debian.org/). It features one HTML
+file and two CSS files:
+
+![Debian Backports website without pagespeed][s1]
+[s1]: [[!!images/pagespeed-disabled.png]]
+
+We downloaded a total of 8 KB (compression included). Let's use our
+proxy and try again:
+
+![Debian Backports website with pagespeed][s2]
+[s2]: [[!!images/pagespeed-enabled.png]]
+
+`mod_pagespeed` succeeds in reducing the size of the HTML file and
+combined the CSS files. Moreover, it minified the resulting CSS
+file. There seems to be a bug in Chromium that display incorrect
+transfert sizes (including in the timeline representation) when using
+a proxy. I have checked with Wireshark that the overall quantity
+transferred was about 8 KB. The gain is very thin here but you can
+imagine that you will get better results on larger sites.
+
+`mod_pagespeed` seems to handle well most sites. However, it only
+optimizes pages that already are in its cache. The first time you
+grab a page, you will get the unoptimized version. I don't know if it
+is the expected behaviour.
+
+[1]: http://code.google.com/intl/fr/speed/page-speed/download.html
+[sfr]: http://www.sfr.fr
+[flashnetworks]: http://www.flashnetworks.com/
+[harmony]: http://www.flashnetworks.com/Content.aspx?Page=harmony_gateway
+[lemonde]: http://mobile.lemonde.fr
+[pagespeedproxy]: http://www.517sou.net/Article/mod_pagespeed-for-Apache2.aspx
+[pagespeed]: http://code.google.com/p/modpagespeed/
+[jquery]: http://jquery.com
+[pipelining]: http://en.wikipedia.org/wiki/HTTP_pipelining
+[neutrality]: http://en.wikipedia.org/wiki/Network_neutrality
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
