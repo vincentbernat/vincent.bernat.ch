@@ -47,9 +47,10 @@ that includes the **whole** jQuery code which is about 85 KB. Each page
 will weight more than 85 KB instead of relying on an external and
 cacheable resource. That's crazy!
 
-Nowadays, most browsers support [HTTP/1.1 pipelining][pipelining]
-which allows to serve multiple resources into a single request. There
-are two cases:
+<del>
+{% filter markdown %}
+Nowadays, most browsers support HTTP/1.1 pipelining which allows to
+serve multiple resources into a single request. There are two cases:
 
  1. If the resource is served from the same server as the HTML page,
  pipelining would enable to get the same result without hindering the
@@ -66,6 +67,17 @@ are two cases:
  page. Moreover, other static resources will likely be downloaded from
  the same server and therefore, this is 300 ms the first time and
  nothing more for the other resources.
+{% endfilter %}
+</del>
+
+**UPDATED:** As noted by [Éric Daspet](http://eric.daspet.name/)
+[in a comment][c1], [pipelining][pipelining] is in fact disabled for
+most browsers and therefore cannot be used to avoid the use of a new
+TCP connection for each resource to download. Therefore, inlining
+javascript is not as stupid as I said earlier. It should not be done
+on such large resources like jQuery.
+
+[c1]: [[fr/blog/2011-accelerer-navigation-3g.html#comment-221386199]]
 
 Searching on the web for `oldSrc` and `NG="replaced"`, I find very little
 information about what is used. It seems that such a feature may also

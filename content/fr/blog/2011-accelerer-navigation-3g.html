@@ -44,8 +44,10 @@ Cela signifie que si un site fait appel à [jQuery][jquery], une
 bibliothèque Javascript très populaire, on se retrouve à télécharger
 l'intégralité du code dans chacune des pages, soit un surpoids de 85 Ko !
 
+<del>
+{% filter markdown %}
 Tous les navigateurs modernes supportent le
-[pipelining HTTP][pipelining] qui permet de demander plusieurs
+pipelining HTTP qui permet de demander plusieurs
 ressources au sein d'une même requête, ce qui est fort utile dès que
 la latence augmente un peu. Il y a alors deux cas possibles :
 
@@ -67,6 +69,19 @@ la latence augmente un peu. Il y a alors deux cas possibles :
  serveur et cette connexion ne sera donc pas perdue. Il est même
  probable qu'elle ait été nécessaire de toute façon (pour télécharger
  les images par exemple).
+{% endfilter %}
+</del>
+
+**MISE À JOUR :** Comme indiqué par
+[Éric Daspet](http://eric.daspet.name/) dans [un commentaire][c1], le
+[pipelining][pipelining] est en fait désactivé par défaut sur la
+plupart des navigateurs et il ne faut donc pas compter dessus pour
+éviter l'ouverture d'une nouvelle connexion TCP pour chaque ressource
+à télécharger. Du coup, intégrer le javascript directement dans le
+document n'est pas aussi idiot que je le prétendais. Toutefois, cela
+ne devrait être fait que sur des ressources de taille raisonnable.
+
+[c1]: [[fr/blog/2011-accelerer-navigation-3g.html#comment-221386199]]
 
 En cherchant un peu sur le web avec les mots clefs `oldSrc` et
 `NG="replaced"`, on ne trouve pas grand chose sur le sujet. Au passage,
