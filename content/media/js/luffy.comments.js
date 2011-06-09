@@ -6,7 +6,8 @@ luffy.comments = function() {
 	var loading = $(this).text('Loading/Chargement...');
         var src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
 	if (typeof(_gaq) !== 'undefined') {
-	    _gaq.push(['_trackEvent', 'Comments', 'Display']);
+	    _gaq.push(['_trackEvent', 'Comments',
+		       document.title.split(" | ")[0]]);
 	}
 	yepnope({ load: src,
 		  complete: function() {
