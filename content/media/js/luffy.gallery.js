@@ -27,7 +27,7 @@ luffy.gallery = function() {
 	captionAnimationDuration: 400,
 	closeKeys: [27, 88, 67],
 	previousKeys: [37, 80],
-	nextKeys: [39, 78],
+	nextKeys: [39, 78]
     };
 
     // Other variables
