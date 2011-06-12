@@ -45,37 +45,43 @@ This means that each page that includes [jQuery][jquery], a popular
 javascript library, as an external resource, will be turned into a page
 that includes the **whole** jQuery code which is about 85 KB. Each page
 will weight more than 85 KB instead of relying on an external and
-cacheable resource. That's crazy!
+cacheable resource.
 
-<del>
-{% filter markdown %}
-Nowadays, most browsers support HTTP/1.1 pipelining which allows to
-serve multiple resources into a single request. There are two cases:
+Nowadays, most browsers support [HTTP keep-alive][keepalive] which
+allows to serve multiple resources into a single request. There are
+two cases:
 
  1. If the resource is served from the same server as the HTML page,
- pipelining would enable to get the same result without hindering the
- cache. The browser may decide to open another connection because the
- initial document is not loaded yet. Therefore, we fall in the second
- case.
+ keep-alive would enable to get almost the same result without
+ hindering the cache: the browser would first request the HTML page,
+ then the javascript resource into the same TCP connection. There is a
+ small penalty of about 100 ms to let the browser request the second
+ resource. The browser may decide to open another connection because
+ the initial document is not loaded yet. Some browsers may even
+ negotiate this additional connection before needing it. In this case,
+ it can use this idle connection at no cost. Otherwise, we may fall in
+ the second case.
  
  2. If the resource is served from another server (like in the example
- above), the browser would download the resource in parallel with the
- help of another connection. It will only costs about 300 ms of
- additional time due to the establishment of a new HTTP connection
- with the server. Those 300 ms are a very small price to pay
- compared to the 10 seconds needed to download 85 KB for each
- page. Moreover, other static resources will likely be downloaded from
- the same server and therefore, this is 300 ms the first time and
- nothing more for the other resources.
-{% endfilter %}
-</del>
+ above) or if the browser does not have an idle connection ready for
+ reuse, it would download the resource in parallel with the help of
+ another connection. It will only costs about 300 ms of additional
+ time due to the establishment of a new TCP connection with the
+ server. Those 300 ms are a very small price to pay compared to the 2
+ seconds needed to download 85 KB for each page. Moreover, other
+ static resources will likely be downloaded from the same server and
+ therefore, this is 300 ms the first time and about 100 ms for
+ additional resources (round-trip time for a new HTTP request into the
+ same TCP connection).
 
-**UPDATED:** As noted by [Éric Daspet](http://eric.daspet.name/)
-[in a comment][c1], [pipelining][pipelining] is in fact disabled for
-most browsers and therefore cannot be used to avoid the use of a new
-TCP connection for each resource to download. Therefore, inlining
-javascript is not as stupid as I said earlier. It should not be done
-on such large resources like jQuery.
+**UPDATED:** In a previous version of this article, I confused
+[pipelining][pipelining] and [keep-alive][keepalive] mechanisms. While
+keep-alive allows to reuse an existing connection to download a new
+resource, only one request at a time by connection could be
+issued. Pipelining allows to push additional requests in the same
+TCP connection without waiting for answers. As noted by
+[Éric Daspet](http://eric.daspet.name/) [in a comment][c1], pipelining
+is disabled for most browsers. However, keep-alive is well supported.
 
 [c1]: [[fr/blog/2011-accelerer-navigation-3g.html#comment-221386199]]
 
@@ -205,6 +211,7 @@ is the expected behaviour.
 [pagespeed]: http://code.google.com/p/modpagespeed/
 [jquery]: http://jquery.com
 [pipelining]: http://en.wikipedia.org/wiki/HTTP_pipelining
+[keepalive]: http://en.wikipedia.org/wiki/HTTP_persistent_connection
 [neutrality]: http://en.wikipedia.org/wiki/Network_neutrality
 
 {# Local Variables: #}

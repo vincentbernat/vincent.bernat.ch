@@ -44,42 +44,44 @@ Cela signifie que si un site fait appel à [jQuery][jquery], une
 bibliothèque Javascript très populaire, on se retrouve à télécharger
 l'intégralité du code dans chacune des pages, soit un surpoids de 85 Ko !
 
-<del>
-{% filter markdown %}
-Tous les navigateurs modernes supportent le
-pipelining HTTP qui permet de demander plusieurs
-ressources au sein d'une même requête, ce qui est fort utile dès que
-la latence augmente un peu. Il y a alors deux cas possibles :
+Tous les navigateurs modernes supportent les
+[connexions HTTP persistantes][keepalive] qui permettent de demander
+plusieurs ressources au sein d'une même requête, ce qui est fort utile
+dès que la latence augmente un peu. Il y a alors deux cas possibles :
 
  1. Si la ressource est servie depuis le même serveur que la page
  HTML, il est possible d'utiliser la même connexion pour obtenir
- celle-ci (bien qu'il est probable qu'une nouvelle connexion soit
+ celle-ci, bien qu'il est possible qu'une nouvelle connexion soit
  ouverte pour continuer à charger le reste du document, dans ce cas,
- on se retrouve dans le second cas). On obtient donc un résultat
- similaire à l'inclusion dans la page mais on peut utiliser le cache
- du navigateur pour économiser la bande passante.
+ on se retrouve dans le second cas (certains navigateurs négocient par
+ avance cette connexion supplémentaire pour l'utiliser ensuite sans
+ aucun coût supplémentaire). On obtient donc un résultat similaire à
+ l'inclusion dans la page mais on peut utiliser le cache du navigateur
+ pour économiser la bande passante. Une pénalité de 100 ms est
+ toutefois à observer étant donné que le navigateur doit demander la
+ resource supplémentaire.
  
  2. Si la ressource provient d'un autre serveur (comme dans l'exemple
  ci-dessus), le navigateur va ouvrir une nouvelle connexion en
  parallèle. Cela va induire un coût d'environ 300 ms (pour une
- connexion 3G) afin d'établir cette nouvelle connexion HTTP. Ces
- 300 ms sont incroyablement moins coûteuses que les 10 secondes
+ connexion 3G) afin d'établir cette nouvelle connexion TCP. Ces
+ 300 ms sont incroyablement moins coûteuses que les 2 secondes
  nécessaires pour retélécharger 85 Ko à chaque requête ! De plus, les
  autres ressources statiques sont sans doute téléchargées depuis ce
  serveur et cette connexion ne sera donc pas perdue. Il est même
  probable qu'elle ait été nécessaire de toute façon (pour télécharger
  les images par exemple).
-{% endfilter %}
-</del>
 
-**MISE À JOUR :** Comme indiqué par
-[Éric Daspet](http://eric.daspet.name/) dans [un commentaire][c1], le
-[pipelining][pipelining] est en fait désactivé par défaut sur la
-plupart des navigateurs et il ne faut donc pas compter dessus pour
-éviter l'ouverture d'une nouvelle connexion TCP pour chaque ressource
-à télécharger. Du coup, intégrer le javascript directement dans le
-document n'est pas aussi idiot que je le prétendais. Toutefois, cela
-ne devrait être fait que sur des ressources de taille raisonnable.
+**MISE À JOUR :** Dans une version précédente, j'avais mélangé le
+mécanisme de [connexions persistantes][keepalive] avec le
+[pipelining][pipelining]. Le premier permet de réutiliser une
+connexion TCP existante mais chaque requête doit être émise l'une
+derrière l'autre et doit attendre la réponse correspondante. Le second
+permet d'envoyer plusieurs requêtes sans attendre les réponses. Comme
+indiqué par [Éric Daspet](http://eric.daspet.name/) dans
+[un commentaire][c1], le pipelining est en fait désactivé par défaut
+sur la plupart des navigateurs. Toutefois, les connexions persistantes
+sont bien supportées.
 
 [c1]: [[fr/blog/2011-accelerer-navigation-3g.html#comment-221386199]]
 
@@ -220,6 +222,7 @@ optimisée. J'ignore s'il s'agit d'un comportement normal.
 [pagespeed]: http://code.google.com/p/modpagespeed/
 [jquery]: http://jquery.com
 [pipelining]: http://fr.wikipedia.org/wiki/Pipelining_HTTP
+[keepalive]: http://en.wikipedia.org/wiki/HTTP_persistent_connection
 [neutrality]: http://fr.wikipedia.org/wiki/Neutralit%C3%A9_du_r%C3%A9seau
 
 {# Local Variables: #}
