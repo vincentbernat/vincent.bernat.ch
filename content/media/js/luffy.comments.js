@@ -4,7 +4,7 @@ var luffy = luffy || {};
 luffy.comments = function() {
     $("#lf-disqus").click(function() {
 	var loading = $(this).text('Loading/Chargement...');
-        var src = 'http://' + disqus_shortname + '.disqus.com/embed.js';
+        var src = '//' + disqus_shortname + '.disqus.com/embed.js';
 	if (typeof(_gaq) !== 'undefined') {
 	    _gaq.push(['_trackEvent', 'Comments',
 		       document.title.split(" | ")[0]]);
