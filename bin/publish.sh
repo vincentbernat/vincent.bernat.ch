@@ -43,6 +43,7 @@
 	    git push github
 	    git push ace.luffy.cx
 	    echo "${fg[green]} [+] Sync!${fg[default]}"
+	    rsync --exclude=.git -a .final/media/ ace.luffy.cx:/srv/www/luffy/media/
 	    rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/
 	    ;;
 	*)
