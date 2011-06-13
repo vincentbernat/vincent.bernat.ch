@@ -1,0 +1,372 @@
+---
+title: 'Anycast DNS'
+keywords: "anycast, dns, cdn, lab, paul vixie, bird, nsd, bgp"
+uuid: eb8d5533-871b-491c-95c1-eba6e2791b4c
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-anycast-dns": "GitHub repository"
+---
+
+In a recently published article, Paul Vixie, past author and
+architect of [BIND][bind], one of the most popular internet domain
+server, [explains why DNS servers should use anycast][paulvixie] for
+increased reliability and faster answers. The main argument against
+unicast is that some resolvers may not be smart enough to select the
+best server to query and therefore, they may select a server on the
+other side of the planet. Since, you cannot go faster than light,
+you get a penalty of about 100 milliseconds in this case.
+
+# Unicast & anycast
+
+Most addresses that you handle are *unicast* addresses, i.e. the
+address of a single receiver. Any time you send a packet to an
+unicast address, it will be forwarded to this single receiver. Another
+common network addressing system is *multicast* (which happens to
+include *broadcast*). When you send a packet to a multicast address,
+several receivers may get it. The packet is copied as needed by some
+nodes.
+
+*Anycast* addresses allow you to send a packet to a set of receivers
+but only one of them will receive it. The packet will not be
+copied. Usually, the idea behind anycast is that the packet is sent
+to the nearest receiver.
+
+There is no universal way to determine if an IP address is an unicast address or
+an anycast address just by looking at it. For example `192.5.5.241` is
+an anycast address while `78.47.78.132` is an unicast address.
+
+ISC, which maintains BIND, operates the "F" root domain server, one of
+the 13 Internet [root name servers][rootservers]. This server is
+queried by using `192.5.5.241` IPv4 anycast address or
+`2001:500:2f::f` IPv6 anycast address. ISC has published a
+[document explaining how anycast works][anycast]. Several nodes around
+the globe announces the same subnet using BGP. When one router running
+BGP has to send a query to the anycast address, it will have several
+choices in its BGP table. It will usually select the shortest path and
+route the query to the corresponding router.
+
+Some nodes may choose to restrict the announcement about the subnet
+containing the anycast address. They are called local nodes (by
+opposition to other global nodes). This allows them to serve query
+only from their clients and use cheaper connectivity and hardware.
+
+# Lab
+
+Let's play with anycast by setting up a lab to experiment with it. We
+want to setup an IPv6 anycast DNS service using two global nodes, `G1`
+and `G2`, and one local node, `L1`. We build some kind of
+mini-Internet. See :
+
+![Anycast lab][1]
+[1]: [[!!images/anycast-lab.png]]
+
+## Setting up the lab
+
+This lab will use UML guests for all nodes. For more details on how
+this works, look at my
+[previous article about network labs with User Mode Linux][umllab]. You
+first need to grab the lab:
+
+    #!console
+    $ git clone https://vincentbernat@github.com/vincentbernat/network-lab.git
+    $ cd network-lab/lab-anycast-dns
+    $ ./setup
+
+You will need to install the dependencies needed by the script on your
+host system. The script was tested on Debian unstable. If some of the
+dependencies do not exist in your distribution, if they don't behave
+as in Debian or if you don't want to install them on your host system,
+you can use `debootstrap` to create a working system:
+
+    #!console
+    $ sudo debootstrap sid ./sid-chroot http://ftp.debian.org/debian/
+    [...]
+    $ sudo chroot ./sid-chroot /bin/bash
+    # apt-get install iproute zsh aufs-tools
+    [...]
+    # apt-get install bird6
+    [...]
+    # exit
+    $ sudo mkdir -p ./sid-chroot/$HOME
+    $ sudo chown $(whoami) ./sid-chroot/$HOME
+    $ ROOT=./sid-chroot ./setup
+
+We are running a lot of UML guests in this lab. We assign 64 MB to
+each host. UML guests do not use host memory until they need it but
+because of cache subsystem, you can expect that each guest will use 64
+MB of memory. This means that you need about 2 GB of RAM to run this
+lab. Moreover, each guest will create a file representing its
+memory. Therefore, you need about 2 GB of free space in `/tmp` too.
+
+Routers are named after their AS number. The router of AS 64652 is
+just `64652`. `Paris`, `NewYork` and `Tokyo` are the exception.
+
+The lab will use only one switch but we will use VLAN to create
+several L2 networks. Each link in our schema is an L2 network. Each
+link will get its own L3 network. Those networks are prefixed with
+`2001:db8:ffff:`. Leaf AS have their own L3 network `2001:db8:X::/48`
+where `X` is the AS number minus 60000. Look at `/etc/hosts` on each
+host to get the IP of all hosts.
+
+## Mini-Internet routing
+
+AS 64600 is some kind of Tier-1 transit network (like
+[Level 3 Communications][level3]). It has three points of presence:
+Paris, New York and Tokyo. AS 64650 is an European regional transit
+network, AS 64640 is an East Asian regional transit network and AS
+64610, 64620 and 64630 are North American regional transit network which are
+peering each other. Other leaf AS are local ISP.
+
+This is not really what Internet looks like but shaping our lab like a
+tree allows us to not deal with a lot of BGP stuff: we ensure that the
+shortest path (in number of BGP hops) from one client to one server is
+the best path. Each BGP router will get a basic BGP configuration
+containing only the list of peers. Since `Paris`, `Tokyo` and
+`NewYork` are in the same AS, they will use iBGP. They are fully
+meshed for this purpose but this does not provide redundancy because
+iBGP routes are not redistributed inside iBGP. A more complex setup
+would be needed to provide redundancy inside AS 64600. We don't use an
+IGP inside leaf AS as we should: for the sake of simplicity, we
+redistribute directly connected routes into BGP.
+
+While in my [previous lab][umllab], I used Quagga, I will use
+[BIRD][bird] in this one. It is a more modern daemon with a clean
+design on how routing tables may interact. It also performs
+better. However, it lacks several features from Quagga. The
+configuration for BIRD is autogenerated from `/etc/hosts`. We use only
+one routing table inside BIRD. This table will be exported to the
+kernel and to any BGP instance. Some directly connected routes will be
+imported (those representing client networks) as well as all routes
+from BGP instances. Here is an excerpt of `64610`'s configuration:
+
+    protocol direct {
+       description "Client networks";
+       import filter {
+         if net ~ [ 2001:db8:4600::/40{40,48} ] then accept;
+         reject;
+       };
+       export none;
+    }
+
+    protocol kernel {
+       persist;
+       import none;
+       export all;
+    }
+
+    protocol bgp {
+       description "BGP with peer NewYork";
+       local as 64610;
+       neighbor 2001:db8:ffff:4600:4610::1 as 64600;
+       gateway direct;
+       hold time 30;
+       export all;
+       import all;
+    }
+
+We do not export inter-router subnets to keep our routing tables
+small. This also means that those IP addresses are not routable in
+spite of the use of public IP addresses. Here is the routing table as
+seen by `64610` (use `birdc6` to connect to BIRD):
+
+    bird> show route
+    2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
+                       via 2001:db8:ffff:4600:4610::1 on eth0 [bgp1 18:52] (100) [AS64622i]
+    2001:db8:4621::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64621i]
+                       via 2001:db8:ffff:4600:4610::1 on eth0 [bgp1 18:52] (100) [AS64621i]
+    2001:db8:4612::/48 via 2001:db8:ffff:4610:4612::2 on eth2 [bgp3 18:52] * (100) [AS64612i]
+    2001:db8:4611::/48 via 2001:db8:ffff:4610:4611::2 on eth1 [bgp2 18:52] * (100) [AS64611i]
+
+As you can notice, it knows several paths to the same network,
+however, it only selects the best one (based on the length of the AS
+path):
+
+    bird> show route 2001:db8:4622::/48 all
+    2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
+            Type: BGP unicast univ
+            BGP.origin: IGP
+            BGP.as_path: 64620 64622
+            BGP.next_hop: 2001:db8:ffff:4610:4620::2 fe80::e05f:a3ff:fef2:f4e0
+            BGP.local_pref: 100
+                       via 2001:db8:ffff:4600:4610::1 on eth0 [bgp1 18:52] (100) [AS64622i]
+            Type: BGP unicast univ
+            BGP.origin: IGP
+            BGP.as_path: 64600 64620 64622
+            BGP.next_hop: 2001:db8:ffff:4600:4610::1 fe80::3426:63ff:fe5e:afbd
+            BGP.local_pref: 100
+
+Let's check that everything works with `traceroute6` on `C1`:
+
+    #!console
+    # traceroute6 G2.lab
+    traceroute to G2.lab (2001:db8:4612::2:53), 30 hops max, 80 byte packets
+     1  64652-eth1.lab (2001:db8:4652::1)  -338.277 ms  -338.449 ms  -338.502 ms
+     2  64650-eth2.lab (2001:db8:ffff:4650:4652::1)  -338.324 ms  -338.363 ms  -338.384 ms
+     3  Paris-eth2.lab (2001:db8:ffff:4600:4650::1)  -338.191 ms  -338.329 ms  -338.282 ms
+     4  NewYork-eth0.lab (2001:db8:ffff:4600:4600:1:0:2)  -338.144 ms  -338.182 ms  -338.235 ms
+     5  64610-eth0.lab (2001:db8:ffff:4600:4610::2)  -338.078 ms  -337.958 ms  -337.944 ms
+     6  64612-eth0.lab (2001:db8:ffff:4610:4612::2)  -337.778 ms  -338.103 ms  -338.041 ms
+     7  G2.lab (2001:db8:4612::2:53)  -338.001 ms  -338.045 ms  -338.080 ms
+
+Let's see what happens if we shut the link between `NewYork` and
+`64610`. This link is VLAN 10. Since `vde_switch` does not allow to
+shut a port, we will change the VLAN of port 9 to VLAN 4093. After at
+most 30 seconds, the BGP session between `NewYork` and `64610` will be
+torn down and packets from `C1` to `G2` will take a new path:
+
+    #!console
+    # traceroute6 G2.lab
+    traceroute to G2.lab (2001:db8:4612::2:53), 30 hops max, 80 byte packets
+     1  64652-eth1.lab (2001:db8:4652::1)  -338.382 ms  -338.499 ms  -338.503 ms
+     2  64650-eth2.lab (2001:db8:ffff:4650:4652::1)  -338.284 ms  -338.317 ms  -338.151 ms
+     3  Paris-eth2.lab (2001:db8:ffff:4600:4650::1)  -337.954 ms  -338.031 ms  -337.924 ms
+     4  NewYork-eth0.lab (2001:db8:ffff:4600:4600:1:0:2)  -337.655 ms  -337.751 ms  -337.844 ms
+     5  64620-eth0.lab (2001:db8:ffff:4600:4620::2)  -337.762 ms  -337.507 ms  -337.611 ms
+     6  64610-eth3.lab (2001:db8:ffff:4610:4620::1)  -337.531 ms  -338.024 ms  -337.998 ms
+     7  64612-eth0.lab (2001:db8:ffff:4610:4612::2)  -337.860 ms  -337.931 ms  -337.992 ms
+     8  G2.lab (2001:db8:4612::2:53)  -337.863 ms  -337.768 ms  -337.808 ms
+
+## Setting up anycast DNS
+
+Our anycast DNS service has three nodes. Two global ones, located in
+Europe and North America and one local one targeted at customers of
+AS 64620 only. The IP address of this anycast DNS server is
+`2001:db8:aaaa::53/48`. We assign this address to `G1`, `G2` and
+`L1`. We also assign `2001:db8:aaaa::1/48` to `64651`, `64612` and
+`64621`. BIRD configuration is adapted to advertise this network:
+
+    protocol direct {
+       description "Client networks";
+       import filter {
+         if net ~ [ 2001:db8:4600::/40{40,48} ] then accept;
+         if net ~ [ 2001:db8:aaaa::/48 ] then accept;
+         reject;
+       };
+       export none;
+    }
+
+We use [NSD][nsd] as a name server. This is an authoritative only name
+server. The configuration is pretty simple. We just ensure that it is
+bound to the IPv6 anycast address (otherwise, it may answer with the
+wrong address). The zone file is customized to answer the name of the
+server:
+
+    #!console
+    #(C1) host -t TXT example.com 2001:db8:aaaa::53
+    Using domain server:
+    Name: 2001:db8:aaaa::53
+    Address: 2001:db8:aaaa::53#53
+    Aliases: 
+
+    example.com descriptive text "G1"
+    #(C5) host -t TXT example.com 2001:db8:aaaa::53
+    Using domain server:
+    Name: 2001:db8:aaaa::53
+    Address: 2001:db8:aaaa::53#53
+    Aliases: 
+
+    example.com descriptive text "G2"
+
+If we try from `C3`, we may be redirected to `L1` while we are not a
+customer of AS 64620. A common way to handle this is to let `64621`
+tag the route with a special community that will let know `64620` that
+the route should not be exported.
+
+    protocol direct {
+       description "Client networks";
+       import filter {
+         if net ~ [ 2001:db8:4600::/40{40,48} ] then accept;
+         if net ~ [ 2001:db8:aaaa::/48 ] then {
+              bgp_community.add((65535,65281));
+              accept;
+         }
+         reject;
+       };
+       export none;
+    }
+
+The community used is known as the `no-export` community. BIRD knows
+how to handle it. However, we hit here some limitations of BIRD:
+
+  1. The correct way to let `64622` knows about this route is to build
+  a BGP confederation for AS 64620 and let AS 64622 and AS 64621 be
+  part of it. This means that those three AS will be seen as AS 64200
+  from outside of the confederation. Moreover, the `no-export`
+  community would allow to export the route only within the
+  confederation. This is exactly what we need but BIRD does not
+  support confederations.
+  
+  2. BIRD first selects the best route to export then apply
+  filtering. This means that even if `64620` knows non-filtered route
+  to `2001:db8:aaaa::/48`, it will select the route to `L1`, filter it
+  out and export nothing to `64622`.
+
+Therefore, we need to fallback to ask BIRD to *not* export the route to
+AS 64600, 64610 and 64630 on `64620`. We could use a special community
+to filter out the route but we keep it simple and just filter the
+route directly.
+
+    filter keep_local_dns {
+       if net ~ [ 2001:db8:aaaa::/48 ] then reject;
+       accept;
+    }
+    protocol bgp {
+       description "BGP with peer NewYork";
+       local as 64620;
+       neighbor 2001:db8:ffff:4600:4620::1 as 64600;
+       gateway direct;
+       hold time 30;
+       export filter keep_local_dns;
+       import all;
+    }
+
+Voilà. Only `C4` will be able to query `L1`. If AS 64621 is missing,
+it will query `G2` instead. One major point about anycast is to know
+that redundancy is done at the AS level only. If the name server on
+`L1` does not work correctly, requests will still be routed to
+it. Therefore, with anycast, you still need to provide redundancy
+inside each AS (or stop advertising the anycast network as soon as
+there is a failure).
+
+# Beyond DNS
+
+Anycast can be used to serve HTTP requests too. This is less commonly
+used because your connection may be rerouted to another node while it
+is still running. This is not a problem with DNS because there is no
+connection (you send a query, you receive an answer). There are at
+least two CDN ([MaxCDN][maxcdn] and [CacheFly][cachefly]) which uses
+anycast to ensure low roundtrip time and very high reliability.
+
+Setting up an HTTP server with an anycast address is no different than
+setting up a DNS server. However, you need to ensure maximum stability
+of the routing path to avoid the connection to be dropped while
+running. I suppose that this is done by hiring some high-level BGP
+expert. You can also mix unicast and anycast:
+
+ - anycast DNS answers the IP address of a nearby unicast HTTP server,
+   or
+ - anycast DNS answers the IP address of an anycast HTTP server that
+   will issue a redirect to an unicast HTTP server when downloading or
+   streaming large files.
+
+[paulvixie]: http://www.circleid.com/posts/20110531_anycast_unicast_or_both/
+[bind]: http://en.wikipedia.org/wiki/BIND
+[anycast]: http://ftp.isc.org/isc/pubs/tn/isc-tn-2003-1.txt
+[rootservers]: http://www.root-servers.org/
+[tcpanycast]: http://www.nanog.org/meetings/nanog37/presentations/matt.levine.pdf
+[cachefly]: http://www.cachefly.com/
+[maxcdn]: http://www.maxcdn.com/
+[level3]: http://en.wikipedia.org/wiki/Level_3_Communications
+[umllab]: [[en/blog/2011-uml-network-lab.html]]
+[bird]: http://bird.network.cz/
+[nsd]: http://www.nlnetlabs.nl/projects/nsd/
+*[AS]: Autonomous System
+*[IGP]: Interior Gateway Protocol
+*[ISC]: Internet Systems Consortium
+*[BIND]: Berkeley Internet Name Daemon
+*[BGP]: Border Gateway Protocol
+*[CDN]: Content Delivery Network
+*[UML]: User Mode Linux
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
