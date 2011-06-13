@@ -19,7 +19,7 @@ luffy.timeago = function() {
 	    months: "environ %d mois",
 	    year: "un an",
 	    years: "%d ans"	    
-	},
+	}
     };
 
     return (function() {
