@@ -41,7 +41,7 @@ install it using `apt-get install user-mode-linux`. You get a `linux`
 command that will run your Linux kernel as a simple process. No need
 to be root.
 
-    #!console
+    ::console
     $ linux
     Core dump limits :
         soft - 0
@@ -79,7 +79,7 @@ filesystem. We also specify `/bin/sh` as `init` instead of
 `/sbin/init`. This will be the first process to be started by our UML
 kernel.
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs
     [...]
     Linux version 2.6.32 (2.6.32) (root@tito) (gcc version 4.4.5 (Debian 4.4.5-10) ) #2 Thu Jan 27 12:49:46 UTC 2011
@@ -96,7 +96,7 @@ kernel.
 
 You may want to setup a bit your environment:
 
-    #!console
+    ::console
     # hostname -b R1
     # export TERM=xterm
     # export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/local/sbin:/usr/sbin
@@ -124,7 +124,7 @@ UML, you did not run `linux` as root. Therefore, when the UML kernel
 tries to write a file it will still be bound by the permissions
 granted by your host kernel. See this example:
 
-    #!console
+    ::console
     # mount -o remount,rw /
     # touch /tmp/test1
     # touch /etc/test1
@@ -147,7 +147,7 @@ control allows you to put tasks in background and interrupt them while
 they are running. It is job control that allows you to stop a program
 with `^C`. Here, you don't have job control. See:
 
-    #!console
+    ::console
     # cat
     ^C^C^C^C
 
@@ -158,7 +158,7 @@ Job control is a great mystery for me. I don't know how to enable it
 by hand. However, `getty` is able to enable job control for you. Just
 type this command:
 
-    #!console
+    ::console
     # exec getty -n -l /bin/sh 38400 /dev/tty0
 
 You get job control. We keep `/bin/sh`, but you may prefer `/bin/bash`
@@ -170,7 +170,7 @@ Let's get back to our root filesystem. Most daemons can run just fine
 with our setup. For example, we can start [Nginx][nginx], a popular
 web server:
 
-    #!console
+    ::console
     # mkdir /var/log/nginx
     # /etc/init.d/nginx start
     Starting nginx: nginx.
@@ -180,7 +180,7 @@ However, it will use the configuration file in
 labs. The best way to handle this is to start Nginx with a custom
 configuration file:
 
-    #!console
+    ::console
     # /etc/init.d/nginx stop
     # nginx -c /home/bernat/mylab/nginx.conf
 
@@ -198,7 +198,7 @@ read-only and all the changes will be reported to the second
 one. We will use [AUFS][aufs]. Ensure that you have `aufs-tools`
 package installed. Let's start from scratch for this example.
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs
     [...]
     # mount -n -t proc proc /proc
@@ -214,7 +214,7 @@ It seems that AUFS with hostfs is rather fragile. We could have merged
 our root filesystem with some directory in our lab using `hostfs` like
 this:
 
-    #!console
+    ::console
     # mount -n -t hostfs hostfs /tmp/rw -o /home/bernat/mylab/root,rw
     # mount -n -t hostfs hostfs /tmp/ro -o /,ro
     # mount -n -t aufs aufs /tmp/aufs -o noatime,dirs=/tmp/rw:/tmp/ro=ro
@@ -239,7 +239,7 @@ like to test).
 Let's consider that Nginx configuration is in
 `/home/bernat/lab/nginx`. We simply uses a symbolic link:
 
-    #!console
+    ::console
     # rm -rf /etc/nginx
     # ln -s /home/bernat/mylab/nginx /etc/nginx
 
@@ -267,7 +267,7 @@ them. The application using them does not need to be run as root.
 
 I usually use this nifty shell function to setup TAP interfaces:
 
-    #!sh
+    ::sh
     __add_to_bridge() {
         # Optionally, add it to given bridge
         [ -z "$2" ] || {
@@ -296,14 +296,14 @@ It will create the interface and put it into a bridge. For example,
 you can create two interfaces linked together through a bridge to
 allow two UML to talk each other:
 
-    #!console
+    ::console
     $ tap tap-R1 br-R1R2
     $ tap tap-R2 br-R1R2
 
 We can setup two UML which will use those interfaces. The first one is
 setup like this:
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R1
     [...]
     # ip link set up dev eth0
@@ -311,7 +311,7 @@ setup like this:
 
 The second one:
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R2
     [...]
     # ip link set up dev eth0
@@ -338,7 +338,7 @@ ports, configure VLAN, etc.
 Like for TAP interfaces, let's setup two UML connected to this
 switch. The first one is like this:
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=vde
     [...]
     # ip link set up dev eth0
@@ -346,7 +346,7 @@ switch. The first one is like this:
 
 And the second one:
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=vde
     [...]
     # ip link set up dev eth0
@@ -376,7 +376,7 @@ layer 2 part.
 
 Let's implement this lab. You should grab the sources first:
 
-    #!console
+    ::console
     $ git clone https://github.com/vincentbernat/network-lab.git
     $ cd network-lab/lab-redundant-vpn
 
@@ -390,7 +390,7 @@ routing daemon supporting both OSPF and BGP) and `racoon` packages.
 
 First look at the end of script. There is something like this:
 
-    #!sh
+    ::sh
     case $$ in
         1)
             # Inside UML. Three states:
@@ -440,7 +440,7 @@ will be 1. As we have seen earlier, the script checks if it is called
 as `init`. If it is the case, it will setup the UML. During this
 setup, host specific configuration will be applied:
 
-    #!sh
+    ::sh
     echo "[+] Setup UML"
     sysctl -w net.ipv4.ip_forward=1
     case ${uts} in
@@ -501,7 +501,7 @@ We need to wait one minute after the lab has been started. We can then
 check the routing table of various equipments. For example, here is
 _R1_ routing table (you need to type `vtysh` to get Quagga console):
 
-    #!console
+    ::console
     R1# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route
@@ -518,7 +518,7 @@ We can see that if this router wants to contact _R2_, it has learned a
 multipath route with OSPF and can then sends its packets through _V1_
 or _V2_, as expected. Here is the routing table of _V3_:
 
-    #!console
+    ::console
     V3# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route
@@ -538,7 +538,7 @@ through _V4_ but will not be used unless the BGP route is lost.
 
 We can ping _R2_ from _R1_:
 
-    #!console
+    ::console
     R1# ping -I 192.168.15.1 192.168.115.1
     PING 192.168.115.1 (192.168.115.1) from 192.168.15.1 : 56(84) bytes of data.
     Warning: time of day goes back (-459129us), taking countermeasures.
@@ -549,7 +549,7 @@ Let's suppose we break the link between _V1_ and the "Internet" (using
 is now a single route through _V2_. Moreover, _V3_ has lost its BGP
 route to _V1_ and is now using its OSPF route through _V4_:
 
-    #!console
+    ::console
     V3# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route

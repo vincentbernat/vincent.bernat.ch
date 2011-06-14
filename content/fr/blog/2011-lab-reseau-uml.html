@@ -42,7 +42,7 @@ Debian, un tel noyau est disponible dans le paquet `user-mode-linux`
 qui fournit une commande `linux`. Il est tout à fait inutile (voire
 dangereux dans notre cas) de la lancer en tant que root !
 
-    #!console
+    ::console
     $ linux
     Core dump limits :
         soft - 0
@@ -80,7 +80,7 @@ disque. Toutefois, on ne va pas laisser le noyau démarrer normalement,
 mais on va lui indiquer d'utiliser `/bin/sh` comme `init`. Ainsi, une
 fois le noyau démarré, on obtient un simple shell :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs
     [...]
     Linux version 2.6.32 (2.6.32) (root@tito) (gcc version 4.4.5 (Debian 4.4.5-10) ) #2 Thu Jan 27 12:49:46 UTC 2011
@@ -98,7 +98,7 @@ fois le noyau démarré, on obtient un simple shell :
 Il faut passer quelques commandes pour normaliser un peu
 l'environnement pour les programmes qui seront lancés par la suite :
 
-    #!console
+    ::console
     # hostname -b R1
     # export TERM=xterm
     # export PATH=/usr/local/bin:/usr/bin:/bin:/sbin:/usr/local/sbin:/usr/sbin
@@ -124,7 +124,7 @@ en tant que processus utilisateur sur votre système. Ainsi, si elle
 tente de modifier un fichier, les droits classiques s'appliquent. Par
 exemple :
 
-    #!console
+    ::console
     # mount -o remount,rw /
     # touch /tmp/test1
     # touch /etc/test1
@@ -147,7 +147,7 @@ de « job control ». Il s'agit du mécanisme qui permet d'interrompre ou
 de mettre en tâche de fond un processus. Par exemple, on peut
 normalement stopper un programme avec `^C`. Pas possible ici :
 
-    #!console
+    ::console
     # cat
     ^C^C^C^C
 
@@ -157,7 +157,7 @@ Ce mécanisme est un grand mystère pour moi, Je ne sais pas exactement
 ce qui l'active. Il se trouver que `getty` est capable de
 l'activer. On peut donc utiliser cette commande :
 
-    #!console
+    ::console
     # exec getty -n -l /bin/bash 38400 /dev/tty0
 
 Et voilà, problème résolu. On en a profité pour utiliser `/bin/bash`
@@ -170,7 +170,7 @@ nous avons aménagé ce qu'il faut pour que la plupart des démons
 fonctionnent sans problème. Par exmple, on peut démarrer
 [Nginx][nginx], un serveur web assez populaire :
 
-    #!console
+    ::console
     # mkdir /var/log/nginx
     # /etc/init.d/nginx start
     Starting nginx: nginx.
@@ -179,7 +179,7 @@ Toutefois, il va utiliser la configuration présente dans `/etc/nginx`
 et il n'est pas raisonnable d'aller modifier cette configuration pour
 chaque labo. On peut lui préciser un autre fichier de configuration :
 
-    #!console
+    ::console
     # /etc/init.d/nginx stop
     # nginx -c /home/bernat/mylab/nginx.conf
 
@@ -195,7 +195,7 @@ plusieurs systèmes de fichiers en un seul. L'un de ces systèmes de
 fichiers est [AUFS][aufs]. Il faut installer le paquet `aufs-tools`
 pour continuer. On recommence du début pour cet exemple :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs
     [...]
     # mount -n -t proc proc /proc
@@ -232,7 +232,7 @@ configuration dans `/home/bernat/lab/nginx`. Nous remplaçons
 simplement le répertoire `/etc/nginx` par un lien symbolique vers ce
 nouveau répertoire :
 
-    #!console
+    ::console
     # rm -rf /etc/nginx
     # ln -s /home/bernat/mylab/nginx /etc/nginx
 
@@ -262,7 +262,7 @@ les applications qui vont les utiliser en tant que root.
 J'ai une fonction shell que j'utilise quand je veux créer une telle
 interface :
 
-    #!sh
+    ::sh
     __add_to_bridge() {
         # Optionally, add it to given bridge
         [ -z "$2" ] || {
@@ -291,14 +291,14 @@ Cette fonction va créer l'interface et éventuellement la placer dans
 un bridge. Voici comment créer deux interfaces et les lier entre elle
 par un câble virtuel :
 
-    #!console
+    ::console
     $ tap tap-R1 br-R1R2
     $ tap tap-R2 br-R1R2
 
 Il est ensuite très simple de démarrer deux UML qui vont communiquer
 entre elles. Pour la première :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R1
     [...]
     # ip link set up dev eth0
@@ -306,7 +306,7 @@ entre elles. Pour la première :
 
 Et pour la seconde :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=tuntap,tap-R2
     [...]
     # ip link set up dev eth0
@@ -334,7 +334,7 @@ opérations de configuration, mais on ne va pas s'y attarder.
 Reprenons notre exemple précédent et essayons de faire communiquer
 deux UML à travers ce switch. Première UML :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=vde
     [...]
     # ip link set up dev eth0
@@ -342,7 +342,7 @@ deux UML à travers ce switch. Première UML :
 
 Deuxième UML :
 
-    #!console
+    ::console
     $ linux init=/bin/sh rootfstype=hostfs eth0=vde
     [...]
     # ip link set up dev eth0
@@ -371,7 +371,7 @@ sites. Nous n'allons utiliser que des switch VDE pour la partie réseau.
 Pour voir comment j'ai implémenté ce lab, récupérez les sources de
 celui-ci :
 
-    #!console
+    ::console
     $ git clone https://github.com/vincentbernat/network-lab.git
     $ cd network-lab/lab-redundant-vpn
 
@@ -385,7 +385,7 @@ paquets `quagga` et `racoon` sur votre mahcine.
 
 Regardez d'abord la fin du script. Il se présente ainsi :
 
-    #!sh
+    ::sh
     case $$ in
         1)
             # Inside UML. Three states:
@@ -432,7 +432,7 @@ Chaque UML va utiliser comme `init` ce même script. Ce dernier va
 effectuer la configuration propre à chaque UML à l'aide d'une
 instruction `case` :
 
-    #!sh
+    ::sh
     echo "[+] Setup UML"
     sysctl -w net.ipv4.ip_forward=1
     case ${uts} in
@@ -495,7 +495,7 @@ adjacences. Le timing est un peu faussé sur des UML et il faut
 attendre une bonne minute. On peut ensuite examiner la table de
 routage de _R1_ (il faut taper `vtysh` pour obtenir la console de Quagga) :
 
-    #!console
+    ::console
     R1# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route
@@ -512,7 +512,7 @@ Pour contacter _R2_, il a appris une route _multipath_ : il peut soit
 passer par _V1_, soit par _V2_, comme prévu. Regardons la table de
 routage de _V3_ :
 
-    #!console
+    ::console
     V3# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route
@@ -533,7 +533,7 @@ perdue (si le VPN est indisponible par exemple).
 
 Pinguons _R2_ depuis _R1_ :
 
-    #!console
+    ::console
     R1# ping -I 192.168.15.1 192.168.115.1
     PING 192.168.115.1 (192.168.115.1) from 192.168.15.1 : 56(84) bytes of data.
     Warning: time of day goes back (-459129us), taking countermeasures.
@@ -544,7 +544,7 @@ Si nous cassons le lien entre _V1_ et « Internet » (avec
 transforme en une route simple vers _V2_. De plus, _V3_ a perdu sa
 route BGP vers _V1_ et utilise donc sa route OSPF vers _V4_ :
 
-    #!console
+    ::console
     V3# show ip route
     Codes: K - kernel route, C - connected, S - static, R - RIP, O - OSPF,
            I - ISIS, B - BGP, > - selected route, * - FIB route
