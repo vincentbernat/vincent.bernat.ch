@@ -21,4 +21,12 @@ luffy.effects = function() {
 	if (resizeTimer) clearTimeout(resizeTimer);
 	resizeTimer = setTimeout(updatePageSizes, 100);
     });
+
+    /* What's window size anyway? */
+    if (typeof(_gaq) !== 'undefined') {
+	var win = $(window);
+	_gaq.push(['_trackEvent', 'Viewport',
+		   win.width() + 'x' + win.height(),
+		   win.width()]);
+    }
 };
