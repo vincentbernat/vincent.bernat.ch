@@ -83,8 +83,8 @@ def sprite():
     print "[+] Write CSS to %s" % conf['css']
     file(conf['css'], "w").write(css)
 
-def publish():
-    """Publish content"""
+def build():
+    """Build production content"""
     local("git checkout master")
     local("rm -rf .final/*")
     _hyde('gen -c site-production.yaml')
@@ -119,14 +119,16 @@ def publish():
         answer = prompt("More diff?", default="yes")
         if answer.lower().startswith("y"):
             local("git diff --word-diff HEAD")
-        answer = prompt("Publish?", default="yes")
+        answer = prompt("Keep?", default="yes")
         if answer.lower().startswith("y"):
             local('git commit -a -m "Autocommit"')
-            with lcd(".."):
-                local("git push github")
-                local("git push ace.luffy.cx")
-            local("rsync --exclude=.git -a media/ ace.luffy.cx:/srv/www/luffy/media/")
-            local("rsync --exclude=.git -a ./ ace.luffy.cx:/srv/www/luffy/")
         else:
             local("git reset --hard")
             local("git clean -d -f")
+
+def push():
+    """Push production content to ace"""
+    local("git push github")
+    local("git push ace.luffy.cx")
+    local("rsync --exclude=.git -a .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
+    local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
