@@ -10,13 +10,17 @@
 	mv deploy $bckp
     }
     hyde gen -c site-production.yaml
-    for file in deploy/media/js/*.js deploy/media/css/*.css ; do
+    for file in deploy/media/js/*.js deploy/media/css/*.css deploy/media/images/l/sprite.png ; do
 	file=${file#deploy/media/}
 	echo "${fg[green]} [+] MD5 hash for $file${fg[default]}"
 	md5=$(md5sum deploy/media/${file} | cut -c1-8)
 	newname=${file%.*}.${md5}.${file##*.}
 	ln -s $(basename ${file}) deploy/media/${newname}
-	sed -i "s+\([\"']\)//media.luffy.cx/${file}\1+\1//media.luffy.cx/${newname}\1+g" deploy/**/*.html
+	sed -i "s+\([\"']\)//media.luffy.cx/${file}\1+\1//media.luffy.cx/${newname}\1+g" \
+	    deploy/**/*.html
+	if [ ${file##*.} = "png" ]; then
+	    sed -i "s+${file}+${newname}+g" deploy/**/*.css
+	fi
     done
     echo "${fg[green]} [+] Compare with current target${fg[default]}"
     rsync --exclude=.git -a --delete deploy/ .final/

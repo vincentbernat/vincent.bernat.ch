@@ -7,7 +7,7 @@ IMGDIR="../images/l"
 SPRITE="sprite.png"
 CSS="../../css/luffy.sprite.less"
 CLASS="lf-sprite"
-SPACER=10
+SPACER=2
 
 import sys
 import os
