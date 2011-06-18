@@ -1,33 +1,39 @@
 {# -*- html -*- #}
 {% if resource.translations or previous or next or resource.meta.attachments %}
-  <nav id="lf-links">
-{# Translations #}
-{% if resource.translations %}
-<div class="lf-block">
-    <p>{{ resource.meta.l10n.translations }}</p>
-    <ul>
-      {% for translation in resource.translations %}
-      <li><a href="{{ content_url(translation.url) }}">
-	  {{ languages[translation.meta.language] }}
+<nav id="lf-links">
+  {# Translations #}
+  {% if resource.translations %}
+  <div class="lf-link">
+    <span class="lf-sprite lf-sprite-flag" title="{{ resource.meta.l10n.translations }}"></span>
+    <div class="lf-link-details"><div class="lf-link-inner">
+      <p>{{ resource.meta.l10n.translations }}</p>
+      <ul>
+	{% for translation in resource.translations %}
+	<li><a href="{{ content_url(translation.url) }}">
+	    {{ languages[translation.meta.language] }}
 	</a></li>
-      {% endfor %}
-    </ul>
-</div>
-{% endif %}
-{# Attachments #}
-{% if resource.meta.attachments %}
-<div class="lf-block">
-    <p>{{ resource.meta.l10n.attachments }}</p>
-    <ul>
-{% for file, description in resource.meta.attachments %}
-{% if file.startswith('http://') or file.startswith('https://') %}
-<li><a href="{{ file }}">{{ description }}</a></li>
-{% else %}
-<li><a href="{{ media_url('files/' + file) }}">{{ description }}</a></li>
-{% endif %}
-{% endfor %}
-    </ul>
-</div>
-{% endif %}
-  </nav>
+	{% endfor %}
+      </ul>
+    </div></div>
+  </div>
+  {% endif %}
+  {# Attachments #}
+  {% if resource.meta.attachments %}
+  <div class="lf-link">
+    <span class="lf-sprite lf-sprite-attachment" title="{{ resource.meta.l10n.attachments }}"></span>
+    <div class="lf-link-details"><div class="lf-link-inner">
+      <p>{{ resource.meta.l10n.attachments }}</p>
+      <ul>
+	{% for file, description in resource.meta.attachments %}
+	{% if file.startswith('http://') or file.startswith('https://') %}
+	<li><a href="{{ file }}">{{ description }}</a></li>
+	{% else %}
+	<li><a href="{{ media_url('files/' + file) }}">{{ description }}</a></li>
+	{% endif %}
+	{% endfor %}
+      </ul>
+    </div></div>
+  </div>
+  {% endif %}
+</nav>
 {% endif %}

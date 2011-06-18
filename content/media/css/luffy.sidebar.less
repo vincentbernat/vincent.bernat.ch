@@ -2,16 +2,19 @@
 /* Additional boxes */
 
 #lf-links {
-    z-index: 101;
+    z-index: 1001;
     position: fixed;
     left: 0;
     top: 160px;
     margin-left: -5px;
     background-color: rgba(255,255,255,0.5);
-    width: 10em;
-    padding: 0.7em 0.1em 0.7em 10px;
-    border: 1px solid @theme-color;
+    padding: 0.7em 7px 0.7em 8px;
+    border: 1px solid lighten(desaturate(@theme-color, 70%), 20%);
     font: normal 12px @font-droid;
+    .rounded-corners(3px);
+    .lf-link-details {
+	display: none;
+    }
     p {
 	color: #888;
 	font-weight: bold;
@@ -27,10 +30,29 @@
 	    }
 	}
     }
+    .lf-link:hover {
+	position: relative;
+	.lf-link-details {
+	    display: block;
+	    position: absolute;
+	    left: 16px; /* Ensure that we collide with the sprite to keep hover */
+	    top: -8px;
+	}
+	.lf-link-inner {
+	    margin-left: 12px;
+	    width: 12em;
+	    background-color: rgba(255,255,255,0.8);
+	    border: 1px solid lighten(desaturate(@theme-color, 70%), 20%);
+	    padding: 0.7em 7px 0.7em 8px;
+	    .rounded-corners(3px);
+	}
+    }
 }
 
-.no-rgba #lf-links {
-    background: url("../images/l/translucent.png");
+.no-rgba {
+    #lf-links, .lf-link-details {
+	background: url("../images/l/translucent.png");
+    }
 }
 
 @media screen and (max-width: 900px) {
@@ -44,9 +66,32 @@
        -moz-box-sizing: border-box;
        -webkit-box-sizing: border-box;
        -ms-box-sizing: border-box;
-       p {
-	   color: #EEE;
+       .lf-link {
+	   display: inline-block;
+	   &:hover {
+	       .lf-link-details, .lf-link-inner {
+		   /* Cancel most effects applied by non mobile CSS */
+		   position: static;
+		   display: inline;
+		   background: inherit;
+		   padding: 0;
+		   margin: 0;
+		   width: auto;
+		   border: none;
+	       }
+	   }
+       }
+       .lf-link-details, .lf-link-inner {
 	   display: inline;
+	   background: inherit;
+       }
+       .lf-sprite {
+	   vertical-align: middle;
+	   margin-right: 0.5em;
+       }
+       p {
+	   display: inline;
+	   color: #EEE;
        }
        ul {
 	   display: inline;
@@ -67,5 +112,8 @@
 @media screen and (max-width: 600px) {
    #lf-links {
        padding-left: 0.5em;
+       p {
+	   display: none;
+       }
    }
 }
