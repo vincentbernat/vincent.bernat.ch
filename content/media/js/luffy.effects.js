@@ -51,13 +51,13 @@ luffy.effects = function() {
 	var soff = 75;
 	$('body').append(header[0]);
 	$(window).scroll(function() {
-	    var width = $("#lf-pages").first().position()['left'] - 25;
+	    var width = $("#lf-pages").first().offset()['left'] - 25;
 	    if (width < 50) return;
 	    var y = $(window).scrollTop(); // Current position
 	    var title = null;		   // Title to display
 	    h1s.each(function() {
 		// Do we need to display this specific header?
-		var header_y = $(this).position()['top'] - soff;
+		var header_y = $(this).offset()['top'] - soff;
 		if (y < header_y) return false;
 		// typogrify is adding a lot of non breakable spaces
 		title = $(this).html().replace(/&nbsp;/g, ' ');
