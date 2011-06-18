@@ -26,6 +26,7 @@ luffy.effects = function() {
     if (typeof(_gaq) !== 'undefined') {
 	var win = $(window);
 	_gaq.push(['_trackEvent', 'Viewport',
+		   'Size',
 		   win.width() + 'x' + win.height(),
 		   win.width()]);
     }
