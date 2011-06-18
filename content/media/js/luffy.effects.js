@@ -35,12 +35,12 @@ luffy.effects = function() {
        -- */
     e = function() {
 	var header = $('<div id="lf-scrolling-header" />');
-	var h1s = $("#lf-main h1");
+	var h1s = $(".lf-article #lf-main h1");
 	var soff = 75;
 	$('body').append(header[0]);
 	$(window).scroll(function() {
 	    var width = $("#lf-pages").first().offset()['left'] - 25;
-	    if (width < 50) return;
+	    if (width < 100) return;
 	    var y = $(window).scrollTop(); // Current position
 	    var title = null;		   // Title to display
 	    h1s.each(function() {
@@ -53,7 +53,12 @@ luffy.effects = function() {
 	    if (title === null) {
 		header.hide();
 	    } else {
+		var size = "18px";
+		if (width < 150) {
+		    size = "12px";
+		}
 		header.css({ top: soff,
+			     'font-size': size,
 			     width: width }).html(title).show();
 	    }
 	});
