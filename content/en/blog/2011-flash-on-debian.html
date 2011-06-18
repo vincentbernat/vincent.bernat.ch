@@ -1,0 +1,114 @@
+---
+title: 'The sorry state of Flash with 64-bit Debian'
+keywords: "flash, debian, 64, nspluginwrapper"
+uuid: f5774027-96c8-4e75-97d4-268687002d40
+---
+
+Even with the availability `<video>` tag in HTML5, most websites still
+require the use of [Adobe Flash plugin][flash] to access some
+content. If you run a 64-bit (Intel architecture) version of Debian,
+you can still get this plugin through the `flashplugin-nonfree`
+package. Unfortunately, Adobe never commited to a decent support for
+the 64-bit version of its plugin. The first 64-bit version was
+provided as late as the fall of 2008. The support was
+discontinued. Then, we recently got a new preview release but it is
+still lagging behind the 32-bit version.
+
+The 64-bit plugin has two major drawbacks:
+
+ - it is not up-to-date and plagued by [several][CVE-2011-2110]
+   [security holes][CVE-2011-2107] which are not planned to be
+   corrected for the 64-bit version;
+ - it exhibits some bugs of its own, like some
+   [sound artifacts][620901] which come from the use of `memcpy()` in
+   place of `memmove()` and only happens with recent GNU libc (where
+   `memcpy()` has been optimized and is no longer equivalent to
+   `memmove()`). Adobe has no plan to fix this. There are several way
+   documented in the bug report to circumvent this bug.
+
+Even if you fix the second point, you have no way to fix the first
+one. What are the alternatives?
+
+# Lightspark
+
+[Lightspark][lightspark] is a modern, free, open-source Flash player
+implementation featuring JIT compilation (with the help of LLVM) and
+hardware acceleration using OpenGL. It only supports Actionscript 3
+(introduced in Flash 9) but it now fallbacks to Gnash if an older
+version is required.
+
+The main problem of Lightspark is that it is optimized for modern
+hardware and uses OpenGL textures to display video frames. This allows
+to achieve video compositing with the help of the graphic
+card. Unfortunately, if you use a video card with poor OpenGL
+performance, like a NVidia card with Nouveau driver, Lightspark is
+slow as hell. It works well with an Intel card.
+
+Currently, Lightspark is only available in experimental for
+Debian. Install `browser-plugin-lightspark`.
+
+# Gnash
+
+[Gnash][gnash] is a more mature project but does not support
+Actionscript 3. Youtube works well with Gnash, as well as most other
+applications unless they use too recent features. If your use of Flash
+is limited, it is a nice alternative. Unfortunately, more and more
+content are delivered with an application requiring Actionscript 3
+support.
+
+On Debian, you can get started by installing `browser-plugin-gnash`.
+
+# 32-bit Flash plugin on Debian
+
+Ubuntu provides Flash as a 32-bit plugin with the help of
+`nspluginwrapper` which is a special plugin that will enable the use
+of a 32-bit plugin inside a 64-bit browser. This seems a sensible
+choice since Adobe only really supports the 32-bit version. You can
+also use `nspluginwrapper` with Debian. You need to
+[download 32-bit version of Flash][flashlinux], uncompress it and put
+`libflashplayer.so` in `~/.mozilla/plugins`.
+
+    ::console
+    # aptitude purge flashplugin-nonfree
+    # aptitude install nspluginwrapper lib32asound2-plugins
+    $ cd ~/.mozilla/plugins
+    $ nspluginwrapper -i $PWD/libflashplayer.so
+
+Beware that you need to watch for updates yourself. Mozilla provides a
+[website checking if plugins are up-to-date][check]. It works with
+other browsers than Firefox.
+
+This is a pity to still need this kind of hack in 2011 but it seems
+that this is currently the best solution.
+
+# No flash
+
+Thanks to the `<video>` tag available in HTML5, most videos should be
+available without the need of a special plugin. Unfortunately, HTML5
+does not define a list of video codecs and container formats that
+should be supported by any browser. Therefore, some browsers support
+Ogg Theora, some others H264 and some of them also support WebM, the
+new royalty-free format from Google. You can find a
+[good summary of the problem from Mark Pilgrim][diveintohtml5].
+
+With Chromium as found in Debian, you have Ogg Theora, WebM and
+H264. [Youtube][youtube] has an
+[opt-in program to enable HTML5 video][youtube/html5] but most other
+video content are just unavailable without Flash. Web without Flash is
+not a reality yet.
+
+[flash]: http://get.adobe.com/fr/flashplayer/
+[flashlinux]: http://fpdownload.macromedia.com/get/flashplayer/current/install_flash_player_10_linux.tar.gz
+[lightspark]: http://sourceforge.net/apps/trac/lightspark
+[gnash]: http://www.gnu.org/s/gnash/
+[youtube]: http://www.youtube.com
+[youtube/html5]: http://www.youtube.com/html5
+[diveintohtml5]: http://diveintohtml5.org/video.html
+[CVE-2011-2110]: http://www.adobe.com/support/security/bulletins/apsb11-18.html
+[CVE-2011-2107]: http://www.adobe.com/support/security/bulletins/apsb11-13.html
+[620901]: http://bugs.debian.org/620901
+[check]: https://www.mozilla.com/en/plugincheck/
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

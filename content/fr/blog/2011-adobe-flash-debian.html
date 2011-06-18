@@ -1,0 +1,126 @@
+---
+title: 'Le plugin Flash et Debian'
+keywords: "flash, debian, 64, nspluginwrapper"
+uuid: f5774027-96c8-4e75-97d4-268687002d40
+---
+
+Beaucoup de sites requièrent toujours l'utilisation du
+[plugin Flash d'Adobe][flash] pour accéder à certains contenus. Si
+vous utilisez une version 64 bits de Debian (avec une architecture
+Intel), vous pouvez obtenir ce plugin à travers le paquet
+`flashplugin-nonfree`. Malheureusement, Adobe n'a jamais prouvé sa
+capacité à maintenir ce plugin à jour. Une première version avait été
+fournie vers la fin de l'année 2008 puis a été retirée pendant
+quelques mois (principalement en raison d'importants problèmes de
+sécurité) avant qu'une version plus récente soit remise en ligne.
+
+Cette version a deux défauts majeurs :
+
+ - Elle n'est pas du tout à jour. Elle est touchée par
+   [plusieurs][CVE-2011-2110] [trous de sécurité][CVE-2011-2107] pour
+   lesquels Adobe n'a communiqué aucune date de correction pour la
+   version 64 bits.
+ - Elle est frappée de quelques bugs qui lui sont propres et pour
+   lesquels Adobe n'a montré aucune attention alors que les
+   corrections à apporter sont parfois triviailes. Par exemple, le
+   [son est déformé][620901] en raison de l'utilisation de `memcpy()`
+   au lieu de `memmove()`. Cela se produit avec une *libc* récente
+   pour laquelle les deux fonctions n'ont plus un comportement
+   identiques. Le rapport de bug comprend un certain nombre de
+   parades à ce bug dont un patch binaire à appliquer sur le plugin.
+
+Même en corrigeant le second point, le premier point peut
+difficilement être résolu par d'autres entités qu'Adobe. Quelles
+sont les alternatives ?
+
+# Lightspark
+
+[Lightspark][lightspark] est une implémentation open-source qui se
+base sur LLVM pour fournir un compilateur JIT qui permet de traduire
+le code Flash en code machine afin d'améliorer les performances. Il
+utilise également OpenGL pour accélérer l'affichage. Il ne supporte
+cependant que Actionscript 3 qui a été introduit avec Flash 9. Quand
+il y a besoin de versions plus anciennes, Gnash est appelé à la
+rescousse.
+
+Le principal problème avec Lightspark est l'utilisation d'OpenGL pour
+le rendu. Si vous ne disposez pas d'un bon support d'OpenGL (comme par
+exemple une carte NVidia avec le pilote Nouveau), ce sera extrêmement
+lent. À noter qu'avec une carte Intel, les performances sont
+satisfaisantes.
+
+Pour le moment, Lightspark n'est disponible que dans Debian Sid. Le
+paquet à installer est `browser-plugin-lightspark`.
+
+# Gnash
+
+[Gnash][gnash] est un projet plus ancien qui ne supporte pas
+Actionscript 3. Il ne fonctionne donc pas avec tous les sites mais il
+fonctionne très bien avec Youtube par exemple. Il utilise des
+techniques plus classiques pour le rendu et fonctionne également sur
+des machines moins bien dotées. Si votre usage du Flash est assez
+limité, cela peut être une bonne solution de remplacement.
+
+Dans Debian, il suffit d'installer le paquet `browser-plugin-gnash`.
+
+# Utiliser le plugin 32 bits
+
+Ubuntu ne fournit pas le plugin dans sa version 64 bits. Il utilise la
+version 32 bits via `nspluginwrapper` qui permet d'encapsuler un
+plugin 32 bits en un plugin 64 bits. Cela semble une bonne décision vu
+le peu d'entrain d'Adobe à maintenir la version 64 bits et le manque
+total de visibilité sur son avenir.
+
+Il est possible de faire de même sous Debian. Il faut d'abord
+[télécharger la version 32 bits de Flash][flashlinux], la décompresser
+et placer le fichier `libflashplayer.so` dans `~/.mozilla/plugins`.
+
+    ::console
+    # aptitude purge flashplugin-nonfree
+    # aptitude install nspluginwrapper lib32asound2-plugins
+    $ cd ~/.mozilla/plugins
+    $ nspluginwrapper -i $PWD/libflashplayer.so
+
+Attention ! Il va falloir maintenant maintenir à jour vous-même ce
+plugin. Mozilla propose un
+[site web pour vérifier si tous les plugins sont à jour][check]. Celui-ci
+fonctionne également avec d'autres navigateurs que Firefox.
+
+Il est assez honteux que, en 2011, il soit toujours nécessaire
+d'utiliser ce type de solution mais il ne semble pas exister d'autres
+alternatives en attendant la disparition de Flash pour la plupart des
+usages.
+
+# Pas de Flash
+
+Grâce à la balise `<video>` disponible dans HTML5, il est désormais
+possible de visualiser des vidéos dans le navigateur sans aucun
+plugin. Malheureusement, HTML5 ne définit aucune norme quant aux
+codecs et à l'encapsulation que les navigateurs doivent
+supporter. Certains navigateurs supportent Ogg Theora, d'autres
+H264. Google propose désormais WebM, un format libre
+d'utilisation. Mark Pilgrim explique en détail
+[cette problématique des formats vidéos][diveintohtml5].
+
+Chromium, tel que fourni dans Debian, supporte les 3 formats les plus
+courants (Theora, WebM et H264). [Youtube][youtube] a une
+[option pour activer la mise à disposition des vidéos avec HTML5][youtube/html5]
+mais la plupart des sites continuent simplement d'utiliser Flash en
+attendant qu'une solution universelle apparaisse. Bref, il faut encore
+attendre pour se passer de Flash.
+
+[flash]: http://get.adobe.com/fr/flashplayer/
+[flashlinux]: http://fpdownload.macromedia.com/get/flashplayer/current/install_flash_player_10_linux.tar.gz
+[lightspark]: http://sourceforge.net/apps/trac/lightspark
+[gnash]: http://www.gnu.org/s/gnash/
+[youtube]: http://www.youtube.com
+[youtube/html5]: http://www.youtube.com/html5
+[diveintohtml5]: http://diveintohtml5.org/video.html
+[CVE-2011-2110]: http://www.adobe.com/support/security/bulletins/apsb11-18.html
+[CVE-2011-2107]: http://www.adobe.com/support/security/bulletins/apsb11-13.html
+[620901]: http://bugs.debian.org/620901
+[check]: https://www.mozilla.com/fr/plugincheck/
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
