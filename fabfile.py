@@ -11,7 +11,7 @@ env.command_prefixes = [ 'export PATH=$HOME/.virtualenv/hyde/bin:$PATH',
                          'export VIRTUAL_ENV=$HOME/.virtualenv/hyde' ]
 
 def _hyde(args):
-    return local('python ~/code/perso/hyde/main.py %s' % args)
+    return local('python ../hyde/h %s' % args)
 
 def regen():
     """Regenerate dev content"""
