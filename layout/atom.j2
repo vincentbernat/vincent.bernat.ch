@@ -5,10 +5,13 @@
     </title>
     <link href="{{base}}{{ content_url(resource.url) }}" rel="self" />
     <link href="{{base}}{{ content_url(resource.meta.language) }}"/>
-    <updated>{{ time_now|xmldatetime }}</updated>
     <id>{{ content_url(resource.url) }}/</id>
 
     {% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)() %}
+    {% if loop.first %}
+    <updated>{{ res.meta.modified|xmldatetime }}</updated>
+
+    {% endif %}
     {% if loop.index0 < 10 %}
         <entry>
             <title type="html">{{ res.meta.title }}</title>
