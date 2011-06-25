@@ -1,0 +1,238 @@
+---
+title: 'Network lab: site to site VPN'
+keywords: "network, lab, vpn, racoon, bird, quagga, ospf"
+uuid: 5955c343-a8f4-4f06-95b5-5a644ee5df71
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-s2s-vpn": "GitHub repository"
+---
+
+The goal of this lab is to setup a site-to-site IPsec VPN. This lab is
+similar to my [first lab using UML][umllab]. The major differences
+are:
+
+ - We only setup one VPN instead of two.
+ - Static routing is used in place of BGP for inter-site
+   routing. Moreover, [BIRD][bird] is used as a routing daemon.
+ - VPN are using an external network for Internet access.
+ - Both internal network and external network are redundant using one
+   OSPF instance each.
+
+[TOC]
+
+# The lab
+
+![VPN lab][1]
+[1]: [[!!images/vpn-lab.png]]
+
+## The big picture
+
+The main point of this architecture is that you get two redundant
+networks for each site. The external ones are used when hosts need
+Internet access. The internal ones are used when they want to
+communicate with each other. Because we don't want hosts from the
+first site to communicate with hosts from the second site through the
+external network, we extend the internal network with the help of a
+site-to-site IPsec VPN.
+
+Each set of networks is using two layer-3 networks on top of two
+layer-2 networks. OSPF is used to provide redundancy and
+aggregation. For example, `R1` has two routes through `V1` to access
+`R2` which is on the other site:
+
+    ::console
+    # ip route show 192.168.96.0/19
+    192.168.96.0/19  proto zebra  metric 10000 
+            nexthop via 192.168.1.100  dev eth0 weight 1
+            nexthop via 192.168.2.100  dev eth1 weight 1
+
+## Setting up the lab
+
+First, grab the source of the lab:
+
+    ::console
+    $ git clone https://vincentbernat@github.com/vincentbernat/network-lab.git
+    $ cd network-lab/lab-s2s-vpn
+
+You may try to run `./setup` directly. It may be safer to build an
+image of Debian inside inside a directory and use it as a base for the
+lab.
+
+    ::console
+    $ sudo debootstrap sid ../sid-chroot http://ftp.fr.debian.org/debian/
+    [...]
+    $ sudo chroot ../sid-chroot /bin/bash
+    # apt-get install iproute zsh rsyslog less makedev tcpdump
+    # apt-get install bird quagga racoon
+    # exit
+    $ ROOT=../sid-chroot ./setup
+
+You still need a working UML kernel. On Ubuntu, the one provided in
+`user-mode-linux` does [not contain the `aufs.ko` module][LP801445]. I
+did not find a simple workaround. You can just grab the
+[package from Debian][umldebian] and install it on your Ubuntu with
+`dpkg -i`.
+
+[LP801445]: https://bugs.launchpad.net/ubuntu/+source/user-mode-linux/+bug/801445
+[umldebian]: http://packages.debian.org/stable/user-mode-linux
+
+## Use of BIRD
+
+With the [previous lab][umllab], Quagga was used as an OSPF routing
+daemon. We still use it on `R1`, `R2`, `E1` and `E2`. However, Quagga
+is not able to run multiple instances of OSPF. [BIRD][bird]
+can. Therefore, we use it on `V1` and `V2` because we need two OSPF
+instances: one for the external network and one for the internal
+network. Since we also need ECMP, we need at least BIRD 1.3.0.
+
+BIRD allows the definition of multiple routing tables. Those tables
+are independant of the kernel routing tables. Each protocol will
+maintain its own set of routes and will allow to export (or import)
+routes from one of the routing table maintained by BIRD. In our setup,
+we use four protocols and only one routing table (the default one).
+
+![BIRD routing tables][2]
+[2]: [[!!images/vpn-lab-bird.png]]
+
+The `ospf EXTERNAL` protocol is one of the two OSPF instances we use on
+`V1`. We import all the routes learned through the OSPF process into
+the internal BIRD routing table. We don't export any route from the
+BIRD routing table to this OSPF instance. Here is the configuration of
+this protocol:
+
+    protocol ospf EXTERNAL {
+       ecmp yes;
+       import all;
+       export none;
+       area 0.0.0.0 {
+          networks {
+             203.0.113.0/26;
+             203.0.113.64/26;
+             203.0.113.150/32;
+          };
+          interface "eth2";
+          interface "eth3";
+          interface "lo" {
+            stub yes;
+          };
+       };
+    }
+
+`203.0.113.150/32` is defined on the loopback interface of `V1`. This
+is the IP of the local VPN endpoint.
+
+The `ospf INTERNAL` protocol is the second OSPF instance. We import all
+routes from this protocol to the BIRD routing table. We also want to
+advertise the route to the remote site. This route is defined in the
+`static STATIC` protocol and imported into BIRD routing table.
+
+    protocol static STATIC {
+       import all;
+       export none;
+       route 192.168.96.0/19 via "lo";
+    }
+
+Therefore, `ospf INTERNAL` protocol export all routes originating from
+the `static STATIC` protocol. This is done using filters:
+
+    protocol ospf INTERNAL {
+       ecmp yes;
+       import all;
+       export filter {
+         if proto = "STATIC" then accept;
+         reject;
+       };
+       area 0.0.0.0 {
+          networks {
+             192.168.1.0/24;
+             192.168.2.0/24;
+          };
+          interface "eth0";
+          interface "eth1";
+       };
+    }
+
+The `kernel` protocol is managing one kernel routing table. By
+default, it handles the `main` table. We don't import any route from the
+kernel. However, we copy routes that come from other protocols, except
+the static route because we already have a default route and the
+static route is some kind of blackhole, we don't want to use it for
+real routing.
+
+    protocol kernel {
+       persist;
+       import none;
+       export filter {
+         if proto = "EXTERNAL" then accept;
+         if proto = "INTERNAL" then accept;
+         reject;
+       };
+    }
+
+The filtering mechanism built inside BIRD is pretty powerful.
+
+## Testing
+
+After starting the lab, you need to wait a few seconds. You should
+then be able to ping `R2` from `R1`:
+
+    ::console
+    R1# ping -c3 -I 192.168.15.1 192.168.115.1
+    PING 192.168.115.1 (192.168.115.1) from 192.168.15.1 : 56(84) bytes of data.
+    Warning: time of day goes back (-5435us), taking countermeasures.
+    64 bytes from 192.168.115.1: icmp_req=1 ttl=62 time=0.921 ms
+    64 bytes from 192.168.115.1: icmp_req=2 ttl=62 time=0.569 ms
+    64 bytes from 192.168.115.1: icmp_req=3 ttl=62 time=0.698 ms
+    --- 192.168.115.1 ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2009ms
+    rtt min/avg/max/mdev = 0.569/0.729/0.921/0.147 ms
+
+On `V1`, you can check BIRD internal routing table using `birdc`:
+
+    ::console
+    > show route 
+    0.0.0.0/0          multipath [EXTERNAL 19:43] * E2 (150/10/1) [0.0.0.11]
+            via 203.0.113.1 on eth2 weight 1
+            via 203.0.113.65 on eth3 weight 1
+    192.168.96.0/19    dev lo [STATIC 19:42] * (200)
+    192.168.1.0/24     dev eth0 [INTERNAL 19:42] * I (150/10) [0.0.0.100]
+    192.168.2.0/24     dev eth1 [INTERNAL 19:42] * I (150/10) [0.0.0.100]
+    192.168.15.0/24    multipath [INTERNAL 19:43] * I (150/20) [0.0.0.10]
+            via 192.168.1.10 on eth0 weight 1
+            via 192.168.2.10 on eth1 weight 1
+    203.0.113.0/26     dev eth2 [EXTERNAL 19:42] * I (150/10) [0.0.0.100]
+    203.0.113.64/26    dev eth3 [EXTERNAL 19:42] * I (150/10) [0.0.0.100]
+    203.0.113.150/32   dev lo [EXTERNAL 19:42] * I (150/0) [0.0.0.100]
+
+The kernel routing table is similar except it does not contain the
+static route.
+
+# Adding more redundancy
+
+The first goal of this lab was to test multiple OSPF instances and
+ECMP with BIRD. It could be completed:
+
+ - Adding a redundant VPN is easy: this is just a matter of duplicating the
+   setup of the existing VPN.
+ - Each router should be redundant by getting a sibling with the same
+   configuration. In the case of `R1` and `R2`, a VIP could be shared
+   between the router and its sibling with VRRP to allow hosts behind
+   to have a single gateway and not use a routing protocol.
+ - Because of the use of static routes instead of BGP, there is
+   nothing to detect a VPN failure (which may be problematic if we
+   setup a redundant VPN). Some VPN are able to invalidate a route
+   when the associated VPN is down. This is not our case. Moreover,
+   there may be some duplication in routing. This is not the case here
+   because each site has its own internal network.
+
+[umllab]: [[en/blog/2011-uml-network-lab.html]]
+[bird]: http://bird.network.cz/
+*[IGP]: Interior Gateway Protocol
+*[OSPF]: Open Shortest Path First
+*[BGP]: Border Gateway Protocol
+*[UML]: User Mode Linux
+*[VPN]: Virtual Private Network
+*[ECMP]: Equal Cost Multipath
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

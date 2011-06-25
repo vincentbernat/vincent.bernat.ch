@@ -1,0 +1,243 @@
+---
+title: 'Lab virtual: VPN inter-site'
+keywords: "réseau, lab, vpn, racoon, bird, quagga, ospf"
+uuid: 5955c343-a8f4-4f06-95b5-5a644ee5df71
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-s2s-vpn": "Dépôt GitHub"
+---
+
+Ce lab a pour but la mise en place d'un VPN inter-site. Il est très
+similaire au [premier lab UML que j'ai présenté][umllab]. Les
+différences majeures sont les suivantes :
+
+ - Un seul VPN est utilisé.
+ - Le routage entre les sites est statique plutôt que dynamique via BGP.
+ - L'accès à Internet se fait via un réseau d'accès.
+ - Les réseaux internes et externes sont redondés en utilisant chacun
+   une instance OSPF.
+
+[TOC]
+
+# Le lab
+
+![Lab VPN][1]
+[1]: [[!!images/vpn-lab.png]]
+
+## Vue d'ensemble
+
+Pour chacun des sites, il y a deux réseaux d'accès redondants. Le
+réseau externe est utilisé quand les machines ont besoin d'un accès
+Internet tandis que le réseau interne est utilisé quand elles doivent
+communiquer entre elles. Comme il n'est pas souhaitable de laisser des
+machines voulant communiquer avec le site distant passer par le réseau
+externe, le réseau interne est étendu à l'aide d'un VPN IPsec.
+
+Chacun des deux réseaux est composé de deux réseaux L3 supportés par
+deux réseaux L2 distincts. OSPF est utilisé pour la redondance ainsi
+qu'éventuellement l'aggrégation. Par exemple, `R1` dispose de deux
+routes à travers `V1` pour accéder à `R2` qui est sur le site distant.
+
+    ::console
+    # ip route show 192.168.96.0/19
+    192.168.96.0/19  proto zebra  metric 10000 
+            nexthop via 192.168.1.100  dev eth0 weight 1
+            nexthop via 192.168.2.100  dev eth1 weight 1
+
+## Mise en place
+
+Tout d'abord, récupérons les sources du lab :
+
+    ::console
+    $ git clone https://vincentbernat@github.com/vincentbernat/network-lab.git
+    $ cd network-lab/lab-s2s-vpn
+
+Il est possible de lancer directement `./setup`. Toutefois, il peut
+être préférable de construire une image de Debian dans un répertoire
+dédié et de l'utiliser comme base pour toutes les machines du lab.
+
+    ::console
+    $ sudo debootstrap sid ../sid-chroot http://ftp.fr.debian.org/debian/
+    [...]
+    $ sudo chroot ../sid-chroot /bin/bash
+    # apt-get install iproute zsh rsyslog less makedev tcpdump
+    # apt-get install bird quagga racoon
+    # exit
+    $ ROOT=../sid-chroot ./setup
+
+Il faut ensuite disposer d'un noyau UML, comme celui fournit dans le
+paquet `user-mode-linux`. Sous Ubuntu,
+[le module `aufs.ko` est manquant][LP801445]. Je n'ai pas trouvé de
+solutions simples à ce problème. Le plus rapide est de récupérer le
+[paquet chez Debian][umldebian] et de l'installer avec `dpkg -i`.
+
+[LP801445]: https://bugs.launchpad.net/ubuntu/+source/user-mode-linux/+bug/801445
+[umldebian]: http://packages.debian.org/stable/user-mode-linux
+
+## Utilisation de BIRD
+
+Dans [le lab précédent][umllab], Quagga était utilisé comme démon
+OSPF. Ici, il est toujours utilisé pour `R1`, `R2`, `E1` et
+`E2`. Toutefois, il n'est pas capable de faire tourner plusieurs
+instances d'OSPF. A contrario, [BIRD][bird] en est tout à fait
+capable. C'est donc ce dernier qui est utilisé sur `V1` et `V2`. Nous
+avons en effet besoin d'une instance OSPF pour le réseau interne et
+d'une autre pour le réseau externe. Comme nous avons besoin d'ECMP, il
+nous faut utiliser au minimum BIRD 1.3.0.
+
+BIRD permet de définir plusieurs tables de routage. Ces tables sont
+totalement indépendantes des tables utilisées par le noyau. Chaque
+protocole va disposer en interne d'un ensemble de routes. Les règles
+d'import et d'export de ces routes vers les tables de routage internes
+à BIRD peuvent être explicitées. Dans notre lab, nous utilisons 4
+protocoles et une seule table de routage (celle par défaut).
+
+![Table de routage dans BIRD][2]
+[2]: [[!!images/vpn-lab-bird.png]]
+
+Le protocole `ospf EXTERNAL` est l'une des deux instances d'OSPF que
+nous utilisons pour `V1`. Toutes les routes apprises par OSPF sont
+importées dans la table de routage de BIRD. Aucune route n'a besoin
+d'être exportée dans cette instance. Voici la configuration de
+celle-ci :
+
+    protocol ospf EXTERNAL {
+       ecmp yes;
+       import all;
+       export none;
+       area 0.0.0.0 {
+          networks {
+             203.0.113.0/26;
+             203.0.113.64/26;
+             203.0.113.150/32;
+          };
+          interface "eth2";
+          interface "eth3";
+          interface "lo" {
+            stub yes;
+          };
+       };
+    }
+
+`203.0.113.150/32` est l'IP portée en loopback pour `V1` et représente
+le point de sortie local du VPN.
+
+Le protocole `ospf INTERNAL` est la seconde instance OSPF. Encore une
+fois, toutes les routes apprises sont importées dans la table de
+routage de BIRD. Nous voulons également exporter vers OSPF une route
+pour indiquer comment accéder au site distant. Celle-ci est définie
+dans le protocole `static STATIC` et importée dans la table de routage
+de BIRD :
+
+    protocol static STATIC {
+       import all;
+       export none;
+       route 192.168.96.0/19 via "lo";
+    }
+
+Nous indiquons alors au protocole `ospf INTERNAL` d'exporter cette
+route en utilisant un filtre :
+
+    protocol ospf INTERNAL {
+       ecmp yes;
+       import all;
+       export filter {
+         if proto = "STATIC" then accept;
+         reject;
+       };
+       area 0.0.0.0 {
+          networks {
+             192.168.1.0/24;
+             192.168.2.0/24;
+          };
+          interface "eth0";
+          interface "eth1";
+       };
+    }
+
+Le protocole `kernel` permet de gérer une table de routage dans le
+noyau. Par défaut, il s'occupe de la table `main`. Nous n'importons
+aucune route depuis le noyau mais nous y exportons les routes en
+provenance des instances OSPF. Nous ne voulons pas exporter la route
+statique car elle agirait comme un trou noir.
+
+    protocol kernel {
+       persist;
+       import none;
+       export filter {
+         if proto = "EXTERNAL" then accept;
+         if proto = "INTERNAL" then accept;
+         reject;
+       };
+    }
+
+Le mécanisme de filtre de BIRD est extrêmement puissant.
+
+## Tests
+
+Après avoir démarré le lab, il faut attendre quelques dizaines de
+secondes. `R2` devient alors accessible depuis `R1` :
+
+    ::console
+    R1# ping -c3 -I 192.168.15.1 192.168.115.1
+    PING 192.168.115.1 (192.168.115.1) from 192.168.15.1 : 56(84) bytes of data.
+    Warning: time of day goes back (-5435us), taking countermeasures.
+    64 bytes from 192.168.115.1: icmp_req=1 ttl=62 time=0.921 ms
+    64 bytes from 192.168.115.1: icmp_req=2 ttl=62 time=0.569 ms
+    64 bytes from 192.168.115.1: icmp_req=3 ttl=62 time=0.698 ms
+    --- 192.168.115.1 ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2009ms
+    rtt min/avg/max/mdev = 0.569/0.729/0.921/0.147 ms
+
+Sur `V1`, il est possible d'examiner la table de routage de BIRD avec
+la commande `birdc` :
+
+    ::console
+    > show route 
+    0.0.0.0/0          multipath [EXTERNAL 19:43] * E2 (150/10/1) [0.0.0.11]
+            via 203.0.113.1 on eth2 weight 1
+            via 203.0.113.65 on eth3 weight 1
+    192.168.96.0/19    dev lo [STATIC 19:42] * (200)
+    192.168.1.0/24     dev eth0 [INTERNAL 19:42] * I (150/10) [0.0.0.100]
+    192.168.2.0/24     dev eth1 [INTERNAL 19:42] * I (150/10) [0.0.0.100]
+    192.168.15.0/24    multipath [INTERNAL 19:43] * I (150/20) [0.0.0.10]
+            via 192.168.1.10 on eth0 weight 1
+            via 192.168.2.10 on eth1 weight 1
+    203.0.113.0/26     dev eth2 [EXTERNAL 19:42] * I (150/10) [0.0.0.100]
+    203.0.113.64/26    dev eth3 [EXTERNAL 19:42] * I (150/10) [0.0.0.100]
+    203.0.113.150/32   dev lo [EXTERNAL 19:42] * I (150/0) [0.0.0.100]
+
+La table de routage du noyau est similaire mais ne contient pas la
+route statique qui a été mise en place.
+
+# Redondance
+
+Ce lab a été mis en place essentiellement pour tester les instances
+OSPF multiples avec BIRD ainsi que le bon support d'ECMP qui a été
+rajouté récemment. Il est possible de le compléter.
+
+ - Ajouter un VPN en redondance du premier est particulièrement
+   facile. Il suffit de dupliquer la configuration du VPN existant.
+ - Chaque routeur devrait être dupliqué. Dans le cas de `R1` et `R2`,
+   le duplicat partegerait une VIP en utilisant un protocole tel que VRRP
+   afin de pouvoir héberger des machines sans démon de routage.
+ - L'utilisation de routes statiques plutôt que de BGP implique qu'il
+   n'est plus possible de détecter la défaillance du VPN (ce qui est
+   très problématique si on met en place de la redondance). Certains
+   VPN sont capables d'invalider une route quand le VPN associé est
+   indisponible. Ce n'est pas le cas ici. De plus, le routage statique
+   entraîne parfois une duplication de la configuration du
+   routage. Nous évitons ce problème car chaque site dispose de son
+   propre adressage interne.
+
+[umllab]: [[fr/blog/2011-uml-network-lab.html]]
+[bird]: http://bird.network.cz/
+*[IGP]: Interior Gateway Protocol
+*[OSPF]: Open Shortest Path First
+*[BGP]: Border Gateway Protocol
+*[UML]: User Mode Linux
+*[VPN]: Virtual Private Network
+*[ECMP]: Equal Cost Multipath
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
