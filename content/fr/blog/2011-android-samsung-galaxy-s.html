@@ -1,0 +1,398 @@
+---
+title: 'Firmware Android alternatif pour le Samsung Galaxy S'
+keywords: "android, cyanogen mod, rom, samsung, sgs, galaxy, heimdall, linux, jailbreak"
+uuid: 1326c4bf-4cb7-4bb2-9835-4dd32ea5d7cf
+---
+
+J'ai acheté il y a quelques temps un [Samsung Galaxy S][sgs], un
+téléphone basé sur le système Android de Google. Une activité courante
+sur ce type de téléphone est de passer sur un firmware alternatif
+(souvent appelé de manière incorrecte « ROM ») comme
+[CyanogenMod][cm]. Se lancer dans cette entreprise est un univers
+troublant dans lequel les outils propriétaires se mêlent à des
+téléchargements de fichiers depuis MegaUpload et consorts. Les
+explications sur ce qui se passe sous le capot sont plutôt rares. Il y
+a de quoi être particulièrement désorienté quand on l'habitude
+d'univers un peu plus carrés.
+
+À noter que Denis Bodor a rédigé un article dans
+[GNU/Linux Magazine France 140][glmf140] pour expliquer comment il a
+mis à jour son téléphone vers Gingerbread. Il y fait des remarques
+très similaires.
+
+[glmf140]: http://ed-diamond.com/produit.php?ref=lmag140&id_rubrique=1&caracteristique=1-2-&caracdisp=2-3-
+
+Je ne vais pas présenter ici un guide pas à pas sur comment changer
+son firmware car il me semble dangereux de donner un guide trop précis
+qui risque de rapidement devenir obsolète. Il n'est pas difficile de
+trouver un tel guide sur les forums. Il est généralement destiné à des
+utilisateurs Windows et fournit tous les liens nécessaires pour mener
+à bien l'opération désirée. C'est ce type de guide qu'il faut
+suivre. Je me contente ici de fournir quelques clefs pour mieux les
+comprendre et éventuellement les adapter.
+
+[TOC]
+
+# Les firmwares Android
+
+Il existe plusieurs firmwares pour Android. Ils sont le plus souvent
+spécifiques à un téléphone (ou à ses variantes proches). Il est
+possible de les classer en trois catégories :
+
+ 1. Les **firmwares officiels** fournis par le fabriquant du
+    téléphone. Ils comprennent un noyau avec les drivers appropriés
+    ainsi qu'une interface, le plus souvent personnalisée par le
+    constructeur (HTC Sense pour HTC, TouchWiz pour Samsung) et
+    quelques applications en remplacement ou en sus des applications
+    développées par Google. Certains fabriquants ont pas mal de retard
+    par rapport aux versions fournies par Google et on ne dispose donc
+    pas forcément de la dernière version disponible pour son téléphone.
+ 2. Les **firmwares modifiés** sont des variations des firmwares
+    officiels créées par des passionnés. Ils ajoutent certaines
+    fonctionnalités, en retirent d'autres mais restent généralement
+    assez proches.
+ 3. Les **firmwares construits depuis
+    [la version Open Source d'Android][aosp]** ne reprennent pas le
+    firmware officiel à l'exception de certaines parties du noyau pour
+    assurer le même niveau de support. Ils proposent donc une version
+    épurée de l'expérience « Google ».
+
+## Darky ROM
+
+[Darky ROM][darky] est un firmware modifié. Il comprend un noyau
+personnalisé (mais basé sur les sources de Samsung), quelques hacks,
+des applications en plus et la possibilité de débrayer certaines
+applications Samsung. C'est un bon firmware particulièrement
+réactif. A priori, c'est un remplaçant sans risque pour le firmware du
+constructeur : tout devrait mieux marcher.
+
+La [dernière version disponible est la 10.1][darky10] et il y a un
+[bon guide expliquant comme l'installer][darkyguide].
+
+## CyanogenMod
+
+[CyanogenMod][cm] est un firmware construit puis la version AOSP
+d'Android. Il supporte de nombreux téléphones. Le Samsung Galaxy S a
+été rajouté récemment à la liste de ceux-ci. Il n'existe pas encore de
+version stable mais
+[une release candidate est désormais disponible][cmdl]. La lecture de
+la [FAQ][cmfaq] est conseillée. Elle indique notamment la nécessité
+d'installer CyanogenMod depuis Froyo 2.2 en raison d'une
+incompatibilié avec le bootloader fourni par Samsung dans Gingerbread
+2.3. Un [wiki][cmwiki] contient également un certain nombre
+d'informations utiles.
+
+Le principal défaut de ce firmware provient de l'autonomie réduite. Je
+dois désormais recharger mon téléphone environ une fois par jour au
+lieu d'une fois tous les deux jours. En échange, je dispose d'un
+système très propre avec de nombreuses fonctionnalités. Par exemple,
+la barre de notification peut être personnalisée et OpenVPN est
+disponible en standard et est parfaitement intégré.
+
+De plus, presque tout est open source (si on n'installe pas les
+applications Google). Ce firmware est un peu comme une distribution
+Linux pour votre téléphone. Pas besoin non plus de télécharger des
+fichiers à droite et à gauche. Toutefois, il n'y a pas de gestionnaire
+de paquets.
+
+# Prérequis
+
+Avant de tenter d'appliquer un nouveau firmware, il y a certains
+outils dont on doit s'assurer le fonctionnement. À noter que pour
+installer un firmware alternatif, il n'y a pas besoin d'obtenir un
+accès root sur le téléphone.
+
+## Modes download & recovery
+
+Il convient en premier lieu de vérifier s'il est possible d'accéder
+aux modes **download** et **recovery**. Le premier permet d'uploader
+un nouveau firmware directement dans la mémoire interne du
+téléphone. S'il est disponible, il est quasiment impossible de rendre
+son téléphone inopérant. Pour accéder à ces deux modes, il faut
+utiliser la manipulation suivante (le téléphone ne doit pas être
+branché) :
+
+ 1. Éteindre le téléphone et attendre la vibration qui indique son
+    extinction totale.
+ 2. Appuyer et maintenir le bouton du volume vers le bas si on veut
+    accéder au mode *download* et vers le haut si on veut atteindre le
+    mode *recovery*.
+ 3. Appuyer et maintenir le bouton « Home » (en bas, au centre).
+ 4. Appuyer et maintenir le bouton « Power » pour allumer le téléphone.
+ 5. Dès que le logo Samsung apparaît, relâcher le bouton « Power ».
+ 6. Ne relâcher les deux autres boutons qu'une fois que l'on a atteint
+    le mode souhaité. Le mode *recovery* affiche un menu tandis que le
+    mode download affiche un gros logo Android jaune.
+
+Si après de nombreux essais, vous ne parvenez pas à entrer dans ces
+modes, peut-être qu'ils sont désactivés. Il y a une solution un peu
+plus bas.
+
+## Heimdall
+
+[Heimdall][heimdall] est un outil pour flasher un nouveau firmware. Il
+sera très utile si quelque chose ne se passe pas comme prévu. De
+nombreux guides expliquent comment utiliser *Odin*. Il s'agit d'un
+outil ne tournant que sous Windows et provenant de Samsung qui ne le
+diffuse pas officiellement. Il est possible d'utiliser Heimdall à la
+place.
+
+    ::console
+    $ git clone https://github.com/Benjamin-Dobell/Heimdall.git
+    Cloning into Heimdall...
+    remote: Counting objects: 423, done.
+    remote: Compressing objects: 100% (271/271), done.
+    remote: Total 423 (delta 220), reused 332 (delta 138)
+    Receiving objects: 100% (423/423), 5.91 MiB | 962 KiB/s, done.
+    Resolving deltas: 100% (220/220), done.
+    $ cd Heimdall/heimdall
+    $ sudo apt-get install libusb-1.0-0-dev
+    $ ./configure && make
+    [...]
+    $ sudo cp 60-heimdall-galaxy-s.rules /etc/udev/rules.d
+    $ sudo /etc/init.d/udev reload
+
+Heimdall s'utiliser alors que le téléphone est en mode
+*download*. Pour le tester, on peut utiliser la commande `print-pit` :
+
+    ::console
+    $ ./heimdall print-pit
+
+Cette commande va afficher la table des partitions du téléphone. Il
+assez enrichissant de savoir ce qu'elle contient :
+
+ - `IBL+PBL` est le boot loader, il faut donc être très prudent si on
+   tente de le modifier ;
+ - `PIT` est la table des partitions ;
+ - `EFS` contient des données importantes telles que l'EMEI du
+   téléphone ;
+ - `SBL` est le second boot loader ;
+ - `SBL2` est une copie du second boot loader ;
+ - `PARAM` contient des images graphiques utilisées à divers moment du boot ;
+ - `KERNEL` est le noyau ;
+ - `RECOVERY` est une copie de sauvegarde du noyau ;
+ - `FACTORYFS` contient le système de fichiers `/system` que l'on peut
+   considérer comme l'équivalent de la racine d'un système GNU/Linux ;
+ - `DBDATA` contient le système de fichiers `/data` qui permet de
+   stocker les préférences et les paramètres du système et des
+   applications ;
+ - `CACHE` contient le système de fichiers `/cache` qui héberge le
+   cache de Dalvik ;
+ - `MODEM` contient le firmware du modem.
+
+Comme on le verra par la suite, Heimdall permet de flasher n'importe
+laquelle de ces partitions avec la commande `flash`.
+
+## adb
+
+[adb][adb] signifie « Android Debug Bridge ». Il permet, entre autres,
+de piloter son téléphone à travers la connexion USB. Il est ainsi
+possible d'obtenir un shell, de rebooter, de récupérer des fichiers, etc.
+
+Pour obtenir cet outil, il faut récupérer [le SDK d'Android][sdk].
+
+    ::console
+    $ tar zxvf ~/download/android-sdk_r11-linux_x86.tgz
+    $ cd android-sdk-linux_x86
+    $ tools/android update sdk
+    [select Android SDK Platform-tools]
+    $ platform-tools/adb shell
+    # uname -a
+    Linux localhost 2.6.35.7-I9000XWJVH-CL184813 #Dark_Core_2.4 PREEMPT Mon May 16 15:02:38 EEST 2011 armv7l GNU/Linux
+
+Les commandes importantes sont :
+
+ - `shell` pour obtenir un shell ;
+ - `reboot recovery` pour rebooter en mode *recovery* ;
+ - `reboot download` pour rebooter en mode *download* ;
+ - `push` pour envoyer un fichier vers le téléphone ;
+ - `pull` pour récupérer un fichier ;
+ - `install` pour installer une application à partir de son APK ;
+ - `logcat` pour consulter en temps réel les logs du téléphone, très
+   utile !
+
+## Réactiver le mode *download*
+
+Si le mode *download* n'est pas disponible, il est possible de le
+récupérer avec `adb` et `heimdall`. Il faut récupérer un firmware
+officiel et en extraire `boot.bin` et `Sbl.bin`.
+
+    ::console
+    $ adb reboot download
+    $ heimdall flash --primary-boot ~/download/boot.bin --secondary-boot ~/download/Sbl.bin
+
+Il faut être très attentif ici car on touche à deux composants
+essentiels du téléphone. Il convient de vérifier plusieurs fois que
+les fichiers téléchargés correspondent bien au téléphone. Je n'ai eu
+aucun problème.
+
+# Installer un nouveau firmware
+
+Bien qu'il soit théoriquement possible de passer d'un firmware à un
+autre sans perdre de données, il est toujours conseillé d'effacer son
+téléphone (*wipe*) avant chaque changement. Cela signifie que l'on
+perd toutes les applications téléchargées ainsi que les données
+associées (les contacts, les SMS, les préférences, etc.). Toutefois,
+cela ne touche pas la carte SD interne, ni celle externe (qui se
+trouve aussi à l'intérieur du téléphone). Elles contiennent
+généralement vos musiques et photos.
+
+Il y a deux façons pour installer un nouveau firmware :
+
+ 1. via Heimdall ou
+ 2. en utilisant le mode *recovery*.
+
+## Heimdall
+
+Quand un guide indique d'utiliser Odin, il suffit d'utiliser Heimdall
+à la place. Odin prend un fichier TAR contenant les différentes
+parties du firmware à flasher. Pour Heimdall, il faut désarchiver
+cette archive et donner les fichiers obtenus. Par exemple :
+
+    ::console
+    $ ./heimdall flash --repartition --pit s1_odin_20100512.pit \
+    >                  --factoryfs factoryfs.rfs \
+    >                  --cache cache.rfs --dbdata dbdata.rfs \
+    >                  --param param.lfs --modem modem.bin \
+    >                  --kernel zImage --secondary-boot Sbl.bin 
+    Claiming interface again...   Success
+    Setting up interface...   Success
+    Beginning session...
+    Handshaking with Loke...   Success
+
+    Uploading PIT
+    PIT upload successful
+    Uploading SBL
+    100%
+    SBL upload successful
+    Uploading KERNEL
+    100%
+    KERNEL upload successful
+    Uploading MODEM
+    100%
+    MODEM upload successful
+    Uploading PARAM
+    100%
+    PARAM upload successful
+    Uploading FACTORYFS
+    100%
+    FACTORYFS upload successful
+    Uploading DBDATAFS
+    100%
+    DBDATAFS upload successful
+    Uploading CACHE
+    100%
+    CACHE upload successful
+    Ending session...
+    Rebooting device...
+
+Il n'est pas obligatoire de repartitionner son téléphone à chaque fois
+(c'est le plus souvent inutile). Heimdall sait de plus détecter tout
+seul les partitions. Si on ne repartitionne pas, il n'est donc pas
+utile de lui fournir le fichier PIT. Enfin, il est aussi capable de ne
+flasher que certaines partitions. On peut par exemple ne mettre à jour
+que le modem.
+
+## Mode *recovery*
+
+Le mode *recovery* fourni en standard avec le Samsung Galaxy S n'a pas
+beaucoup d'options. Selon sa version, il peut aussi refuser de prendre
+certains firmwares s'ils ne sont pas signés. La plupart des firmwares
+alternatifs fournissent *ClockWorkMod* pour le remplacer. Une fois en
+place, il permet d'utiliser n'importe quel fichier ZIP pour installer
+un nouveau firmware.
+
+Mon conseil est donc d'obtenir au plus tôt *ClockWorkMod*. Une
+première possibilité est de l'installer via
+[ROM Manager][rommanager]. Il faut cependant être root. Si ce n'est
+pas le cas, il est aussi possible d'installer directement un firmware
+modifié. Il en existe même qui sont faits juste pour ça, comme
+EZBase. Si vous voulez installer CyanogenMod par la suite, n'optez que
+pour des firmwares Froyo, CyanogenMod n'est pas compatible avec le
+bootloader de Gingerbread.
+
+Le mode *recovery* étant en réalité inclus avec l'image du noyau, il
+n'est pas nécessaire de flasher le firmware en entier (et donc de
+perdre les données du téléphone) : il suffit de flasher le noyau.
+
+*ClockWorkMod* est fourni avec un utilitaire permettant de sauvegarder
+une image du téléphone. Il est ainsi possible de restaurer entièrement
+ce dernier quand on souhaite revenir en arrière. Il s'agit d'une
+sauvegarde *Nandroid*.
+
+## Lagfix
+
+De nombreux guides mentionnent la nécessité d'activer ou désactiver le
+lagfix. Samsung fournit des firmwares utilisant un système de fichiers
+dérivé de FAT (RFS) qui dispose de performances très médiocres qui
+serait à l'origine de nombreux ralentissements. Le lagfix consiste à
+remplacer ce système de fichiers par quelque chose de plus performant
+comme EXT4 ou YAFFS2. C'est une opération assez simple qui consiste à
+faire une sauvegarde du contenu, installer le nouveau système de
+fichiers et restaurer la sauvegarde.
+
+Le lagfix est parfois appliqué automatiquement par le firmware (comme
+pour CyanogenMod) ou doit etre demandé explicitement dans le mode
+*recovery* (la plupart des firmwares modifiés fonctionnent ainsi). En
+cas d'installation d'un nouveau firmware, il est souvent conseillé de
+le désactiver, à moins de passer par Heimdall.
+
+# Applications
+
+Android dispose de nombreuses applications libres mais l'Android
+Market ne permet pas de les trouver facilement. [F-Droid][fdroid] est
+une alternative ne présentant que des applications libres.
+
+Voici une courte sélection :
+
+ - [ADW.Launcher][adw] est un remplaçant du bureau. Il dispose de
+   thèmes et de nombreuses options de configuration.
+ - [K-9 Mail][k9] est un client mail très fonctionnel.
+ - [Xabber][xabber] est un client XMPP/Jabber.
+ - [ConnectBot][connectbot] est un client SSH client ainsi qu'un terminal.
+ - [DroidWall][droidwall] permet de configurer le firewall du
+   téléphone (basé sur Netfilter) afin d'indiquer quelles applications
+   peuvent aller sur Internet (en wifi ou en 3G). Utile si votre
+   forfait est limité.
+ - [Barcode Scanner][barcode] permet de décoder des codes barres 1D ou
+   2D dont les codes QR que l'on trouve un peu partout.
+ - [OsmAnd][osm] est un remplaçant pour Google Maps qui repose sur
+   OpenStreetMap. La version gratuite disponible sur l'Android Market
+   est dépassée. Il faut soit acheter la version payante, soit prendre
+   celle proposée par F-Droid.
+
+Une autre application très utile mais non libre est
+[Titanium Backup][titanium] qui permet de faire une sauvegarde des
+applications et des données et de les restaurer de manière
+sélective. Utile si vous ne voulez pas tout perdre en changeant de
+firmware.
+   
+[sgs]: http://fr.wikipedia.org/wiki/Samsung_i9000_Galaxy_S
+[cm]: http://www.cyanogenmod.com/
+[cmwiki]: http://wiki.cyanogenmod.com/
+[cmdl]: http://download.cyanogenmod.com/?device=galaxysmtd
+[cmfaq]: http://forum.cyanogenmod.com/topic/24169-faq-cm7-on-the-samsung-galaxy-s/
+[darky]: http://www.darkyrom.com/
+[darky10]: http://www.webcitation.org/5zj30aLRd
+[darkyguide]: http://www.webcitation.org/5zj36IbDf
+[aosp]: http://source.android.com/
+[heimdall]: http://www.glassechidna.com.au/products/heimdall/
+[adb]: http://developer.android.com/guide/developing/tools/adb.html
+[sdk]: http://developer.android.com/sdk/index.html
+[rommanager]: https://market.android.com/details?id=com.koushikdutta.rommanager
+[fdroid]: http://f-droid.org/repository/
+[barcode]: http://f-droid.org/repository/browse/?fdid=com.google.zxing.client.android
+[xabber]: http://www.xabber.com/
+[connectbot]: http://code.google.com/p/connectbot/
+[droidwall]: http://code.google.com/p/droidwall/
+[k9]: http://code.google.com/p/k9mail/
+[osm]: http://code.google.com/p/osmand/
+[navit]: http://sourceforge.net/projects/navit/
+[adw]: https://market.android.com/details?id=org.adw.launcher
+[titanium]: http://matrixrewriter.com/android/
+*[AOSP]: Android Open Source Project
+*[FOSS]: Free and Open Source Software
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
