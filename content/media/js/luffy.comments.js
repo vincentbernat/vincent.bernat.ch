@@ -3,7 +3,7 @@
 var luffy = luffy || {};
 luffy.comments = function() {
     /* Load Disqus when clicking on the comment bar */
-    $("#lf-disqus").click(function() {
+    $("#lf-disqus").show().click(function() {
 	var loading = $(this).text('Loading/Chargement...');
         var src = '//' + disqus_shortname + '.disqus.com/embed.js';
 	if (typeof(_gaq) !== 'undefined') {
