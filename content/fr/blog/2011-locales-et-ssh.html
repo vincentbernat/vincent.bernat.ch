@@ -1,0 +1,128 @@
+---
+title: 'Connexions SSH et « locales » manquantes'
+keywords: "locales, zsh, ssh, perl, linux, libc"
+uuid: a0c892a2-5f9a-44b1-8d6b-f7d07eebcfd4
+---
+
+Sur mon système, j'initialise les variables `LANG` et `LC_MESSAGES` à,
+respectivement, `fr_FR.utf8` et `en_US.utf8`. Ainsi, les différents
+programmes appliquent les paramètres régionaux français à l'exception
+des messages qui sont affichés en anglais. Cela implique de bien
+inclure ces deux « locales » dans le fichier
+`/etc/locale.gen`. Toutefois, celles-ci peuvent être indisponibles sur
+certains systèmes distants. La plupart des applications se rabattent
+sur la locale `C` sans broncher. Une exception notable est Perl qui se
+plaint très bruyamment :
+
+    ::console
+    $ perl -e 'print "Hello\n";'
+    perl: warning: Setting locale failed.
+    perl: warning: Please check that your locale settings:
+            LANGUAGE = (unset),
+            LC_ALL = (unset),
+            LC_MESSAGES = "en_US.utf8",
+            LANG = "fr_FR.utf8"
+        are supported and installed on your system.
+    perl: warning: Falling back to the standard locale ("C").
+    Hello
+
+Ce message est une véritable plaie. Je ne comprends pas qu'il soit
+[encore présent actuellement][221790]. La
+[documentation de Perl][perllocale] explique comment se débarasser de
+ce message. La manière la plus expéditive est d'utiliser la variable
+d'environnement `PERL_BADLANG` :
+
+    ::console
+    $ PERL_BADLANG=0 perl -e 'print "Hello\n";'
+    Hello
+
+Toutefois, cela ne résout en rien notre problème. Quand on se connecte
+sur un système distant avec `ssh`, les variables d'environnement sont
+pour la plupart mises à la poubelle. La directive `AcceptEnv` du
+fichier `/etc/ssh/sshd_config` du système distant indique quelles sont
+les variables d'environnement autorisées à survivre. Sur un système
+Debian, la valeur de cette directive est `LANG LC_*`.
+
+Comme je ne peux pas passer sur chaque système installer les locales
+manquantes et qu'il ne m'est pas non plus possible d'aller
+tripatouiller chaque shell distant pour corriger l'environnement,
+j'utilise quelque chose comme ça dans mon `.zshrc` :
+
+    ::zsh
+    ssh() {
+      [ -t 1 ] && echo -ne "\033]0;$@\007"
+      LANG=C LC_MESSAGES=C =ssh "$@"
+    }
+
+Le défaut majeur de cette approche est que je me retrouve avec la
+locale `C` sur tous les systèmes, y compris ceux qui disposent de mes
+locales préférées. Si je supprimais les variables d'environnement
+`LANG` et `LC_MESSAGES`, j'utiliserais la locale par défaut du système
+distant qui peut tout à fait être composée d'une langue qui m'est
+inconnue. De plus, le comportement de la locale `C` n'est pas défini
+quand il y a utilisation de caractères non-ASCII. Voici ce que dit
+[IEEE Std 1003.1][locales] :
+
+> Conforming systems shall provide a POSIX locale, also known as the C
+> locale. The behavior of standard utilities and functions in the POSIX
+> locale shall be as if the locale was defined via the `localedef` utility
+> with input data from the POSIX locale tables in [Locale Definition][1].
+> 
+> The tables in [Locale Definition][1] describe the characteristics and
+> behavior of the POSIX locale for data consisting entirely of
+> characters from the portable character set and the control character
+> set. For other characters, the behavior is unspecified. For C-language
+> programs, the POSIX locale shall be the default locale when the
+> `setlocale()` function is not called.
+> 
+> The POSIX locale can be specified by assigning to the appropriate
+> environment variables the values `C` or `POSIX`.
+
+[1]: http://pubs.opengroup.org/onlinepubs/007904875/basedefs/xbd_chap07.html#tag_07_03
+
+Il est impossible de savoir à l'avance les locales installées sur un
+système distant et initier une connexion juste pour vérifier la locale
+est beaucoup trop coûteux. Voici un autre extrait de mon `.zshrc` (que
+je place sur certains systèmes) pour rétablir une locale proche de mes
+préférences si possible :
+
+    ::zsh
+    export LANG=C
+    export LC_MESSAGES=C
+    (( $+commands[locale] )) && function {
+        local locales
+        locales=( "LANG fr_FR.utf8 en_US.utf8 C" \
+                  "LC_MESSAGES en_US.utf8 fr_FR.utf8 C" )
+        for locale in $locales; do
+            for l in $=locale[(w)2,-1]; do
+                if locale -a | grep -qx $l; then
+                    export $locale[(w)1]=$l
+                    break
+                fi
+            done
+        done
+    } 2> /dev/null
+
+Il y a quelques techniques intéressantes mais propres à ZSH.
+
+ - L'utilisation de `(( $+commands[locale] ))` permet de vérifier
+   l'existence de la commande `locale`. C'est plus joli que `if
+   $(which locale >& /dev/null)`.
+ - Une [fonction anonyme][zsh] permet d'éviter de polluer
+   l'environnement du shell avec des variables inutiles.
+ - `$locale[(w)1]` convertit `$locale` en tableau et extrait le
+   premier élément. `$=locale[(w)2,-1]` convertit `$locale` en
+   tableau, conserve tous les éléments sauf le premier et applique le
+   *word splitting* (par défaut, ZSH ne le fait pas tout seul).
+
+Si vous connaissez une meilleure méthode pour gérer ce problème,
+n'hésitez pas à me l'indiquer !
+
+[perllocale]: http://perldoc.perl.org/perllocale.html#LOCALE-PROBLEMS
+[locales]: http://pubs.opengroup.org/onlinepubs/007904875/basedefs/xbd_chap07.html#tag_07_02
+[zsh]: http://zsh.sourceforge.net/Doc/Release/Functions.html#index-anonymous-functions
+[221790]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=221790
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
