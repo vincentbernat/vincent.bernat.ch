@@ -7,8 +7,8 @@ import glob
 import hashlib
 
 env.shell = "/bin/sh -c"
-env.command_prefixes = [ 'export PATH=$HOME/.virtualenv/hyde/bin:$PATH',
-                         'export VIRTUAL_ENV=$HOME/.virtualenv/hyde' ]
+env.command_prefixes = [ 'export PATH=$HOME/.virtualenvs/hyde/bin:$PATH',
+                         'export VIRTUAL_ENV=$HOME/.virtualenvs/hyde' ]
 
 def _hyde(args):
     return local('python ../hyde/h %s' % args)
