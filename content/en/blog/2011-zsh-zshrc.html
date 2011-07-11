@@ -1,0 +1,87 @@
+---
+title: 'Rewriting my .zshrc'
+keywords: "zsh, zshrc, shell, oh-my-zsh, zshkit"
+uuid: 40aaf124-101d-4f43-93e0-de21e13abc7c
+attachments:
+  "https://github.com/vincentbernat/zshrc": "GitHub repository"
+---
+
+Ten years ago, I started to use [ZSH][zsh], a shell designed for
+interactive use but which is also powerful for scripting usage. I had
+a fairly comprehensive `.zshrc` file splitted in several parts. I have
+decided to rewrite it for several reasons:
+
+ 1. I did not take advantage of several features of ZSH, like some
+ advanced parameter expansion, arrays, arithmetic expressions and
+ other built-in features. There were a lot of `| head`, `| awk`, `|
+ sed` that could be replaced by some ZSH machinery (something easier
+ to read like `${${(f)~~"$(</etc/hosts)"}%%\#*}`).
+
+ 2. It contained a lot of hacks to make things work on some odd/old
+ setups. I was not really sure that those hacks are useful anymore. It
+ also contained a lot of conditionals where some parts of the code
+ were executed depending on the hostname.
+
+I have discovered [`oh-my-zsh`][ohmyzsh], a nice project trying to
+provide a generic and flexible ZSH configuration:
+
+> A community-driven framework for managing your zsh
+> configuration. Includes 40+ optional plugins (rails, git, OSX, hub,
+> capistrano, brew, ant, macports, etc), over 80 terminal themes to
+> spice up your morning, and an auto-update tool so that makes it easy
+> to keep up with the latest updates from the community.
+
+The idea of such a project is to fork it and make the changes that you
+need. I was previously hacking around [Phil!'s ZSH Prompt][phils] for
+my prompt. `oh-my-zsh` contains a close theme (`jonathan`). Neat.
+However, I decided to write my `.zshrc` from scratch (but with some
+snippets stolen from `oh-my-zsh`). Why? Mostly because I want to
+precisely configure ZSH. Even with its plugin architecture and its
+override mechanism, `oh-my-zsh` provides some features (options,
+aliases, functions) that I do not want. Of course, thanks to git, you
+can fork and make any local changes you want but since I would have
+modified most of the files, it seemed easier to just start from
+scratch.
+
+I have published the result on [GitHub][github]. You can use it as is,
+fork it or (better) steal and adapt some snippets for your own
+usage. Here is the mandatory screenshot for the prompt (no much space
+left for the commands):
+
+![My ZSH prompt][1]
+[1]: [[!!images/zsh-screenshot.png]]
+
+Here is a short snippet used to select a sensible `EDITOR` depending
+on what is available. It uses anonymous functions (to restrict the
+scope of local variables), arrays and flags in parameter
+expansion. For another example, take a look on
+[how I select a valid locale][locale].
+
+    ::bash
+    () {
+        local -a editors
+        local editor
+        editors=(
+            "emacs23 -Q -D -nw" # Fast emacs
+            "jove" "mg" "jed"   # Emacs clone
+            "vim" "vi"          # vi
+            "editor")           # fallback
+        for editor in $editors; do
+            (( $+commands[$editor[(w)1]] )) && {
+                export EDITOR=$editor
+                break
+            }
+        done
+    }
+
+Enjoy!
+
+[zsh]: http://zsh.sourceforge.net
+[ohmyzsh]: https://github.com/robbyrussell/oh-my-zsh
+[phils]: http://aperiodic.net/phil/prompt/
+[github]: https://github.com/vincentbernat/zshrc
+[locale]: [[en/blog/2011-ssh-and-locales.html]]
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

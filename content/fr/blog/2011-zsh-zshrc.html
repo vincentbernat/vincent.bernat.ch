@@ -1,0 +1,84 @@
+---
+title: 'Réécriture de mon .zshrc'
+keywords: "zsh, zshrc, shell, oh-my-zsh, zshkit"
+uuid: 40aaf124-101d-4f43-93e0-de21e13abc7c
+attachments:
+  "https://github.com/vincentbernat/zshrc": "GitHub repository"
+---
+
+J'utilise [ZSH][zsh] depuis maintenant 10 ans. Il s'agit d'un shell
+conçu pour une utilisation interactive mais qui est aussi
+assez puissant quand il s'agit d'écrire des scripts. Mon `.zshrc` a
+accumulé au fil des années un certains nombres de fonctionnalités mais
+je voulais le réécrire pour deux raisons :
+
+ 1. Je n'utilisais pas vraiment les nombreuses fonctionnalités
+ offertes par ZSH comme l'expansion des paramètres, les tableaux, les
+ expressions arithmétiques, etc. J'utilisais beaucoup de `| head`, `|
+ awk`, `| sed` alors que ZSH sait faire tout cela en interne (et de
+ manière très lisible, comme `${${(f)~~"$(</etc/hosts)"}%%\#*}`).
+
+ 2. J'employais énormément de hacks pour accomoder certaines
+ configurations qui n'existent sans doute plus. Il y avait également
+ de nombreuses parties du code qui testaient le nom de la machine
+ avant de s'exécuter. Pas très pratique à transposer sur une autre
+ machine.
+
+Le projet [`oh-my-zsh`][ohmyzsh] fournit une configuration très
+complète et flexible de ZSH. On y trouve une quarantaine de plugins,
+de nombreux thèmes et un cadre pour ajouter les fonctionnalités
+manquantes. L'idée principale est de forker ce projet et d'y apporter
+les modifications que l'on souhaite. J'utilisais auparavant une
+version modifiée du [prompt ZSH de Phil!][phils] et `oh-my-zsh` en
+contient une variation sous le nom de `jonathan`.
+
+Toutefois, j'ai décidé de repartir de zéro (en reprenant des bonnes
+idées sur `oh-my-zsh`). En effet, en ce qui concerne le shell, j'aime
+bien configurer, à la virgule près, chaque fonctionnalité et
+`oh-my-zsh` fournit en standard un certain nombre de choses (des
+alias, des options, des fonctions) que je ne souhaite pas
+utiliser. Plutôt que de supprimer la moitié du code, il me semblait
+plus simple de partir de zéro.
+
+Le résultat est disponible sur [GitHub][github]. Bien qu'il soit
+possible de l'utiliser tel quel, il me semble préférable de voler et
+d'adapter les morceaux de code qui vous intéressent. Voici la capture
+d'écran du prompt (il ne reste plus beaucoup d'espace pour écrire) :
+
+![My ZSH prompt][1]
+[1]: [[!!images/zsh-screenshot.png]]
+
+À titre d'illustration, voici le bout de code qui initialise la
+variable `EDITOR`. Il utilise notamment une fonction anonyme (pour
+restreindre la portée des variables locales) et un tableau. Pour un
+autre exemple, voyez
+[comment je sélectionne une locale valide][locale].
+
+    ::bash
+    () {
+        local -a editors
+        local editor
+        editors=(
+            "emacs23 -Q -D -nw" # Fast emacs
+            "jove" "mg" "jed"   # Emacs clone
+            "vim" "vi"          # vi
+            "editor")           # fallback
+        for editor in $editors; do
+            (( $+commands[$editor[(w)1]] )) && {
+                export EDITOR=$editor
+                break
+            }
+        done
+    }
+
+Enjoy !
+
+[zsh]: http://zsh.sourceforge.net
+[ohmyzsh]: https://github.com/robbyrussell/oh-my-zsh
+[phils]: http://aperiodic.net/phil/prompt/
+[github]: https://github.com/vincentbernat/zshrc
+[locale]: [[fr/blog/2011-ssh-and-locales.html]]
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
