@@ -40,7 +40,10 @@ luffy.effects = function() {
 	$('body').append(header[0]);
 	$(window).scroll(function() {
 	    var width = $("#lf-pages").first().offset()['left'] - 25;
-	    if (width < 100) return;
+	    if (width < 100) {
+		header.hide();
+		return;
+	    }
 	    var y = $(window).scrollTop(); // Current position
 	    var title = null;		   // Title to display
 	    h1s.each(function() {
