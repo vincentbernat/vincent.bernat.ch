@@ -24,14 +24,19 @@ the process that was created first in a namespace will get PID 1. If
 it gets killed, the namespace is destroyed and all other processes
 contained in this namespace are killed as well. [systemd][systemd], a
 system and service manager for Linux, targeted as a replacement for
-the old SysV init, uses this feature to launch daemons in their own
-PID namespace and keep track of them without relying on their
-cooperation. When it needs to kill a daemon, it just kills the process
-with PID 1 (which has another PID in the global namespace) and the
-kernel will do the hard work of killing all processes that were
-started in this namespace. You can get more details about this
-namespace in the [manual page of `clone(2)`][clone] (search for
-`CLONE_NEWPID`).
+the old SysV init, <del>uses</del> <ins>could use</ins> this feature to
+launch daemons in their own PID namespace and keep track of them
+without relying on their cooperation. When it needs to kill a daemon,
+it just kills the process with PID 1 (which has another PID in the
+global namespace) and the kernel will do the hard work of killing all
+processes that were started in this namespace. You can get more
+details about this namespace in the [manual page of `clone(2)`][clone]
+(search for `CLONE_NEWPID`).
+
+**UPDATED:** In fact, *systemd* does not use PID namespaces but
+*cgroups* to group processes together. There is no PID numbering here
+but spawned processes are all enclosed into one *cgroup* and therefore
+can be killed easily.
 
 For example, here is the result of `pstree -p` inside a PID namespace:
 
@@ -83,6 +88,12 @@ Other tools exist, like [lxc][lxc] (aka Linux Containers). However, it
 is more targeted at providing a complete container. I have reported
 that [`lxc-execute` is not able to spawn a standalone shell][bug637911] 
 but got no luck.
+
+**UPDATED:** *systemd* ships with `systemd-nspawn` which was exactly
+what I needed. However, it requires *systemd*. Otherwise, it seems
+*less* basic than the alternative that I describe below (some sensible
+mount points are setup, the console is correctly configured, signals
+are correctly transmitted, ...). If you use *systemd*, look at it!
 
 # jchroot
 
