@@ -1,0 +1,174 @@
+---
+title: 'jchroot : chroot avec isolation améliorée'
+keywords: "chroot, jchroot, unshare, clone, namespace, linux, clone_newpid"
+uuid: ff8fb081-9f5c-4e25-80af-d69710f15a78
+attachments:
+  "https://github.com/vincentbernat/jchroot": "Dépôt GitHub pour jchroot"
+---
+
+Deux nouvelles fonctionnalités très intéressantes ont vu le jour lors
+de la sortie de Linux 2.6.24 il y a plus de trois ans :
+[les espaces de noms pour les PID et le réseau][containers]. Cela
+permet de créer des processus qui ne partagent pas l'espace de noms
+correspondant avec les autres processus.
+
+# PID & points de montage
+
+Un espace de noms pour les PID est une vue des processus qui tournent
+actuellement sur le système. Chaque espace de noms dispose de sa
+propre numérotation des processsus qu'il contient (y compris les
+processus qui se trouvent dans l'espace de noms des fils). Les autres
+processus sont cachés et il n'est alors pas possible d'utiliser une
+opération nécessitant leur PID, comme par exemple
+[`kill(2)`][kill]. De plus, le premier processus de l'espace de noms
+obtient le PID 1. S'il est tué, tous les processus du même espace sont
+tués également. [systemd][systemd], un gestionnaire de services
+remplaçant *init*, utilise cette fonctionnalité pour lancer chaque
+service dans un espace différent et ainsi pouvoir les arrêter très
+facilement sans obtenir aucune coopération de leur part (notamment,
+aucun besoin d'un fichier contenant le PID du service) : quand il a
+besoin d'arrêter un service, il lui suffit de tuer le PID 1 de
+l'espace de noms correspondant au service (ce processus a un autre PID
+dans l'espace de noms global) et le noyau s'occupera du reste. La
+[page de manuel de `clone(2)`][clone] (section `CLONE_NEWPID`)
+contient des explications plus détaillées sur le fonctionnement de cet
+espace de noms.
+
+Par exemple, voici le résultat de `pstree -p` à l'intérieur d'un
+espace de noms pour les PID :
+
+    ::console
+    root@guybrush:/# pstree -p
+    bash(1)─┬─pstree(8)
+            └─sleep(7)
+
+Le PID de `sleep` est 7. Dans l'espace de noms global, il s'agit du PID
+31762. Dans les deux cas, il s'agit bien du même processus !
+
+    ::console
+    root@guybrush:/# ps -eo pid,command | grep sleep
+    31762 sleep 1000
+
+Linux supporte depuis longtemps les espaces de noms pour les points de
+montage : chaque processus peut disposer de ses propres points de
+montage qui ne seront visibles que par les processus du même espace de
+noms ou par les processus des fils. Quand l'espace de noms est détruit
+(quand il ne contient plus aucun processus), le noyau fera le
+nettoyage lui-même sans qu'il soit nécessaire de démonter manuellement
+chacun des points.
+
+# chroot
+
+Une façon courante de tester des logiciels ou de travailler sur de
+l'empaquetage est de construire une *chroot* : `debootstrap` permet de
+construire un système complet dans un répertoire donné et `chroot`
+permet « d'entrer » dans ce nouveau système. Des outils comme
+`schroot` facilitent grandement la gestion de ce genre de choses.
+
+Malheureusement, `chroot` ne permet d'obtenir qu'une isolation au
+niveau du système de fichiers. Si vous lancez un démon ou montez des
+partitions à l'intérieur de la *chroot*, il faut noter toutes les
+actions effectuées pour pouvoir les défaire une fois terminé.
+
+Étendre un outil existant, comme `schroot` pour utiliser les espaces
+de noms pour les PID et les points de montage semble être la meilleure
+solution pour contourner ces problèmes. J'ai créé le
+[bug #637870][bug637870] à cet effet. Toutefois, `schroot` permet de
+lancer des processus dans une session existante. Quand cette session
+est matérialisée uniquement par une chroot, ce n'est pas très
+compliqué. Il suffit de se *chrooter* au même endroit et de lancer le
+processus. Avec les autres types d'espaces de noms, il faut utiliser
+l'appel système `setns()`, nouvellement introduit, pour s'accrocher à
+un espace de noms existant. Cependant, non seulement la Glibc ne
+contient pas encore le wrapper pour cet appel système mais le noyau ne
+contient pas encore le code nécessaire pour se rattacher à un espace
+de noms pour PID.
+
+D'autres outils existent, notamment [lxc][lxc] (*Linux
+Containers*). Toutefois, il est surtout conçu pour lancer des systèmes
+entiers (et non une commande ou un shell). J'ai créé un rapport de bug
+pour indiquer que
+[`lxc-execute` ne peut être utilisé pour lancer un shell][bug637911]
+mais je n'ai pas obtenu de réponse satisfaisante pour le moment.
+
+# jchroot
+
+Programmer un clone de `chroot` qui exploite les espaces de noms n'est
+pas très difficile. Voici à quoi ressemble un tel programme :
+
+    ::c
+    int main() {
+      pid_t pid;
+      int ret;
+      long stack_size = sysconf(_SC_PAGESIZE);
+      void *stack = alloca(stack_size) + stack_size;
+      /* New process with its own PID/IPC/NS namespace */
+      pid = clone(step2,
+                  stack,
+                  SIGCHLD | CLONE_NEWPID | CLONE_NEWIPC |
+                  CLONE_NEWNS | CLONE_FILES,
+                  NULL);
+      /* Wait for the child to terminate */
+      while (waitpid(pid, &ret, 0) < 0 && errno == EINTR)
+        continue;
+      return WIFEXITED(ret)?WEXITSTATUS(ret):EXIT_FAILURE;
+    }
+    
+    static int step2(void *a) {
+      /* Mount /proc as an example */
+      mount("proc", "/proc", "proc", 0, "");
+      /* Chroot */
+      chroot("/srv/debian");
+      chdir("/");
+      /* Drop privileges */
+      setgid(1000);
+      setgroups(0, NULL);
+      setuid(1000);
+      /* Exec shell */
+      execl("/bin/bash", "/bin/bash", NULL);
+    }
+
+Si on ajoute les options en ligne de commande, la gestion des erreurs
+et la capacité de lire un fichier au format fstab pour la définition
+des points de montage, on obtient [jchroot][jchroot]. Voici un exemple
+d'utilisation :
+
+    ::console
+    $ cat fstab
+    proc     /proc  proc    defaults                  0  0
+    sys      /sys   sysfs   defaults                  0  0
+    /home    /home  none    bind,rw                   0  0
+    /dev/pts /dev/pts none  bind,rw                   0  0
+    /var/run /var/run tmpfs rw,nosuid,noexec,mode=755 0  0
+    /etc/resolv.conf /etc/resolv.conf none bind,ro    0  0
+    $ sudo jchroot -f fstab -n test /srv/debian/squeeze /bin/bash
+    # hostname
+    test
+    # ps auxww
+    USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+    root         1  0.0  0.0  19480  1888 pts/1    S    15:18   0:00 /bin/bash
+    root         3  0.0  0.0  16536  1184 pts/1    R+   15:18   0:00 ps auxww
+    # /etc/init.d/postgresql start
+    Starting PostgreSQL 9.0 database server: main.
+    # exit
+    $ ps auxwwc | grep postgres
+    $
+
+*jchroot* est un outil temporaire dont les fonctionnalités seront sans
+doute intégrées à terme dans les outils pour créer des
+*chroot*. D'ailleurs, je pensais à proposer un patch pour ajouter le
+support des espaces de noms dans `chroot(8)`. A-t'il une chance d'être
+accepté ?
+
+[lxc]: http://lxc.sourceforge.net
+[bug637870]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=637870
+[bug637911]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=637911
+[containers]: http://lwn.net/Articles/256389/
+[systemd]: http://www.freedesktop.org/wiki/Software/systemd
+[clone]: http://www.kernel.org/doc/man-pages/online/pages/man2/clone.2.html
+[kill]: http://www.kernel.org/doc/man-pages/online/pages/man2/kill.2.html
+[jchroot]: https://github.com/vincentbernat/jchroot
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

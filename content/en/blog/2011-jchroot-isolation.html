@@ -1,0 +1,166 @@
+---
+title: 'jchroot: chroot with more isolation'
+keywords: "chroot, jchroot, unshare, clone, namespace, linux, clone_newpid"
+uuid: ff8fb081-9f5c-4e25-80af-d69710f15a78
+attachments:
+  "https://github.com/vincentbernat/jchroot": "GitHub repository for jchroot"
+---
+
+Linux 2.6.24, released more than three years ago, introduced two very
+interesting features: [PID and network namespaces][containers]. They
+allow to create a process that does not share the same PID namespace
+or the same network namespace than other processes. Those namespaces
+are then inherited by the children (unless they are assigned new
+namespaces).
+
+# PID & mount namespaces
+
+A PID namespace is a view of the processes running on the system. Each
+PID namespace will have its own numbering of the processes contained
+in its namespace (including the namespace of the children). Other
+processes are hidden and therefore, it is not possible to issue any
+operation requiring a PID on them, like [`kill(2)`][kill]. Moreover,
+the process that was created first in a namespace will get PID 1. If
+it gets killed, the namespace is destroyed and all other processes
+contained in this namespace are killed as well. [systemd][systemd], a
+system and service manager for Linux, targeted as a replacement for
+the old SysV init, uses this feature to launch daemons in their own
+PID namespace and keep track of them without relying on their
+cooperation. When it needs to kill a daemon, it just kills the process
+with PID 1 (which has another PID in the global namespace) and the
+kernel will do the hard work of killing all processes that were
+started in this namespace. You can get more details about this
+namespace in the [manual page of `clone(2)`][clone] (search for
+`CLONE_NEWPID`).
+
+For example, here is the result of `pstree -p` inside a PID namespace:
+
+    ::console
+    root@guybrush:/# pstree -p
+    bash(1)─┬─pstree(8)
+            └─sleep(7)
+
+The PID of `sleep` is 7. In the global namespace, it is 31762
+instead. But it is the same processus!
+
+    ::console
+    root@guybrush:/# ps -eo pid,command | grep sleep
+    31762 sleep 1000
+
+Linux have also supported mount namespaces since a long time. Each
+process can have its own mount points that will be visible only by
+processes in the same namespace or in children namespaces. When the
+namespace is destroyed (when no process left), the kernel will
+do the cleanup itself.
+
+# chroot
+
+A common way to test experimental software or do packaging work is to
+build a chroot: `debootstrap` is used to build a new complete system
+inside a directory and `chroot` allows to "enter" into this new
+system. Tools like `schroot` can become handy if you need to do that
+often.
+
+Unfortunately, you only get an isolated filesystem. When you start
+launching daemons and mounting partitions, you need to keep track of
+all your actions to undo them. Quitting the chroot will not kill any
+daemon nor unmount any partition.
+
+Extending an existing tool, like `schroot` to use PID and mount
+namespaces seems the best way to prevent such problems. I have filed
+[bug #637870][bug637870] for this purpose. However, this is not as
+simple as it seems since `schroot` allows to run a process into an
+existing session. When the session is a chroot, this is quite easy:
+just chroot into the same root filesystem and launch the process
+here. With other kind of namespaces, you need to use a new system
+call, `setns()`, to change the current namespace of the running
+process. However, some bits are still missing. First, the GNU C
+Library does not implement the appropriate wrapper. Second, Linux (as
+of 3.0) does not contain the support to change the PID namespace of a
+running process yet.
+
+Other tools exist, like [lxc][lxc] (aka Linux Containers). However, it
+is more targeted at providing a complete container. I have reported
+that [`lxc-execute` is not able to spawn a standalone shell][bug637911] 
+but got no luck.
+
+# jchroot
+
+Building a `chroot` clone using namespaces is quite easy. The only
+difficulty is the use of [`clone(2)`][clone]. Here is a
+sketch:
+
+    ::c
+    int main() {
+      pid_t pid;
+      int ret;
+      long stack_size = sysconf(_SC_PAGESIZE);
+      void *stack = alloca(stack_size) + stack_size;
+      /* New process with its own PID/IPC/NS namespace */
+      pid = clone(step2,
+                  stack,
+                  SIGCHLD | CLONE_NEWPID | CLONE_NEWIPC |
+                  CLONE_NEWNS | CLONE_FILES,
+                  NULL);
+      /* Wait for the child to terminate */
+      while (waitpid(pid, &ret, 0) < 0 && errno == EINTR)
+        continue;
+      return WIFEXITED(ret)?WEXITSTATUS(ret):EXIT_FAILURE;
+    }
+    
+    static int step2(void *a) {
+      /* Mount /proc as an example */
+      mount("proc", "/proc", "proc", 0, "");
+      /* Chroot */
+      chroot("/srv/debian");
+      chdir("/");
+      /* Drop privileges */
+      setgid(1000);
+      setgroups(0, NULL);
+      setuid(1000);
+      /* Exec shell */
+      execl("/bin/bash", "/bin/bash", NULL);
+    }
+
+Add command flags, error handling and fstab parsing for the definition
+of mount points and you get [jchroot][jchroot]. Here is an example of
+use:
+
+    ::console
+    $ cat fstab
+    proc     /proc  proc    defaults                  0  0
+    sys      /sys   sysfs   defaults                  0  0
+    /home    /home  none    bind,rw                   0  0
+    /dev/pts /dev/pts none  bind,rw                   0  0
+    /var/run /var/run tmpfs rw,nosuid,noexec,mode=755 0  0
+    /etc/resolv.conf /etc/resolv.conf none bind,ro    0  0
+    $ sudo jchroot -f fstab -n test /srv/debian/squeeze /bin/bash
+    # hostname
+    test
+    # ps auxww
+    USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+    root         1  0.0  0.0  19480  1888 pts/1    S    15:18   0:00 /bin/bash
+    root         3  0.0  0.0  16536  1184 pts/1    R+   15:18   0:00 ps auxww
+    # /etc/init.d/postgresql start
+    Starting PostgreSQL 9.0 database server: main.
+    # exit
+    $ ps auxwwc | grep postgres
+    $
+
+I hope that *jchroot* won't live for too long and that its features
+will be integrated into regular chroot tools. I was thinking at
+proposing a patch for `chroot(8)`. Anyone knows if this would have a
+chance to be accepted?
+
+[lxc]: http://lxc.sourceforge.net
+[bug637870]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=637870
+[bug637911]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=637911
+[containers]: http://lwn.net/Articles/256389/
+[systemd]: http://www.freedesktop.org/wiki/Software/systemd
+[clone]: http://www.kernel.org/doc/man-pages/online/pages/man2/clone.2.html
+[kill]: http://www.kernel.org/doc/man-pages/online/pages/man2/kill.2.html
+[jchroot]: https://github.com/vincentbernat/jchroot
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
