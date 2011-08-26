@@ -38,56 +38,41 @@ luffy.search = function() {
 	return true;
     });
 
-    /* Submit request to Microsoft Bing */
+    /* Submit request to Google Search */
     $("#lf-search").submit(function(event) {
-	var AppId = "92F36BFCB584BE6F156D5AD0C4487D0585FF6E7A";
+	var apikey = "AIzaSyBYIVw9Z98BD2xgc9IdKo8-tJMmyUJhGAs";
+	var cse = "005302691838508801550:am84wi88jr8";
 	var query = $("#lf-search-query").val();
 	var lang = $("html").attr("lang");
-	var market = (lang === "fr")?"fr-FR":"en-US";
 	event.preventDefault();
 	if (query === "") return;
-	var requestStr = "http://api.bing.net/json.aspx?"
-	    + "AppId=" + AppId
-	    + "&Query=site:vincent.bernat.im/" + lang
-	    + "%20" + encodeURIComponent(query)
-	    + "&Sources=Web"
-	    + "&Version=2.0"
-	    + "&Market=" + market
-	    + "&Options=EnableHighlighting"
-	    + "&Web.Count=10"
-	    + "&Web.Offset=0"
-	    + "&JsonType=callback"
-	    + "&JsonCallback=?";
+	var requestStr = "https://www.googleapis.com/customsearch/v1?"
+	    + "&key=" + apikey
+	    + "&cx=" + cse
+	    + "&lr=lang_" + lang
+	    + "&q=" + encodeURIComponent(query);
 	$.ajax({
 	    url: requestStr,
 	    dataType: 'jsonp',
+	    error: function() {
+		$("#lf-search")
+		    .unbind('submit')
+		    .submit(); // Fallback to classic search
+	    },
 	    success: function(data) {
-		if (!data || !data.SearchResponse || data.SearchResponse.Errors) {
-		    $("#lf-search")
-			.unbind('submit')
-			.submit(); // Fallback to classic search
-		    return;
-		}
-		var wresults = data.SearchResponse.Web.Results;
+		var wresults = data.items;
 		var ul = $("<div class='zero'>:-(</div>");
-		var bold = function(text) {
-		    return $('<i/>').text(text).html()
-			.replace(/\uE000/g, "<strong>")
-			.replace(/\uE001/g, "</strong>");
-		}
 		show();
 		if (wresults) {
 		    ul = $("<ul></ul>");
 		    for (var i = 0; i < wresults.length ; i++) {
 			/* Drop the part after `|' in the title */
-			var title = bold(wresults[i].Title.split(" | ")[0]);
-			var descr = bold(wresults[i].Description);
+			var title = wresults[i].htmlTitle.split(" | ")[0];
+			var descr = wresults[i].htmlSnippet;
 			ul.append($("<li></li>").append(
 			    $("<a></a>")
-				.attr("href", wresults[i].Url)
+				.attr("href", wresults[i].link)
 				.html(title),
-			    $("<time></time>")
-				.text(jQuery.timeago(wresults[i].DateTime)),
 			    $("<span></span>").html(descr)
 			));
 		    }
