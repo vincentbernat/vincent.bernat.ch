@@ -63,7 +63,9 @@ luffy.search = function() {
 	    dataType: 'jsonp',
 	    success: function(data) {
 		if (!data || !data.SearchResponse || data.SearchResponse.Errors) {
-		    $("#lf-search").submit(); // Fallback to classic search
+		    $("#lf-search")
+			.unbind('submit')
+			.submit(); // Fallback to classic search
 		    return;
 		}
 		var wresults = data.SearchResponse.Web.Results;
