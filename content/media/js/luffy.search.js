@@ -73,7 +73,10 @@ luffy.search = function() {
 			    $("<a></a>")
 				.attr("href", wresults[i].link)
 				.html(title),
-			    $("<span></span>").html(descr)
+			    $("<div></div>").addClass("snippet").html(descr),
+			    $("<div></div>").addClass("url")
+				.text(wresults[i]
+				      .link.replace("http://", ""))
 			));
 		    }
 		}
