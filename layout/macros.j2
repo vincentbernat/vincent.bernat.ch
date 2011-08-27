@@ -1,11 +1,13 @@
 {# List blog posts pertaining to a given language #}
 
 {% macro list_posts(lang) %}
-<ul>
+<ul class="hfeed">
 {% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang) %}
 {% for resource in sort() -%}
-  <li style="clear: both">
-<a href="{{ content_url(resource.url) }}">{{ resource.meta.title|e }}</a>
+  <li class="hentry" style="clear: both">
+<a class="entry-title" href="{{ content_url(resource.url) }}">
+{{ resource.meta.title|e }}
+</a>
 <span style="float: right">{{ resource_date(resource) }}</span>
   </li>
 {% endfor %}
@@ -17,7 +19,7 @@
 <time class="timeago"
       datetime="{{ resource.meta.created|xmldatetime }}"
       pubdate>
-  {{ resource.meta.created.strftime('%B %d, %Y') }}
+  <abbr class="published" title="{{ resource.meta.created|xmldatetime }}">{{ resource.meta.created.strftime('%B %d, %Y') }}</abbr>
 </time>
 {% endif %}
 {% endmacro %}
