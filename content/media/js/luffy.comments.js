@@ -30,7 +30,7 @@ luffy.comments = function() {
 	$("#lf-disqus").click();
     }
     /* Display comments now if there is a comment anchor in our URL */
-    if (location.hash.match("^#comment-")) {
+    if (location.hash.match("^#comment-[0-9]+")) {
 	var comment = location.hash.substr(9);
 	display_comment(comment);
     }
@@ -41,7 +41,7 @@ luffy.comments = function() {
 	    (this.pathname == location.pathname ||
 	     "/" + this.pathname == location.pathname) &&
 	    (typeof this.hash !== 'undefined') &&
-	    (this.hash.match("^#comment-"));
+	    (this.hash.match("^#comment-[0-9]+"));
     }).click(function() {
 	var comment = this.hash.substr(9);
 	display_comment(comment);
