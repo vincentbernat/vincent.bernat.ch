@@ -57,7 +57,7 @@ luffy.comments = function() {
     /* Also display them when we click on a link to a comment to the
        same page */
     $("article a").filter(function (index) {
-	return (this.host == location.host) &&
+	return (this.hostname == location.hostname) &&
 	    (this.pathname == location.pathname ||
 	     "/" + this.pathname == location.pathname) &&
 	    (typeof this.hash !== 'undefined') &&
