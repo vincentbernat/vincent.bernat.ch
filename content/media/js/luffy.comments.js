@@ -40,7 +40,8 @@ luffy.comments = function() {
 	$("head").append("<style>" + style + "</style>");
 
 	/* Scroll to comment(s) */
-	if (typeof window.scroll == 'function') {
+	if ('object' == typeof window.scroll ||
+	    'function' == typeof window.scroll) {
 	    var el = $("#dsq-comment-" + comment);
 	    window.scroll(0, (el.length?el:$("#disqus_thread")).offset().top);
 	}
