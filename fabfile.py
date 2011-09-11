@@ -127,7 +127,8 @@ def build():
             local("git clean -d -f")
 
 def _s3cmd(args):
-    local("s3cmd --no-preserve --config=s3cmd.cfg -F -P --no-check-md5 %s" % args)
+    local("s3cmd --exclude=.git/* --no-preserve --config=s3cmd.cfg "
+          "-F -P --no-check-md5 %s" % args)
 
 def push():
     """Push production content to ace"""
@@ -152,3 +153,5 @@ def push():
 
     # HTML
     local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
+    _s3cmd(" --exclude=media/* --exclude=nginx.conf"
+           "   sync .final/ s3://www.luffy.cx/")
