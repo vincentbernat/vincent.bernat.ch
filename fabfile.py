@@ -154,4 +154,4 @@ def push():
     # HTML
     local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
     _s3cmd(" --exclude=media/* --exclude=nginx.conf"
-           "   sync .final/ s3://www.luffy.cx/")
+           "   sync .final/ s3://vincent.bernat.im/")
