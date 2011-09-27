@@ -1,0 +1,280 @@
+---
+title: 'Speeding up SSL: enabling session reuse'
+keywords: "ssl, tls, session, resume, rfc 5077, rfc 4507, apache, nginx, openssl, nss, gnutls, memcached"
+uuid: 38894698-5e3a-4d47-a4d6-6f5edb836419
+attachments:
+  "https://github.com/vincentbernat/rfc5077": GitHub repository with related tools
+---
+
+Session reuse is one of the most important mechanism to
+[improve SSL performance][1]: by submitting an appropriate blob to the
+server, a client is able to trigger an abbreviated handshake,
+improving latency and computation time. There exists two distinct ways
+to achieve session reuse: **session identifiers** as described in
+[RFC 5246][rfc5246] and **session tickets** as depicted in
+[RFC 5077][rfc5077].
+
+[1]: [[en/blog/2011-ssl-benchmark.html]]
+
+[TOC]
+
+A quick note: when I say **SSL**, unless I mention a version number,
+you should read **TLS** instead. Look at the article for
+[TLS on Wikipedia][tls] for some background on this.
+
+# Theory of operation
+
+To establish a SSL connection, four messages need to be exchanged
+between client and server. With a latency of 50 ms, we have a 200 ms
+overhead to establish the connection (plus TCP handshake). Moreover,
+to share a common secret, both the client and the server needs to
+achieve some public-key cryptographic operations which are costly,
+computation-wise.
+
+![SSL full handshake][s1]
+[s1]: [[!!images/benchs-ssl/ssl-handshake.png]]
+
+To avoid a full SSL handshake each time a client request a resource,
+it is possible for the client to request an abbreviated handshake,
+saving a complete round-trip (100 ms) and avoiding the costliest part
+of the full SSL handshake.
+
+![SSL abbreviated handshake][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.png]]
+
+Two mechanisms can be used to accomplish an abbreviated handshake:
+
+1. When the server sends the "Server Hello" message, it can include a
+   **session identifier**. The client should store it and present it
+   in the "Client Hello" message of the next session. If the server
+   finds the corresponding session in its cache and accepts to resume
+   the session, it will send back the same session identifier and will
+   continue with the abbreviated SSL handshake. Otherwise, it will
+   issue a new session identifier and switch to a full handshake. This
+   mechanism is detailed in [RFC 5246][rfc5246]. It is the most common
+   mechanism because it exists since earlier versions of SSL.
+
+2. In the last exchange of a full SSL handshake, the server can
+   include a "New Session Ticket" message (not represented in the
+   handshake described in the picture) which will contain the complete
+   session state (including the master secret negotiated between the
+   client and the server and the cipher suite used). Therefore, this
+   state is encrypted and integrity-protected by a key known only by
+   the server. This opaque datum is known as a **session ticket**. The
+   details lie in [RFC 5077][rfc5077] which supersedes
+   [RFC 4507][rfc4507].
+
+The ticket mechanism is a TLS extension. The client can advertise its
+support by sending an empty "Session Ticket" extension in the "Client
+Hello" message. The server will answer with an empty "Session Ticket"
+extension in its "Server Hello" message if it supports it. If one of
+them does not support this extension, they can fallback to the session
+identifier mechanism built into SSL.
+
+[RFC 5077][rfc5077] identifies situations where tickets are desirable
+over session identifiers. The main improvement is to avoid to maintain
+a server-side session cache since the whole session state is
+remembered by the client, not the server. A session cache can be
+costly in term of memory and difficult to share between multiple hosts
+when requests are load-balanced across servers.
+
+# Browser support
+
+Session identifiers are part of SSL and are therefore supported since
+a long time by clients and servers. However, session tickets are an
+optional TLS extension and therefore, the support is not as widespread
+as for session identifiers. Support for tickets was added in
+[OpenSSL][openssl] 0.9.8f (October 2007). In [GnuTLS][gnutls], this is
+version 2.9.3 (August 2009). For [NSS][nss], the set of libraries
+behind most browsers, support of RFC 5077 is in version 3.12 (June
+2008). [Schannel][schannel], Microsoft implementation of TLS, does not
+currently supports tickets.
+
+To check if a browser supports session resume without and with
+tickets, I have written a [web server][rfc5077-server] listening to
+several ports with different configurations (session cache disabled or
+enabled, ticket support disabled or enabled). With the help of some
+Javascript, it is possible to interact with this server to determine
+what kind of session resume a browser support.
+
+![Checking for browser support for session resume][s3]
+[s3]: [[!!images/benchs-ssl/rfc5077-screenshot.png]]
+
+It is difficult to get extensive results this way since you need to
+install a lot of browsers to get something valuable. Surprisingly,
+Android 2.3.4 browser (as shipped by Cyanogen Mod) does not support
+any session resume.
+
+Another way to check if a browser supports session resume is to use a
+sniffer and to spot "Client Hello" messages. If a client tries to
+resume a session, it will use an appropriate session identifier or
+send a ticket. A simple [program parsing PCAP files][rfc5077-pcap]
+allows to automate this task and get some interesting statistics. Here
+are random facts from more than 300 000 requests (38 000 clients) to
+a customer care service of an important French telco:
+
+- 35% of requests exhibit support of tickets;
+- 53.3% of requests ask to resume without tickets; 25.6% with tickets;
+- 67.2% of requests exhibit support of [SNI][sni];
+- 86.7% of requests use TLS 1.0; the remaining uses SSL 3.0; almost no TLS
+  1.1/1.2;
+- in average, a client execute 8 SSL handshakes;
+- ciphers supported by all clients are 3DES-SHA, RC4-MD5 and RC4-SHA.
+
+With some log analysis to match each requests with the appropriate
+user agent, we can split the world in two parts: browsers supporting
+RFC 5077 (Chrome and Firefox) and browsers not supporting RFC 5077
+(Internet Explorer, Opera 9.80, Safari for MacOS and iOS and Android
+browser).
+
+# Web server support
+
+There is no unique recipe to configure a web server to handle
+appropriately and efficiently session resume. Here are some generic
+directions :
+
+- if the web server uses multiple processes, you need to configure a
+  shared memory session cache; usually, tickets will work just fine in
+  this setup;
+- if you use local load-balancing, one easy way to avoid any problem
+  is to use ensure that one IP is mapped to one server (either
+  statically with hashing or dynamically with a stick table); if your
+  load-balancer understands SSL, you can also use session identifier
+  (and disable tickets[^1]) to build a stick
+  table;
+- if you don't want to apply the previous advice, you need to share
+  the session cache between the servers with something like
+  [memcached][memcached] and disable tickets;
+- if you use global load-balancing (DNS based), there
+  is no need to ensure that session resumption works across geographic
+  pools since a user will usually stick to one pool.
+
+[^1]: [RFC 5077][rfc5077] describes interactions between session
+      identifiers and session tickets. When using tickets, the server
+      *should* send back an empty session identifier. The client *may*
+      present an empty session identifier or generate one. However,
+      for all practical purposes, it seems that servers send back a
+      non-empty session identifier and clients just stick to this
+      identifier. Please, investigate if you want to use SSL session
+      identifiers for load-balancing while keeping tickets enabled.
+
+Remember that only one client out of three supports TLS
+tickets. Therefore, you cannot rely on them to ensure proper session
+resume. You need a session cache.
+
+## Setting a session cache with Apache & nginx
+
+**Apache** features two different SSL engines. The first one is
+[mod_ssl][modssl] and uses OpenSSL as backend. It is possible to setup
+a shared session cache with `SSLSessionCache` but the
+memcached-enabled session cache is
+[available only in the development branch][modssl-memcached]. You can
+also get one by switching to [mod_gnutls][modgnutls] backend. The
+cache is enabled with `GnuTLSCache`. In this case, do not enable
+tickets because they cannot be shared.
+
+With **nginx**, you need to enable the shared session cache with
+`ssl_session_cache`. Currently, it lacks a memcached-enabled session
+cache but [Matt Palmer has some patches to add it][nginxcaching] to
+the 0.8 branch. However, those patches can have a serious impact on
+nginx performance since retrieving a session from memcached is done
+synchronously (mostly because a limitation in OpenSSL design who does
+not allow to register asynchronous callbacks with
+`SSL_CTX_sess_set_get_cb()`).
+
+As a proof of concept, I have also added a similar feature to
+[**stud**][stud], the scalable TLS unwrapping daemon, a very efficient
+network proxy terminating SSL connections. The same limitation as for
+*nginx* applies: performances will suffer. Look at the
+[pull request][pr] for more details.
+
+[pr]: https://github.com/bumptech/stud/pull/29
+
+## Sharing tickets
+
+[RFC 5077][rfc5077] tells tickets allow to load-balance requests
+across servers. However, to the best of my knowledge, there is
+currently no web server able to share tickets across a pool. Actually,
+when a server initializes its SSL stack, it will randomly generate
+some keys that will be used to protect and encrypt tickets. In
+OpenSSL, from `ssl/ssl_lib.c`:
+
+        ::c
+        /* Setup RFC4507 ticket keys */
+        if ((RAND_pseudo_bytes(ret->tlsext_tick_key_name, 16) <= 0)
+                || (RAND_bytes(ret->tlsext_tick_hmac_key, 16) <= 0)
+                || (RAND_bytes(ret->tlsext_tick_aes_key, 16) <= 0))
+                ret->options |= SSL_OP_NO_TICKET;
+
+Therefore, with a round-robin load-balanced pool of servers, tickets
+have to be disabled because servers would not accept tickets from
+neighbors. One way to solve this is to generate keys deterministically
+by hashing some common secret with the private key. I have implemented
+this approach for *stud*. Here is a simplified version (no error
+handling, no allocation) of the [pull request for this feature][pr2]:
+
+        ::c
+        unsigned char keys[48];
+        EVP_PKEY *pkey = grab_private_key();
+
+        /* To get our key, we sign the seed with the private key */
+        unsigned int siglen;
+        unsigned char sign[LARGE_ENOUGH];
+        EVP_MD_CTX mdctx;
+        EVP_MD_CTX_init(&mdctx);
+        EVP_SignInit(&mdctx, EVP_sha256());
+        EVP_SignUpdate(&mdctx, some_secret, strlen(some_secret));
+        EVP_SignFinal(&mdctx, sign, &siglen, pkey);
+
+        /* And we keep only the first bytes. */
+        memcpy(keys, sign, sizeof(keys));
+
+        /* Tell OpenSSL to use those keys */
+        SSL_CTX_set_tlsext_ticket_keys(ctx, keys, sizeof(keys));
+
+[pr2]: https://github.com/bumptech/stud/pull/30
+
+## Testing
+
+While tests can be done with just `openssl s_client` and `openssl
+sess_id`, testing all aspects can take a lot of time. For this
+purpose, I have written a
+[client testing session resume with and without tickets][rfc5077-client]. Here
+is a typical result:
+
+![twitter.com RFC session resume][s4]
+[s4]: [[!!images/benchs-ssl/rfc5077-twitter.png]]
+
+The program will try to establish five consecutive SSL connections for
+each IP without and with tickets. For each IP, the last four SSL
+connections should always reuse the first SSL session. Here, Twitter
+web servers seem properly configured: for each IP, session resume is
+successful. Their web servers do not support tickets or they may have
+disabled it because they share the session cache between servers
+inside the same pool.
+
+*[SSL]: Secure Sockets Layer
+*[TLS]: Transport Layer Security
+[tls]: http://en.wikipedia.org/wiki/Transport_Layer_Security
+[rfc4507]: http://tools.ietf.org/html/rfc4507
+[rfc5077]: http://tools.ietf.org/html/rfc5077
+[rfc5246]: http://tools.ietf.org/html/rfc5246
+[openssl]: http://www.openssl.org
+[gnutls]: http://www.gnu.org/s/gnutls/
+[nss]: http://www.mozilla.org/projects/security/pki/nss/
+[schannel]: http://msdn.microsoft.com/en-us/library/aa380123(v=VS.85).aspx
+[rfc5077-server]: https://github.com/vincentbernat/rfc5077/blob/master/rfc5077-server.c
+[rfc5077-pcap]: https://github.com/vincentbernat/rfc5077/blob/master/rfc5077-pcap.c
+[rfc5077-client]: https://github.com/vincentbernat/rfc5077/blob/master/rfc5077-client.c
+[sni]: http://en.wikipedia.org/wiki/Server_Name_Indication
+[beast]: http://www.schneier.com/blog/archives/2011/09/man-in-the-midd_4.html
+[memcached]: http://memcached.org/
+[modssl]: http://www.modssl.org/
+[modgnutls]: http://www.outoforder.cc/projects/apache/mod_gnutls/
+[nginxcaching]: http://hezmatt.org/~mpalmer/blog/2011/06/28/ssl-session-caching-in-nginx.html
+[stud]: https://github.com/bumptech/stud
+[modssl-memcached]: http://journal.paul.querna.org/articles/2010/07/10/overclocking-mod_ssl/
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
