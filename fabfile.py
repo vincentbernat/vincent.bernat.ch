@@ -5,6 +5,7 @@ import shutil
 import time
 import glob
 import hashlib
+import yaml
 
 env.shell = "/bin/sh -c"
 env.command_prefixes = [ 'export PATH=$HOME/.virtualenvs/hyde/bin:$PATH',
@@ -87,7 +88,9 @@ def build():
     """Build production content"""
     local("git checkout master")
     local("rm -rf .final/*")
-    _hyde('gen -c site-production.yaml')
+    conf = "site-production.yaml"
+    media = yaml.load(file(conf))['media_url']
+    _hyde('gen -c %s' % conf)
     with lcd(".final"):
         for p in [ 'media/js/*.js',
                    'media/css/*.css',
@@ -112,8 +115,8 @@ def build():
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s+\([\"']\)//media.luffy.cx/%s\1+\1//media.luffy.cx/%s\1+g"
-                          '"' % (f, newname))
+                          r"s+\([\"']\)%s%s\1+\1%s%s\1+g"
+                          '"' % (media, f, media, newname))
         local("git add *")
         local("git diff --stat HEAD")
         answer = prompt("More diff?", default="yes")
