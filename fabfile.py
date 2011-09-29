@@ -126,10 +126,6 @@ def build():
             local("git reset --hard")
             local("git clean -d -f")
 
-def _s3cmd(args):
-    local("s3cmd --exclude=.git/* --no-preserve --config=s3cmd.cfg "
-          "-F -P --no-check-md5 %s" % args)
-
 def push():
     """Push production content to ace"""
     local("git push github")
@@ -138,16 +134,6 @@ def push():
 
     # media.luffy.cx
     local("rsync --exclude=.git -a .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
-    _s3cmd(" --add-header=Expires:'Thu, 31 Dec 2037 23:55:55 GMT'"
-           " --add-header=Cache-Control:'max-age=315360000'"
-           "   sync .final/media/js/libs/ s3://media.luffy.cx/js/libs/")
-    _s3cmd(" --add-header=Cache-Control:'max-age=86400'" # 1 day
-           "   sync .final/media/files/ s3://media.luffy.cx/files/")
-    _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
-           " --exclude=files/* --exclude=js/libs/*"
-           "   sync .final/media/ s3://media.luffy.cx/")
 
     # HTML
     local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
-    _s3cmd(" --exclude=media/* --exclude=nginx.conf"
-           "   sync .final/ s3://vincent.bernat.im/")
