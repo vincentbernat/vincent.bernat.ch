@@ -1,0 +1,260 @@
+---
+title: 'SSL termination: stunnel, nginx & stud, round 2'
+keywords: "benchmark, tls, ssl, nginx, stud, session reuse, haproxy, stunnel, avalanche"
+uuid: 80df1557-a28c-411a-b311-3a8237f939f6
+---
+
+A month ago, I published an article on the compared
+[performances of stunnel, nginx and stud][prev] as SSL
+terminators. The conclusion was to use [stud][stud] on a 64-bit
+system, with session caching and AES. [stunnel][stunnel] was unable to
+scale properly and [nginx][nginx] exhibited important latency issues.
+I got constructive comments on many aspects. Therefore, here is the
+second round. The protagonists are the same but both the conditions
+and the conclusions have changed a bit.
+
+[TOC]
+
+# Benchmarks
+
+The hardware platform remains unchanged:
+
+ - [HP DL 380 G7][g7]
+ - 6 GB RAM
+ - 2 × [L5630 @ 2.13GHz][l5630] (8 cores), hyperthreading disabled
+ - 2 × [Intel 82576 NIC][i82576]
+ - [Spirent Avalanche 2900][avalanche] appliance
+
+We focus on the following environment:
+
+ - [Ubuntu Lucid][lucid], featuring a patched version of OpenSSL
+   0.9.8k with AES-NI builtin and enabled by default
+ - 2.6.39 kernel (250 HZ)
+ - 64-bit
+ - 1 core for [HAProxy][haproxy], 2 cores for network cards[^0], 4 cores
+   for SSL, 1 core for the system
+ - system limit of 100,000 file descriptors per process
+
+[^0]: *HAProxy* and network cards don't need dedicated core for this
+      kind of load. However, if you also want to handle non SSL
+      traffic, those dedicated cores can get busy.
+
+On the SSL side, the main components are:
+
+ - 2048-bit certificates
+ - AES128-SHA cipher suite
+ - 8 HTTP/1.0 requests per client
+ - HTTP response payload of 1024 bytes
+
+
+If you are interested in different conditions (32-bit, number of
+cores, 1024-bit certificates, proportion of session reuses), have a
+look at [the previous article][prev] whose results on the matter are
+still valid. I only consider 2048-bit certificates because most
+certificates issued today are 2048-bit. In [SP800-57][sp800-57], NIST
+advises that 1024-bit RSA keys will no longer be viable after 2010 and
+advises moving to 2048-bit RSA keys:
+
+> If information is initially signed in 2009 and needs to remain
+> secure for a maximum of ten years (i.e., from 2009 to 2019), a
+> 1024-bit RSA key would not provide sufficient protection between
+> 2011 and 2019 and, therefore, it is not recommended that 1024-bit
+> RSA be used in this case.
+
+And the protagonists are:
+
+ - [stud][stud], [@e207dbc5a3][e207dbc5a3], with session cache enabled
+   for 20,000 sessions, listen backlog of 1000 connections,
+ - [stunnel][stunnel] 4.44, configured with `--disable-libwrap
+   --with-threads=pthread` ([configuration][stunnelconf]),
+ - [nginx][nginx] 1.1.4, configured with `--with-http_ssl_module`
+   ([configuration][nginxconf]).
+
+[e207dbc5a3]: https://github.com/vincentbernat/stud/tree/e207dbc5a3d5c2753a4d83794780edf6edb2e3fb
+
+For each test, we want to maximize the number of HTTP transactions per
+second (TPS) while minimizing latency and unsucessful
+transactions. The maximum number of allowed failed transactions is set
+at 1 transaction out of 1000. The maximum allowed average latency is
+100 ms[^1].
+
+[^1]: The real condition is more complex. Each point is considered
+      valid if the corresponding average latency is less than 100 ms
+      or if the average on the next 8 points is less than
+      100 ms. Temporary latency bursts are therefore allowed. We are
+      not so forgiveful with failed transactions.
+
+## Control case
+
+Below is the first comparison between *stud*, *nginx* and *stunnel* on
+plain Ubuntu Lucid. Like in previous benchs, *stunnel* is not able to
+scale, with a maximum of 400 TPS. Also, *nginx* sill have early latency
+issues as you can see on the bottom plot (be careful, the scale is
+logarithmic): over 1000 TPS, the average latency is over
+100 ms. *stud* is able to achieve about 1500 TPS before latency rises
+over 100 ms. Both *nginx* and *stud* are able to reach more than 2000
+TPS but the latency is then out of our limits. With 1024-bit
+certificates, *stud* does not have this latency issue.
+
+![stud, nginx, stunnel on Ubuntu Lucid][s1]
+[s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu.png]]
+
+## OpenSSL 1.0.0e
+
+When I published the first round of benchmarks,
+[Michał Trojnara][michal] was dubious about the bad results of
+[stunnel][stunnel]. He [told me][tweet1] [on Twitter][tweet2]:
+
+> I solved it! You compiled stunnel against a 4 years old OpenSSL with
+> MT-unsafe `SSL_accept`. Upgrade OpenSSL and rebuild stunnel. This
+> bug was fixed in OpenSSL 1.0.0b. I implemented a (slow) workaround,
+> so stunnel doesn't crash with earlier versions of OpenSSL.
+
+[tweet1]: https://twitter.com/#!/mtrojnar/status/110912432519659520
+[tweet2]: https://twitter.com/#!/mtrojnar/status/110914736979316737
+
+Therefore, I backported [Ubuntu Oneiric OpenSSL 1.0.0e][oneiric-ssl]
+to Ubuntu Lucid[^2] and, as you can see yourself on the plot below,
+there is a huge performance boost for *stunnel*: about 400%! *stud*
+features a slight improvement too (about 8%). Unfortunately, *nginx*
+still exhibits the same issues. From now on, we will only focus on
+*stunnel* and *stud*.
+
+[^2]: This is pretty straighforward: I just
+      [dropped multiarch support][oneiric-ssl-backport]. I chose to
+      use Ubuntu version of OpenSSL instead of upstream because there
+      are some interesting patches, like automatic support of AES-NI.
+
+![stud, nginx, stunnel with OpenSSL 1.0.0e][s2]
+[s2]: [[!!images/benchs-ssl/stud-nginx-stunnel-openssl100e.png]]
+
+It is worth noting *stud* exhibits a latency of at least 40 ms, even
+on low loads while *stunnel* only has a few milliseconds latency below
+1000 TPS. This is pretty annoying. I have tried some
+[micro optimization to solve this issue][stud-micro] but without
+luck. If latency matters for you, stick with *stunnel* (or find where
+the problem lies in *stud*).
+
+## Intel Accelerator Engine
+
+Most Linux distributions are still using OpenSSL 0.9.8. For example,
+Debian Squeeze ships with OpenSSL 0.9.8o, Ubuntu Lucid with 0.9.8k and
+RHEL 5.7 with 0.9.8e. Therefore, they are not eligible to recent
+performance improvements. To solve this, Intel released
+[Intel Accelerator Engine][intel-accel], which also brings, among
+other things, AES-NI support:
+
+> This is essentially a collection of assembler modules from
+> development OpenSSL branch, packed together as a standalone engine.
+> "Standalone" means that it can be compiled outside OpenSSL source
+> tree without patching the latter. Idea is to provide a way to
+> utilize new code in already released OpenSSL versions constrained by
+> support and release policies limiting their evolvement to genuine
+> bug fixes.
+
+Alas, in my tests, there was no improvement compared to OpenSSL 1.0.0e
+(already patched with AES-NI support).
+
+*stunnel* comes with out-of-the-box support for additional
+engines. Just add something like this to your `stunnel.conf`:
+
+	engine=dynamic
+	engineCtrl=SO_PATH:/WOO/intel-accel-1.4/libintel-accel.so
+	engineCtrl=ID:intel-accel
+	engineCtrl=LIST_ADD:1
+	engineCtrl=LOAD
+	engineCtrl=INIT
+
+For *stud*, you should grab
+[support for engine selection from GitHub][stud-engine].
+
+## Intel Performance Primitives
+
+In his great article ["Accelerated SSL"][accelerated-ssl], Simon Kuhn
+shows huge performance improvements by using
+[Intel's IPP library][ipp], a library aimed at leveraging power of
+multi-core processors and including some cryptographic primitives and
+a patch to make use of them in OpenSSL. Unfortunately, this library is
+not free, not even as in "free beer". The patch provided by Intel only
+applies on OpenSSL 0.9.8j. Simon updated it for OpenSSL 1.0.0d. It
+also applies with a slight modification to OpenSSL 1.0.0e. Look at
+[Simon's article][accelerated-ssl] for instructions on how to compile
+OpenSSL with IPP.
+
+Simon measured 220% improvement on RSA 1024-bit private key operations
+by using this library. Unfortunately, we don't get such a performance
+burst with *stud* which exhibits a 15% improvement (but remember that
+private key operations only happen once every 8 transactions thanks
+to session reuse). Worst, with *stunnel*, performances are reduced by
+one third. There may be a thread-related problem with IPP.
+
+![stud and stunnel with IPP][s3]
+[s3]: [[!!images/benchs-ssl/stud-stunnel-ipp.png]]
+
+## Hyperthreading
+
+During the previous tests, *stud* only used half the capacity of each
+core. Adding more workers per core only slightly improves this
+situation (less than 10% with 4 workers per core). Therefore, I
+thought using hyperthreading could rectify the situation here. In this
+case, *stud* and *stunnel* are allocated 8 "virtual" cores instead of
+4. *stud* only got a moderate improvement of 5% while *stunnel* got a
+significant improvement of 26%.
+
+![stud and stunnel with hyperthreading][s4]
+[s4]: [[!!images/benchs-ssl/stud-stunnel-ht.png]]
+
+# Conclusion
+
+Here is a quick recap of the maximum TPS reached on each tests (while
+keeping average response time below 100 ms). All tests were run on 4
+physical cores with 2048-bit certificates, AES128-SHA cipher
+suite. Each client makes 8 HTTP requests and reuse the first SSL
+session.
+
+Context                     | nginx 1.1.4 | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
+--------------------------- | ----------- | ------------- | ----------------------------------
+OpenSSL 0.9.8k              | 968 TPS     | 400 TPS       | 1492 TPS
+OpenSSL 1.0.0e              | 930 TPS     | 1561 TPS      | 1609 TPS
+OpenSSL 1.0.0e + IPP        | -           | 1101 TPS      | **1857 TPS**
+OpenSSL 1.0.0e + HT         | -           | **1973 TPS**  | 1694 TPS
+
+I also would like to stress that below 1500 TPS, *stunnel* adds an
+overhead of a few milliseconds while *stud* adds 40 milliseconds. With
+OpenSSL 1.0.0e and hyperthreading enabled, *stunnel* has both good
+performance and low latency on low loads to moderate loads. You may
+just want to limit the number of allowed connections to avoid
+collapsing on high loads.
+
+*[TPS]: Transactions per second
+*[AES]: Advanced Encryption Standard
+*[DHE]: Diffie Hellman Ephemeral
+*[SSL]: Secure Sockets Layer
+*[TLS]: Transport Layer Security
+*[NIST]: US National Institute of Standards and Technology
+*[RHEL]: Red Hat Enterprise Linux
+[stud]: https://github.com/bumptech/stud
+[stunnel]: http://www.stunnel.org/
+[nginx]: http://wiki.nginx.org/
+[haproxy]: http://haproxy.1wt.eu/
+[prev]: [[en/blog/2011-ssl-benchmark.html]]
+[g7]: http://h10010.www1.hp.com/wwpc/us/en/sm/WF05a/15351-15351-3328412-241644-241475-4091412.html
+[avalanche]: http://www.spirent.com/Solutions-Directory/Avalanche.aspx
+[l5630]: http://ark.intel.com/products/47927
+[i82576]: http://download.intel.com/design/network/ProdBrf/320025.pdf
+[lucid]: http://releases.ubuntu.com/lucid/
+[nginxconf]: https://gist.github.com/1145093
+[stunnelconf]: https://gist.github.com/1180393
+[sp800-57]: http://csrc.nist.gov/publications/nistpubs/800-57/sp800-57-Part1-revised2_Mar08-2007.pdf
+[michal]: http://mike.mirt.net/
+[oneiric-ssl]: http://packages.ubuntu.com/oneiric/openssl
+[oneiric-ssl-backport]: https://gist.github.com/1272151
+[stud-micro]: https://github.com/bumptech/stud/pull/37
+[stud-engine]: https://github.com/bumptech/stud/pull/36
+[intel-accel]: http://groups.google.com/group/mailing.openssl.dev/msg/01a427c7b424d9a5
+[ipp]: http://software.intel.com/en-us/articles/intel-ipp/
+[accelerated-ssl]: http://zombe.es/post/5183420528/accelerated-ssl
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
