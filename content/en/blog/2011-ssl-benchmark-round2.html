@@ -72,6 +72,14 @@ And the protagonists are:
 
 [e207dbc5a3]: https://github.com/vincentbernat/stud/tree/e207dbc5a3d5c2753a4d83794780edf6edb2e3fb
 
+**UPDATED:** Configuration of *nginx* has been updated to switch to
+`off` both `multi_accept` and `accept_mutex` thanks to the
+[feedback of Maxim Dounin on latency issues][0] that were present in
+the [previous article][prev] (and still present in the early version
+of this article).
+
+[0]: http://mailman.nginx.org/pipermail/nginx/2011-September/029243.html
+
 [HAProxy][haproxy] ([configuration][haproxyconf]) is used for
 *stunnel* and *stud* to add load-balancing.
 
@@ -91,16 +99,19 @@ at 1 transaction out of 1000. The maximum allowed average latency is
 
 Below is the first comparison between *stud*, *nginx* and *stunnel* on
 plain Ubuntu Lucid. Like in previous benchs, *stunnel* is not able to
-scale, with a maximum of 400 TPS. Also, *nginx* sill have early latency
-issues as you can see on the bottom plot (be careful, the scale is
-logarithmic): over 1000 TPS, the average latency is over
-100 ms. *stud* is able to achieve about 1500 TPS before latency rises
-over 100 ms. Both *nginx* and *stud* are able to reach more than 2000
-TPS but the latency is then out of our limits. With 1024-bit
-certificates, *stud* does not have this latency issue.
+scale, with a maximum of 400 TPS. However, early latency issues of
+*nginx* has been solved, thanks to the change in configuration. *stud*
+and *nginx* gets similar performance but, as you can see on the bottom
+plot (whose scale is logarithmic) *stud* starts with an initial
+latency of 40 ms.
+
+This is pretty annoying. I have tried some
+[micro optimization to solve this issue][stud-micro] but without
+luck. If latency matters for you, stick with *stunnel* or *nginx* (or
+find where the problem lies in *stud*).
 
 ![stud, nginx, stunnel on Ubuntu Lucid][s1]
-[s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu.png]]
+[s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu-2.png]]
 
 ## OpenSSL 1.0.0e
 
@@ -119,9 +130,8 @@ When I published the first round of benchmarks,
 Therefore, I backported [Ubuntu Oneiric OpenSSL 1.0.0e][oneiric-ssl]
 to Ubuntu Lucid[^2] and, as you can see yourself on the plot below,
 there is a huge performance boost for *stunnel*: about 400%! *stud*
-features a slight improvement too (about 8%). Unfortunately, *nginx*
-still exhibits the same issues. From now on, we will only focus on
-*stunnel* and *stud*.
+features a slight improvement too (about 8%) but still starts with a
+latency of 40 ms while *nginx* does not improve.
 
 [^2]: This is pretty straighforward: I just
       [dropped multiarch support][oneiric-ssl-backport]. I chose to
@@ -129,20 +139,7 @@ still exhibits the same issues. From now on, we will only focus on
       are some interesting patches, like automatic support of AES-NI.
 
 ![stud, nginx, stunnel with OpenSSL 1.0.0e][s2]
-[s2]: [[!!images/benchs-ssl/stud-nginx-stunnel-openssl100e.png]]
-
-It is worth noting *stud* exhibits a latency of at least 40 ms, even
-on low loads while *stunnel* only has a few milliseconds latency below
-1000 TPS. This is pretty annoying. I have tried some
-[micro optimization to solve this issue][stud-micro] but without
-luck. If latency matters for you, stick with *stunnel* (or find where
-the problem lies in *stud*).
-
-**UPDATED:** Setting `multi_accept` and `accept_mutex` to `off` allows
-*nginx* to compare with *stud* and *stunnel*. Also, *stud* latency is
-related to `--write-proxy` option. There is no such latency without
-this option. I will update this blog post with new results to correct
-the situation.
+[s2]: [[!!images/benchs-ssl/stud-nginx-stunnel-openssl100e-2.png]]
 
 ## Intel Accelerator Engine
 
@@ -175,7 +172,8 @@ engines. Just add something like this to your `stunnel.conf`:
 	engineCtrl=INIT
 
 For *stud*, you should grab
-[support for engine selection from GitHub][stud-engine].
+[support for engine selection from GitHub][stud-engine] and for
+*nginx*, just specify the engine with `ssl_engine`.
 
 ## Intel Performance Primitives
 
@@ -193,25 +191,27 @@ OpenSSL with IPP.
 Simon measured 220% improvement on RSA 1024-bit private key operations
 by using this library. Unfortunately, we don't get such a performance
 burst with *stud* which exhibits a 15% improvement (but remember that
-private key operations only happen once every 8 transactions thanks
-to session reuse). Worst, with *stunnel*, performances are reduced by
-one third. There may be a thread-related problem with IPP.
+private key operations only happen once every 8 transactions thanks to
+session reuse). Worst, with *stunnel*, performances are reduced by one
+third and *nginx* just segfaults. I think such a library is risky to
+use in production.
 
 ![stud and stunnel with IPP][s3]
 [s3]: [[!!images/benchs-ssl/stud-stunnel-ipp.png]]
 
 ## Hyperthreading
 
-During the previous tests, *stud* only used half the capacity of each
-core. Adding more workers per core only slightly improves this
-situation (less than 10% with 4 workers per core). Therefore, I
+During the previous tests, only half the capacity of each core were
+used. For *stud*, adding more workers per core only slightly improves
+this situation (less than 10% with 4 workers per core). Therefore, I
 thought using hyperthreading could rectify the situation here. In this
-case, *stud* and *stunnel* are allocated 8 "virtual" cores instead of
-4. *stud* only got a moderate improvement of 5% while *stunnel* got a
-significant improvement of 26%.
+case, *stud*, *stunnel* and *nginx* are allocated 8 "virtual" cores
+instead of 4. *stud* only got a small improvement of 5%, *nginx* a
+moderate improvement of 11% while *stunnel* got a significant
+improvement of 26%.
 
-![stud and stunnel with hyperthreading][s4]
-[s4]: [[!!images/benchs-ssl/stud-stunnel-ht.png]]
+![stud, stunnel and nginx with hyperthreading][s4]
+[s4]: [[!!images/benchs-ssl/stud-stunnel-nginx-ht.png]]
 
 # Conclusion
 
@@ -221,19 +221,21 @@ physical cores with 2048-bit certificates, AES128-SHA cipher
 suite. Each client makes 8 HTTP requests and reuse the first SSL
 session.
 
-Context                     | nginx 1.1.4 | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
---------------------------- | ----------- | ------------- | ----------------------------------
-OpenSSL 0.9.8k              | 968 TPS     | 400 TPS       | 1492 TPS
-OpenSSL 1.0.0e              | 930 TPS     | 1561 TPS      | 1609 TPS
-OpenSSL 1.0.0e + IPP        | -           | 1101 TPS      | **1857 TPS**
-OpenSSL 1.0.0e + HT         | -           | **1973 TPS**  | 1694 TPS
+Context                     | nginx 1.1.4  | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
+--------------------------- | ------------ | ------------- | ----------------------------------
+OpenSSL 0.9.8k              | 1489 TPS     | 400 TPS       | 1492 TPS
+OpenSSL 1.0.0e              | 1501 TPS     | 1561 TPS      | 1609 TPS
+OpenSSL 1.0.0e + IPP        | -            | 1101 TPS      | **1857 TPS**
+OpenSSL 1.0.0e + HT         | **1718 TPS** | **1973 TPS**  | 1694 TPS
 
 I also would like to stress that below 1500 TPS, *stunnel* adds an
 overhead of a few milliseconds while *stud* adds 40 milliseconds. With
 OpenSSL 1.0.0e and hyperthreading enabled, *stunnel* has both good
 performance and low latency on low loads to moderate loads. You may
 just want to limit the number of allowed connections to avoid
-collapsing on high loads.
+collapsing on high loads. While in the [previous round][prev], *stud*
+was the champion and *stunnel* lagged behind, the situation is now
+reversed : *stunnel* is on top!
 
 *[TPS]: Transactions per second
 *[AES]: Advanced Encryption Standard
@@ -252,7 +254,7 @@ collapsing on high loads.
 [l5630]: http://ark.intel.com/products/47927
 [i82576]: http://download.intel.com/design/network/ProdBrf/320025.pdf
 [lucid]: http://releases.ubuntu.com/lucid/
-[nginxconf]: https://gist.github.com/1145093/232d7f8c02c9fbbb709c6b60a5b31f12f3cea7a6
+[nginxconf]: https://gist.github.com/1145093/80f787ad334c92dcbec933c6b43856575134b1e4
 [haproxyconf]: https://gist.github.com/1163077/1a840a1a080e9cae5ffb91cc5c5717e620d7a0d9
 [stunnelconf]: https://gist.github.com/1180393/a61d6a22c4f0af2b227a5afa0695400cdbb0be81
 [sp800-57]: http://csrc.nist.gov/publications/nistpubs/800-57/sp800-57-Part1-revised2_Mar08-2007.pdf

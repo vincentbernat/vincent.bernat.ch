@@ -73,6 +73,14 @@ Enfin, les protagonistes sont :
 
 [e207dbc5a3]: https://github.com/vincentbernat/stud/tree/e207dbc5a3d5c2753a4d83794780edf6edb2e3fb
 
+**MISE À JOUR :** La configuration de *nginx* a été modifiée pour
+passer à `off` les paramètres `multi_accept` et `accept_mutex` suite
+aux [conseils avisés de Maxim Dounin sur les latences][0] qui avaient
+été rencontrés lors du [précédent test][prev] (et qui étaient toujours
+présents dans les premières versions de cet article).
+
+[0]: http://mailman.nginx.org/pipermail/nginx/2011-September/029243.html
+
 *stud* et *stunnel* sont appuyés par [HAProxy][haproxy]
 ([configuration][haproxyconf]) pour la répartition de charge.
 
@@ -94,17 +102,16 @@ transactions abandonnées. Nous plaçons comme limite 1 transaction
 Voyons comment se comportent  *stud*, *nginx* et *stunnel* sur une
 Ubuntu Lucid de base. Comme lors des précédents tests, *stunnel* n'est
 pas capable de monter suffisamment en performance (plafond à 400 TPS
-malgré les 4 cœurs). De plus, *nginx* présente toujours des latences
-élevées comme on peut le voir sur le graphique du bas (dont l'échelle
-est logarithmique): au-delà de 1000 TPS, la latence moyenne passe
-au-dessus de 100 ms tandis que *stud* est capable de monter jusqu'à
-1500 TPS avant que cela ne se produise. *nginx* et *stud* sont tous
-deux capables de monter à 2000 TPS mais la latence moyenne est dans ce
-cas prohibitive. Rappelons qu'avec des certificats de 1024 bits,
-*stud* ne présentait pas ce déficit en latence.
+malgré les 4 cœurs). Cependant, les latences rencontrées précédemment avec *nginx* ont disparu suite à l'ajustement de la configuration de ce dernier. *stud* et *nginx* présentent des performances brutes similaires mais comme on peut le voir sur le graphique du bas (dont l'échelle est logarithmique), *stud* commence dès le début avec une latence de 40 ms.
+
+C'est quelque chose d'assez ennuyeux que j'ai tenté de corriger en
+appliquant [quelques micro-optimisations][stud-micro] mais sans
+succès. Lorsqu'une latence de 40 ms est considérée comme rédhibitoire,
+il est alors préférable de rester avec *stunnel* ou *nginx* (ou de
+corriger le problème dans *stud*).
 
 ![stud, nginx, stunnel sur Ubuntu Lucid][s1]
-[s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu.png]]
+[s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu-2.png]]
 
 ## OpenSSL 1.0.0e
 
@@ -125,9 +132,7 @@ Lors de la publication de la première série de tests,
 J'ai donc porté [OpenSSL 1.0.0e d'Ubuntu Oneiric][oneiric-ssl] vers
 Ubuntu Lucid[^2] et comme il est possible de constater sur le
 graphique ci-dessous, *stunnel* béneficie d'une accélération de
-400%. *stud* ne gagne qu'environ 8% tandis que *nginx* présente
-toujours les mêmes problèmes de latence. Les prochains tests n'auront
-donc lieu que sur *stunnel* et *stud*.
+400%. *stud* ne gagne qu'environ 8% tandis que *nginx* ne bouge pas.
 
 [^2]: Ce n'est pas très compliqué : il suffit de
       [retirer le support *multiarch*][oneiric-ssl-backport]. J'ai
@@ -136,24 +141,7 @@ donc lieu que sur *stunnel* et *stud*.
       notamment du support de l'AES-NI.
 
 ![stud, nginx, stunnel avec OpenSSL 1.0.0e][s2]
-[s2]: [[!!images/benchs-ssl/stud-nginx-stunnel-openssl100e.png]]
-
-Il convient aussi de noter que *stud* présente une latence moyenne
-d'au moins 40 ms, y compris sur les faibles charges. *stunnel* n'a,
-lui, qu'une latence de quelques millisecondes sur des charges
-comparables. C'est quelque chose d'assez ennuyeux que j'ai tenté de
-corriger en appliquant [quelques micro-optimisations][stud-micro] mais
-sans succès. Lorsqu'une latence de 40 ms est considérée comme
-rédhibitoire, il est alors préférable de rester avec *stunnel* (ou de
-corriger le problème dans *stud*).
-
-**MISE À JOUR :** En mettant les options `multi_accept` et
-`accept_mutex` à `off`, *nginx* présente alors des performances
-comparables à *stud* et *stunnel*. À noter également que la latence de
-*stud* provient de l'utilisation de `--write-proxy`. Sans cette
-option, la latence est similaire à celle obtenue avec *stunnel*. Je
-mettrai à jour cet article avec de nouveaux résultats pour corriger
-cette situation.
+[s2]: [[!!images/benchs-ssl/stud-nginx-stunnel-openssl100e-2.png]]
 
 ## Intel Accelerator Engine
 
@@ -189,7 +177,9 @@ d'ajouter quelque chose comme ceci dans `stunnel.conf` :
 	engineCtrl=INIT
 
 Pour *stud*, il est nécessaire d'ajouter un
-[patch permettant la sélection du moteur OpenSSL à utiliser][stud-engine].
+[patch permettant la sélection du moteur OpenSSL à utiliser][stud-engine]. Pour
+*nginx*, il suffit d'indiquer le moteur à utiliser avec la directive
+`ssl_engine`.
 
 ## Intel Performance Primitives
 
@@ -207,23 +197,25 @@ RSA 1024 bits en utilisant cette bibliothèque. Avec *stud*, je
 n'obtiens qu'une amélioration de 15% (mais les opérations RSA n'ont
 lieu qu'une fois toutes les huit connexions en raison du cache de
 sessions). Pire, avec *stunnel*, les performances sont réduites
-d'environ un tiers. Sans doute y'a-t'il un problème lié aux threads
-avec IPP.
+d'environ un tiers tandis que *nginx* ne parvient même pas à démarrer
+(*segfault* au lancement). Il semble risqué d'utiliser IPP en
+production.
 
 ![stud et stunnel avec IPP][s3]
 [s3]: [[!!images/benchs-ssl/stud-stunnel-ipp.png]]
 
 ## Hyperthreading
 
-Durant les précédents tests, *stud* n'exploitait pas plus de la moitié
-de chaque cœur. Ajouter plusieurs workers par cœur n'améliore que peu
-cette situation (environ 10% pour 4 workers par cœur). Peut-être que
-l'utilisation de l'hyperthreading peut aider ici ? Quand ce dernier
-est activé, *stud* n'obtient qu'une amélioration de 5% mais *stunnel*
-augmente ses performances de 26% !
+Durant les précédents tests, seule la moitié de chaque cœur était
+exploitée. Ajouter plusieurs workers par cœur n'améliore que peu cette
+situation (environ 10% pour 4 workers par cœur pour *stud*). Peut-être
+que l'utilisation de l'hyperthreading peut aider ici ? Quand ce
+dernier est activé, *stud* n'obtient qu'une amélioration de 5%,
+*nginx* rattrape son retard sur *stud* avec une amélioration de 11% et
+*stunnel* augmente ses performances de plus de 26% !
 
-![stud et stunnel avec hyperthreading][s4]
-[s4]: [[!!images/benchs-ssl/stud-stunnel-ht.png]]
+![stud, stunnel et nginx avec hyperthreading][s4]
+[s4]: [[!!images/benchs-ssl/stud-stunnel-nginx-ht.png]]
 
 # Conclusion
 
@@ -234,12 +226,12 @@ les tests ont été effectués avec quatre cœurs physiques, des
 certificates de 2048 bits et de l'AES-SHA1. Chaque client effectue
 huit requêtes HTTP et réutilise la première session SSL.
 
-Context                     | nginx 1.1.4 | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
---------------------------- | ----------- | ------------- | ----------------------------------
-OpenSSL 0.9.8k              | 968 TPS     | 400 TPS       | 1492 TPS
-OpenSSL 1.0.0e              | 930 TPS     | 1561 TPS      | 1609 TPS
-OpenSSL 1.0.0e + IPP        | -           | 1101 TPS      | **1857 TPS**
-OpenSSL 1.0.0e + HT         | -           | **1973 TPS**  | 1694 TPS
+Context                     | nginx 1.1.4  | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
+--------------------------- | ------------ | ------------- | ----------------------------------
+OpenSSL 0.9.8k              | 1489 TPS     | 400 TPS       | 1492 TPS
+OpenSSL 1.0.0e              | 1501 TPS     | 1561 TPS      | 1609 TPS
+OpenSSL 1.0.0e + IPP        | -            | 1101 TPS      | **1857 TPS**
+OpenSSL 1.0.0e + HT         | **1718 TPS** | **1973 TPS**  | 1694 TPS
 
 Il est également important de souligner que sous 1500 TPS, *stunnel*
 ajoute une latence de quelques millisecondes seulement, là où *stud*
@@ -247,7 +239,10 @@ ajoute 40 millisecondes. Ainsi, avec OpenSSL 1.0.0e et
 l'hyperthreading, *stunnel* permet d'obtenir à la fois de bonnes
 performances et une latence faible sur des charges faibles ou
 moyennes. Il convient simplement de limiter le nombre de connexions
-pour éviter qu'il ne s'écroule sous forte charge.
+pour éviter qu'il ne s'écroule sous forte charge. Alors que lors du
+[précédent round][prev], *nginx* sortait en champion et *stunnel*
+traînait derrière, la situation est désormais inversée : *stunnel*
+tient le haut du pavé !
 
 *[TPS]: Transactions par seconde
 *[AES]: Advanced Encryption Standard
@@ -266,7 +261,7 @@ pour éviter qu'il ne s'écroule sous forte charge.
 [l5630]: http://ark.intel.com/products/47927
 [i82576]: http://download.intel.com/design/network/ProdBrf/320025.pdf
 [lucid]: http://releases.ubuntu.com/lucid/
-[nginxconf]: https://gist.github.com/1145093/232d7f8c02c9fbbb709c6b60a5b31f12f3cea7a6
+[nginxconf]: https://gist.github.com/1145093/80f787ad334c92dcbec933c6b43856575134b1e4
 [haproxyconf]: https://gist.github.com/1163077/1a840a1a080e9cae5ffb91cc5c5717e620d7a0d9
 [stunnelconf]: https://gist.github.com/1180393/a61d6a22c4f0af2b227a5afa0695400cdbb0be81
 [sp800-57]: http://csrc.nist.gov/publications/nistpubs/800-57/sp800-57-Part1-revised2_Mar08-2007.pdf
