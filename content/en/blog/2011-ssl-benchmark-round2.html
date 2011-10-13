@@ -110,6 +110,15 @@ This is pretty annoying. I have tried some
 luck. If latency matters for you, stick with *stunnel* or *nginx* (or
 find where the problem lies in *stud*).
 
+**UPDATED:** After reporting this issue, a
+[fix has been commited][studfix]. The culprit was
+[Nagle's algorithm][nagle] which improves bandwidth at the expense of
+latency. With the fix, performances are mostly the same but there is
+no latency penalty any more.
+
+[studfix]: https://github.com/bumptech/stud/commit/7ad212a3f8
+[nagle]: http://en.wikipedia.org/wiki/Nagle's_algorithm
+
 ![stud, nginx, stunnel on Ubuntu Lucid][s1]
 [s1]: [[!!images/benchs-ssl/stud-nginx-stunnel-ubuntu-2.png]]
 
@@ -236,6 +245,9 @@ just want to limit the number of allowed connections to avoid
 collapsing on high loads. While in the [previous round][prev], *stud*
 was the champion and *stunnel* lagged behind, the situation is now
 reversed : *stunnel* is on top!
+
+**UPDATED:** As said earlier, the latency issue with *stud*
+[has been solved][studfix]. Performances remain mostly the same.
 
 *[TPS]: Transactions per second
 *[AES]: Advanced Encryption Standard
