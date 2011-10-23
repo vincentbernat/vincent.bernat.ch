@@ -53,4 +53,17 @@ luffy.effects = function() {
 	    }
 	});
     }();
+
+    /* -- Effect 4:
+          Add captions to images
+       -- */
+    e = function() {
+	$("article img[title]").replaceWith(function () {
+	    var el = $(this);
+	    return $("<div>")
+		.addClass("lf-captioned")
+		.append(el.clone())
+		.append($("<div>").text(el.attr("title")));
+	});
+    }();
 };
