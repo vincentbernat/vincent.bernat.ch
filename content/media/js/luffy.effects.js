@@ -58,12 +58,13 @@ luffy.effects = function() {
           Add captions to images
        -- */
     e = function() {
-	$("article img[title]").replaceWith(function () {
-	    var el = $(this);
-	    return $("<div>")
-		.addClass("lf-captioned")
-		.append(el.clone())
-		.append($("<div>").text(el.attr("title")));
+	$("article img[title]").each(function() {
+	    var img = $(this);
+	    $("<div>")
+		.addClass("lf-caption")
+		.text(img.attr("title"))
+		.appendTo(img.parent());
+	    img.parent().addClass("lf-captioned");
 	});
     }();
 };
