@@ -65,6 +65,11 @@ luffy.effects = function() {
 		.text(img.attr("title"))
 		.appendTo(img.parent());
 	    img.parent().addClass("lf-captioned");
+	    img.hover(function() {
+		img.next().hide();
+	    }, function() {
+		img.next().show();
+	    });
 	});
     }();
 };
