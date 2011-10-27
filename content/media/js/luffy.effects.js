@@ -8,12 +8,10 @@ luffy.effects = function() {
        -- */
     e = function() {
 	/* Set appropriate height for rotated pages */
-	var updatePageSizes = function() {
-	    $(".csstransforms #lf-page-1, .csstransforms #lf-page-2")
-		.css("height",$("#lf-page").innerHeight())
-		.css("width", $("#lf-page").innerWidth())
-		.show();
-	}();
+	$(".csstransforms #lf-page-1, .csstransforms #lf-page-2")
+	    .css("height",$("#lf-page").innerHeight())
+	    .css("width", $("#lf-page").innerWidth())
+	    .show();
     }();
 
     /* -- Effect 3:
