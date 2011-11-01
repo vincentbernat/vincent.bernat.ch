@@ -1,0 +1,335 @@
+---
+title: SSL computational DoS mitigation
+keywords: "tls, ssl, dos, thc, denial of service, rsa, cryptography"
+uuid: 508f723b-adbe-4d05-be2d-bc53b4a9cbb5
+attachments:
+  "https://github.com/vincentbernat/ssl-dos": "Various tools related to SSL"
+---
+
+Some days ago, a hacker group, THC, released a
+[denial of service tool][thc] for SSL web servers. As stated in its
+description, the problem is not really new: a complete SSL handshake
+implies costly cryptographic computations.
+
+There are two different aspects in the presented attack:
+
+ - The computation cost of an handshake is more important on the
+   server side than on the client side. The advisory explains that a
+   server will require 15 times the processing power of a client. This
+   means a single average workstation could challenge a multi-core
+   high-end server.
+ - The use of [SSL renegotiation][rfc5746] allows to trigger hundreds
+   of handshakes in the same TCP connection. Even a client behind a
+   DSL connection can therefore bomb a server with a lot of
+   renegotiation requests.
+
+[TOC]
+
+# Mitigation techniques
+
+There is no definitive solution to this attack but there exists some
+workarounds. Since the DoS tool from THC relies heavily on
+renegotiation, the most obvious one is to disable this mechanism on
+the server side but we will explore other possibilities.
+
+## Disabling SSL renegotiation
+
+Tackling the second problem seems easy: just disable SSL
+renegotiation. It is hardly needed: a server can trigger a
+renegotiation to ask a client to present a certificate but a client
+usually does not have any reason to trigger one. Because of a
+[past vulnerability in SSL renegotiation][cve-2009-3555], recent
+version of _Apache_ and _nginx_ just forbid it, even when the
+[non-vulnerable version][rfc5746] is available.
+
+`openssl s_client` can be used to test if SSL renegotiation is really
+disabled. Sending `R` on an empty line trigger renegotiation. Here is
+an example where renegotiation is disabled (despite being advertised
+as supported):
+
+	::console
+	$ openssl s_client -connect www.luffy.cx:443 -tls1
+	[...]
+	New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
+	Server public key is 2048 bit
+	Secure Renegotiation IS supported
+	Compression: zlib compression
+	Expansion: zlib compression
+	[...]
+	R
+	RENEGOTIATING
+	140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
+
+Disabling renegotation is not trivial with OpenSSL. As an example, I
+have pushed a [patch to disable renegotiation in _stud_][studreneg],
+the scalable TLS unwrapping daemon.
+
+## Rate limiting SSL handshakes
+
+Disabling SSL renegotiation on the client side is not always
+possible. For example, your web server may be too old to propose such
+an option. Since those renegotiations should not happen often, a
+workaround is to limit them.
+
+When the flaw was first advertised, [F5 Networks][f5] provided a way
+to configure such a limitation with an iRule on their load-balancers. We
+can do something similar with just Netfilter. We can spot most TCP
+packets triggering such a renegotiation by looking for encrypted TLS
+handshake record. They may happen in a regular handshake but in this
+case, they usually are not at the beginning of the TCP payload. There
+is no field saying if a TLS record is encrypted or not (TLS is
+stateful for this purpose). Therefore, we have to use some
+heuristics. If the handshake type is unknown, we assume that this is
+an encrypted record. Moreover, renegotiation requests are usually
+encapsulated in a TCP packet flagged with "push".
+
+	::sh
+	# Access to TCP payload (if not fragmented)
+	payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
+	iptables -A LIMIT_RENEGOCIATION \
+		-p tcp --dport 443 \
+		--tcp-flags SYN,FIN,RST,PSH PSH \
+		-m u32 \
+		--u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
+		-m hashlimit \
+		--hashlimit-above 5/minute --hashlimit-burst 3 \
+		--hashlimit-mode srcip --hashlimit-name ssl-reneg \
+		-j DROP
+
+The use of `u32` match is a bit difficult to read. The
+[manual page][iptables] gives some insightful examples. `$payload`
+allows to seek for the TCP payload. It only works if there is no
+fragmentation. Then, we check if we have a handshake (`0x16`) and if
+we recognise TLS version (`0x0300`, `0x0301`, `0x0302` or
+`0x0303`). At least, we check if the handshake type is not a known
+value.
+
+There is a risk of false positives but since we use `hashlimit`, we
+should be safe. This is not a bullet proof solution: TCP fragmentation
+would allow an attacker to evade detection. Another equivalent
+solution would be to use `CONNMARK` to record the fact the initial
+handshake has been done and forbid any subsequent handshakes.
+
+If you happen to disable SSL renegociation, you can still use some
+Netfilter rule to limit the number of SSL handshakes by limiting the
+number of TCP connections from one IP:
+
+	::sh
+	iptables -A LIMIT_SSL \
+		-p tcp --dport 443 \
+		--syn -m state --state NEW \
+		-m hashlimit \
+		--hashlimit-above 120/minute --hashlimit-burst 20 \
+		--hashlimit-mode srcip --hashlimit-name ssl-conn \
+		-j DROP
+
+Your servers will still be vulnerable to a large botnet but if there
+is only a handful of source IP, this rule will work just fine[^a].
+
+[^a]: However, since this rule relies on source IP to identify the
+      attacker, the risk of false positive is real. You can slow down
+      legitimate proxies, networks NATed behind a single IP, mobile
+      users sharing an IP address or people behind a CGN.
+
+I have made all those solutions available in a
+[single file][netfilter].
+
+## Increasing server-side power processing
+
+SSL can easily be scaled up and out. Since
+[SSL performance increases linearly with the number of cores][sslbench1],
+scaling up can be done by throwing in more CPU or more cores per
+CPU. Adding expensive SSL accelerators would also do the
+trick. Scaling out is also relatively easy but you should care about
+[SSL session resume][sslresume].
+
+## Putting more work on the client side
+
+In their presentation of the [denial of service tool][thc], THC explains:
+
+> Establishing a secure SSL connection requires 15× more processing
+> power on the server than on the client.
+
+I don't know where this figure comes from. To check it, I built a
+[small tool to measure CPU time of a client and a server doing 1000 handshakes][server-vs-client]
+with various parameters (cipher suites and key sizes). The results are
+summarized on the following plot:
+
+![Plot to compare computational power required by servers and clients][s1]
+[s1]: [[!!images/ssl-server-vs-client.png]] "Comparison of computational power needed by servers and clients"
+
+For example, with 2048bit RSA certificates and a cipher suite like
+`AES256-SHA`, the server needs 6 times more CPU power than the
+client. However, if we use `DHE-RSA-AES256-SHA` instead, the server
+needs 34% less CPU power. The most efficient cipher suite from the
+server point of view seems to be something like `DHE-DSS-AES256-SHA`
+where the server needs half the power of the client.
+
+However, you can't really uses those shiny cipher suites:
+
+ 1. Some browsers do not support them: they are limited to RSA cipher
+    suites[^1].
+ 2. Using them will increase your regular load a lot. Your servers may
+    collapse with just legitimate traffic.
+ 3. They are expensive for some mobile clients: they need more memory,
+    more processing power and will drain battery faster.
+ 
+[^1]: Cipher suites supported by all browsers are `RC4-MD5`, `RC4-SHA`
+      and `3DES-SHA`. Support for `DHE-DSS-AES256-SHA` requires TLS
+      1.2 (not supported by any browser).
+
+Let's dig a bit more on why the server needs more computational power
+in the case of RSA. Here is a SSL handshake when using a cipher suite
+like `AES256-SHA`:
+
+![SSL full handshake][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Full SSL handshake"
+
+When sending the _Client Key Exchange_ message, the client will
+**encrypt** TLS version and 46 random bytes with the public key of the
+certificate sent by the server in its _Certificate_ message. The
+server will have to **decrypt** this message with her private
+key. Those are the two most expensive operations in the
+handshake. Encryption and decryption are done with [RSA][rsa] (because
+of the selected cipher suite). To understand why decryption is more
+expensive than encryption, let me explain how RSA works.
+
+First, the server needs a public and a private key. Here are the main
+steps to generate them:
+
+ 1. Pick two random distinct [prime numbers][prime] ·p· and ·q·, each
+    roughly the same size.
+ 2. Compute ·n=pq·. It is the _modulus_.
+ 3. Compute ·\\varphi(n)=(p-1)(q-1)·.
+ 4. Choose an integer ·e· such that ·1<e<\\varphi(n)· and
+    ·\\gcd(\\varphi(n),e) = 1· (i.e. ·e· and ·\\varphi(n)· are
+    [coprime][coprime]). It is the _public exponent_.
+ 5. Compute ·d=e^{-1}\\mod\\varphi(n)·. It is the _private key
+    exponent_.
+
+The **public key** is ·(n,e)· while the **private key** is ·(n,d)·. A
+message to be encrypted is first turned into an integer ·m<n· (with
+some appropriate padding). It is then encrypted to a ciphered message
+·c· with the public key and should only be decrypted with the private
+key:
+
+ - ·c=m^e\\mod n·  (encryption)
+ - ·m=c^d\\mod n·  (decryption)
+
+So, why is decryption more expensive? In fact, the key pair is not
+really generated like I said above. Usually, ·e· is a small fixed
+prime number with a lot of 0, like 17 (`0x11`) or 65537 (`0x10001`)
+and ·p· and ·q· are choosen such that ·\\varphi(n)· is coprime with
+·e·. This allows encryption to be fast using
+[exponentiation by squaring][squaring]. On the other hand, its inverse
+·d· is a big number with no special property and therefore,
+exponentiation is more costly and slow.
+
+Instead of computing ·d· from ·e·, it is possible to choose ·d· and
+compute ·e·. We could choose ·d· to be small and coprime with
+·\\varphi(n)· and then compute ·e=d^{-1}\\mod\\varphi(n)· and get
+blazingly fast decryption. Unfortunately, there are two problems with
+this:
+
+ - Most SSL implementation expects ·e· to be a 32bit integer.
+ - If ·d· is too small (less than one-quarter as many bits as the
+   modulus ·n·), it can be
+   [computed efficiently from the public key][wiener].
+
+Therefore, we cannot use a small private exponent. The best we can do
+is to choose the public exponent to be ·e'=4294967291· (the biggest
+prime 32bit number and it contains only one 0). However, there is no
+change as you can see on our comparative plot.
+
+To summarize, no real solution here. You need to allow RSA cipher
+suites and there is no way to improve the computational ratio between
+the server and the client with such a cipher suite.
+
+# Things get worse
+
+Shortly after the release the [denial of service tool][thc], Eric
+Rescorla[^0] published a
+[good analysis on the impact of such a tool][educated]. He asks
+himself about the efficiency to use renegotiation for such an attack:
+
+> What you should be asking at this point is whether a computational DoS
+> attack based on renegotiation is any better for the attacker than a
+> computational DoS attack based on multiple connections. The way we
+> measure this is by the ratio of the work the attacker has to do to the
+> work that the server has to do. I've never seen any actual
+> measurements here (and the THC guys don't present any), but some back
+> of the envelope calculations suggest that the difference is small.
+>
+> If I want to mount the old, multiple connection attack, I need to
+> incur the following costs:
+> 
+>  1. Do the TCP handshake (3 packets)
+>  2. Send the SSL/TLS _ClientHello_ (1 packet). This can be a canned message.
+>  3. Send the SSL/TLS _ClientKeyExchange_, _ChangeCipherSpec_,
+>     _Finished_ messages (1 packet). These can also be canned.
+> 
+> Note that I don't need to parse any SSL/TLS messages from the server,
+> and I don't need to do any cryptography. I'm just going to send the
+> server junk anyway, so I can (for instance) send the same bogus
+> _ClientKeyExchange_ and _Finished_ every time. The server can't find
+> out that they are bogus until it's done the expensive part. So,
+> roughly speaking, this attack consists of sending a bunch of canned
+> packets in order to force the server to do one RSA decryption.
+
+[^0]: Eric is one of the author of several RFC related to TLS. He knows his stuff.
+
+I have written a
+[quick proof of concept of such a tool][brute-shake]. To avoid any
+abuse, it will only work if the server supports `NULL-MD5`
+cipher suite. No sane server in the wild will support such a
+cipher. You need to configure your web server to support it before
+using this tool.
+
+While Eric explains that there is no need to parse any SSL/TLS
+messages, I have found that if the key exchange message is sent before
+the server send the answer, the connection will be aborted. Therefore,
+I quickly parse the server's answer to check if I can continue. Eric
+also says a bogus key exchange message can be sent since the server
+will have to decrypt it before discovering it is bogus. I have choosen
+to build a valid key exchange message during the first handshake
+(using the certificate presented by the server) and replay it on
+subsequent handshakes because I think the server may dismiss the
+message before the computation is complete (for example, if the size
+does not match the size of the certificate).
+
+With such a tool and 2048bit RSA certificate, a server is using 100
+times more processing power than the client. Unfortunately, this means
+that most solutions, except rate limiting, exposed on this page
+may just be ineffective.
+
+*[DoS]: Denial of service
+*[SSL]: Secure Socket Layer
+*[TLS]: Transport Layer Security
+*[DSL]: Digital Subscriber Line
+*[RSA]: Rivest Shamir Adleman
+*[THC]: The Hacker's Choice
+*[CGN]: Carrier-grade NAT
+[sslbench1]: [[en/blog/2011-ssl-benchmark.html]] "First round of SSL benchmarks"
+[sslbench2]: [[en/blog/2011-ssl-benchmark-round2.html]] "Second round of SSL benchmarks"
+[sslresume]: [[en/blog/2011-ssl-session-reuse-rfc5077.html]] "Speeding up SSL: enabling session reuse"
+[rsa]: http://en.wikipedia.org/wiki/Rivest_Shamir_Adleman "Article on Wikipedia for RSA"
+[prime]: http://en.wikipedia.org/wiki/Prime_number "Article on Wikipedia for prime numbers"
+[coprime]: http://en.wikipedia.org/wiki/Coprime "Article on Wikipedia for coprime numbers"
+[squaring]: http://en.wikipedia.org/wiki/Exponentiation_by_squaring "Article on Wikipedia for exponentiation by squaring"
+[wiener]: http://en.wikipedia.org/wiki/Wiener%27s_Attack "Article on Wikipedia for Wiener's attack"
+[thc]: http://www.thc.org/thc-ssl-dos/        "THC-SSL-DOS tool"
+[rfc5746]: http://tools.ietf.org/html/rfc5746 "RFC 5746: TLS Renegotiation Indication Extension"
+[studreneg]: https://github.com/bumptech/stud/pull/47 "CVE-2009-3555 fix for stud"
+[educated]: http://www.educatedguesswork.org/2011/10/ssltls_and_computational_dos.html "Educated Guesswork: SSL/TLS and Computational DoS"
+[f5]: http://www.f5.com/ "F5 Networks website"
+[f5-ssl]: http://devcentral.f5.com/weblogs/david/archive/2011/05/03/ssl-renegotiation-dos-attack-ndash-an-irule-countermeasure.aspx "SSL Renegotiation DOS attack – an iRule Countermeasure"
+[f5-bigip]: http://www.f5.com/products/hardware/big-ip.html "F5 Big-IP product line"
+[cve-2009-3555]: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CAN-2009-3555 "CVE-2009-3555"
+[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Firewall rules to mitigate SSL DoS"
+[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Tool to emit massive parallel SSL handshakes"
+[server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Tool compare processing power needed by client and server"
+[iptables]: http://linux.die.net/man/8/iptables "Manual page of iptables(8)"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

@@ -1,0 +1,375 @@
+---
+title: "Déni de service SSL : quelles solutions ?"
+keywords: "tls, ssl, dos, thc, denial of service, rsa, cryptographie"
+uuid: 508f723b-adbe-4d05-be2d-bc53b4a9cbb5
+attachments:
+  "https://github.com/vincentbernat/ssl-dos": "Divers outils sur le sujet"
+---
+
+Il y a quelques jours, un groupe de hackers, THC, a mis à disposition
+un [outil permettant de lancer un déni de service][thc] contre des
+serveurs web SSL. Comme indiqué dans la description de l'outil, le
+problème n'est pas réellement nouveau : une poignée de mains SSL
+implique de coûteux calculs cryptographiques.
+
+L'attaque s'appuie sur deux aspects importants :
+
+ - Une poignée de mains SSL nécessite des ressources de calcul plus
+   importantes du côté du serveur que du côté du client. Il est ainsi
+   indiqué qu'un serveur usera 15 fois plus de ressources qu'un
+   client. Il est donc possible pour un ordinateur personnel de mettre
+   à mal un serveur haut de gamme.
+ - L'utilisation de la [renégociation SSL][rfc5746] permet, dans une
+   seule connexion TCP, de demander un nombre important de poignées de
+   mains, évitant ainsi de devoir rétablir la connexion après chaque
+   poignée de mains. De fait, un client derrière une simple connexion
+   ADSL peut bombarder le serveur de demandes de renégociation.
+
+[TOC]
+
+# Solutions techniques possibles
+
+Il n'y a pas de solution toute faite à ce problème, mais il existe
+certaines mesures pour atténuer celui-ci. Comme l'outil développé par
+THC s'appuie sur la renégociation SSL, la mesure la plus immédiate est
+de désactiver celle-ci, mais nous allons explorer d'autres
+possibilités.
+
+## Désactiver la renégociation SSL
+
+La façon la plus simple de parer à l'attaque mise au point par THC est
+de désactiver la renégociation SSL. C'est un mécanisme qui est
+rarement utilisé en pratique. Un serveur peut demander une
+renégociation si le client désire accéder à une ressource nécessitant
+un certificat mais un client n'a habituellement aucune raison de
+demander une renégociation. En raison d'une
+[vulnérabilité passée][cve-2009-3555], les versions récentes
+d'_Apache_ et _nginx_ interdisent simplement la renégociation SSL,
+même si la [version non vulnérable][rfc5746] est disponible.
+
+Pour déterminer si la renégociation SSL est autorisée, il est possible
+d'utiliser `openssl s_client`. Une rénégociation peut être demandée en
+envoyant `R` sur une ligne vide. Voici un exemple où la renégociation
+est désactivée (malgré le fait qu'elle soit indiquée comme supportée
+lors de la poignée de mains initiale) :
+
+	::console
+	$ openssl s_client -connect www.luffy.cx:443 -tls1
+	[...]
+	New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
+	Server public key is 2048 bit
+	Secure Renegotiation IS supported
+	Compression: zlib compression
+	Expansion: zlib compression
+	[...]
+	R
+	RENEGOTIATING
+	140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
+
+Désactiver la renégociation dans un programme n'est pas quelque chose
+de trivial avec OpenSSL. À titre d'exemple, j'ai écrit un
+[patch désactivant celle-ci dans stud][studreneg], un logiciel faisant
+office de terminaison SSL.
+
+## Limiter la fréquence des poignées de mains SSL
+
+Désactiver la renégociation SSL n'est pas toujours possible. Par
+exemple, votre serveur web peut être trop ancien pour proposer cette
+option. Comme les renégociations ne doivent avoir lieu que très
+rarement, voire jamais, une solution est d'en limiter fortement le
+nombre.
+
+Lorsque l'outil de THC a été publié pour la première fois,
+[F5 Networks][f5] a fourni une règle afin de mettre au point une telle
+limitation pour leurs répartiteurs de charge. Il est possible
+d'obtenir un résultat similaire avec Netfilter en repérant les paquets
+TCP commençant par un enregistrement TLS correspondant à une poignée
+de mains chiffrée. Il est possible de les trouver dans la poignée de
+mains initiale mais ils ne sont habituellement pas en début de
+paquet. Il n'y a toutefois aucun champ permettant d'indiquer si un
+enregistrement TLS est chiffré ou non (TLS utilise un mécanisme
+d'états pour le déterminer). Il est alors nécessaire d'utiliser
+quelques heuristiques. Par exemple, si le type de poignée de mains ne
+correspond pas à un type connu et que le paquet TCP a le drapeau
+« _push_ », il est alors fortement probable qu'il s'agisse du paquet
+qui nous intéresse :
+
+	::sh
+	# Access to TCP payload (if not fragmented)
+	payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
+	iptables -A LIMIT_RENEGOCIATION \
+		-p tcp --dport 443 \
+		--tcp-flags SYN,FIN,RST,PSH PSH \
+		-m u32 \
+		--u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
+		-m hashlimit \
+		--hashlimit-above 5/minute --hashlimit-burst 3 \
+		--hashlimit-mode srcip --hashlimit-name ssl-reneg \
+		-j DROP
+
+L'utilisation de l'extension `u32` peut sembler particulièrement
+difficile à lire. Il est conseillé de lire attentivement la
+[page de manuel][iptables] qui contient des exemples. `$payload`
+permet de trouver le contenu du paquet TCP (à condition qu'il n'y ait
+pas de fragmentation). On vérifie ensuite qu'il s'agit bien d'un
+enregistrement correspondant à une poignée de mains (`0x16`) puis que
+la version de TLS nous est bien connue (`0x300`, `0x0301`, `0x0302` ou
+`0x0303`). Enfin, il est vérifié que le type n'est pas connu.
+
+Il y a un risque évident de faux positifs avec cette règle mais
+l'utilisation de `hashlimit` permet de diminuer très fortement les
+problèmes. Il ne s'agit pas d'une solution incontournable. Un
+attaquant peut utiliser diverses techniques de fragmentation pour
+éviter la détection.
+
+Une solution quasiment équivalente consiste à utiliser `CONNMARK` pour
+suivre le déroulement de la première poignée de mains et d'interdire
+toutes celles qui pourraient survenir ensuite.
+
+Si les renégociations SSL sont désactivées, il est possible de
+simplement limiter le nombre de poignées de mains en limitant le
+nombre de connexions TCP en provenance d'une IP :
+
+	::sh
+	iptables -A LIMIT_SSL \
+		-p tcp --dport 443 \
+		--syn -m state --state NEW \
+		-m hashlimit \
+		--hashlimit-above 120/minute --hashlimit-burst 20 \
+		--hashlimit-mode srcip --hashlimit-name ssl-conn \
+		-j DROP
+
+Les serveurs ainsi protégés sont toujours vulnérables à une attaque de
+plus grande envergure mais devraient pouvoir écarter tout attaquant
+solitaire[^a].
+
+[^a]: À noter toutefois que comme toute limitation assimilant un
+      utilisateur à une IP, il y a un risque important de faux
+      positifs comprenant notamment les serveurs mandataires
+      légitimes, les réseaux derrière du NAT, les utilisateurs de
+      mobiles partageant une même IP ou ceux qui se trouvent derrière
+      un CGN.
+
+J'ai réuni ces solutions dans un
+[simple fichier pour référence][netfilter].
+
+## Augmenter les capacités de calcul côté serveur
+
+Il est relativement facile de faire évoluer les capacités côté serveur
+aussi bien horizontalement que verticalement. Verticalement, les
+[performances de SSL augmentent linéairement avec le nombre de cœurs][sslbench1]
+et il suffit donc d'ajouter des CPU supplémentaires ou d'opter pour
+des CPU avec plus de cœurs. Il est également possible d'acquérir des
+accélérateurs cryptos (assez chers). Horizontalement, il suffit
+d'ajouter des serveurs supplémentaires en prenant garde à bien cerner
+la problématique de la [reprise des sessions SSL][sslresume].
+
+## Augmenter le travail nécessaire côté client
+
+Dans la présentation de leur outil, THC indique notamment :
+
+> Établir une connexion SSL sécurisée nécessite 15 fois plus de
+> puissance de calcul sur le serveur que sur le client.
+
+J'ignore d'où provient ce chiffre. Pour le vérifier, j'ai construit un
+[petit outil comparant le temps CPU pour 1000 poignées de mains][server-vs-client]. Les
+résultats sont présentés dans le graphique ci-dessous :
+
+![Graphique pour comparer la puissance nécessaire côté serveur et client][s1]
+[s1]: [[!!images/ssl-server-vs-client.png]] "Comparaison des temps de calcul nécessaires côté client et serveur"
+
+Ainsi, avec des clefs RSA de 2048 bits et une suite de chiffrement
+telles que `AES256-SHA`, un serveur effectue 6 fois plus de calculs
+qu'un client. Toutefois, avec une suite telle que
+`DHE-RSA-AES256-SHA`, la tendance s'inverse et le serveur nécessite
+34% de puissance en moins. Elle s'accentue encore plus avec une suite
+telle que `DHE-DSS-AES256-SHA` où le serveur fait moitié moins de
+calculs que le client.
+
+Toutefois, dans la réalité, il est difficile d'utiliser de telles
+suites de chiffrement :
+
+ 1. Certains navigateurs ne les supportent simplement pas. Ils sont
+    limités aux suites classiques utilisant uniquement RSA[^1].
+ 2. Les utiliser conduirait à augmenter fortement la charge habituelle
+    des serveurs qui risquent alors de s'écrouler sous le trafic
+    légitime.
+ 3. Enfin, certains clients, notamment les mobiles, ne peuvent pas se
+    permettre d'utiliser des suites aussi coûteuses qui sont trop
+    lentes et trop gourmandes en énergie.
+ 
+[^1]: Les suites de chiffrement supportées par tous les navigateurs
+      sont `RC4-MD5`, `RC4-SHA` et `3DES-SHA`. `DHE-DSS-AES256-SHA`
+      nécessite normalement TLS 1.2 (présent dans aucun navigateur).
+
+Étudions plus en avant pourquoi, dans le cadre d'une suite basée sur
+RSA comme `AES256-SHA`, le serveur doit effectuer plus de calculs que
+le client. Voici à quoi ressemble une poignée de mains SSL :
+
+![Poignée de mains SSL][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Poignée de mains SSL complète"
+
+En envoyant le message _Client Key Exchange_, le client va
+**chiffrer**[^c] la version de TLS ainsi que 46 octets aléatoires avec la
+clef publique du serveur, contenue dans le message _Certificate_ qu'il
+vient de recevoir. Le serveur va ensuite devoir **déchiffrer** ce
+message à l'aide de sa clef privée. Il s'agit là des deux opérations
+les plus coûteuses d'une poignée de mains. Pour comprendre pourquoi le
+déchiffrement est plus coûteux que le chiffrement, il faut d'abord
+comprendre comme RSA fonctionne.
+
+[^c]: En Français, le vocabulaire approprié est _chiffrement_ et
+      _déchiffrement_. En Anglais, il s'agit de _encrypt_ et
+      _decrypt_. En Français, _crypter_ ne veut rien dire. _Décrypter_
+      signifie décoder le message sans en détenir la clef secrète.
+
+Tout d'abord, un serveur a besoin d'une clef privée et d'une clef
+publique. Voici les étapes principales pour générer celles-ci :
+
+ 1. Prendre au hasard deux [entiers premiers][prime] distincts ·p· et
+    ·q·, chacun étant approximativement de la même taille.
+ 2. Calculer ·n=pq·. Il s'agit du _module de chiffrement_.
+ 3. Calculer ·\\varphi(n)=(p-1)(q-1)·.
+ 4. Choisir ·e· tel que ·1<e<\\varphi(n)· et ·\\gcd(\\varphi(n),e) =
+    1· (c'est-à-dire que ·e· et ·\\varphi(n)· sont
+    [premiers entre eux][coprime]). Il s'agit de l'_exposant de
+    chiffrement_.
+ 5. Calculer ·d=e^{-1}\\mod\\varphi(n)·. Il s'agit de l'_exposant de
+    déchiffrement_.
+
+La **clef publique** est ·(n,e)· et la **clef privée** est
+·(n,d)·. Pour chiffrer un message, il faut d'abord le transformer en
+un entier ·m<n· (que l'on doit « bourrer »). Il est chiffré avec la
+clef publique pour obtenir le message ·c· et ne peut être en théorie
+déchiffré qu'avec la clef privée :
+
+ - ·c=m^e\\mod n·  (chiffrement)
+ - ·m=c^d\\mod n·  (déchiffrement)
+
+Cela ne nous explique pas encore pourquoi le déchiffrement est plus
+coûteux que le chiffrement. La paire de clefs n'est en réalité pas
+construite comme expliqué ci-dessus. Habituellement, ·e· est fixé
+comme un petit entier premier dont la représentation binaire contient
+beaucoup de 0, comme 17 (`0x11`) ou 65537 (`0x10001`). Ensuite, ·p· et
+·q· sont choisis de façon à ce que ·\\varphi(n)· soit premier avec
+·e·. Cela permet d'obtenir un chiffrement très rapide en utilisant
+l'[exponentiation rapide][squaring]. Cela implique alors que son
+inverse ·d· est un nombre très grand ne disposant pas de propriétés
+particulières et l'exponentiation est alors très lente.
+
+Au lieu de déduire ·d· à partir de ·e·, il est possible de faire
+l'inverse. Ainsi, ·d· pourrait être petit et nous aurions ainsi un
+déchiffrement très rapide. Il y a toutefois deux problèmes importants
+empêchant cette solution :
+
+ - La plupart des implémentations SSL attendent à ce que ·e· soit un
+   entier de 32 bits.
+ - Si ·d· est trop petit (s'il a moins d'un quart des bits de ·n·), il
+   est possible de le
+   [calculer de manière efficace à partir de la clef publique][wiener].
+
+Ainsi, le mieux que l'on puisse faire est de choisir l'exposant public
+·e'=4294967291· (plus grand nombre premier de 32 bits ; il ne contient
+qu'un seul 0). Toutefois, en pratique, cela n'est pas suffisant comme
+on peut le constater sur notre graphique comparatif.
+
+Ainsi, il n'y a pas de réelles solutions dans ce domaine : il est
+nécessaire d'autoriser les suites de chiffrement basées sur RSA et il
+n'est pas possible avec celles-ci d'inverser le rapport entre le
+client et le serveur.
+
+# Où les choses se corsent
+
+Peu après la publication de l'outil de déni de service par THC, Eric
+Rescorla[^0] a publié une
+[très bonne analyse de l'impact d'un tel outil][educated]. Il
+s'interroge sur l'intérêt d'utiliser la renégociation pour une telle
+attaque :
+
+> Ce que vous devez vous demander à ce point est si une attaque par
+> déni de service basée sur la renégociation est plus efficace qu'une
+> attaque similaire utilisant de nombreuses connexions. La façon de
+> mesurer ceci est de faire le rapport entre le travail nécessaire
+> pour l'attaquant et celui nécessaire pour le serveur. Je n'ai jamais
+> vu de véritables mesures ici (et THC n'en présente pas) mais
+> quelques calculs rapides semblent indiquer que la différence est
+> faible.
+>
+> Avec l'ancienne méthode, utilisant les connexions multiples, les
+> coûts à prendre en compte sont les suivants :
+> 
+>  1. Faire une poignée de mains TCP (3 paquets)
+>  2. Envoyer un _ClientHello_ (1 paquet). Il peut s'agir d'un message
+>     préfabriqué.
+>  3. Envoyer les messages _ClientKeyExchange_, _ChangeCipherSpec_,
+>     _Finished_ (1 paquet). Ils peuvent également être préfabriqués.
+> 
+
+> À noter que je n'ai pas besoin d'analyser une seule des réponses
+> envoyées par le serveur et je n'ai pas besoin de faire un seul
+> calcul cryptographique. Il suffit d'envoyer n'importe quoi au
+> serveur. Par exemple, je peux envoyer les mêmes messages incorrects
+> _ClientKeyExchange_ et _Finished_ à chaque fois. Le serveur ne peut
+> pas savoir qu'ils sont incorrects avant d'avoir effectué les calculs
+> les plus coûteux. En résumé, l'attaque consiste à envoyer une série
+> de messages préfabriqués afin de forcer le serveur à effectuer un
+> déchiffrement RSA.
+
+[^0]: Eric est l'auteur de nombreuses RFC liées à TLS. Il connaît donc
+      bien le sujet.
+
+J'ai rapidement écrit un
+[outil effectuant les étapes ainsi décrites][brute-shake]. Afin
+d'éviter les abus, celui-ci ne fonctionne que si le serveur accepte la
+suite de chiffrement `NULL-MD5`. Aucun serveur configuré sérieusement
+ne va l'accepter. Il vous faudra donc en modifier la configuration
+pour tester.
+
+Alors qu'Eric indique qu'il n'a pas besoin d'interpréter les réponses
+du serveur, j'ai été confronté au fait que la connexion est abandonnée
+si le client envoie la clef avant que le serveur n'ait répondu aux
+premiers messages. Ainsi, j'interprète sommairement les réponses du
+serveur avant de continuer. De plus, Eric indique qu'un message
+_Client Key Exchange_ erroné suffit car le serveur devra le déchiffrer
+avant de s'en rendre compte. J'ai choisi de construire un message
+valide, fabriqué lors de la première poignée de mains et rejoué
+ensuite, afin de ne pas permettre au serveur de se rendre compte que
+le message est invalide avant d'avoir terminé l'intégralité du calcul
+(par exemple, si sa longueur est incorrecte).
+
+Avec un tel outil et un certificat RSA de 2048 bits, le serveur a
+besoin de 100 fois plus de puissance de calcul que le client. Cela
+signifie notamment que la plupart des solutions exposées auparavant
+sont ineffectives, à l'exception des limitations via Netfilter.
+
+*[DoS]: Denial of service
+*[SSL]: Secure Socket Layer
+*[TLS]: Transport Layer Security
+*[DSL]: Digital Subscriber Line
+*[RSA]: Rivest Shamir Adleman
+*[THC]: The Hacker's Choice
+*[CGN]: Carrier-grade NAT
+[sslbench1]: [[fr/blog/2011-ssl-benchmark.html]]        "Premier round de benchmarks SSL"
+[sslbench2]: [[fr/blog/2011-ssl-benchmark-round2.html]] "Second round de benchmarks SSL"
+[sslresume]: [[fr/blog/2011-sessions-ssl-rfc5077.html]] "Accélérer SSL avec la réutilisation des sessions"
+[rsa]: http://fr.wikipedia.org/wiki/Rivest_Shamir_Adleman "Article Wikipedia sur RSA"
+[prime]: http://fr.wikipedia.org/wiki/Nombre_premier "Article Wikipedia sur les nombres premiers"
+[coprime]: http://fr.wikipedia.org/wiki/Nombres_premiers_entre_eux "Article Wikipedia sur les nombres premiers entre eux"
+[squaring]: http://fr.wikipedia.org/wiki/Exponentiation_rapide "Article Wikipedia sur l'exponentiation rapide"
+[wiener]: http://en.wikipedia.org/wiki/Wiener%27s_Attack "Article Wikipedia sur l'attaque de Wiener"
+[thc]: http://www.thc.org/thc-ssl-dos/        "Outil THC-SSL-DOS"
+[rfc5746]: http://tools.ietf.org/html/rfc5746 "RFC 5746: TLS Renegotiation Indication Extension"
+[studreneg]: https://github.com/bumptech/stud/pull/47 "Patch pour stud pour CVE-2009-3555"
+[educated]: http://www.educatedguesswork.org/2011/10/ssltls_and_computational_dos.html "Educated Guesswork: SSL/TLS and Computational DoS"
+[f5]: http://www.f5.com/ "F5 Networks"
+[f5-ssl]: http://devcentral.f5.com/weblogs/david/archive/2011/05/03/ssl-renegotiation-dos-attack-ndash-an-irule-countermeasure.aspx "SSL Renegotiation DOS attack – an iRule Countermeasure"
+[f5-bigip]: http://www.f5.com/products/hardware/big-ip.html "Ligne de produits F5 Big-IP"
+[cve-2009-3555]: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CAN-2009-3555 "CVE-2009-3555"
+[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Règles de firewall pour atténuer les attaques DoS SSL"
+[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Outil pour émettre en masse des poignées de mains SSL"
+[server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Outil de comparaison du rapport de puissance entre un client et un serveur"
+[iptables]: http://linux.die.net/man/8/iptables "Page de manuel pour iptables(8)"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

@@ -6,6 +6,7 @@ combine:
 ---
 
 $(function() {
+    luffy.mathjax();
     luffy.effects();
     luffy.search();
     luffy.timeago();
