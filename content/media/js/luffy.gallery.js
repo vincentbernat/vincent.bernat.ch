@@ -45,15 +45,15 @@ luffy.gallery = function() {
 		center = $('<div id="lfb-center" />')[0],
 	    ]).css("display", "none")
 	);
-	$('<div id="lfb-close" class="lf-sprite lf-sprite-slimbox-close"/>')
+	$('<div id="lfb-close" class="lf-sprite-slimbox-close"/>')
 	    .appendTo(center).add(overlay).click(close);
 	image = $('<div id="lfb-image" />').appendTo(center).append(
 	    sizer = $('<div style="position: relative;" />').append([
 		prevLink = $('<a id="lfb-prevlink" href="#"></a>')
-		    .append($('<span id="lfb-prevlink-ico" class="lf-sprite lf-sprite-slimbox-left" />'))
+		    .append($('<span id="lfb-prevlink-ico" class="lf-sprite-slimbox-left" />'))
 		    .click(previous)[0],
 		nextLink = $('<a id="lfb-nextlink" href="#"></a>')
-		    .append($('<span id="lfb-nextlink-ico" class="lf-sprite lf-sprite-slimbox-right" />'))
+		    .append($('<span id="lfb-nextlink-ico" class="lf-sprite-slimbox-right" />'))
 		    .click(next)[0]
 	    ])[0]
 	)[0];

@@ -69,6 +69,7 @@ def sprite():
         sprite.paste(im, (0, height))
         css += """
 .%(class)s-%(name)s {
+    .%(class)s;
     background-position: 0px %(offset)spx;
     width: %(width)spx;
     height: %(height)spx;
