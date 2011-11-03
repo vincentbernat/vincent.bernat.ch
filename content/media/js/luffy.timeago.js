@@ -9,14 +9,14 @@ luffy.timeago = function() {
 	    prefixAgo: "il y a",
 	    prefixFromNow: "d'ici",
 	    seconds: "moins d'une minute",
-	    minute: "environ une minute",
-	    minutes: "environ %d minutes",
-	    hour: "environ une heure",
-	    hours: "environ %d heures",
-	    day: "environ un jour",
-	    days: "environ %d jours",
-	    month: "environ un mois",
-	    months: "environ %d mois",
+	    minute: "une minute",
+	    minutes: "%d minutes",
+	    hour: "une heure",
+	    hours: "%d heures",
+	    day: "un jour",
+	    days: "%d jours",
+	    month: "un mois",
+	    months: "%d mois",
 	    year: "un an",
 	    years: "%d ans"	    
 	}
@@ -70,15 +70,15 @@ luffy.timeago = function() {
         suffixAgo: "ago",
         suffixFromNow: "from now",
         seconds: "less than a minute",
-        minute: "about a minute",
+        minute: "a minute",
         minutes: "%d minutes",
-        hour: "about an hour",
-        hours: "about %d hours",
+        hour: "an hour",
+        hours: "%d hours",
         day: "a day",
         days: "%d days",
-        month: "about a month",
+        month: "a month",
         months: "%d months",
-        year: "about a year",
+        year: "a year",
         years: "%d years",
         numbers: []
       }
@@ -175,8 +175,4 @@ luffy.timeago = function() {
   function distance(date) {
     return (new Date().getTime() - date.getTime());
   }
-
-  // fix for IE6 suckage
-  document.createElement("abbr");
-  document.createElement("time");
 }(jQuery));
