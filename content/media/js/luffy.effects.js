@@ -85,4 +85,46 @@ luffy.effects = function() {
 	    }).addClass("lf-tag-selected");
 	}
     }();
+
+    /* -- Effect 6:
+          Replace missing ligatures (œ)
+       -- */
+    /* This code was mostly stolen here:
+       http://johannburkard.de/resources/Johann/jquery.highlight-3.js
+       MIT licensed by Johann Burkard
+    */
+    e = function() {
+	var ligatures = { "œ": "oe", "Œ": "OE"};
+	/* On each leaf node, we will achieve substitution */
+	function innerSubstitution(node) {
+	    var skip = 0;
+	    if (node.nodeType == 3) {
+		// This is a text node
+		for (var ligature in ligatures) {
+		var pos = node.data.indexOf(ligature);
+		    if (pos >= 0) {
+			var spannode = document.createElement('span');
+			spannode.className = 'lf-ligature';
+			var middlebit = node.splitText(pos);
+			var endbit = middlebit.splitText(1);
+			spannode.innerHTML = ligatures[ligature][0];
+			endbit.data = ligatures[ligature][1] + endbit.data;
+			middlebit.parentNode.replaceChild(spannode, middlebit);
+			skip = 1; break; // We should reanalyse again this node!
+		    }
+		}
+	    } else if (node.nodeType == 1
+		       && node.childNodes
+		       && !/(script|style)/i.test(node.tagName)) {
+		// Recurse inside this node
+		for (var i = 0; i < node.childNodes.length; ++i) {
+		    i += innerSubstitution(node.childNodes[i]);
+		}
+	    }
+	    return skip;
+	}
+	$("article").each(function() {
+	    innerSubstitution(this);
+	});
+    }();
 };
