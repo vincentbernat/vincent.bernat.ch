@@ -107,8 +107,8 @@ luffy.effects = function() {
 			spannode.className = 'lf-ligature';
 			var middlebit = node.splitText(pos);
 			var endbit = middlebit.splitText(1);
-			spannode.innerHTML = ligatures[ligature][0];
-			endbit.data = ligatures[ligature][1] + endbit.data;
+			spannode.innerHTML = ligatures[ligature].charAt(1);
+			node.data = node.data + ligatures[ligature].charAt(0);
 			middlebit.parentNode.replaceChild(spannode, middlebit);
 			skip = 1; break; // We should reanalyse again this node!
 		    }
