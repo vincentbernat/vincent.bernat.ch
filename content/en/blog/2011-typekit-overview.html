@@ -1,0 +1,389 @@
+---
+title: A quick look at Typekit
+keywords: "fonts, typekit, font-face, css, cdn, typography"
+uuid: 661e2f81-66f5-4cc0-bafa-9f4779e00e43
+---
+
+Back in the dark ages of the web, before the introduction of CSS 3,
+browsers could only display fonts available on the client
+system. Thanks to the introduction of `@font-face` and its now
+widespread support, this is over. Now, Web designers have access to a
+large selection of fonts and most users will be able to appreciate
+them.
+
+[Typekit][typekit] provides a subscription-based library of hosted,
+high-quality fonts to use on websites. I expose here my own, mostly
+uneducated[^educated] on the typographic side, look on this service.
+
+[^educated]: While I have a high interest in typography, have my own
+             copy of “[The Elements of Typographic Style][elements]” by
+             Robert Bringhurst and have throughly read
+             “[The Elements of Typographic Style Applied to the Web][webtypography]”,
+             I am still fairly novice on this matter.
+
+[TOC]
+
+# Fonts embedding 101
+
+There are several ways to embed fonts for the Web. Let's have a look
+at the most common ones.
+
+## Self-hosting and `@font-face`
+
+A first possibility is to host fonts yourself and provide a CSS file
+with the appropriate `@font-face` declarations. There are five
+important things to know:
+
+ 1. There is **no common format**. You will need to host different
+    versions of the same font to support most browsers.
+ 2. Of course, Internet Explorer comes with its own **quirks** that
+    you need to work around.
+ 3. Most browsers enforce a **[same origin policy][sop]**. You need to
+    serve your fonts from the same domain as the requesting page. You
+    can circumvent such a limitation by enabling
+    [cross-origin resource sharing][cors]: add an
+    `Access-Control-Allow-Origin` header when serving fonts.
+ 4. Fonts are unlikely to change. To **leverage caching**, configure
+    an explicit expiration date far in the future. Something like 30
+    days.
+ 5. There is no [MIME types registered for fonts][mime]. Don't bother
+    setting one, even if Google Chrome likes to complain about them in
+    the console.
+
+One great resource is [Font Squirrel][squirrel] which provides kits
+with fonts and the appropriate CSS declarations. You choose your font
+family (or upload one of your own), the formats that you want to use
+(check them all) and you will get a ZIP archive with all fonts and a
+CSS file. You may want to tweak it a bit to enable automatic use of
+the bold variant when needed and to use a local copy if available. For
+example, if you choose _Crimson_, an oldstyle typeface, you may want
+to declare the bold version with `font-weight: bold` and add local
+names:
+
+    ::css
+    @font-face {
+        font-family: 'Crimson';
+        src: url('Crimson-Bold-webfont.eot');
+        src: local('Crimson Bold'), local('Crimson Text Bold'),
+             url('Crimson-Bold-webfont.eot?#iefix') format('embedded-opentype'),
+             url('Crimson-Bold-webfont.woff') format('woff'),
+             url('Crimson-Bold-webfont.ttf') format('truetype'),
+             url('Crimson-Bold-webfont.svg#CrimsonBold') format('svg');
+        font-weight: bold;
+        font-style: normal;
+    }
+
+## Google Web Fonts
+
+For open-source fonts, you can also use
+[Google Web Fonts][googlefonts] instead of hosting the files
+yourself. Build a collection of fonts and choose the variants that you
+want to use for each of them. You will then be provided with a code
+snippet to paste in the `<head>` element of your page. For example,
+for _Crimson_:
+
+    ::html
+    <link href='http://fonts.googleapis.com/css?family=Crimson+Text:400,700,400italic'
+          rel='stylesheet' type='text/css'>
+
+Why choose this solution over self-hosting?
+
+ 1. You don't use your own **bandwith** to serve fonts. This may be
+    important if you pay for it.
+ 2. Google uses its own **CDN** to serve fonts. If you don't use a CDN
+    yourself, this can be a major performance improvement.
+ 3. **Caching** is more efficient since many sites will use the same font.
+ 4. It's **easier** to do it right.
+
+Unless you are concerned about Google tracking your users[^track], I
+think this is a better solution than self-hosting. Quick delivery of
+fonts is pretty important since content rendering can be delayed by
+them.
+
+[^track]: Google serves fonts from a cookie-less domain. Technically,
+          they could still do some kind of tracking but I believe they
+          don't.
+
+## Paid services
+
+If you would like to use commercial fonts, like _Adobe Minion Pro_ or
+_Paratype Futura PT_, a convenient option is to rent
+them. [Typekit][typekit] is service providing such an option. Pricing
+depends on volume and the number of fonts you want to have access
+to. There is a free plan and the first paid plan is US$24.99 per
+year. Other [similar services][smashing] exist. Feel free to compare.
+
+Once registered, the workflow is similar to _Google Web Fonts_. You
+choose your fonts, assemble them in a "kit" and publish it. Instead
+of directly providing a CSS file, _Typekit_ provides some Javascript
+which will in turn download a CSS file containing all fonts in the
+appropriate format for the browser (on most browsers, fonts are
+_inlined_).
+
+    ::html
+    <script type="text/javascript"
+            src="//use.typekit.com/tyt0atd.js"></script>
+    <script type="text/javascript">
+      try{Typekit.load();}catch(e){}
+    </script>
+
+# Typekit: the good parts...
+
+So, why choose _Typekit_? First, there is the **very large choice of
+fonts**. The first paid plan comes with more than 500 fonts from about
+80 foundries. There are about a hundred serif fonts and a couple
+hundred sans serif ones.
+
+_Typekit_ provides a **convenient interface to browse fonts**. You can
+either search fonts by name or by characteristics. In the last case,
+you can filter on properties like the classification (serif, sans
+serif, decorative, etc.), weight, width, contrast, x-height,
+recommended use or language support. Once a font is selected and added
+to your kit, you can easily choose what variants you want. The kit
+total size is displayed.
+
+If you happen to meet any problem or have some questions, _Typekit_
+**support is very responsive**. I got clear and crisp answers in less
+than a few hours in the week-end.
+
+# ...and the bad ones
+
+Unfortunately, _Typekit_ has also some shortcomings. One of the most
+commonly cited is that Javascript is mandatory. No Javascript, no
+fonts. If you want to display the appropriate fonts for users without
+Javascript, you should just not use _Typekit_.
+
+## Not free, nor free
+
+While _Typekit_ offers some open-source fonts, most of them are
+not. Moreover, only a few of them are available in the free
+plan. While I would prefer to use open-source fonts, I don't consider
+this a strong requirement: if you are dissatisfied for some reason,
+switching back to open-source fonts (or another service) is fast and
+easy.
+
+I like serif fonts a lot and they get less attention from the FLOSS
+world: it is difficult to find one whose readability on screen is
+excellent. _Droid Serif_ is a nice font but is a bit too black for
+me. Maybe _Cardo_ would be a good match.
+
+You may disagree and in this case, [Google Web Fonts][googlefonts] or
+self-hosting seem the perfect match.
+
+## Difficulty to choose and test fonts
+
+While browsing fonts is easy and smooth, choosing and testing them is
+another matter. For example, _Typekit_ is missing some interface to
+compare font rendering for whole paragraphs at a given size. It also
+misses a way to check how two fonts render together, one for headings
+and one for paragraphs. Here, _Google Web Fonts_ is more versatile.
+
+Things become really difficult when you want to test your selected
+fonts for real. Except if you have invested into one of the expensive
+plans, you can only include a limited number of fonts in your
+kit. Each time you want to try another set of fonts, you need to
+modify your kit and wait for it to be distributed across _Typekit_
+network. You may have to **wait five or ten minutes between each
+change**!
+
+Another inconvenient thing is that once you publish your site, any
+change to the kit will affect the published version. Therefore,
+you need to use a second kit for development and play back and
+forth with those two kits.
+
+What would be convenient here is a special kit with all fonts from the
+library with restricted access to some IP to avoid abuse. This is
+something done by [Fontdeck][fontdeck], a competitor.
+
+## Poor subset support
+
+Because you want to keep the font size small (about 30 kB for each
+variant), _Typekit_ usually proposes two subsets: the default one
+contains **only latin characters** and the complete one with **all
+glyphs**. If some glyph is absent from the default subset, you need to
+use the complete one which is roughly two to four times the size of
+the default one. This is a bit huge for only one character.
+
+What would be nice is to have subsets for each language. In my case, I
+would take a French subset because I need the "œ" glyph which appears
+in French in words like "_cœur_" (_heart_ or _core_) or "_œil_"
+(_eye_). I don't want to select the complete subset just for this
+character.
+
+When a glyph is absent, the next font in the CSS stack is used. For
+example, if the selected font is _FF Tisa Web Pro_ and the next font
+in the stack is _Droid Serif_, here is how the word "_cœur_" may be
+rendered. On the first line, _FF Tisa Web Pro_ contains the
+appropriate glyph. On the second line, the glyph is absent and taken
+from _Droid Serif_. Since x-height and contrast are a bit different,
+the replaced glyph seems out of tone. At small sizes, the difference
+accounts for more than 10%.
+
+![Various rendering of word "cœur"][img-oe]
+[img-oe]: [[!!images/typekit/ligatures.png]] "Rendering when glyph is present, substituted by a glyph from another font or emulated. Rendering at 72px and 16px (zoomed)."
+
+I have also added a third line where the ligature is built from "o"
+and "e" and the following style is applied to "e":
+
+    ::css
+    .lf-ligature {
+        margin-left: -0.172em;
+        zoom: 1; /* Here to trigger hasLayout on IE7 */
+    }
+
+As you can see, the result seems good. I have a
+[piece of Javascript][ligature-js] turning a ligature into the
+appropriate markup. It can be extended to handle more ligatures and
+could be adapted to handle other composed characters (like the ones in
+"Antonín Dvořák").
+
+## Defective caching
+
+Because a document can only be rendered after the fonts have been
+loaded[^fout], it is pretty important to deliver fonts as fast as
+possible. _Typekit_ uses [Edgecast][edgecast] as a CDN and
+[DynECT][dynect] for DNS hosting.
+
+[^fout]: In fact, browsers have different strategies on how to
+         render before fonts availability. Paul Irish wrote a
+         [comprehensive article on FOUT][fout]. One common strategy is
+         to render a blank space until downloaded fonts are
+         available. If this takes too much time, fallback fonts may be
+         used.
+
+Two files are downloaded. Both of them are hosted on
+`use.typekit.com`. The first one is a script that will act as a
+loader. Based on the characteristics of your browser, it will choose
+how to download the requested fonts for best rendering. The second
+file is generally a big CSS file containing the fonts.
+
+Here are the headers returned for the first file:
+
+    ::text
+    HTTP/1.1 200 OK
+    Accept-Ranges: bytes
+    Cache-Control: max-age=300
+    Content-Encoding: gzip
+    Content-Type: text/javascript
+    Date: Tue, 08 Nov 2011 18:34:16 GMT
+    ETag: "388467610+gzip"
+    Expires: Tue, 08 Nov 2011 18:39:16 GMT
+    Last-Modified: Sat, 05 Nov 2011 09:31:57 GMT
+    Server: ECS (cdg/D624)
+    Vary: Accept-Encoding
+    X-Cache: HIT
+    Content-Length: 7440
+
+First, notice that the content is served compressed. Good point. The
+next headers to look at are `Cache-Control`, `Date`, `ETag` and
+`Expires`: the server requests the content to be **cached for 5
+minutes**. When the browser notices that its copy is out-of-date, it
+will issue a new request including a `If-None-Match: 388467610+gzip`
+header. Unless the kit has been modified, the server will answer
+with `304 Not Modified` and no content. The copy of the browser
+will be valid for another 5 minutes. This means that after 5 minutes,
+at least **3 round-trips** are needed to check if our fonts are
+up-to-date.
+
+Worse, sometimes, _Typekit_ servers may be just slow. They can wait
+one second before answering, just to send a `304`. Since the first file
+is a script embedded in `<head>`, the whole page is blocked until you
+get the answer. Here is an illustrative example with Chromium 14 where
+a page using _Typekit_ is loaded while all static assets are in the
+navigator cache and things have gone wrong (which is pretty rare):
+
+![Screenshot of Chromium Inspector][typekit-slow]
+[typekit-slow]: [[!!images/typekit/slow.png]] "Timeline view when loading a page with Typekit embedded"
+
+Since fonts are needed, the rendering has been paused for 3.5 seconds
+until _Typekit_ was fully loaded. If we look more closely, we may also
+notice we got a status `200` from the server instead of `304`. Here is
+an excerpt of the browser request:
+
+    ::text
+    GET /tyt0atd.js HTTP/1.1
+    Host: use.typekit.com
+    Connection: keep-alive
+    Accept-Encoding: gzip,deflate,sdch
+    If-None-Match: "2200251225+gzip"
+    If-Modified-Since: Thu, 10 Nov 2011 11:38:11 GMT
+
+And here is an excerpt of the answer headers:
+
+    ::text
+    HTTP/1.1 200 OK
+    Accept-Ranges: bytes
+    Cache-Control: max-age=300
+    Content-Type: text/javascript
+    Date: Fri, 11 Nov 2011 17:10:03 GMT
+    ETag: "2200251225"
+    Expires: Fri, 11 Nov 2011 17:15:03 GMT
+    Last-Modified: Thu, 10 Nov 2011 11:38:11 GMT
+    Server: EOS (lax001/54E5)
+    Content-Length: 25755
+
+What happened? For some unknown reason, the server denied the access
+to the compressed version of the resource: there is no
+`Content-Encoding: gzip` while the browser _did_ send
+`Accept-Encoding: gzip`. The tag provided by the browser
+(`2200251225+gzip`) came obviously from the compressed resource and
+therefore does not match. [RFC 2616][rfc2616] requests
+`If-Modified-Since` header to be ignored if the tag does not
+match. Consequently, the server answers with `200 OK` and resend the
+whole file. The same problem happened with the CSS file. Let me stress
+again how important the problem is: we had to download again the two
+files but we also downloaded the non-compressed version.
+
+Now, let's suppose that we did not run into this problem and the
+server answered with `304 Not Modified`. The result is still not
+satisfactory: we would have waited 1.3 seconds to get both answers
+from the server. Keep in mind that most of the time, _Typekit_ is
+pretty fast.
+
+Here is how I think this should have been done: each time you modify
+your font kit, you get a new URL to use (containing the version of
+the font kit for example). This resource and the associated fonts
+(whose URL is also versioned) are requested to be cached for several
+days. As a sidenote, this also enables to modify a kit for your
+development environment without modifying the kit for your
+production site.
+
+I suspect that _Typekit_ did not go this way to track kit usage more
+accurately and enforce the appropriate pricing. Having multiple
+versions of the same kit would also allow to use more fonts that we
+are paying for.
+
+# Conclusion
+
+I have mixed feelings about _Typekit_. While the difficulty to test
+fonts and the lack of language-related subsets are annoying, I have
+been able to work around them. However, the caching problem is more
+annoying. I am still considering going back to _Google Web Fonts_
+just because of this.
+
+*[CSS]: Cascading Style Sheets
+*[FOUT]: Flash of unstyled text
+*[DNS]: Domain Name Service
+*[CDN]: Content Delivery Network
+*[FLOSS]: Free and Open Source Software
+
+[typekit]:     http://www.typekit.com           "Typekit"
+[googlefonts]: http://www.google.com/webfonts   "Google Web Fonts"
+[squirrel]:    http://www.fontsquirrel.com/     "Font Squirrel"
+[edgecast]:    http://www.edgecast.com/         "EdgeCast Networks"
+[dynect]:      http://dyn.com/dns/dynect-managed-dns/ "DynECT Managed DNS"
+[rfc2616]:     http://rfc2616.com/              "RFC 2616: HTTP/1.1"
+[webtypography]: http://webtypography.net/      "The Elements of Typographic Style Applied to the Web"
+[fontdeck]:    http://www.fontdeck.com/         "Fontdeck"
+
+[elements]: http://www.amazon.com/Elements-Typographic-Style-Robert-Bringhurst/dp/0881792063 "The Elements of Typographic Style on Amazon"
+[mime]: https://developer.mozilla.org/en/css/@font-face "@font-face reference at MDN"
+[sop]: http://en.wikipedia.org/wiki/Same_origin_policy "Wikipedia article on same origin policy"
+[cors]: http://enable-cors.org/ "Enable cross-origin resource sharing"
+[fout]: http://paulirish.com/2009/fighting-the-font-face-fout/ "Fighting the @font-face FOUT"
+[ligature-js]: https://github.com/vincentbernat/www.luffy.cx/commit/dab984d044c1dd7440a2db9b95e3b67c2ae07924#diff-3 "Javascript code to render ligatures correctly"
+[smashing]: http://www.smashingmagazine.com/2010/10/20/review-of-popular-web-font-embedding-services/ "Smashing Magazine: Review of Popular Web Font Embedding Services"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}

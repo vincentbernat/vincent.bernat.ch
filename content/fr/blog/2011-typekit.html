@@ -1,0 +1,404 @@
+---
+title: Impressions sur Typekit
+keywords: "fontes, polices, typographie, typekit, font-face, css, cdn"
+uuid: 661e2f81-66f5-4cc0-bafa-9f4779e00e43
+---
+
+En des temps immémoriaux, avant l'introduction de CSS 3, les
+navigateurs ne pouvaient exploiter que les polices présentes sur le
+système de l'utilisateur. Tout ceci a pris fin avec l'introduction de
+`@font-face` et le support de cette directive dans tous les
+navigateurs actuels. Les concepteurs web peuvent désormais choisir
+parmi une large palette de polices.
+
+[Typekit][typekit] fournit sous forme d'abonnement une bibliothèque de
+polices de grande qualité utilisables sur des sites web. J'expose ici
+mon point de vue quasi-novice[^novice] sur ce service.
+
+[^novice]: Bien que je sois intéressé par la typographie, avec
+           notamment mon propre exemplaire de
+           « [The Elements of Typographic Style][elements] » de Robert
+           Bringhurst et une lecture attentive de
+           « [The Elements of Typographic Style Applied to the Web][webtypography] »,
+           mon niveau en la matière reste plutôt mince.
+
+[TOC]
+
+# Rudiments d'intégration des fontes
+
+Il existe plusieurs méthodes pour exploiter les fontes de son choix
+dans des documents Web. Examinons les principales d'entre elles.
+
+## Auto-hébergement et `@font-face`
+
+Une première possibilité est d'héberger soi-même les fonts et
+d'inclure les directives CSS `@font-face` appropriées. Il y a alors
+cinq choses importantes à savoir :
+
+ 1. **Aucun format commun** à tous les navigateurs n'existe. Il est
+    alors nécessaire de fournir chaque fonte sous différents formats
+    pour supporter le plus de navigateurs possibles.
+ 2. Bien entendu, le cas d'**Internet Explorer** nécessitera quelques
+    bidouilles.
+ 3. La plupart des navigateurs impose la
+    « **[same origin policy][sop]** » : une fonte ne peut être
+    téléchargée que depuis le même domaine que la page qui
+    l'utilise. Il est possible de contourner une telle politique en
+    autorisant explicitement l'accès à ces ressources depuis un
+    domaine tiers. On parle alors de
+    « [cross-origin resource sharing][cors] ». Il faut ajouter
+    l'entête `Access-Control-Allow-Origin` pour servir les fontes en
+    question.
+ 4. Les fontes changeant peu souvent, pour améliorer le **mécanisme de
+    cache**, il est préférable de configurer une date d'expiration
+    assez lointaine dans le futur. Par exemple, environ 30 jours.
+ 5. Il n'y a pas de [type MIME prévu pour les fontes][mime]. Il est
+    donc parfaitement inutile d'en configurer un, même si Google
+    Chrome s'en plaint dans la console.
+
+[Font Squirrel][squirrel] est un outil particulièrement utile à ce
+niveau. Il fournit des kits prêts à l'emploi. Il suffit de choisir la
+fonte que l'on désire utiliser (ou télécharger sa propre fonte) et les
+formats à prendre en compte (mieux vaut les cocher tous) pour obtenir
+une archive ZIP contenant les fontes et les déclarations CSS à
+utiliser. Il est préférable de modifier légèrement ces dernières pour
+utiliser automatiquement les variantes d'une fonte de base ou la copie
+locale de l'utilisateur si disponible. Par exemple, pour la
+police de caractères _Crimson_ en gras, la déclaration suivante me
+semble préférable à celle fournie dans le kit :
+
+    ::css
+    @font-face {
+        font-family: 'Crimson';
+        src: url('Crimson-Bold-webfont.eot');
+        src: local('Crimson Bold'), local('Crimson Text Bold'),
+             url('Crimson-Bold-webfont.eot?#iefix') format('embedded-opentype'),
+             url('Crimson-Bold-webfont.woff') format('woff'),
+             url('Crimson-Bold-webfont.ttf') format('truetype'),
+             url('Crimson-Bold-webfont.svg#CrimsonBold') format('svg');
+        font-weight: bold;
+        font-style: normal;
+    }
+
+## Google Web Fonts
+
+Plutôt que d'héberger soi-même les fontes, il est possible d'opter
+pour un hébergement externe. Dans le cadre des polices de caractères
+libres, [Google Web Fonts][googlefonts] constitue une solution
+envisageable. Le principe de fonctionnement est fort simple : on
+construit une collection de fontes, on choisit pour chacune d'elles les
+variantes que l'on souhaite utiliser et on obtient en retour une ligne
+à coller dans l'élement `<head>` de sa page. Par exemple, pour
+_Crimson_ :
+
+    ::html
+    <link href='http://fonts.googleapis.com/css?family=Crimson+Text:400,700,400italic'
+          rel='stylesheet' type='text/css'>
+
+Pourquoi choisir cette solution plutôt que l'auto-hébergement ?
+
+ 1. Il n'y a pas à utiliser (et parfois payer) sa propre **bande
+    passante** pour servir les fontes.
+ 2. Google dispose de son propre **CDN**. Cela représente un gain
+    important au niveau des performances.
+ 3. La **mise en cache** est plus efficace car plusieurs sites
+    partagent la même fonte.
+ 4. La mise en place est plus **simple**.
+
+À moins de se méfier de Google, notamment en ce qui concerne la traque
+des visiteurs[^track], je pense qu'il s'agit là d'une meilleure
+solution que d'héberger soi-même les fontes. Dans ce domaine, les
+performances sont particulièrement importantes étant donné que les
+fontes sont nécessaires au rendu du document.
+
+[^track]: Les fontes servies par Google le sont depuis un domaine
+          n'émettant pas de cookies. Il est toujours possible pour
+          Google de pister les utilisateurs mais je pense que ce n'est
+          pas le cas.
+
+## Services payants
+
+Pour utiliser des polices de caractères commerciales telles que _Adobe
+Minion Pro_ ou _Paratype Futura PT_, une alternative intéressante est
+de les louer. [Typekit][typekit] propose un tel service. Les tarifs
+dépendent du volume et du nombre de fontes auquel on désire avoir
+accès. Il existe une option gratuite et l'abonnement le moins cher est à
+24,99 $ par an. Il existe de [nombreux services similaires][smashing].
+
+Une fois inscrit, l'utilisation est semblable à _Google Web Fonts_ :
+on sélectionne les fontes que l'on souhaite utiliser et on les
+assemble dans un _kit_ que l'on publie. Plutôt que de fournir
+directement un fichier CSS, _Typekit_ fournit un bout de Javascript
+qui va ensuite télécharger un CSS contenant toutes les fontes dans un
+format approprié pour le navigateur (avec la plupart d'entre eux, les
+fontes sont contenues directement dans le CSS).
+
+    ::html
+    <script type="text/javascript"
+            src="//use.typekit.com/tyt0atd.js"></script>
+    <script type="text/javascript">
+      try{Typekit.load();}catch(e){}
+    </script>
+
+# Typekit: les points positifs...
+
+Pourquoi opter pour _Typekit_ ? Tout d'abord, il y a un **très large
+choix de fontes**. L'abonnement payant le moins cher donne accès à
+plus de 500 polices de caractères issues de plus de 80 fonderies. Il y
+a une centaine de polices à empattement et environ le double sans
+empattement.
+
+_Typekit_ propose une **interface efficace pour naviguer à travers les
+fontes**. Il est possible d'effectuer des recherches par nom ou de
+filtrer selon les caractéristiques de la police recherchée (avec ou
+sans empattement, graisse, largeur, hauteur, contraste, utilisation
+recommandée, langues supportées, etc.).
+
+Pour toute question ou problème, le **support est diligent et
+rapide**. J'ai obtenu des réponses claires à mes questions en quelques
+heures durant un week-end.
+
+# ...et les points négatifs
+
+Malheureusement, _Typekit_ a aussi quelques défauts. L'un des
+principaux est l'utilisation de Javascript qui empêche aux personnes
+le désactivant l'accès aux fontes. Si c'est un point important pour
+vous, restez éloignés de _Typekit_.
+
+## Ni libre, ni gratuit
+
+Bien que _Typekit_ propose quelques fontes libres, la plupart d'entre
+elles ne le sont pas. De plus, l'abonnement gratuit contient beaucoup
+moins de fontes que les abonnements payants. Bien que je préférerais
+utiliser des fontes libres, ce n'est pas un point déterminant pour
+moi : il est facile d'opter pour une autre fonte ou un autre service.
+
+J'aime beaucoup les polices avec empattement et le monde libre
+s'attarde rarement sur celles-ci ; il est alors difficile d'en trouver
+des attrayantes dont le rendu à l'écran est excellent. _Droid Serif_
+est trop colorée à mon goût. Peut-être que _Cardo_ me conviendrait.
+
+## Choix et tests des fontes
+
+Alors que naviguer dans les différentes fontes est simple et agréable,
+les comparer et les tester est une autre affaire. On apprécierait en
+effet de pouvoir comparer le rendu d'un paragraphe à l'aide de
+plusieurs fontes sur une même page, ou alors de pouvoir assembler un
+titre et un paragraphe afin de juger si deux polices s'apparient
+correctement. Sur ce point, _Google Web Fonts_ propose des interfaces
+plus abouties.
+
+Les choses se compliquent singulièrement quand il s'agit de tester les
+fontes choisies sur son propre site. En effet, chaque modification du
+kit doit être suivie d'une publication de celui-ci. Cette dernière
+peut nécessiter d'**attendre cinq à dix minutes** avant d'être
+effective. De plus, il est nécessaire de jongler entre les kits (dont
+le nombre est aussi limité) pour ne pas affecter le site publié quand
+on désire tester quelques modifications.
+
+Il aurait été préférable de proposer un kit contenant toutes les
+fontes disponibles. Ce kit pourrait par exemple être limité à
+certaines IP pour éviter les abus. C'est quelque chose que propose
+[Fontdeck][fontdeck], un concurrent de _Typekit_.
+
+## Peu de sous-ensembles disponibles
+
+Parce qu'il est souvent nécessaire de maintenir la taille des fontes
+sous une certaine limite (par exemple, 30 Ko par fonte), _Typekit_
+propose pour la plupart des fontes deux ensembles de caractères :
+l'ensemble par défaut ne contient **que certains caractères latins**
+et l'ensemble complet contient **tous les caractères disponibles dans
+la fonte**. Si un caractère est absent de l'ensemble par défaut, il
+faut alors utiliser l'ensemble complet qui est souvent deux à quatre
+fois plus gros. Ce qui est dommage pour un seul caractère.
+
+Il serait préférable de proposer des sous-ensembles pour chaque
+langue. J'opterais alors pour un sous-ensemble francophone qui
+contiendrait, en plus des caractères de l'ensemble par défaut, le
+caractère « œ » que l'on trouve dans « cœur » et dans « œil ». C'est
+le seul caractère manquant de l'ensemble par défaut !
+
+Quand un caractère est absent, le navigateur utilise le caractère de
+la fonte suivante dans la pile CSS. Par exemple, si la fonte souhaitée
+est _FF Tisa Web Pro_ et que la fonte suivante est _Droid Serif_,
+voici ce que donne le mot «_cœur_». Sur la première ligne, _FF Tisa
+Web Pro_ contient tous les caractères adéquats tandis que sur la
+seconde, le caractère « œ » est pris dans la fonte _Droid
+Serif_. Étant donné que ces deux fontes diffèrent par leur hauteur et
+leur contraste, on remarque des différences, particulièrement pour les
+petites tailles où l'erreur atteint les 10%.
+
+![Divers rendu pour le mot « cœur »][img-oe]
+[img-oe]: [[!!images/typekit/ligatures.png]] "Rendu quand le caractère est présent, substitué par celui d'une autre fonte ou émulé. Rendu à 72 pixels et 16 pixels (agrandi)."
+
+J'ai également ajouté une troisième ligne où la ligature est
+construite en accolant « o » et « e ». Le style suivant est appliqué
+sur « e » :
+
+    ::css
+    .lf-ligature {
+        margin-left: -0.172em;
+        zoom: 1; /* Here to trigger hasLayout on IE7 */
+    }
+
+Le résultat est tout à fait respectable. J'utilise
+[un peu de Javascript][ligature-js] pour transformer la ligature. Il
+serait possible de prendre en charge des ligatures supplémentaires
+mais également d'ajouter des caractères composés (comme on en trouve
+dans des mots comme « Antonín Dvořák »).
+
+## Mise en cache peu satisfaisante
+
+Comme un document ne peut être affiché qu'une fois que les fontes ont
+été chargées[^fout], il est particulièrement important que le
+téléchargement des fontes soit le plus rapide possible. _Typekit_ fait
+appel à [Edgecast][edgecast] comme CDN et [DynECT][dynect] pour le
+DNS.
+
+[^fout]: En fait, les navigateurs ont plusieurs techniques pour
+         effectuer le rendu lorsque les fontes ne sont pas
+         immédiatement disponibles. Paul Irish a écrit
+         [un article complet à ce sujet][fout]. Une stratégie assez
+         courante est de laisser l'espace nécessaire au texte et de ne
+         l'afficher qu'une fois la fonte disponible, à moins que cela
+         prenne trop de temps et dans ce cas, on utilise
+         temporairement une fonte de repli.
+
+Deux fichiers sont téléchargés, tous deux hébergés sur
+`use.typekit.com`. Le premier est un script qui fait office de
+chargeur. Selon les caractéristiques du navigateur, il détermine quel
+est la meilleure façon de charger les fontes. Le second fichier est
+généralement un gros fichier CSS.
+
+Voici les entêtes retournées par le premier fichier :
+
+    ::text
+    HTTP/1.1 200 OK
+    Accept-Ranges: bytes
+    Cache-Control: max-age=300
+    Content-Encoding: gzip
+    Content-Type: text/javascript
+    Date: Tue, 08 Nov 2011 18:34:16 GMT
+    ETag: "388467610+gzip"
+    Expires: Tue, 08 Nov 2011 18:39:16 GMT
+    Last-Modified: Sat, 05 Nov 2011 09:31:57 GMT
+    Server: ECS (cdg/D624)
+    Vary: Accept-Encoding
+    X-Cache: HIT
+    Content-Length: 7440
+
+Tout d'abord, notons que le contenu du fichier est compressé. Bon
+point. Les entêtes à examiner ensuite sont `Cache-Control`, `Date`,
+`ETag` et `Expires` : le serveur demande au navigateur d'**invalider
+le cache au bout de 5 minutes**. Quand le navigateur remarque que sa
+copie n'est plus à jour, il va demander au serveur une copie plus
+récente, si disponible, en incluant l'entête `If-None-Match:
+388467610+gzip`. À moins que le kit ait été modifié, le serveur va
+alors répondre qu'il n'y a pas eu de modifications (`304 Not
+Modified`) et ne renverra pas le fichier. La copie sera alors valable
+5 autres minutes. Cela signifie qu'après 5 minutes, il est nécessaire
+d'effectuer **trois aller-retour** entre le client et le serveur juste
+pour savoir s'il existe une nouvelle version.
+
+Pire, parfois, les serveurs de _Typekit_ mettent du temps à répondre,
+jusqu'à une minute dans certains cas. Comme le premier fichier est un
+script que l'on indique dans `<head>`, la totalité de la page est
+bloquée en attendant celui-ci. Voici un exemple de ce qui arrive
+parfois (mais rarement) quand on charge une page utilisant _Typekit_
+alors que tous les éléments statiques sont en cache :
+
+![Capture d'écran de Chromium Inspector][typekit-slow]
+[typekit-slow]: [[!!images/typekit/slow.png]] "Frise du déroulement du chargement d'une page utilisant Typekit"
+
+On remarque que le rendu de la page a été mis en pause pendant 3,5
+secondes en attente des ressources issues de _Typekit_. En regardant
+plus attentivement, on remarque d'autres problèmes, notamment la
+présence d'un code retour `200` au lieu de `304`. Voici la requête
+(partielle) qu'a envoyé le navigateur :
+
+    ::text
+    GET /tyt0atd.js HTTP/1.1
+    Host: use.typekit.com
+    Connection: keep-alive
+    Accept-Encoding: gzip,deflate,sdch
+    If-None-Match: "2200251225+gzip"
+    If-Modified-Since: Thu, 10 Nov 2011 11:38:11 GMT
+
+Et voici un extrait de la réponse :
+
+    ::text
+    HTTP/1.1 200 OK
+    Accept-Ranges: bytes
+    Cache-Control: max-age=300
+    Content-Type: text/javascript
+    Date: Fri, 11 Nov 2011 17:10:03 GMT
+    ETag: "2200251225"
+    Expires: Fri, 11 Nov 2011 17:15:03 GMT
+    Last-Modified: Thu, 10 Nov 2011 11:38:11 GMT
+    Server: EOS (lax001/54E5)
+    Content-Length: 25755
+
+Que s'est-il passé ? Pour une raison inconnue, le serveur n'a pas jugé
+souhaitable de donner accès à la version compressée de la ressource :
+il n'y a pas d'entête `Content-Encoding: gzip` dans la réponse alors
+que le navigateur a utilisé l'entête `Accept-Encoding:
+gzip`. L'étiquette `ETag` fournie par le navigateur
+(`2200251225+gzip`) provient manifestement de la version
+compressée. Celle-ci étant indisponible et la [RFC 2616][rfc2616]
+indiquant d'ignorer l'entête `If-Modified-Since` dans ce cas, le
+serveur répond avec `200 OK` et renvoie l'intégralité du fichier. Non
+seulement la mise en cache n'a pas fonctionné mais on doit en plus
+télécharger la version non compressée !
+
+Supposons maintenant que ce problème ne soit pas apparu et que le
+serveur ait répondu, comme attendu, avec `304 Not Modified`. Le
+résultat n'est toujours pas satisfaisant. Nous aurions attendu 1,3
+secondes pour savoir que notre version était toujours à jour. Notez
+cependant que, la plupart du temps, _Typekit_ est très rapide.
+
+Il aurait été préférable que _Typekit_ fournisse une nouvelle URL à
+utiliser lors de chaque modification du kit (avec le numéro de
+version, par exemple). La politique de mise en cache de cette URL
+serait de plusieurs jours. Cette approche permettrait aussi de pouvoir
+modifier le kit lors du développement sans affecter le site en
+production.
+
+Je suspecte _Typekit_ d'avoir délibéremment choisi une mise en cache
+déficiente pour pouvoir suivre l'utilisation de chaque kit et vérifier
+ainsi que le nombre de visiteurs correspond bien à l'abonnement
+choisi.
+
+# Conclusion
+
+Mon sentiment vis-à-vis de _Typekit_ est assez mitigé. Le problème de
+mise en cache me semble plutôt majeur et je réfléchis à retourner vers
+_Google Web Fonts_ pour cette unique raison. En dehors de cet aspect,
+les défauts cités me semblent relativement mineurs par rapport aux
+avantages apportés.
+
+*[CSS]: Cascading Style Sheets
+*[FOUT]: Flash of unstyled text
+*[DNS]: Domain Name Service
+*[CDN]: Content Delivery Network
+*[FLOSS]: Free and Open Source Software
+
+[typekit]:     http://www.typekit.com           "Typekit"
+[googlefonts]: http://www.google.com/webfonts   "Google Web Fonts"
+[squirrel]:    http://www.fontsquirrel.com/     "Font Squirrel"
+[edgecast]:    http://www.edgecast.com/         "EdgeCast Networks"
+[dynect]:      http://dyn.com/dns/dynect-managed-dns/ "DynECT Managed DNS"
+[rfc2616]:     http://rfc2616.com/              "RFC 2616: HTTP/1.1"
+[webtypography]: http://webtypography.net/      "The Elements of Typographic Style Applied to the Web"
+[fontdeck]:    http://www.fontdeck.com/         "Fontdeck"
+
+[elements]: http://www.amazon.fr/Elements-Typographic-Style-Robert-Bringhurst/dp/0881792063 "The Elements of Typographic Style on Amazon"
+[mime]: https://developer.mozilla.org/en/css/@font-face "@font-face sur MDN"
+[sop]: http://en.wikipedia.org/wiki/Same_origin_policy "Article Wikipedia sur SOP"
+[cors]: http://enable-cors.org/ "Utiliser le CORS"
+[fout]: http://paulirish.com/2009/fighting-the-font-face-fout/ "Fighting the @font-face FOUT"
+[ligature-js]: https://github.com/vincentbernat/www.luffy.cx/commit/dab984d044c1dd7440a2db9b95e3b67c2ae07924#diff-3 "Code Javascript pour le rendu des ligatures"
+[smashing]: http://www.smashingmagazine.com/2010/10/20/review-of-popular-web-font-embedding-services/ "Smashing Magazine: Review of Popular Web Font Embedding Services"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
