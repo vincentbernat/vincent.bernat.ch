@@ -160,6 +160,12 @@ summarized on the following plot:
 ![Plot to compare computational power required by servers and clients][s1]
 [s1]: [[!!images/ssl-server-vs-client.png]] "Comparison of computational power needed by servers and clients"
 
+**UPDATED:** Adam Langley announced
+[Google HTTPS sites now support forward secrecy][ecdh] and
+`ECDHE-RSA-RC4-SHA` is now the preferred cipher suite thanks to fast,
+constant-time implementations of elliptic curves P-224, P-256 and
+P-521 in OpenSSL. The tests above did not use those implementations.
+
 For example, with 2048bit RSA certificates and a cipher suite like
 `AES256-SHA`, the server needs 6 times more CPU power than the
 client. However, if we use `DHE-RSA-AES256-SHA` instead, the server
@@ -167,7 +173,7 @@ needs 34% less CPU power. The most efficient cipher suite from the
 server point of view seems to be something like `DHE-DSS-AES256-SHA`
 where the server needs half the power of the client.
 
-However, you can't really uses those shiny cipher suites:
+However, you can't really uses only those shiny cipher suites:
 
  1. Some browsers do not support them: they are limited to RSA cipher
     suites[^1].
@@ -337,6 +343,7 @@ may just be ineffective.
 [server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Tool compare processing power needed by client and server"
 [iptables]: http://linux.die.net/man/8/iptables "Manual page of iptables(8)"
 [sslsqueeze]: ftp://ftp.stunnel.org/sslsqueeze/ "sslsqueeze, SSL service load generator"
+[ecdh]: http://www.imperialviolet.org/2011/11/22/forwardsecret.html "Forward secrecy for Google HTTPS"
 
 {# Local Variables: #}
 {# mode: markdown   #}
