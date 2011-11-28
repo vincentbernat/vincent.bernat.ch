@@ -1,0 +1,299 @@
+---
+title: SSL/TLS & Perfect Forward Secrecy
+keywords: "tls, ssl, pfs, courbes elliptiques, ecdhe, cryptographie, openssl"
+uuid: ec3e8780-4190-4ed0-bcbb-32665846d2f1
+tags:
+  - ssl
+---
+
+Une fois la clef privée d'un site HTTPS quelconque compromise, un
+attaquant est capable de monter une [attaque par interception][mitm]
+(_MITM_) afin de déchiffrer toutes les communications avec le site
+compromis. Si l'attaque est détectée, le certificat sera révoqué via
+une CRL ou un protocole tel que OCSP. Malheureusement, l'attaquant
+peut aussi avoir en sa position une copie des communications passées
+de clients avec le serveur. Il est alors capable de déchiffrer
+celles-ci et y trouver des informations sensibles.
+
+La propriété de _forward secrecy_[^trad] permet à une information
+chiffrée aujourd'hui de rester confidentielle en cas de compromission
+future de la clef privée d'un correspondant. C'est un mécanisme assez
+coûteux en calculs et de nombreux serveurs font donc l'impasse sur
+celui-ci. Google a récemment
+[annoncé le support du _forward secrecy_][announce] pour tous ses
+sites accessibles en HTTPS. Adam Langley a rédigé un
+[article plus détaillé sur ce qui a été réalisé][agl] pour améliorer
+l'efficacité d'un tel mécanisme : avec quelques collègues, il a écrit
+une implémentation plus efficace pour OpenSSL, basée sur la
+cryptographie sur les courbes elliptiques.
+
+[^trad]: Je ne connais pas la traduction généralement admise pour les
+         termes _forward secrecy_ et _perfect forward
+         secrecy_. Wikipedia opte pour
+         [confidentialité persistante][pfs] ce qui me semble assez
+         horrible. J'opte donc pour le terme anglais.
+
+[TOC]
+
+# Sans forward secrecy
+
+Pour comprendre ce que le _forward secrecy_ tente de résoudre,
+regardons ce qui se passe lors d'une poignée de mains TLS en utilisant
+une suite de chiffrement telle que `AES128-SHA`. Durant celle-ci, le
+serveur va présenter son certificat au client et les deux parties vont
+s'accorder sur la construction d'un _secret maître_ utilisé par la
+suite pour protéger la connexion.
+
+![Déroulement d'une poignée de mains TLS][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Poignée de mains TLS complète"
+
+Un premier secret de 48 octets est généré et chiffré par le client avec la clef publique du serveur. Il est envoyé durant la troisième étape de la poignée de mains, lors de l'envoi du message _Client Key Exchange_. Le _secret maître_ est calculé à partir de celui-ci et des valeurs aléatoires qui ont été transmisses dans les messages _Client Hello_ et _Server Hello_.
+
+Ce procédé est sûr à condition que seul le serveur puisse déchiffrer
+le premier secret (à l'aide de sa clef privée) envoyé par le
+client. Supposons maintenant qu'un attaquant enregistre tous les
+échanges entre le serveur et ses nombreux clients pendant plusieurs
+mois. Deux ans plus tard, le serveur est décommissionné et jeté à la
+benne. L'attaquant en profite pour subtiliser le disque et y trouve la
+clef privée. Il est désormais capable de déchiffrer toutes les
+communications qu'il a pu intercepter. Cela lui permet de récupérer,
+par exemple, des mots de passe encore valides aujourd'hui.
+
+Le problème principal est que la clef privée est à la fois utilisée
+pour l'**authentification** du serveur et pour le **chiffrement** du
+secret partagé. Alors que l'authentification n'est réellement
+importante que pendant le laps de temps où la communication entre les
+deux parties est établie, le chiffrement doit être capable de protéger
+un secret pendant plusieurs années.
+
+# Algorithme de Diffie-Hellman
+
+Une solution consiste à n'utiliser la clef privée que pour
+l'authentification et négocier un secret partagé totalement
+indépendant de celle-ci. Il existe un protocole à cet effet :
+l'[algorithme de Diffie-Hellman][dh]. Il s'agit d'une méthode
+d'échange de clefs ne nécessitant aucune connaissance préalable entre
+les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
+
+ 1. Le serveur doit initialement disposer de (avec l'aide d'une commande
+    comme `openssl dhparam` par exemple) :
+     - ·p·, un grand [nombre premier][prime],
+	 - ·g·, une [racine primitive modulo ·p·][primroot] (pour chaque
+       entier ·a· [premier avec ·p·][coprime], il existe un entier ·k·
+       tel que ·g^k=a\\mod p·).
+ 2. Le serveur choisit un nombre aléatoire ·a· et calcule ·g^a \\mod
+    p·. Après l'envoi du message _Certificate_, il envoie un message
+    _Server Key Exchange_ (inclu lors de l'étape 3 mais non représenté
+    dans la poignée de mains décrite précédemment) contenant, en clair
+    mais authentifié avec sa clef privée :
+	 - la valeur aléatoire issue du message _Client Hello_,
+	 - la valeur aléatoire issue du message _Server Hello_,
+	 - ·p·, ·g·,
+	 - ·g^a\\mod p=A·.
+ 3. Le client vérifie la signature et choisit un nombre aléatoire
+    ·b·. Il envoie alors ·g^b \\mod p=B· dans un message _Client Key
+    Exchange_. Il calcule ·A^b\\mod p=g^{ab}\\mod p· qui constitue le
+    premier secret duquel est dérivé le _secret maître_.
+ 4. Le serveur reçoit ·B· et calcule ·B^a\\mod p=g^{ab}\\mod p· qui
+    est identique au premier secret calculé par le client.
+
+La clef privée n'a été utilisée qu'à des fins d'authentification. Un
+espion ne pourra connaître que ·p·, ·g·, ·g^a\\mod p· et ·g^b\\mod
+p·. Calculer ·g^{ab}\\mod p· à partir de ces valeurs est connu sous le
+nom du problème du [logarithme discret][discretelog]. Aucune solution
+efficace à ce problème n'a été découverte pour le moment.
+
+Tel que décrit ci-dessus, l'échange de Diffie-Hellman utilise
+systématiquement de nouvelles valeurs pour ·a· et ·b·. On parle alors
+d'échange de Diffie-Hellman éphémère (_Ephemeral Diffie-Hellman_, EDH
+ou DHE). Des suites de chiffrement telles que `DHE-RSA-AES128-SHA`
+l'utilisent pour obtenir la propriété de _perfect forward
+secrecy_[^pfs].
+
+[^pfs]: La propriété de _perfect forward secrecy_ est une version
+        améliorée du _forward secrecy_ pour laquelle chaque clef est
+        indépendante l'une de l'autre et la compromission d'une clef
+        ne peut être utilisée pour en compromettre une autre.
+
+Afin d'obtenir un bon niveau de sécurité, les paramètres utilisés
+doivent être de la même taille que la clef privée (la sécurité du
+logarithme discret est environ équivalente à celle fournie par la
+factorisation de deux grands nombres premiers). Les opérations
+d'exponentiation sur de tels grands nombres sont alors
+particulièrement longues et impactent la performance de la poignée de
+mains comme on peut le voir sur le benchmark ci-dessous :
+
+![Graphique de comparaison de la vitesse avec et sans Diffie-Hellman][s3]
+[s3]: [[!!images/benchs-ssl/dhe-impact.png]] "Performances de stud sur 6 cœurs, avec et sans Diffie-Hellman pour une clef de 1024 bits"
+
+# Diffie-Hellman et les courbes elliptiques
+
+L'échange de Diffie-Hellman peut également s'effectuer à l'aide de la
+[cryptographie sur les courbes elliptiques][ecc], basée sur la
+structure des courbes elliptiques sur un corps
+fini. L'[article de Wikipedia][ecc] n'est pas très didactique et je
+vous conseille plutôt
+l'[article illustré d'Adam Langley][eccintro]. Les courbes elliptiques
+permettent d'obtenir un niveau de sécurité équivalent à RSA en
+utilisant des clefs plus petites. Par exemple, une courbe elliptique
+de 224 bits permet d'obtenir un
+[niveau de sécurité similaire à une clef RSA de 2048 bits][compare].
+
+## Un peu de théorie
+
+L'échange de Diffie-Hellman décrit auparavant peut facilement être
+adapté pour utiliser les courbes elliptiques. Au lieu d'utiliser deux
+entiers ·p· et ·g·, on part d'une courbe elliptique, ·y^2=x^3+\\alpha
+x+\\beta·, d'un entier premier ·p· et d'un point de base ·G·. Tous ces
+paramètres sont publics. En fait, même s'ils peuvent être générés par
+le serveur, ils sont généralement choisis dans un catalogue.
+
+L'utilisation des courbes elliptiques est normalisée comme une
+extension de TLS et décrite dans la [RFC 4492][rfc4492]. Contrairement
+à l'échange de Diffie-Hellman classique, le client et le serveur
+doivent se mettre d'accord sur les divers paramètres à utiliser. Cet accord se
+matérialise essentiellement dans les messages _Client Hello_ et
+_Server Hello_. Bien qu'il soit possible d'utiliser une courbe
+elliptique arbitraire, les navigateurs se contentent d'indiquer le
+support de quelques courbes prédéfinies telles que NIST P-256, P-384
+et P-521. L'échange de clefs est ensuite très similaire au cas
+classique :
+
+ 1. Le serveur choisit un entier aléatoire ·a· et calcule ·aG· qui
+    sera envoyé en clair, mais signé avec la clef privée du serveur,
+    dans un message _Server Key Exchange_.
+ 2. Le client vérifie la signature et choisit un nombre aléatoire
+    ·b·. Il calcule et envoie ·bG· dans un message _Client Key
+    Exchange_. Il calcule également ·b\\cdot aG=abG· qui est le premier
+    secret à partir duquel est calculé le _secret maître_.
+ 3. Le serveur reçoit ·bG· et calcule ·a\\cdot bG=abG·. Il peut alors
+    dériver le même _secret maître_ que le client.
+
+Un espion verra passer les valeurs ·aG· et ·bG·. Il n'existe aucun
+moyen connu de calculer efficacement ·abG· à partir de ces valeurs et
+des paramètres de la courbe.
+
+Utiliser une suite de chiffrement telle que `ECDHE-RSA-AES128-SHA`
+(avec la courbe NIST P-256 par exemple) constitue déjà une
+amélioration notable des performances par rapport à la suite
+`DHE-RSA-AES128-SHA` grâce aux nombres plus petits mis en jeu.
+
+Les navigateurs ne supportent qu'une poignée de courbes elliptiques et
+ces dernières ont été choisies entre autres pour leurs structures
+facilitant des implémentations efficaces. Le travail effectué par Bodo
+Möller, Emilia Käsper et Adam Langley consiste à fournir une
+implémentation optimisée pour les processeurs 64 bits des courbes NIST
+P-224, P-256 et P-521 pour OpenSSL. Pour obtenir plus de détails sur
+le sujet, vous pouvez lire la fin de
+l'[introduction aux courbes elliptiques][eccintro] d'Adam Langley puis
+le [court papier d'Emilia Käsper][emilia] sur l'optimisation de
+l'implémentation de la courbe NIST P-224.
+
+## En pratique
+
+Tout d'abord, le support des courbes elliptiques n'est pas présent
+dans tous les navigateurs. Les versions récentes de Firefox et de
+Chrome supportent les courbes NIST P-256, P-384 et P-521 mais en ce
+qui concerne Internet Explorer, il n'y a rien pour le moment. Il faut
+donc continuer à accepter des suites de chiffrement classiques.
+
+Une version récente d'OpenSSL est nécessaire. Le support pour les
+suites ECDHE est apparu dans **OpenSSL 1.0.0**. Il est simple de
+vérifier leur présence avec `openssl ciphers ECDH`. Pour utiliser la
+version optimisée pour 64 bits, il faut se tourner vers la future
+version 1.0.1 en la configurant avec l'option
+`enable-ec_nistp_64_gcc_128`. Une version récente de GCC est alors
+également requise.
+
+Ensuite, il faut choisir les **suites de chiffrement** appropriées. Si
+le _forward secrecy_ est optionnel, vous pouvez partir sur
+`ECDHE-RSA-AES128-SHA:AES128-SHA:RC4-SHA` qui est compatible avec la
+plupart des navigateurs. Si le _forward secrecy_ est obligatoire, il
+faudra partir sur quelque chose comme
+`ECDHE-RSA-AES128-SHA:DHE-RSA-AES128-SHA:EDH-DSS-DES-CBC3-SHA`.
+
+Également, il faut s'assurer que l'**ordre des suites de chiffrement
+est respecté**. Pour _nginx_, il s'agit de la directive
+`ssl_prefer_server_ciphers on` tandis que pour _Apache_, c'est
+`SSLHonorCipherOrder on`.
+
+L'implémentation des [tickets de session TLS][tickets] peut être
+incompatible avec le _forward secrecy_ selon leur
+implémentation. Quand la clef protégeant les tickets est générée
+aléatoirement au démarrage du serveur, la même clef peut être utilisée
+pendant des mois. Certaintes implémentations [^stud] optent pour une
+clef dérivée de la clef privée. Dans ce cas, le _forward secrecy_ est
+rendu totalement inefficace. Il est alors préférable de désactiver
+tickets.
+
+[^stud]: C'est le cas par exemple de l'implémentation que j'ai
+         proposée pour [stud][stud] afin de permettre
+         [le partage des tickets entre plusieurs serveurs][stud30].
+
+La commande `openssl s_client -tls1 -cipher ECDH -connect
+127.0.0.1:443` permet de vérifier que tout fonctionne comme attendu.
+
+## Quelques benchmarks
+
+En utilisant l'[outil de micro-benchmark][server-vs-client] utilisé
+lors de mon [précédent article][dos], il est possible de comparer
+l'efficacité de chacune des suites de chiffrement permettant d'obtenir
+le _forward secrecy_ :
+
+![Graphique de comparaison avec/sans DHE/ECDHE][s4]
+[s4]: [[!!images/benchs-ssl/ecdhe.png]] "Performance de 1000 poignées de mains avec différentes suites de chiffrement (RSA 2048, DHE, ECDHE, ECDHE optimisé)"
+
+J'ai utilisé une
+[pré-version d'OpenSSL 1.0.1 datant du 25 novembre 2011][snapshot]. La
+version optimisée d'ECDHE est celle obtenue en utilisant l'option
+`enable-ec_nistp_64_gcc_128` en configurant OpenSSL.
+
+[snapshot]: ftp://ftp.openssl.org/snapshot/openssl-1.0.1-stable-SNAP-20111125.tar.gz
+
+Concentrons-nous sur la partie serveur. Activer la suite
+`DHE-RSA-AES128-SHA` grève les performances d'un facteur 3 tandis que
+l'utilisation de `ECDHE-RSA-AES128-SHA` n'implique qu'une pénalité de
+27%. La version optimisée permet de réduire la **pénalité à 15%** par
+rapport à `AES128-SHA`. À noter qu'il convient de pondérer de telles
+pénalités en fonction du nombre de poignées de mains complètement
+effectuées par les clients. Ainsi, si ceux-ci utilisent trois fois sur
+quatre une poignée de main raccourcie (reprise d'une ancienne session
+SSL), il faut diviser par quatre l'impact sur les performances.
+
+Le coût d'une suite utilisant ECDHE semble donc être plutôt
+raisonnable par rapport au gain de sécurité apporté. Il s'agit donc
+d'une option à considérer attentivement lors du choix des suites de
+chiffrement autorisées.
+
+*[CRL]: Certificate Revocation List
+*[OCSP]: Online Certificate Status Protocol
+*[SSL]: Secure Sockets Layer
+*[TLS]: Transport Layer Security
+*[MITM]: Man-in-the-middle
+
+[dos]: [[fr/blog/2011-dos-ssl-solutions.html]]             "Déni de service SSL : quelles solutions ?"
+[sslbench1]: [[fr/blog/2011-ssl-benchmark.html]]           "Premier round de benchmarks SSL"
+[tickets]: [[fr/blog/2011-sessions-ssl-rfc5077.html]]      "Accélérer SSL : réutilisation des sessions"
+
+[tls]: http://fr.wikipedia.org/wiki/Transport_Layer_Security     "TLS sur Wikipedia"
+[prime]: http://fr.wikipedia.org/wiki/Nombre_premier             "Nombre premier sur Wikipedia"
+[primroot]: http://fr.wikipedia.org/wiki/Racine_primitive_modulo_n "Racine primitive sur Wikipedia"
+[coprime]: http://fr.wikipedia.org/wiki/Nombres_premiers_entre_eux "Nombres permiers entre eux sur Wikipedia"
+[discretelog]: http://fr.wikipedia.org/wiki/Logarithme_discret   "Logarithme discret sur Wikipedia"
+[mitm]: http://fr.wikipedia.org/wiki/Attaque_de_l%27homme_du_milieu "Attaque de l'homme du milieu sur Wikipedia"
+[dh]: http://fr.wikipedia.org/wiki/%C3%89change_de_cl%C3%A9s_Diffie-Hellman "Diffie-Hellman sur Wikipedia"
+[ecc]: http://fr.wikipedia.org/wiki/Cryptographie_sur_les_courbes_elliptiques  "Cryptographie sur les courbes elliptiques sur Wikipedia"
+
+[stud]: https://github.com/bumptech/stud
+[stud30]: https://github.com/bumptech/stud/pull/30
+[announce]: http://googleonlinesecurity.blogspot.com/2011/11/protecting-data-for-long-term-with.html "Protecting data for the long term with forward secrecy"
+[agl]: http://www.imperialviolet.org/2011/11/22/forwardsecret.html "Forward secrecy for Google HTTPS"
+[emilia]: http://research.google.com/pubs/archive/37376.pdf "Fast Elliptic Curve Cryptography in OpenSSL"
+[eccintro]: http://www.imperialviolet.org/2010/12/04/ecc.html "Elliptic curves and their implementation"
+[compare]: http://www.keylength.com/en/compare/ "Cryptographic key length recommendation"
+[rfc4492]: http://tools.ietf.org/html/rfc4492 "RFC 4492: ECC Cipher Suites for TLS"
+[server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Tool compare processing power needed by client and server"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
