@@ -64,7 +64,7 @@ established, but encryption is expected to last for years.
 # Diffie-Hellman with discrete logarithm
 
 One way to solve the problem is to keep using the private key for
-authentication but uses an independant mechanism to agree on a shared
+authentication but uses an independent mechanism to agree on a shared
 secret. Hopefully, there exists a well-known protocol for this: the
 [Diffie-Hellman key exchange][dh]. It is a method of exchanging keys
 without any prior knowledge. Here is how it works in TLS:
@@ -104,7 +104,7 @@ random values ·a· and ·b·, it is called _Ephemeral Diffie-Hellman_
 protocol to achieve _perfect forward secrecy_[^pfs].
 
 [^pfs]: _Perfect forward secrecy_ is an enhanced version of _forward
-        secrecy_. It assumes each exchanged key are independant and
+        secrecy_. It assumes each exchanged key are independent and
         therefore a compromised key cannot be used to compromise
         another one.
 
@@ -123,12 +123,11 @@ benchmark below:
 Fortunately, there exists another way to achieve a Diffie-Hellman key
 exchange with the help of [elliptic curve cryptography][ecc] which is
 based on the algebraic structure of elliptic curves over finite
-fields. The [wikipedia article][ecc] is not the best introduction to
-elliptic curves. You may prefer the more
-[illustrated introduction from Adam Langley][eccintro]. Elliptic curve
-cryptography allows one to achieve the same level of security than RSA with
-smaller keys. For example, a 224bit elliptic curve is believed to be
-[as secure as a 2048bit RSA key][compare].
+fields. To get some background on this, be sure to check first
+[Wikipedia article on elliptic curves][ec]. Elliptic curve
+cryptography allows one to achieve the same level of security than RSA
+with smaller keys. For example, a 224bit elliptic curve is believed to
+be [as secure as a 2048bit RSA key][compare].
 
 ## Some theory
 
@@ -202,6 +201,19 @@ Then, you need to ensure the **order of cipher suites is
 respected**. On _nginx_, this is done with `ssl_prefer_server_ciphers
 on`. On _Apache_, this is `SSLHonorCipherOrder on`.
 
+**UPDATED:** You need to check **ECDHE support for your web
+server**. For _nginx_, the support has been added in 1.0.6 and
+1.1.0. The curve selected defaults to NIST P-256. You can specify
+another one with `ssl_ecdh_curve` directive. For _Apache_, it has been
+added in 2.3.3 and does not exist in the current stable branch. Adding
+support for ECDHE is quite easy. You can check
+[how I added it in _stud_][stud61]. This issue also exists for DHE
+cipher suites, in which case you also might have to specify DH
+parameters to use (generated with `openssl dhparam`) using some
+special directive or by appending the parameters to the
+certificate. Check [Immerda Techblog article][immerda] for more
+background about this point.
+
 The implementation of [TLS session tickets][tickets] may be
 incompatible with forward secrecy, depending on how they are
 implemented. When they are protected by a random key generated at the
@@ -261,9 +273,12 @@ better security.
 [mitm]: http://en.wikipedia.org/wiki/Man-in-the-middle_attack    "Man-in-the-middle attack on Wikipedia"
 [dh]: http://en.wikipedia.org/wiki/Diffie-Hellman                "Diffie-Hellman key exchange on Wikipedia"
 [ecc]: http://en.wikipedia.org/wiki/Elliptic_curve_cryptography  "Elliptic curve cryptography on Wikipedia"
+[ec]: http://en.wikipedia.org/wiki/Elliptic_curve                "Elliptic curves on Wikipedia"
 
-[stud]: https://github.com/bumptech/stud
-[stud30]: https://github.com/bumptech/stud/pull/30
+[immerda]: https://tech.immerda.ch/?p=84 "The state of Forward Secrecy in OpenSSL"
+[stud]: https://github.com/bumptech/stud  "stud, the scalable TLS unwrapping daemon"
+[stud30]: https://github.com/bumptech/stud/pull/30 "Sharing tickets with multiple instances of stud"
+[stud61]: https://github.com/bumptech/stud/pull/61 "Adding support for ECDHE in stud"
 [announce]: http://googleonlinesecurity.blogspot.com/2011/11/protecting-data-for-long-term-with.html "Protecting data for the long term with forward secrecy"
 [agl]: http://www.imperialviolet.org/2011/11/22/forwardsecret.html "Forward secrecy for Google HTTPS"
 [emilia]: http://research.google.com/pubs/archive/37376.pdf "Fast Elliptic Curve Cryptography in OpenSSL"

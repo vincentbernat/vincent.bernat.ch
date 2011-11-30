@@ -130,13 +130,13 @@ mains comme on peut le voir sur le benchmark ci-dessous :
 
 L'échange de Diffie-Hellman peut également s'effectuer à l'aide de la
 [cryptographie sur les courbes elliptiques][ecc], basée sur la
-structure des courbes elliptiques sur un corps
-fini. L'[article de Wikipedia][ecc] n'est pas très didactique et je
-vous conseille plutôt
-l'[article illustré d'Adam Langley][eccintro]. Les courbes elliptiques
-permettent d'obtenir un niveau de sécurité équivalent à RSA en
-utilisant des clefs plus petites. Par exemple, une courbe elliptique
-de 224 bits permet d'obtenir un
+structure des courbes elliptiques sur un corps fini. Pour comprendre
+comment tout cela fonctionne en détail,
+l'[article de Wikipedia sur les courbes elliptiques][ec] est un bon
+point de départ. Les courbes elliptiques permettent d'obtenir un
+niveau de sécurité équivalent à RSA en utilisant des clefs plus
+petites. Par exemple, une courbe elliptique de 224 bits permet
+d'obtenir un
 [niveau de sécurité similaire à une clef RSA de 2048 bits][compare].
 
 ## Un peu de théorie
@@ -217,6 +217,23 @@ est respecté**. Pour _nginx_, il s'agit de la directive
 `ssl_prefer_server_ciphers on` tandis que pour _Apache_, c'est
 `SSLHonorCipherOrder on`.
 
+**MISE À JOUR :** Il est également nécessaire de vérifier que le
+support pour **ECDHE est présent dans le serveur web** que vous
+souhaitez utiliser. Pour _nginx_, le support a été ajouté dans la
+version 1.0.6 et dans la version 1.1.0. La courbe elliptique
+sélectionnée par défaut est NIST P-256 et il est possible d'en choisir
+une autre avec la directive `ssl_ecdh_curve`. Pour _Apache_, le
+support existe depuis la version 2.3.3 mais n'est pas présent dans la
+branche stable. Ajouter le support pour ECDHE n'est pas très
+difficile. À titre d'exemple, vous pouvez consulter
+[comment j'ai ajouté son support dans _stud_][stud61]. Le problème est
+similaire pour les suites basées sur DHE ; dans ce cas, il peut aussi
+être nécessaire de spécifier les paramètres DH à utiliser (générés
+avec `openssl dhparam`) à l'aide de la directive adéquate ou en les
+incluant après le certificat. Un
+[article de Immerda Techblog][immerda] fournit quelques informations
+supplémentaires sur ce point précis.
+
 L'implémentation des [tickets de session TLS][tickets] peut être
 incompatible avec le _forward secrecy_ selon leur
 implémentation. Quand la clef protégeant les tickets est générée
@@ -283,9 +300,12 @@ chiffrement autorisées.
 [mitm]: http://fr.wikipedia.org/wiki/Attaque_de_l%27homme_du_milieu "Attaque de l'homme du milieu sur Wikipedia"
 [dh]: http://fr.wikipedia.org/wiki/%C3%89change_de_cl%C3%A9s_Diffie-Hellman "Diffie-Hellman sur Wikipedia"
 [ecc]: http://fr.wikipedia.org/wiki/Cryptographie_sur_les_courbes_elliptiques  "Cryptographie sur les courbes elliptiques sur Wikipedia"
+[ec]: http://fr.wikipedia.org/wiki/Courbe_elliptique "Courbes elliptiques sur Wikipedia"
 
-[stud]: https://github.com/bumptech/stud
-[stud30]: https://github.com/bumptech/stud/pull/30
+[immerda]: https://tech.immerda.ch/?p=84 "The state of Forward Secrecy in OpenSSL"
+[stud]: https://github.com/bumptech/stud  "stud, the scalable TLS unwrapping daemon"
+[stud30]: https://github.com/bumptech/stud/pull/30 "Partager les tickets entre de multiples instances de stud"
+[stud61]: https://github.com/bumptech/stud/pull/61 "Ajout du support pour ECDHE dans stud"
 [announce]: http://googleonlinesecurity.blogspot.com/2011/11/protecting-data-for-long-term-with.html "Protecting data for the long term with forward secrecy"
 [agl]: http://www.imperialviolet.org/2011/11/22/forwardsecret.html "Forward secrecy for Google HTTPS"
 [emilia]: http://research.google.com/pubs/archive/37376.pdf "Fast Elliptic Curve Cryptography in OpenSSL"
