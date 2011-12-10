@@ -24,6 +24,9 @@ luffy.comments = function() {
 	.show()			// Show because JS is enabled
 	.click(load);		// Load on click
 
+    // If this is Googlebot, load comments right now (maybe comments will be indexed)
+    if (/googlebot/i.test(navigator.userAgent)) load();
+
     /* Load on scroll to bottom */
     $(window).scroll(function() {
 	var bottom = $(window).scrollTop() + $(window).height();
