@@ -1,0 +1,396 @@
+---
+title: Comprendre la mise en cache des routes IPv4 sous Linux
+keywords: "linux, kernel, ipv4, route, cache"
+uuid: 13ee65a8-234e-11e1-9359-0018f3034e06
+tags:
+  - network
+---
+
+Afin d'améliorer les performances lors de la consultation des tables
+de routage, Linux maintient un cache des routes. Dans le cadre d'un
+routeur, l'inefficacité de ce cache peut engendrer un impact important
+sur les performances.
+
+La documentation de ce composant est très réduite. Il est difficile de
+trouver des explications à jour sur le fonctionnement et
+l'optimisation de ce cache. Le livre
+« *[Understanding Linux Network Internals][understanding]* » édité par
+O'Reilly est une exception et contient de précieuses informations sur
+le sujet. Même s'il a été écrit à l'époque du 2.6.12, la partie sur le
+cache des routes est toujours d'actualité. Malheureusement, ce livre
+est orienté développeur et ne s'attarde pas sur l'administration du
+cache.
+
+J'espère fournir ici une vue concise sur le cache des routes, tel
+qu'implémenté dans **Linux 3.1**. Ce cache est dépendant du protocole
+sous-jacent[^dst] et je ne couvre ici que la version **IPv4**.
+
+[^dst]: Linux fournit un sous-système indépendant du protocole appelé
+        *protocol-independent destination cache* (DST). Toutefois, ce
+        composant n'est là que pour découpler les autres sous-systèmes du
+        cache et ne fournit pas tous les services nécessaires à
+        l'implémentation d'un cache.
+
+[TOC]
+
+# Vue d'ensemble du cache des routes
+
+Lorsque le noyau doit prendre une décision sur comment router un
+paquet IP, il consulte ses tables de routage. Bien que cela semble
+assez trivial, il doit répondre à un certain nombre de questions :
+
+ - Est-ce que les adresses source et destination semblent valides ?
+ - Est-ce que l'adresse source est *martienne*[^martian] ?
+ - Est-ce que l'adresse de destination est portée par le système ou
+   doit-il router le paquet vers un autre système ?
+ - Quelle table de routage faut-il utiliser ?
+ - Est-ce que l'adresse de destination correspond à cette route ? Ou à celle-là ?
+ - Est-ce que la passerelle à utiliser est actuellement disponible ?
+
+[^martian]: Les adresses *martiennes* sont des adresses qui ne peuvent
+            pas être utilisées comme adresses sources, soit parce
+            qu'elles sont réservées pour un usage spécifique (comme
+            les adresses multicast), soit en raison de la mise en
+            œuvre du *reverse path filtering* qui vérifie si un paquet
+            reçu sur une interface aurait sa réponse vers la même
+            interface, comme défini dans la [RFC 3704][rfc3704]. Cette
+            fonctionnalité peut être activée dans Linux via le réglage
+            `rp_filter`.
+
+Toutes ces vérifications peuvent prendre du temps, y compris pour des
+tables de routage réduites. Aussi, Linux tient à jour un *cache des
+routes* interrogé avant de consulter les tables de routage et mis à
+jour après chaque consultation. La commande `ip -s route show cache`
+permet de visualiser ce cache :
+
+    ::console
+    $ ip -s route show cache
+    198.51.100.7 from 203.0.113.2 via 192.0.2.1 dev eth1
+      cache used 7 age 2sec ipid 0x1fce rtt 131ms rttvar 45ms cwnd 10
+    198.51.100.17 from 203.0.113.15 via 192.0.2.1 dev eth1
+      cache used 3 age 0sec ipid 0xc3bd
+    local 192.0.2.18 from 203.0.113.15 dev lo src 192.0.2.18
+      cache <local> used 154 age 1sec iif eth0
+
+Voici deux exemples :
+
+ - Si Linux reçoit un paquet de **198.51.100.17** destiné à
+   **203.0.113.15**, il va trouver le flux correspondant dans le
+   cache. Il sait donc immédiatement qu'il a besoin de faire suivre ce
+   paquet à la passerelle 192.0.2.1. Aucune vérification n'est
+   nécessaire.
+ - S'il reçoit un paquet de **198.51.100.16** pour **203.0.113.15**,
+   il n'existe aucune entrée appropriée dans le cache et le système
+   doit donc se rabattre sur les tables de routage classiques. Il est
+   probable que la même route que lorsque la source était
+   198.51.100.17 soit utilisée, mais il est possible qu'il existe une
+   politique de routage différente (impliquant une autre table de
+   routage) ou que 198.51.100.16 soit une adresse portée par le
+   système lui-même et sera donc considérée comme *martienne*.
+
+Le schéma ci-dessous indique comment est implémenté ce cache dans
+Linux[^src]. Il utilise une [table de hachage][hash] où chaque entrée
+est une liste chaînée où chaque élément est une entrée du cache.
+
+[^src]: Pour plus de détails, les fichiers à examiner sont
+        `include/net/dst.h`, `include/net/route.h` et
+        `net/ipv4/route.c`.
+
+![Schéma de la table de hachage utilisé pour le cache des routes][rthashtable]
+[rthashtable]: [[!!images/linux/routing-cache.png]] "Vue partielle avec trois entrées de la table de hachage utilisée par le cache des routes"
+
+Une fois qu'une entrée se trouve dans le cache, elle peut être retirée
+par divers mécanismes. La plupart des entrées sont retirées par le
+[ramasse-miettes][gc] (*garbage collector*) qui parcourt le cache à la
+recherche d'entrées invalides ou trop vieilles. Il est activé quand le
+cache est plein ou, à intervalles réguliers, passé un certain seuil.
+
+## Réglages disponibles
+
+Il existe plusieurs réglages pour modifier le comportement du
+cache. La plupart d'entre eux sont disponibles via la commande
+`sysctl`.
+
+ - `rhash_entries` est la **taille de la table de hachage**[^size]. Si
+   sa valeur n'est pas spécifiée sur la ligne de commande du noyau,
+   elle est calculée au démarrage du système selon la mémoire
+   disponible. Il est possible de la connaître en cherchant, dans les
+   journaux du noyau, quelque chose comme `IP route cache hash table
+   entries: 262144 (order: 9, 2097152 bytes)`.
+ - `net.ipv4.route.max_size` est le **nombre maximum d'entrées** dans
+   le cache. Excepté en des circonstances exceptionnelles, cette
+   valeur ne peut jamais être dépassée.
+ - `net.ipv4.route.gc_elasticity` représente la **taille moyenne des
+   listes chaînées** dans la table de hachage. Le ramasse-miettes va se
+   montrer plus agressif lorsque cette taille est dépassée. Cela
+   signifie que le produit de cette valeur avec `rhash_entries`
+   correspond au nombre d'entrées que le ramasse-miettes va tenter de
+   conserver dans le cache.
+ - `net.ipv4.route.gc_min_interval_ms` est le **délai minimal entre
+   deux exécutions du ramasse-miettes**. Ce délai n'est pas respecté si
+   le cache est plein. La valeur par défaut convient dans la grande
+   majorité des cas.
+ - `net.ipv4.route.gc_thresh` est le **seuil de déclenchement du
+   ramasse-miettes**. Celui s'exécute alors toutes les
+   `net.ipv4.route.gc_min_interval_ms` millisecondes.
+ - `net.ipv4.route.gc_timeout` est la valeur de base utilisée pour
+    déterminer si une **entrée est suffisamment ancienne pour être
+    retirée**. Quelle que soit la valeur de ce paramètre, le
+    ramasse-miettes tentera d'enlever le même nombre
+    d'entrées. Toutefois, cette valeur peut influencer son
+    efficacité. Nous verrons cela plus en détail par la suite.
+
+[^size]: En fait, la taille de la table de hachage est toujours une
+         puissance de deux. La valeur de `rhash_entries` est alors
+         arrondie à la prochaine puissance de deux. En interne, sa
+         valeur est stockée dans `rt_hash_mask + 1`.
+
+Il existe deux réglages que l'on retrouve souvent dans les
+documentations mais qui sont désormais obsolètes :
+
+ - `net.ipv4.route.secret_interval` a été
+   [retiré de Linux 2.6.35][secret] ; il permettait de vidanger le
+   cache à intervalles réguliers pour éviter qu'il ne se remplisse.
+ - `net.ipv4.route.gc_interval` a été
+   [retiré de Linux 2.6.38][gcinterval]. Il est toujours présent
+   jusqu'à la version 3.2 mais sans effet. Il permettait de déclencher
+   un nettoyage régulier du cache (d'une façon différente de ce qui
+   est effectué par le ramasse-miettes). Le ramasse-miettes est
+   désormais capable de se débrouiller seul.
+
+## Statistiques & surveillance
+
+Linux maintient un certain nombre de statistiques sur le cache des
+routes. Celles-ci sont situées dans `/proc/net/stat/rt_cache`. La
+commande `lnstat` permet de les afficher de manière conviviale :
+
+    ::console
+    $ lnstat -s1 -i1 -c-1 -f rt_cache
+    rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|rt_cache|
+     entries|  in_hit|in_slow_|in_slow_|in_no_ro|  in_brd|in_marti|in_marti| out_hit|out_slow|out_slow|gc_total|gc_ignor|gc_goal_|gc_dst_o|in_hlist|out_hlis|
+            |        |     tot|      mc|     ute|        |  an_dst|  an_src|        |    _tot|     _mc|        |      ed|    miss| verflow| _search|t_search|
+     3096848|   42309|     686|       0|       0|       0|       0|       0|       3|       0|       0|     674|     672|       0|       0|   27644|       8|
+     3096984|   41405|     636|       0|       0|       0|       0|       0|       3|       0|       0|     623|     621|       0|       0|   28189|       8|
+     3097160|   42483|     700|       0|       0|       0|       0|       0|       5|       0|       0|     694|     692|       0|       0|   29506|      12|
+
+
+À l'exception de la première colonne, toutes les valeurs affichées
+sont en unités par seconde. Voyons ce que signifient certaines d'entre
+elles :
+
+ - `rt_cache_entries` est le nombre d'entrées actuellement dans le
+   cache. Cette valeur est à comparer avec `net.ipv4.route.max_size`
+   pour s'assurer que le cache n'est jamais plein et éviter ainsi le
+   déclenchement continu du ramasse-miettes.
+ - `rt_cache_in_hit` et `rt_cache_out_hit` représentent le nombre de
+   fois où une route a été trouvée dans le cache pour les paquets
+   entrants et sortants, respectivement. Quand un système est utilisé
+   comme routeur, la route est déterminée lorsque le paquet arrive sur
+   le système. Ces valeurs sont à comparer avec `rt_cache_in_slow_tot`
+   et `rt_cache_in_out_slow_tot` qui sont le nombre de fois où les
+   tables de routage classiques ont dû être consultées. Sur ce
+   système, l'*efficacité* du cache est de plus de 98%.
+ - `rt_cache_gc_total` indique combien de fois le ramasse-miettes a été
+   sollicité tandis que `rt_cache_gc_ignored` correspond au nombre de
+   fois où il n'a finalement rien fait car il a été démarré peu de
+   temps auparavant (moins de `net.ipv4.route.gc_min_interval_ms`
+   millisecondes). La différence entre ces deux valeurs doit être
+   faible afin de s'assurer que le ramasse-miettes ne se déclenche pas
+   plus de quelques fois par seconde.
+ - `rt_cache_gc_goal_miss` indique combien de fois le ramasse-miettes
+   n'a pas été capable d'enlever les entrées qu'il aurait souhaité
+   retirer. Cette valeur doit être rarement différente de 0.
+ - `rt_cache_gc_dst_overflow` est le nombre de fois où le cache est
+   plus gros que le maximum autorisé. Cela ne doit jamais arriver, sauf
+   lorsque la taille du cache est changée.
+ - `rt_cache_in_hlist_search` et `rt_cache_out_hlist_search` indique
+   combien de fois il a été nécessaire d'avancer dans une liste
+   chaînée de la table de hachage : à chaque fois que Linux doit
+   suivre le pointeur `next`, un de ces compteurs est incrémenté. Ces
+   valeurs sont à comparer avec le nombre de requêtes utilisant le
+   cache (que celles-ci aient réussi ou non).
+
+À titre d'illustration, le graphique suivant montre les différentes
+statistiques exposées ci-dessus dans le cas d'un routeur recevant
+environ un millier de nouvelles routes par seconde :
+
+![Graphique montrant les diverses statistiques issues du cache des routes][rtstats]
+[rtstats]: [[!!images/linux/routing-cache-stats.png]] "Statistiques issues du cache des routes"
+
+`rhash_entries` a comme valeur 1 048 576, de même pour
+`net.ipv4.route.gc_thresh`. Ainsi, le ramasse-miettes s'active à
+partir de ce seuil. Il n'est exécuté que deux fois par seconde (la
+valeur de `net.ipv4.gc_interval_ms` est 500) car le cache n'est pas
+plein. `net.ipv4.gc_elasticity` a comme valeur 3. Cela explique
+pourquoi le ramasse-miettes devient plus agressif lorsque le nombre
+d'entrées atteint 3 145 728.
+
+Comme vous pouvez le constater, l'efficacité du cache culmine
+constamment à près de 100%. Le pourcentage de collisions correspond au
+rapport de `rt_cache_in_hlist_search` avec la somme de
+`rt_cache_in_hit` et `rt_cache_in_slow_tot`.
+
+## Optimisations
+
+Quelles sont les valeurs à modifier ? Il faut se poser principalement
+deux questions :
+
+ 1. Quelle efficacité veut-on obtenir du cache ?
+ 2. Quelle quantité de mémoire veut-on dédier au cache ?
+
+Concernant la mémoire, il faut compter environ 500 Mo pour deux
+millions d'entrées sur un système 64 bits. À partir de là, il est
+possible de calculer la consommation moyenne et maximale à partir des
+valeurs de `net.ipv4.route.max_size`, `rhash_entries` et
+`net.ipv4.route.gc_elasticity`. Par exemple, si la table de hachage
+peut contenir 262 144 entrées, que le nombre d'entrées maximal dans le
+cache est 4 194 304 et que la valeur de `net.ipv4.route.gc_elasticity`
+est 8, le cache va utiliser en moyenne 500 Mo et au maximum 1 Go. Si
+cela représente trop de mémoire, il faut modifier certaines valeurs.
+
+Concernant l'efficacité, la section précédente indique comment la
+calculer à partir des statistiques exportées par Linux. En règle
+générale, l'efficacité est supérieure à 90%. Pour l'améliorer, il peut
+être nécessaire d'augmenter la taille du cache.
+
+Pour doubler le nombre d'entrées dans le cache, il faut doubler
+`net.ipv4.route.max_size`, `net.ipv4.route.gc_thresh` et
+`rhash_entries` mais garder `net.ipv4.route.gc_elasticity` à 8.
+
+Pour que le ramasse-miettes soit efficace, le cache ne doit pas se
+remplir trop vite. Le ramasse-miettes peut normalement s'adapter à
+cette situation en effectuant plusieurs passes pour retirer des
+entrées mais cela impacte alors les performances. Il faut surveiller
+`gc_goal_miss` : si cette valeur a tendance à ne pas rester nulle, il
+peut alors être souhaitable de diminuer `net.ipv4.gc_timeout`.
+
+# Le ramasse-miettes en détails
+
+Pour mieux comprendre les indications données auparavant, il est
+nécessaire d'examiner le fonctionnement du ramasse-miettes. Celui-ci
+est principalement activé lorsqu'une nouvelle entrée doit être ajoutée
+au cache et que le nombre d'entrées actuellement en cache dépasse le
+seuil `net.ipv4.route.gc_thresh`. Il est implémenté dans la
+[fonction `rt_garbage_collect()`][rtgarbagecollect]. Il ne fait rien
+s'il a déjà été appelé il y a moins de `net.ipv4.route.gc_interval_ms`
+millisecondes, à moins que le cache ne soit plein (plus de
+`net.ipv4.route.max_size` entrées).
+
+## Choisir un but
+
+Le ramasse-miettes va tout d'abord examiner la situation. Il compare le
+nombre d'entrées actuellement dans le cache avec le produit de
+`rhash_entries` et de `net.ipv4.gc_elasticity`:
+
+ 1. au-dessous de cette limite, il enlève au plus la moitié de la
+    différence ;
+ 2. dans le cas contraire, il va tenter d'enlever au moins
+    `rhash_entries` entrées.
+
+Si on examine le graphique précédent, il est aisé de constater la
+différence quand le ramasse-miettes est peu agressif (plus de 1 048 576
+entrées mais moins de 3 145 728) et quand il l'est (au-dessus de
+3 145 728 entrées). En supposant que le ramasse-miettes est capable
+d'atteindre son but, il est assez simple de
+[simuler son algorithme][simul]:
+
+![Graphique montrant l'influence des divers paramètres sur le ramasse-miettes][experiments]
+[experiments]: [[!!images/linux/routing-cache-exp.png]] "Variations sur les différents paramètres du cache et leurs effets"
+
+La première courbe montre ce qu'il se passe si environ 2000 nouvelles
+routes sont ajoutées par seconde avec `rhash_entries` égal à 262 144
+et `net.ipv4.route.gc_elasticity` égal à 8. Quand le seuil
+`net.ipv4.route.gc_threshold` est atteint, le ramasse-miettes n'a
+quasiment aucun effet. Cependant, quand le nombre d'entrées atteint
+2 097 152, il retire 262 144 entrées. À partir de là, le nombre
+d'entrées oscille aux environs de deux millions.
+
+Sur la seconde courbe, `rhash_entries` est désormais égal à 1 048 576
+mais `net.ipv4.route.gc_elasticity` vaut 2. Ainsi, le seuil à partir
+duquel le ramasse-miettes devient agressif est le même. Cependant, il
+enlève cette fois-ci quatre fois plus d'entrées à chaque fois. Ce qui
+est gagné d'un côté (faire tourner moins souvent le ramasse-miettes)
+est perdu de l'autre (plus d'entrées à supprimer à chaque fois). Pour
+améliorer l'efficacité du cache, il semble préférable de garder
+`net.ipv4.route.gc_elasticity` à 8 ou éventuellement 4 pour raccourcir
+la taille des chaînes (mais le gain semble essentiellement théorique
+dans ce cas).
+
+Les autres courbes montrent ce qui se produit quand il y a un soudain
+afflux de routes ou au contraire lorsqu'il y a une pause.
+
+## Réalisation de l'objectif
+
+Maintenant que nous comprenons bien comment `rhash_entries`,
+`net.ipv4.route.gc_elasticity` et `net.ipv4.route.gc_threshold`
+interagissent, regardons `net.ipv4.route.gc_timeout`. Une fois que le
+ramasse-miettes s'est fixé un objectif, il doit choisir les entrées à
+retirer.
+
+Pour se faire, il parcourt la table de hachage depuis sa dernière
+position et retire les entrées sélectionnées jusqu'à atteindre son
+objectif. Si l'entrée n'est plus à jour (par exemple, si l'interface
+réseau associée a une configuration différente), elle est
+retirée. Dans le cas contraire, le système va considérer à la fois son
+âge et sa position dans la chaîne. Si l'entrée est en première
+position, elle n'est conservée que si son âge est inférieur à
+`net.ipv4.route.gc_timeout`. Si elle est en seconde position, elle
+n'est conservée que si son âge est inférieur à la moitié de
+`net.ipv4.route.gc_timeout`. En troisième position, le seuil est le
+quart de `net.ipv4.route.gc_timeout` et ainsi de suite. Cela permet au
+ramasse-miettes de favoriser les chaînes courtes.
+
+Si après un parcours complet de la table, le ramasse-miettes n'a pas pu
+atteindre son objectif, il effectue un nouveau parcours en agissant
+comme si `net.ipv4.route.gc_timeout` avait été divisé par deux. Il
+fera autant de passes que nécessaire jusqu'à atteindre l'objectif ou
+jusqu'à l'impossibilité de supprimer toute entrée supplémentaire (ou
+encore s'il a passé trop de temps). Une fois que le ramasse-miettes se
+trouve dans ce mode agressif, il conserve ce comportement sur
+plusieurs cycles en l'atténuant à chaque passage.
+
+Si `net.ipv4.route.gc_timeout` est très grand, le ramasse-miettes va
+avoir beaucoup de mal à trouver des entrées à retirer. Plusieurs
+passes seront nécessaires. Au contraire, si la valeur est trop petite,
+il va retirer très rapidement des entrées alors qu'il existe de
+meilleurs candidats plus tard dans la table.
+
+Pour plus de détails sur le fonctionnement du cache des routes, le
+chapitre 33 de
+« *[Understanding Linux Network Internals][understanding]* » constitue
+une ressource incontournable. Il faut toutefois noter que le cache des
+routes *multipath* n'existe plus et que les nettoyages asynchrones
+(`rt_periodic_timer`) ont également été retirés.
+
+# Conclusion
+
+Lors de l'optimisation du cache des routes, `rhash_entries`,
+`net.ipv4.route.gc_elasticity`, `net.ipv4.route.max_size` et
+`net.ipv4.route.gc_threshold` sont liées et ne doivent donc pas être
+modifiées séparément. `net.ipv4.route.gc_thresh` doit être inférieur
+au produit de `net.ipv4.route.gc_elasticity` et de `rhash_entries`
+tandis que `net.ipv4.route.max_size` doit y être supérieur.
+
+Linux expose un certain nombre de métriques liées au cache des
+routes. Les surveiller permet de vérifier l'efficacité du cache mais
+également de déceler des anomalies (ramasse-miettes trop fréquent,
+difficultés à retirer des routes, ...).
+
+Le système de cache évolue toujours et certains anciens comportements
+sont désormais caducs. La meilleure documentation est toujours le code
+étant donné que les documentations tendent à devenir obsolètes. Le
+cache des routes pour IPv6 est totalement différent et il n'est donc
+pas conseillé d'appliquer les conseils indiqués ici aveuglément.
+
+[simul]: https://gist.github.com/1460108 "Simulation de rt_garbage_collect()"
+[rtgarbagecollect]: https://github.com/torvalds/linux/blob/v3.1/net/ipv4/route.c#L880-L998 "rt_garbage_collect() dans Linux 3.1"
+[gc]: http://fr.wikipedia.org/wiki/ramasse-miettes_(informatique) "Ramasse-miettes sur Wikipedia"
+[secret]: https://github.com/torvalds/linux/commit/3ee943728fff536edaf8f59faa58aaa1aa7366e3 "Commit Linux retirant secret_interval timer"
+[gcinterval]: https://github.com/torvalds/linux/commit/349d2895cc8b7db1f5be677cd685209a3805d2ed "Commit Linux retirant gc_interval"
+[hash]: http://fr.wikipedia.org/wiki/Table_de_hachage "Table de hachage dans Wikipedia"
+[rfc3704]: http://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
+[understanding]: http://shop.oreilly.com/product/9780596002558.do  "Understanding Linux Network Internals"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
