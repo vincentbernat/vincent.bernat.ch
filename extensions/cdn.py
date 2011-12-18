@@ -17,11 +17,15 @@ from hyde.fs import FS, File, Folder
 NOCDN="//media.luffy.cx/"
 def decorate_media_url(media_url):
     @wraps(media_url)
-    def wrapper(site, path):
+    def wrapper(site, path, safe=None):
         if path.startswith("files/") or path.startswith("videos/"):
             # Don't use CDN for those big files
-            return quote(Folder(NOCDN).child(path).replace(os.sep, '/').encode("utf-8"))
-        return media_url(site, path)
+            path = Folder(NOCDN).child(path).replace(os.sep, '/').encode("utf-8")
+            if safe is not None:
+                return quote(path, safe)
+            else:
+                return quote(path)
+        return media_url(site, path, safe)
     return wrapper
 
 
