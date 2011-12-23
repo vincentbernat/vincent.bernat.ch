@@ -22,8 +22,13 @@ fails to provide appropriate tips on how to monitor and tune the route
 cache.
 
 I hope to provide here a concise view of the route cache, as it is
-implemented in **Linux 3.1**. It is protocol-dependent[^dst] and I
-will cover only the **IPv4** version here.
+implemented in **Linux 3.1**[^valid]. It is protocol-dependent[^dst]
+and I will cover only the **IPv4** version here.
+
+[^valid]: The content of this article should be valid for Linux
+          2.6.38, 2.6.39, 3.0 and 3.1. There are some clues for Linux
+          2.6.35, 2.6.36 and 2.6.37 as well as for Linux 3.2. For
+          other versions, you are on your own.
 
 [^dst]: Linux provides a protocol-independent destination cache
         subsystem (DST). This component is not a generic cache layer
@@ -139,9 +144,14 @@ You may find documentation about those obsolete *sysctl* values:
  - `net.ipv4.route.gc_interval` has been
    [removed in Linux 2.6.38][gcinterval]. It is still present until
    Linux 3.2 but has no effect. It was used to trigger an asynchronous
-   cleanup of the route cache (but in a different way of what the
-   garbage collector does). The garbage collector is now considered
+   cleanup of the route cache. The garbage collector is now considered
    efficient enough for the job.
+
+**UPDATED:** `net.ipv4.route.gc_interval`
+[is back for Linux 3.2][gcinterval2]. It is still needed to avoid
+exhausting the neighbour cache because it allows to cleanup the cache
+periodically and not only above a given threshold. Keep it to its
+default value of 60.
 
 ## Statistics & monitoring
 
@@ -205,14 +215,28 @@ second:
 `net.ipv4.route.gc_thresh`. Therefore, the garbage collector was
 requested to be run when the number of entries goes above this
 level. Because the cache is not full, it is only really run twice per
-seconds (the value of `net.ipv4.gc_interval_ms` is
-500). `net.ipv4.gc_elasticity` is set to 3. This explains why the
-garbage collector is aggressive when the number of entries reached
+seconds (the value of `net.ipv4.route.gc_interval_ms` is
+500). `net.ipv4.route.gc_elasticity` is set to 3. This explains why
+the garbage collector is aggressive when the number of entries reached
 3,145,728.
 
 As you can see, the efficiency is near 100% all the time. The
 percentage of collisions is `rt_cache_in_hlist_search` ratio to the
 sum of `rt_cache_in_hit` and `rt_cache_in_slow_tot`.
+
+**UPDATED:** The plot above was with a 2.6.39 kernel. For a kernel
+between 2.6.35 and 2.6.37 (included) or a 3.2 kernel or more recent,
+the cleanup triggered every `net.ipv4.route.gc_interval` seconds will
+expire up to `rhash_entries` entries. If the pace at which routes are
+added to the cache is less than this rate, the number of entries may
+stop climbing, even when `net.ipv4.route.gc_threshold` is not met. For
+example, here are the same statistics with a 2.6.35 kernel for a
+router with about 2,500 new entries per second but with
+`net.ipv4.route.gc_interval` enabled; the threshold of 1,048,576 is
+never met:
+
+![Plot of various statistics for the route cache with gc_interval][rtstats2]
+[rtstats2]: [[!!images/linux/routing-cache-gc-interval.png]] "Various statistics about the route cache with gc_interval set to 60"
 
 ## Tuning
 
@@ -245,7 +269,16 @@ be filled too fast. The garbage collector should be able to cope with
 this situation but this may impact performance because it needs to
 walk several times the route cache to find entries to expire. Watching
 `gc_goal_miss` may give you a hint about this: if this value starts to
-be different of 0, lower `net.ipv4.gc_timeout`.
+be different of 0, lower `net.ipv4.route.gc_timeout`.
+
+**UPDATED:** For a kernel where `net.ipv4.route.gc_interval` matters,
+things become more complicated. Because the cleanup algorithm will
+expire entries at a regular interval, the average number of entries
+may stay low unless the number of new entries per second is high
+enough. Therefore, the average number of entries may be lower than the
+theoretical value computed above. Monitoring the appropriate metrics
+is the key to a good tuning. If you feel that entries are expired too
+fast, you may want to double `net.ipv4.route.gc_timeout`.
 
 # In-depth look into the garbage collector
 
@@ -263,7 +296,7 @@ nothing if it has been called less than
 
 The garbage collector will first assess the situation. It will look how
 the number of entries currently in the cache compares to the product
-of `rhash_entries` and `net.ipv4.gc_elasticity`:
+of `rhash_entries` and `net.ipv4.route.gc_elasticity`:
 
  1. Above this limit, it will try to remove at least
     `rhash_entries` entries.
@@ -342,6 +375,35 @@ aware that multipath route caching has been removed (and was never
 really used) and asynchronous cleanup (`rt_periodic_timer`) does not
 exist anymore.
 
+**UPDATED:** As stated earlier, `net.ipv4.route.gc_interval` has been
+[reinstantiated in Linux 3.2][gcinterval2]. The cleanup is a bit
+different of what is done by the garbage collector but have some
+similarities. It is run every `net.ipv4.route.gc_interval` seconds
+(even when there is less than `net.ipv4.route.gc_threshold`
+entries). It will set a goal proportional to
+`net.ipv4.route.gc_interval` and inversely proportional to
+`net.ipv4.route.gc_timeout`. It cannot be greater than
+`rhash_entries`. If `net.ipv4.route.gc_interval` and
+`net.ipv4.route.gc_timeout` are equal, the goal is exactly
+`rhash_entries`. It represents the number of entries the cleanup
+procedure will look at (and *not* the number of entries it will try to
+expire). If an entry is not valid anymore or is old enough to be
+removed (with the same criteria as for the garbage collector), it will
+be removed. Another important thing about this cleanup algorithm is
+that it will modify the maximum allowed length of a chain to the
+average length it has observed plus four times the standard deviation
+with a maximum equal to `net.ipv4.route.gc_elasticity`. Without this
+algorithm, the maximum allowed length is 20. When inserting a new
+entry, if a chain with more than `net.ipv4.route.gc_elasticity`
+entries is selected, the kernel will try to remove an element before
+inserting a new one. Then, if the chain is still longer than the
+maximum allowed length (longer than what is allowed by
+`net.ipv4.route.gc_elasticity` or too long compared to other
+chains[^attack]), all cache entries for the current interface are
+invalidated.
+
+[^attack]: This allows the kernel to guard against collision attacks.
+
 # Conclusion
 
 When tuning the route cache, `rhash_entries`,
@@ -367,6 +429,7 @@ blindly apply the same tuning for IPv6.
 [gc]: http://en.wikipedia.org/wiki/Garbage_collection_(computer_science) "Garbage collector on Wikipedia"
 [secret]: https://github.com/torvalds/linux/commit/3ee943728fff536edaf8f59faa58aaa1aa7366e3 "Linux commit removing secret_interval timer"
 [gcinterval]: https://github.com/torvalds/linux/commit/349d2895cc8b7db1f5be677cd685209a3805d2ed "Linux commit removing gc_interval sysctl"
+[gcinterval2]: https://github.com/torvalds/linux/commit/9f28a2fc0bd77511f649c0a788c7bf9a5fd04edb "Linux commit adding back gc_interval sysctl"
 [hash]: http://en.wikipedia.org/wiki/Hash_table "Hash table on Wikipedia"
 [rfc3704]: http://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
 [understanding]: http://shop.oreilly.com/product/9780596002558.do  "Understanding Linux Network Internals"

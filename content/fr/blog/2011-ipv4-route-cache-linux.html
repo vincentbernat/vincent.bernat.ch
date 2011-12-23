@@ -22,8 +22,14 @@ est orienté développeur et ne s'attarde pas sur l'administration du
 cache.
 
 J'espère fournir ici une vue concise sur le cache des routes, tel
-qu'implémenté dans **Linux 3.1**. Ce cache est dépendant du protocole
+qu'implémenté dans **Linux 3.1**[^valid]. Ce cache est dépendant du protocole
 sous-jacent[^dst] et je ne couvre ici que la version **IPv4**.
+
+[^valid]: Le contenu de cet article est valide pour les noyaux 2.6.38,
+          2.6.39, 3.0 et 3.1. Il contient également les informations
+          nécessaires pour comprendre le fonctionnement des noyaux
+          2.6.35, 2.6.36, 2.6.37 et 3.2. Pour les autres versions,
+          aucune garantie n'est donnée quant à l'exactitude.
 
 [^dst]: Linux fournit un sous-système indépendant du protocole appelé
         *protocol-independent destination cache* (DST). Toutefois, ce
@@ -156,9 +162,15 @@ documentations mais qui sont désormais obsolètes :
  - `net.ipv4.route.gc_interval` a été
    [retiré de Linux 2.6.38][gcinterval]. Il est toujours présent
    jusqu'à la version 3.2 mais sans effet. Il permettait de déclencher
-   un nettoyage régulier du cache (d'une façon différente de ce qui
-   est effectué par le ramasse-miettes). Le ramasse-miettes est
-   désormais capable de se débrouiller seul.
+   un nettoyage régulier du cache. Le ramasse-miettes est désormais
+   capable de se débrouiller seul.
+
+**MISE À JOUR :** Le paramètre `net.ipv4.route.gc_interval` est
+[de retour dans Linux 3.2][gcinterval2]. Il est en effet nécessaire
+pour éviter d'enrayer le ramasse-miette du cache ARP grâce à un
+nettoyage périodique (contrairement au ramasse-miette qui se déclenche
+uniquement passé un certain seuil). Il est préférable de laisser ce
+paramètre à sa valeur par défaut qui est 60.
 
 ## Statistiques & surveillance
 
@@ -222,15 +234,31 @@ environ un millier de nouvelles routes par seconde :
 `rhash_entries` a comme valeur 1 048 576, de même pour
 `net.ipv4.route.gc_thresh`. Ainsi, le ramasse-miettes s'active à
 partir de ce seuil. Il n'est exécuté que deux fois par seconde (la
-valeur de `net.ipv4.gc_interval_ms` est 500) car le cache n'est pas
-plein. `net.ipv4.gc_elasticity` a comme valeur 3. Cela explique
-pourquoi le ramasse-miettes devient plus agressif lorsque le nombre
-d'entrées atteint 3 145 728.
+valeur de `net.ipv4.route.gc_interval_ms` est 500) car le cache n'est
+pas plein. `net.ipv4.route.gc_elasticity` a comme valeur 3. Cela
+explique pourquoi le ramasse-miettes devient plus agressif lorsque le
+nombre d'entrées atteint 3 145 728.
 
 Comme vous pouvez le constater, l'efficacité du cache culmine
 constamment à près de 100%. Le pourcentage de collisions correspond au
 rapport de `rt_cache_in_hlist_search` avec la somme de
 `rt_cache_in_hit` et `rt_cache_in_slow_tot`.
+
+**MISE À JOUR :** Le graphique ci-dessus provient de valeurs récoltées
+sur un noyau 2.6.39. Pour un noyau 2.6.35, 2.6.36, 2.6.37 ou 3.2 ou
+plus récent, le nettoyage effectué toutes les
+`net.ipv4.route.gc_interval` secondes va retirer jusqu'à
+`rhash_entries` entrées. Si la vitesse à laquelle les nouvelles routes
+sont ajoutées dans le cache est inférieure à ce rhythme, le nombre
+d'entrées dans le cache peut décroître même si le seuil défini par
+`net.ipv4.route.gc_threshold` n'est pas atteint. À titre d'exemple,
+voici ce qu'on obtient sur un routeur équipé d'un noyau 2.6.35 et
+recevant environ 2500 nouvelles routes par seconde ; le seuil de
+1 048 576 n'est jamais atteint et le ramasse-miette ne se déclenche
+donc jamais :
+
+![Graphique montrant les diverses statistiques issues du cache des routes sous influence de gc_interval][rtstats2]
+[rtstats2]: [[!!images/linux/routing-cache-gc-interval.png]] "Statistiques issues du cache des routes avec un 2.6.35 pour lequel gc_interval est égal à 60"
 
 ## Optimisations
 
@@ -264,7 +292,18 @@ remplir trop vite. Le ramasse-miettes peut normalement s'adapter à
 cette situation en effectuant plusieurs passes pour retirer des
 entrées mais cela impacte alors les performances. Il faut surveiller
 `gc_goal_miss` : si cette valeur a tendance à ne pas rester nulle, il
-peut alors être souhaitable de diminuer `net.ipv4.gc_timeout`.
+peut alors être souhaitable de diminuer `net.ipv4.route.gc_timeout`.
+
+**MISE À JOUR :** Avec un noyau où le paramètre
+`net.ipv4.route.gc_interval` a une influence, les choses se
+compliquent. L'algorithme de nettoyage va retirer des entrées à
+intervalles réguliers d'une façon plus compliquée à prédire. Le nombre
+moyen d'entrées peut donc être plus faible que la valeur théorique
+calculée ci-dessus à moins que le nombre de nouvelles entrées par
+seconde soit suffisamment élevé. La surveillance des différentes
+métriques est donc indispensable pour trouver les réglages
+appropriés. Si les entrées semblent expirer trop vite, il est possible
+de doubler la valeur de `net.ipv4.route.gc_timeout`.
 
 # Le ramasse-miettes en détails
 
@@ -282,7 +321,7 @@ millisecondes, à moins que le cache ne soit plein (plus de
 
 Le ramasse-miettes va tout d'abord examiner la situation. Il compare le
 nombre d'entrées actuellement dans le cache avec le produit de
-`rhash_entries` et de `net.ipv4.gc_elasticity`:
+`rhash_entries` et de `net.ipv4.route.gc_elasticity`:
 
  1. au-dessous de cette limite, il enlève au plus la moitié de la
     différence ;
@@ -364,6 +403,38 @@ une ressource incontournable. Il faut toutefois noter que le cache des
 routes *multipath* n'existe plus et que les nettoyages asynchrones
 (`rt_periodic_timer`) ont également été retirés.
 
+**MISE À JOUR :** Comme indiqué précédemment, le paramètre
+`net.ipv4.route.gc_interval` a été
+[réintroduit dans Linux 3.2][gcinterval2]. L'algorithme de nettoyage
+utilisé est différent de celui du ramasse-miette mais a de nombreuses
+similitudes. Il est exécuté toutes les `net.ipv4.route.gc_interval`
+secondes, y compris si le seuil défini par
+`net.ipv4.route.gc_threshold` n'est pas atteint. Il détermine un but
+proportionnel à `net.ipv4.route.gc_interval` et inversement
+proportionnel à `net.ipv4.route.gc_timeout`. Ce but ne peut dépasser
+`rhash_entries`. Si `net.ipv4.route.gc_interval` et
+`net.ipv4.route.gc_timeout` sont égaux, le but est exactement
+`rhash_entries`. Celui-ci indique le nombre d'entrées du cache qui
+seront examinées (et non le nombre d'entrées qui doivent être
+supprimées). Si une entrée n'est plus valide ou suffisamment ancienne
+(selon les mêmes critères que pour le ramasse-miette), elle est alors
+supprimée. Un autre aspect important de cet algorithme est qu'il
+détermine la taille maximale autorisée pour une chaîne. Initialement,
+cette valeur est de 20 mais à chaque exécution, l'algorithme la
+modifie comme étant la longueur moyenne des chaînes qu'il a pu
+observer augmenté de quatre fois la déviation standard avec un maximum
+égal à `net.ipv4.route.gc_elasticity`. Lors de l'insertion d'une
+nouvelle entrée dans le cache, une chaîne dont la longueur dépasse
+`net.ipv4.route.gc_elasticity` se verra retirer un élément (le moins
+« précieux »), si possible. Ensuite, si la chaîne est toujours plus
+longue que la valeur autorisée (soit plus longue que
+`net.ipv4.route.gc_elasticity`, soit trop longue par rapport aux
+autres chaînes[^attack]), toutes les entrées du cache correspondant à
+l'interface courante sont invalidées.
+
+[^attack]: Cela permet au noyau de se protéger contre les attaques par
+           collision.
+
 # Conclusion
 
 Lors de l'optimisation du cache des routes, `rhash_entries`,
@@ -389,6 +460,7 @@ pas conseillé d'appliquer les conseils indiqués ici aveuglément.
 [gc]: http://fr.wikipedia.org/wiki/ramasse-miettes_(informatique) "Ramasse-miettes sur Wikipedia"
 [secret]: https://github.com/torvalds/linux/commit/3ee943728fff536edaf8f59faa58aaa1aa7366e3 "Commit Linux retirant secret_interval timer"
 [gcinterval]: https://github.com/torvalds/linux/commit/349d2895cc8b7db1f5be677cd685209a3805d2ed "Commit Linux retirant gc_interval"
+[gcinterval2]: https://github.com/torvalds/linux/commit/9f28a2fc0bd77511f649c0a788c7bf9a5fd04edb "Commit Linux réintroduisant gc_interval"
 [hash]: http://fr.wikipedia.org/wiki/Table_de_hachage "Table de hachage dans Wikipedia"
 [rfc3704]: http://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
 [understanding]: http://shop.oreilly.com/product/9780596002558.do  "Understanding Linux Network Internals"
