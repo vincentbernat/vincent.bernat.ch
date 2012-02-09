@@ -1,0 +1,652 @@
+---
+title: "Étendre les fonctionnalités de Net-SNMP"
+keywords: "snmp, net-snmp, agentx, mib2c, ucd-snmp, api, pass, pass_persist, python, perl"
+uuid: 76e48e66-4726-11e1-a76f-0018f3034e06
+tags:
+  - network
+attachments:
+  "https://github.com/vincentbernat/extend-netsnmp": "Dépôt GitHub"
+---
+
+SNMP signifie « [Simple Network Management Protocol][snmp] ». Il
+permet à un *superviseur* (*manager*) d'obtenir des informations
+auprès d'un *agent*. Un usage particulièrement répandu de SNMP est
+d'obtenir les courbes de trafic de divers équipements.  Bien que le
+« S » de SNMP signifie *simple*, la nébuleuse autour de ce protocole
+peut s'avérer assez complexe à mettre en œuvre. Il s'agit toutefois du
+standard le plus courant pour récupérer des métriques en environnement
+hétérogène. [Net-SNMP][netsnmp] est une suite d'applications SNMP
+incluant notamment un agent. Ce dernier permet d'exporter de
+nombreuses informations et peut être étendu par différents
+moyens. Voyons lesquels.
+
+**En bref** : à mon avis, étendre Net-SNMP passe par l'une de ces méthodes :
+
+ - directive `extend` ;
+ - directive `pass_persist` ;
+ - protocole AgentX.
+
+[TOC]
+
+# Ce qu'il faut savoir sur SNMP
+
+Les *variables* accessibles à travers un agent SNMP sont organisées
+sous forme d'un arbre. Chaque variable dispose d'un type et est
+associée à un *identifiant d'objet* (ou OID). Ainsi,
+`.1.3.6.1.2.1.31.1.1.1.1.2` est l'OID correspondant au nom de la
+seconde carte réseau du système.
+
+Habituellement, SNMP est transporté au-dessus d'UDP, sur le port
+161. Pour les besoins de cet article, nous pouvons limiter notre
+compréhension de l'agent à sa capacité à traiter trois types de
+requêtes :
+
+GET
+: récupérer la valeur d'une variable.
+
+GETNEXT
+: récupérer la variable suivante, dans l'ordre lexicographique des
+  OID. Cette opération permet au logiciel de supervision de
+  *parcourir* l'ensemble des variables disponibles et ainsi de
+  découvrir, par exemple, l'ensemble des interfaces réseau
+  disponibles. Cette fonctionnalité rend la conception de l'agent plus
+  complexe mais il s'agit d'une fonctionnalité cruciale de SNMP.
+
+SET
+: modifier la valeur d'une variable.
+
+Un OID est peu naturel à manipuler pour un humain. Aussi, les
+variables sont habituellement décrites dans une [MIB][mib] qui est un
+fichier dont le contenu décrit la correspondance entre des noms de
+variables et des OID. Ainsi, il est possible de désigner l'OID
+ci-dessus par `IF-MIB::ifName.2`. Ces modules sont écrits en utilisant
+un sous-ensemble d'[ASN.1][asn1] défini dans la [RFC 2578][rfc2578].
+
+Une MIB permet également de grouper plusieurs variables sous forme
+d'une table. Ainsi, `IF-MIB::ifDescr`, `IF-MIB::ifType`,
+`IF-MIB::ifSpeed` sont les colonnes de `IF-MIB::ifTable`. Chaque ligne
+est représentée par un index. Dans le cas de `IF-MIB::ifTable`, il
+s'agit simplement de l'index de l'interface. Net-SNMP fournit
+`snmptable` qui permet d'afficher de telles tables[^snmpconf] :
+
+    ::console
+    $ snmptable localhost IF-MIB::ifTable
+    SNMP table: IF-MIB::ifTable                       
+
+     ifIndex ifDescr           ifType ifMtu   ifSpeed
+           1      lo softwareLoopback 16436  10000000
+           2    eth0   ethernetCsmacd  1500 100000000
+           3    eth1   ethernetCsmacd  1500  10000000
+           4     br0   ethernetCsmacd  1500         0
+
+[^snmpconf]: Les utilitaires `snmp*` prennent normalement des
+             arguments supplémentaires indiquant la version du
+             protocole à utiliser ainsi que la communauté ou
+             l'utilisateur. Je ne spécifie rien de tel dans les
+             exemples présentés ici. Ces paramètres peuvent en effet
+             être renseignés dans le fichier `~/.snmp/snmp.conf`. De
+             plus, certaines sorties ont été raccourcies.
+
+En tant que protocole, SNMP ne connaît pas l'organisation des
+variables (tableau ou non). Une variable est décrite par un OID et un
+type, c'est tout.
+
+Parmi les outils inclus dans Net-SNMP et souvent usités, on peut citer
+`snmpget` pour récupérer la valeur d'une variable, `snmpwalk` pour
+parcourir les variables exposées (avec l'opération *GETNEXT*) et
+`snmptranslate` qui permet de traduire un nom en OID ou vice-versa.
+
+    ::console
+    $ snmpget localhost IF-MIB::ifDescr.2
+    IF-MIB::ifDescr.2 = STRING: eth0
+    $ snmpwalk localhost IF-MIB::ifDescr
+    IF-MIB::ifDescr.1 = STRING: lo
+    IF-MIB::ifDescr.2 = STRING: eth0
+    IF-MIB::ifDescr.3 = STRING: eth1
+    IF-MIB::ifDescr.4 = STRING: br0
+    $ snmpwalk -On public localhost .1.3.6.1.2.1.2.2.1.2
+    .1.3.6.1.2.1.2.2.1.2.1 = STRING: lo
+    .1.3.6.1.2.1.2.2.1.2.2 = STRING: eth0
+    .1.3.6.1.2.1.2.2.1.2.3 = STRING: eth1
+    .1.3.6.1.2.1.2.2.1.2.4 = STRING: br0
+    $ snmptranslate -On IF-MIB::ifDescr.3
+    .1.3.6.1.2.1.2.2.1.2.3
+
+# Extensions pour Net-SNMP
+
+`ethtool -S` permet d'obtenir différentes statistiques liées à une
+carte réseau, comme le nombre d'octets reçus ou le nombre de
+collisions. Certaines de ces statistiques sont accessibles à travers
+[IF-MIB][rfc2233], [RMON-MIB][rfc1757] et [EtherLike-MIB][rfc3635],
+mais d'autres sont très spécifiques et dépendent de la carte
+réseau. Comment exporter ces statistiques à travers SNMP ?
+
+À ma connaissance, il n'existe pas de MIB déjà écrite pour cet
+usage. La première étape est donc d'en écrire une. Appelons-la
+[ETHTOOL-MIB][ethtool-mib]. Elle ne contient qu'une seule
+table. Celle-ci est indexée par l'index de l'interface ainsi que par
+le nom de la statistique. Voici ce qu'on pourrait obtenir comme
+sortie :
+
+    ::console
+    $ snmpwalk localhost ETHTOOL-MIB::ethtoolStat.2
+    ethtoolStat.2.'align_errors' = Counter64: 0
+    ethtoolStat.2.'broadcast' = Counter64: 25
+    ethtoolStat.2.'multicast' = Counter64: 345
+    ethtoolStat.2.'rx_errors' = Counter64: 0
+    ethtoolStat.2.'rx_missed' = Counter64: 0
+    ethtoolStat.2.'rx_packets' = Counter64: 262011
+    ethtoolStat.2.'tx_aborted' = Counter64: 0
+    ethtoolStat.2.'tx_errors' = Counter64: 0
+    ethtoolStat.2.'tx_multi_collisions' = Counter64: 0
+    ethtoolStat.2.'tx_packets' = Counter64: 296170
+    ethtoolStat.2.'tx_single_collisions' = Counter64: 0
+    ethtoolStat.2.'tx_underrun' = Counter64: 0
+    ethtoolStat.2.'unicast' = Counter64: 261641
+
+J'ai écrit différentes implémentations de cette MIB que vous pouvez
+récupérer dans un [dépôt GitHub][extend-netsnmp].
+
+## Avec des commandes arbitraires
+
+La première solution pour étendre Net-SNMP est de faire usage de la
+directive `extend`. Celle-ci permet d'exécuter des commandes
+arbitraires et de récupérer les résultats à travers
+`NET-SNMP-EXTEND-MIB`. À l'aide d'un
+[script encapsulant la sortie de `ethtool -S`][ethtool-stats], les
+statistiques pour `eth0` peuvent être exportées en utilisant la
+configuration suivante dans `snmpd.conf` :
+
+    ::conf
+    # Export eth0 statistics
+    extend eth0-names  /full/path/to/ethtool-stats eth0 names
+    extend eth0-values /full/path/to/ethtool-stats eth0 values
+
+Le résultat est ensuite récupéré à travers
+`NET-SNMP-EXTEND-MIB::‌nsExtendOutput2Table` :
+
+    ::console
+    $ snmpwalk localhost NET-SNMP-EXTEND-MIB::nsExtendOutput2Table
+    nsExtendOutLine."eth0-names".1 = STRING: tx_packets
+    nsExtendOutLine."eth0-names".2 = STRING: rx_packets
+    nsExtendOutLine."eth0-names".3 = STRING: tx_errors
+    nsExtendOutLine."eth0-names".4 = STRING: rx_errors
+    nsExtendOutLine."eth0-names".5 = STRING: rx_missed
+    nsExtendOutLine."eth0-names".6 = STRING: align_errors
+    nsExtendOutLine."eth0-names".7 = STRING: tx_single_collisions
+    nsExtendOutLine."eth0-names".8 = STRING: tx_multi_collisions
+    nsExtendOutLine."eth0-values".1 = STRING: 246309
+    nsExtendOutLine."eth0-values".2 = STRING: 223941
+    nsExtendOutLine."eth0-values".3 = STRING: 0
+    nsExtendOutLine."eth0-values".4 = STRING: 0
+    nsExtendOutLine."eth0-values".5 = STRING: 0
+    nsExtendOutLine."eth0-values".6 = STRING: 0
+    nsExtendOutLine."eth0-values".7 = STRING: 0
+    nsExtendOutLine."eth0-values".8 = STRING: 0
+
+Il est aussi possible d'effectuer cette configuration à la volée. La
+commande suivante permet d'ajouter les statistiques liées à
+l'interface `eth2` :
+
+    ::console
+    $ snmpset -m +NET-SNMP-EXTEND-MIB localhost \
+    >    'nsExtendStatus."eth2-names"'  = createAndGo \
+    >    'nsExtendCommand."eth2-names"' = /full/path/to/ethtool-stats \
+    >    'nsExtendArgs."eth2-names"'    = 'eth2 names' \
+    >    'nsExtendStatus."eth2-values"'  = createAndGo \
+    >    'nsExtendCommand."eth2-values"' = /full/path/to/ethtool-stats \
+    >    'nsExtendArgs."eth2-values"'    = 'eth2 values'
+    nsExtendStatus."eth2-names" = INTEGER: createAndGo(4)
+    nsExtendCommand."eth2-names" = STRING: /full/path/to/ethtool-stats
+    nsExtendArgs."eth2-names" = STRING: eth2 names
+    nsExtendStatus."eth2-values" = INTEGER: createAndGo(4)
+    nsExtendCommand."eth2-values" = STRING: /full/path/to/ethtool-stats
+    nsExtendArgs."eth2-values" = STRING: eth2 values
+    $ snmpgetnext -m +NET-SNMP-EXTEND-MIB localhost \
+    >    'nsExtendOutLine."eth2-names"'
+    nsExtendOutLine."eth2-names".1 = STRING: tx_packets
+
+Cela peut paraître plutôt pratique mais cela représente également un
+risque important. Il est préférable de désactiver cette fonctionnalité
+ou de
+[ne l'activer que pour un utilisateur SNMPv3 particulier][snmpd-secure].
+
+L'utilisation de `extend` ne permet pas d'implémenter une MIB
+particulière. Si le mécanisme de cache n'est pas désactivé, cela peut
+toutefois être une solution raisonnable pour des besoins simples tels
+qu'obtenir le contenu d'un fichier d'une ligne ou la sortie d'un
+plugin Nagios. Toutefois, quand il s'agit d'exporter des données sous
+forme de tableau, cette solution est peu appropriée.
+
+## Avec des scripts lancés par l'agent
+
+Net-SNMP est capable de déléguer un sous-arbre à un script défini par
+la directive `pass_persist`. Un tel script va recevoir les requêtes à
+traiter sur son entrée standard à l'aide d'un protocole très
+simple. Celui-ci est décrit
+[dans la page de manuel de snmpd.conf][snmpd.conf]. Voici un exemple
+d'interaction :
+
+    ::text
+    →  PING
+    ←  PONG
+    →  get
+    →  .1.3.6.1.4.1.39178.100.1.1.1.2.2.109.117.108.116.105.99.97.115.116
+    ←  .1.3.6.1.4.1.39178.100.1.1.1.2.2.109.117.108.116.105.99.97.115.116
+    ←  counter64
+    ←  223941
+    →  getnext
+    →  .1.3.6.1.4.1.39178.100.1.1.1.2.2
+    ←  .1.3.6.1.4.1.39178.100.1.1.1.2.2.97.108.105.103.110.95.101.114
+    ←  counter64
+    ←  0
+
+Ce protocole est suffisamment simple pour être implémenté directement
+à l'aide d'un langage de scripts. Toutefois, en Perl, il est
+préférable d'utiliser l'extension
+[SNMP::‌ExtensionSNMP::‌PassPersist][passperl] de Sébastien
+Aperghis-Tramoni. Voici un extrait de l'implémentation de
+`ETHTOOL-MIB` en utilisant cette extension. Le
+[code complet se trouve sur GitHub][ethtool-stats.pl].
+
+    ::perl
+    use SNMP::Extension::PassPersist;
+    my $extsnmp = SNMP::Extension::PassPersist->new(
+        backend_collect => \&update_tree
+        );
+    $extsnmp->run;
+
+    sub update_tree {
+        my @interfaces = </sys/class/net/*>;
+        foreach my $interface (@interfaces) {
+            $interface =~ s/^.*\///;
+            open(ETHTOOL, "ethtool -S $interface 2>/dev/null |") or next;
+            while (<ETHTOOL>) {
+                /^\s+(\w+): (\d+)$/ or next;
+                my $name  = $1;
+                my $value = int($2);
+                my $oid   = oid_compute($interface, $name);
+                $extsnmp->add_oid_entry($oid, "counter", $value);
+            }
+            close(ETHTOOL);
+        }
+    }
+
+Avec Python, le module [snmp-passpersist][passpython] de Nicolas Agius
+fournit une interface
+similaire. L'[exemple complet se trouve sur GitHub][ethtool-stats.py].
+
+La directive `pass_persist` permet d'implémenter une MIB avec des
+performances tout à fait honnêtes. Il faut toutefois garder en tête
+les limitations les plus importantes de cette approche :
+
+ - À moins de disposer d'une version très récente de Net-SNMP, les
+   types 64 bits ne sont pas supportés et les types 32 bits
+   équivalents seront substitués. Cela peut être gênant pour les
+   compteurs qui augmentent rapidement.
+ - Lors du traitement d'une requête, l'agent ne répondra pas aux
+   autres requêtes. Toute pause, par exemple pour aller récupérer une
+   information distante, est donc prohibée. Les données doivent être
+   récupérées en avance et disponible immédiatement.
+
+## Avec le protocole AgentX
+
+AgentX est un protocole défini par la [RFC 2741][rfc2741] et
+permettant à un *agent maître* d'être complété par plusieurs
+*sous-agents* indépendants. Pour autoriser `snmpd` à accepter des
+sous-agents, il suffit d'ajouter la directive `master agentx` dans
+`snmpd.conf`. Voici les bénéfices auxquels on peut s'attendre par
+rapport à la directive `pass_persist` :
+
+ 1. Aucune configuration n'est nécessaire au niveau de l'agent maître
+    pour accepter un sous-agent supplémentaire. C'est ce dernier qui
+    va indiquer à l'agent maître les MIB (ou seulement certaines
+    parties) dont il veut s'occuper.
+ 3. Un sous-agent est découplé de l'agent maître. Il peut utiliser une
+    identité différente ou se trouver intégré à un logiciel tiers
+    permettant ainsi l'export des données internes ou la configuration
+    à distance, à travers SNMP, de ce dernier.
+ 4. Le protocole AgentX peut être transporté au-dessus de TCP. Un
+    sous-agent peut donc se trouver sur une autre machine ou dans un
+    environnement restreint.
+ 5. Les types 64 bits sont totalement supportés. De plus, il est
+    possible d'envoyer des alertes (*traps*).
+
+### Perl et Python
+
+Net-SNMP fournit un module Perl, `NetSNMP::agent`, pour écrire un
+sous-agent avec le protocole AgentX. Il s'agit d'un module de plus bas
+niveau que celui que nous avons utilisé avec `pass_persist`. Voici
+quelques exemples de son utilisation :
+
+ - Une [implémentation de ETHTOOL-MIB][ethtool-stats-agentx.pl] qui
+   suit la même approche que pour la version pour la directive
+   `pass_persist`. Mes compétences en Perl étant assez faibles, le
+   code s'en ressent un peu.
+ - Une [implémentation d'un sous-agent pour les serveurs Redis][redis-snmp].
+ - Une [implémentation de la BRIDGE-MIB][bridge-snmp] fournie avec Net-SNMP.
+
+Il n'existe actuellement pas de module similaire pour Python mais il
+existe une [extension AgentX][python-agentx] utilisant `ctypes` et
+fournissant une abstraction d'assez haut niveau. Je n'ai pas écrit
+d'exemple l'utilisant, mais un
+[il y en a un donné par l'auteur][python-agentx-example].
+
+### C avec la « nouvelle » API
+
+Pour écrire un sous-agent en C, il faut choisir entre deux API :
+
+ 1. celle héritée d'UCD-SNMP qui est parfois appelée l'API
+    « traditionelle » ;
+ 2. l'API développée pour Net-SNMP 5.x.
+
+Les deux API permettent d'enregistrer des fonctions gérant chacune une
+ou plusieurs parties de l'arbre. Avec l'API traditionnelle, ces
+fonctions sont appelées avec très peu d'informations. Il est donc
+nécessaire de retrouver à partir de l'OID les objets à exporter. Cela
+devient particulièrement compliqué en présence de tableaux dont les
+index sont complexes.
+
+La nouvelle API propose différentes aides pour écrire ces
+fonctions. Certaines permettent de copier les objets dans des tableaux
+ou des listes et déchargent l'auteur de toutes les autres
+tâches. D'autres attendent de l'auteur qu'il écrive un itérateur pour
+parcourir les objets. D'autres encore permettent d'ajouter un système
+de cache.
+
+Au-dessus de cette nouvelle API, Net-SNMP apporte un utilitaire,
+`mib2c`, convertissant une MIB en un squelette en C. Il suffit ensuite
+de compléter celui-ci avec le code nécessaire pour récupérer les
+objets à exporter. Le squelette est documenté et une commande permet
+de récupérer un guide d'implémentation comprenant toutes les étapes
+nécessaires.
+
+Implémenter `ETHTOOL-MIB` revient donc à faire tourner `mib2c`,
+répondre à quelques questions et ajouter le code manquant dans
+`ethtoolStatTable_data_access.c`. Le résultat est
+[disponible sur Github][ethtool-mib2c]. Voici une version
+raccourcie[^strip] de ce qui a été écrit :
+
+    ::c
+    /* Socket for ioctl */
+    skfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    /* Iterate through all interfaces */
+    getifaddrs(&ifap);
+    for (ifa = ifap; ifa != NULL; ifa = ifa->ifa_next) {
+        /* Grab statistics name and values */
+        strcpy(ifr.ifr_name, ifa->ifa_name);
+        drvinfo.cmd         = ETHTOOL_GDRVINFO;
+        ifr.ifr_data        = (caddr_t) &drvinfo;
+        ioctl(skfd, SIOCETHTOOL, &ifr);
+        n_stats             = drvinfo.n_stats;
+        strings->cmd        = ETHTOOL_GSTRINGS;
+        strings->string_set = ETH_SS_STATS;
+        strings->len        = n_stats;
+        ifr.ifr_data        = (caddr_t) strings;
+        ioctl(skfd, SIOCETHTOOL, &ifr);
+        stats->cmd          = ETHTOOL_GSTATS;
+        stats->n_stats      = n_stats;
+        ifr.ifr_data        = (caddr_t) stats;
+        ioctl(skfd, SIOCETHTOOL, &ifr);
+
+        ifIndex = if_nametoindex(ifa->ifa_name);
+
+        /* Iterate through statistics */
+        for (i = 0; i < n_stats; i++) {
+
+            /* Declare the appropriate index */
+            strncpy(ethtoolStatName,
+                    (char *)&strings->data[i * ETH_GSTRING_LEN],
+                    ETH_GSTRING_LEN);
+            ethtoolStatName[sizeof(ethtoolStatName) - 1] = '\0';
+            ethtoolStatName_len = strlen(ethtoolStatName);
+
+            /* Append this new variable to the container. */
+            rowreq_ctx = ethtoolStatTable_allocate_rowreq_ctx();
+            ethtoolStatTable_indexes_set(rowreq_ctx,
+                        ifIndex,
+                        ethtoolStatName, ethtoolStatName_len);
+            rowreq_ctx->data.ethtoolStat.high = stats->data[i] >> 32;
+            rowreq_ctx->data.ethtoolStat.low = (uint32_t)stats->data[i];
+
+            CONTAINER_INSERT(container, rowreq_ctx);
+        }
+    }
+
+[^strip]: Pas d'allocation mémoire, pas de déclaration des variables,
+          aucune vérification des erreurs. Ne faites pas la même
+          chose !
+
+C'est plutôt simple. J'énumère simplement les objets que je veux
+exposer. Je n'ai même pas eu besoin de convertir les noms des
+statistiques en un index : `mib2c` a écrit la fonction
+`ethtoolStatTable_indexes_set()` à cet effet. Le projet OpenHPI
+dispose
+d'[une documentation complète sur l'écriture d'un agent][subagent-manual]
+en utilisant cette approche.
+
+Tout n'est cependant pas rose. Pour implémenter une **seule table**,
+je me retrouve avec **14 fichiers générés** dont le style est impropre
+à l'intégration dans un projet externe. Une solution consisterait à
+utiliser la nouvelle API sans `mib2c`. Malheureusement, même si la
+[documentation existe][netsnmp-api], tous les exemples se basent
+uniquement sur l'outil `mib2c`. À moins d'être capable d'utiliser la
+nouvelle API sans celui-ci, je pense qu'il est préférable de
+restreindre son usage aux deux cas suivants :
+
+ - Écriture d'un module pour intégration dans Net-SNMP. Étant donné
+   que la plupart des modules existants sont écrits avec l'aide de
+   `mib2c`, le style de code est compatible.
+ - Écriture d'un sous-agent totalement autonome. Comme il n'y a pas de
+   code existant, il n'y a pas non plus de problème de compatibilité
+   avec le style de code.
+
+Pour les autres usages, regardons plutôt du côté de l'API traditionnelle.
+
+### C avec l'API « traditionnelle »
+
+Cette API est bien plus basique et bien que très ancienne, on trouve
+encore de nombreux exemples de son utilisation. Voici comment
+initialiser l'agent (encore une fois, la version complète de ce code
+se trouve sur [GitHub][ethtool-agentx]) :
+
+    ::c
+    static oid ethtool_oid[] = {1, 3, 6, 1, 4, 1, 39178, 100, 1};
+    static struct variable3 ethtool_vars[] = {
+      {1, ASN_COUNTER64, RONLY, ethtool_stat, 3, {1, 1, 2}}
+    };
+
+    int main()
+    {
+      netsnmp_enable_subagent();
+      snmp_disable_log();
+      snmp_enable_stderrlog();
+      init_agent("ethtoolAgent");
+      REGISTER_MIB("ethtoolStatTable", ethtool_vars,
+                   variable3, ethtool_oid);
+      init_snmp("ethtoolAgent");
+      while (1)
+        agent_check_and_process(1);
+    }
+
+La macro `REGISTER_MIB()` permet d'enregistrer l'OID racine
+(`ethtool_oid` dans notre exemple) fourni auprès de l'agent maître. De
+plus, à travers le tableau `ethtool_vars[]`, elle associe des OID aux
+fonctions chargées de les prendre en charge. Les membres de ce tableau
+contiennent les champs suivants :
+
+ - `magic` est un entier permettant de différencier les OID gérés par
+   une même fonction. C'est très utile quand il s'agit de gérer
+   différentes colonnes d'un tableau car elles partagent le même
+   index.
+ - `type` représente le type de la variable.
+ - `acl` indique si un objet est en lecture seule (`RONLY`) ou en
+   lecture/écriture (`RWRITE`).
+ - `findVar` est la fonction dont la tâche sera de trouver l'objet
+   adéquat et d'en retourner sa valeur.
+ - Les deux derniers champs indiquent l'OID relatif (et sa longueur)
+   pour lequel cette entrée est responsable.
+
+Le prototype de la fonction `ethtool_stat()` est le suivant :
+
+    ::c
+    static u_char*
+    ethtool_stat(struct variable *vp, oid *name, size_t *length,
+                 int exact, size_t *var_len, WriteMethod **write_method);
+
+Cette fonction doit retourner un pointeur sur la valeur de la variable
+demandée ou `NULL` si celle-ci ne peut pas être localisée. Voici la
+description de chacun des arguments :
+
+ - `struct variable *vp` est une copie de la structure qui a permis
+   d'associer l'OID à cette fonction. Toutefois, `vp->name` est
+   maintenant un OID complet (et non plus relatif). Si besoin, il est
+   possible d'utiliser `vp->magic` pour savoir quelle colonne traiter
+   si la fonction est mutualisée à travers plusieurs OID.
+ - `oid *name` et `size_t *length` indiquent l'OID exact demandé. Si
+   on veut retourner un autre OID, il est possible de le modifier (par
+   exemple pour une requête de type *GETNEXT*). `name` pointe sur un
+   tableau suffisamment grand pour contenir n'importe quel OID.
+ - `int exact` indique si la requête est de type *GET*/*SET* ou de
+   type *GETNEXT*.
+ - `size_t *var_len` permet d'indiquer la taille de l'objet
+   retourné.
+ - `WriteMethod **write_method` est utilisé uniquement si la variable
+   est modifiable. Si c'est le cas, il faut stocker dans cette
+   variable la fonction qui s'occupera de l'opération
+   d'écriture[^write].
+
+[^write]: Pour un exemple de gestion de l'opération *SET*, vous pouvez
+          regarder le
+          [support SNMP de Keepalived][keepalived-snmp-vrrp]. Une
+          telle opération est plus complexe car SNMP garantit
+          l'atomicité de l'opération sur l'ensemble des variables
+          fournies. Il s'agit d'une opération s'effectuant en trois
+          passes. L'API traditionnelle est particulièrement inefficace
+          pour une telle opération car l'objet doit être localisé à
+          nouveau à chacune des étapes.
+
+L'implémentation de cette fonction est totalement libre. Notamment, si
+vous devez récupérer des données externes, il faudra gérer une sorte
+de cache. Dans le cadre de `ETHTOOL-MIB`, j'ai opté pour un arbre
+bicolore. Cela permet de plus de gérer facilement l'opération
+*GETNEXT*.
+
+Voici trois projets utilisant l'API traditionnelle afin d'ajouter un
+support SNMP :
+
+ - [Keepalived][keepalived] est un démon VRRP ainsi qu'un démon de
+   supervision pour les clusters LVS. J'y ai ajouté
+   [un support SNMP complet][keepalived-snmp]. Les fichiers les plus
+   intéressants sont [core/snmp.c][keepalived-snmp-core],
+   [check/check_snmp.c][keepalived-snmp-check] et
+   [vrrp/vrrp_snmp.c][keepalived-snmp-vrrp]. Keepalived utilise une
+   boucle d'évènements dans laquelle il a fallu intégrer la boucle
+   d'évènements de NetSNMP. Toutes les structures internes de
+   Keepalived (configuration, état et statistiques) sont exportées en
+   lecture seule. Des alertes sont générées pour certains évènements
+   et il est possible de modifier quelques variables.
+ - [lldpd][lldpd] est une implémentation de 802.1AB (LLDP), un
+   protocole de découverte qui permet à un équipement de se manifester
+   auprès de ces voisins au niveau Ethernet. Ce protocole va de pair
+   avec une MIB assez conséquente comprenant de nombreuses
+   tables. *lldpd* inclut un support assez complet en lecture de
+   celle-ci. L'essentiel du code est concentré dans
+   [agent.c][lldpd-snmp]. Il n'y a actuellement aucun support en
+   écriture mais *lldpd* utilise la séparation des privilèges tout en
+   restant compatible avec l'utilisation d'une socket Unix pour la
+   conversation entre l'agent maître et *lldpd*.
+ - [Asterisk][asterisk], un PABX libre, fournit un sous-agent
+   permettant de récupérer certaines métriques. Jetez un œil à
+   [res/snmp/agent.c][asterisk-snmp].
+
+## Autres solutions
+
+La page de manuel de [snmpd.conf][snmpd.conf] répertorie les
+possibilités d'extension sous la section « *Extending agent
+functionality* »:
+
+ - `exec` et `sh` sont obsolètes. Il faut désormais utiliser `extend`.
+ - `pass` est un peu plus simple que `pass_persist`. La commande est
+   exécutée pour chaque requête. Il est assez simple de transformer
+   une telle commande en un script de type `pass_persist` script. De
+   plus, Net-SNMP ne répondra à aucune requête tant que la commande
+   est en cours d'exécution.
+ - `proxy` redirige les requêtes vers un autre agent SNMP. À moins
+   d'avoir un agent qui ne peut pas être transformé en sous-agent
+   (absence de code source), il est préférable d'utiliser AgentX. Si
+   le programme utilise l'API de Net-SNMP, la transformation en un
+   sous-agent ne nécessite de rajouter qu'une seule ligne de code. Un
+   sous-agent mettant en jeu un code plus réduit qu'un agent complet,
+   il sera plus efficace et plus sûr.
+ - `smux` est obsolète. Il faut utiliser désormais utiliser AgentX.
+ - `perl` et `dlmod` permettent de charger et d'exécuter du code
+   externe directement dans l'agent. À moins d'avoir des besoins très
+   importants en performance, il est préférable d'utiliser un
+   sous-agent. Si un bug survient, seul le sous-agent sera affecté. Un
+   sous-agent correspond mieux à la philosophie Unix : « écrire des
+   programmes qui ne font qu'une chose mais qui la font
+   bien ». Toutefois, la [FAQ de Net-SNMP][faqwhich] indique :
+
+> Implémenter un module C à l'intérieur de l'agent principal
+> (directement ou via `dlmod`) est sans doute la manière la plus
+> efficace et la plus sûre, suivie de peu par l'utilisation de
+> l'interpréteur Perl (ou Python) embarqué. Ils présentent l'avantage
+> d'un surcoût minimal entre le code implémentant la MIB et l'agent
+> avec notamment l'absence de toute communication entre processus.
+
+*[SNMP]: Simple Network Management Protocol
+*[MIB]: Management Information Base
+*[OID]: Object IDentifier
+*[PDU]: Protocol Data Unit
+*[PABX]: Private Automatic Branch Exchange
+
+[rfc4022]: http://tools.ietf.org/html/rfc4022 "RFC 4022: MIB for TCP"
+[rfc2578]: http://tools.ietf.org/html/rfc2578 "RFC 2578: SMIv2"
+[rfc1757]: http://tools.ietf.org/html/rfc1757 "RFC 1757: RMON"
+[rfc3635]: http://tools.ietf.org/html/rfc3635 "RFC 3635: Ethernet-like Interface Types"
+[rfc2741]: http://tools.ietf.org/html/rfc2741 "RFC 2741: Ethernet-like Interface Types"
+[rfc2233]: http://tools.ietf.org/html/rfc2233 "RFC 2233: The Interfaces Group MIB using SMIv2"
+
+[mib]:  http://fr.wikipedia.org/wiki/Management_Information_Base        "MIB sur Wikipedia"
+[asn1]: http://fr.wikipedia.org/wiki/ASN.1                              "Syntaxe ASN.1 sur Wikipedia"
+[snmp]: http://fr.wikipedia.org/wiki/Simple_network_management_protocol "SNMP sur Wikipedia"
+
+[faqwhich]: http://www.net-snmp.org/docs/FAQ.html#What_is_the_purpose_of__dlmod__ "FAQ Net-SNMP sur dlmod"
+[netsnmp]: http://www.net-snmp.org/ "Net-SNMP, une suite d'applications pour SNMP"
+[snmpd.conf]: http://linux.die.net/man/5/snmpd.conf "Page de manuel de snmpd.conf"
+[snmpv1]: http://www.rane.com/note161.html "SNMP: Simple? Network Management Protocol"
+[passperl]: http://search.cpan.org/~saper/SNMP-Extension-PassPersist-0.06/lib/SNMP/Extension/PassPersist.pm "Extension SNMP::Extension::PassPersist pour Perl"
+[passpython]: http://pypi.python.org/pypi/snmp-passpersist "Module snmp-passpersist pour Python"
+[lldpd]: https://github.com/vincentbernat/lldpd/wiki "lldpd, implémentation de IEEE 802.1ab (LLDP)"
+[keepalived]: http://www.keepalived.org/ "Keepalived: healthchecking for LVS and high-availability"
+[redis-snmp]: https://github.com/masterzen/redis-snmp/blob/master/redis-snmp "Sous-agent SNMP pour serveurs Redis"
+[bridge-snmp]: http://net-snmp.git.sourceforge.net/git/gitweb.cgi?p=net-snmp/net-snmp;a=blob;f=local/snmp-bridge-mib;hb=171e8d48d4af04013cff8fd28f5341a2aef21d88 "Implémentation de la BRIDGE-MIB en tant que sous-agent AgentX en Perl"
+[asterisk]: http://www.asterisk.org/ "Asterisk, Open Source Private Branch Exchange"
+[asterisk-snmp]: http://svnview.digium.com/svn/asterisk/trunk/res/snmp/agent.c?revision=352957&view=markup "Support SNMP pour Asterisk, agent.c"
+[python-agentx]: https://sourceforge.net/projects/python-agentx/ "Module AgentX pour Python"
+[python-agentx-example]: http://python-agentx.svn.sourceforge.net/viewvc/python-agentx/example.py?revision=8&view=markup "Exemple pour le module Python agentx"
+[snimpy]: https://github.com/vincentbernat/snimpy "snimpy, client interactif pour SNMP"
+[netsnmp-api]: http://www.net-snmp.org/dev/agent/group__handler.html "Documentation de l'API Net-SNMP 5.x"
+[subagent-manual]: http://openhpi.sourceforge.net/subagent-manual/ "Net-SNMP subagent development manual"
+
+[extend-netsnmp]: https://github.com/vincentbernat/extend-netsnmp/ "Divers exemples sur l'extension de Net-SNMP"
+[ethtool-mib]: https://github.com/vincentbernat/extend-netsnmp/blob/master/ETHTOOL-MIB "ETHTOOL-MIB"
+[ethtool-mib2c]: https://github.com/vincentbernat/extend-netsnmp/blob/master/agentx-c-mib2c/ "Implémentation de ETHTOOL-MIB avec mib2c"
+[ethtool-agentx]: https://github.com/vincentbernat/ethtool-snmpd "Implémentation de ETHTOOL-MIB avec l'API UCD-SNMP"
+[ethtool-stats]: https://github.com/vincentbernat/extend-netsnmp/blob/master/net-snmp-extend/ethtool-stats "Script simpliste pour formater la sortie de ethtool"
+[ethtool-stats-agentx.pl]: https://github.com/vincentbernat/extend-netsnmp/blob/master/agentx-perl/ethtool-stats.pl "Export des statistiques ethtool avec AgentX et Perl"
+[ethtool-stats.pl]: https://github.com/vincentbernat/extend-netsnmp/blob/master/passpersist-perl/ethtool-stats.pl "Export des statistiques ethtool avec pass_persist et Perl"
+[ethtool-stats.py]: https://github.com/vincentbernat/extend-netsnmp/blob/master/passpersist-python/ethtool-stats.py "Export des statistiques ethtool avec pass_persist et Python"
+[snmpd-secure]: https://github.com/vincentbernat/extend-netsnmp/blob/master/net-snmp-extend/snmpd.conf "snmpd.conf pour lequel la configuration de NET-SNMP-EXTEND-MIB n'est autorisée que pour un super admin"
+[keepalived-snmp]: [[fr/blog/2011-keepalived-snmp-ipv6.html]] "Support SNMP pour Keepalived"
+[keepalived-snmp-mib]: https://github.com/vincentbernat/keepalived/blob/snmp-1.2.0/doc/KEEPALIVED-MIB "MIB pour Keepalived"
+[keepalived-snmp-core]: https://github.com/vincentbernat/keepalived/blob/snmp-1.2.0/keepalived/core/snmp.c "Support SNMP pour Keepalived : core/snmp.c"
+[keepalived-snmp-check]: https://github.com/vincentbernat/keepalived/blob/snmp-1.2.0/keepalived/check/check_snmp.c "Support SNMP pour Keepalived : check/check_snmp.c"
+[keepalived-snmp-vrrp]: https://github.com/vincentbernat/keepalived/blob/snmp-1.2.0/keepalived/vrrp/vrrp_snmp.c "Support SNMP pour Keepalived : vrrp/vrrp_snmp.c"
+[lldpd-snmp]: https://github.com/vincentbernat/lldpd/blob/master/src/agent.c "lldpd, support SNMP : agent.c"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
