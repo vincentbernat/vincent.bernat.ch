@@ -1,0 +1,253 @@
+---
+title: "De la non asynchronicité du protocole AgentX dans Net-SNMP"
+keywords: "snmp, net-snmp, agentx, async, ping, alarm"
+uuid: caf3f98f-dd86-4d91-9dc8-51a8f81b1482
+tags:
+  - snmp
+---
+
+Une des façons les plus commodes pour
+[ajouter un support SNMP est d'utiliser le protocole AgentX][extending-netsnmp] :
+une application se comporte comme un *sous-agent* et traitera les
+requêtes déléguées par un *agent maître* via ce
+protocole. L'implémentation la plus courante est celle de Net-SNMP.
+
+**En bref** : Une application exploitant l'implémentation AgentX de
+Net-SNMP de manière *asynchrone* peut se bloquer à de nombreuses
+occasions en raison principalement de l'indisponibilité temporaire de
+l'agent maître. Une contre-mesure assez efficace est d'utiliser comme
+agent maître un agent dédié à cette tâche et déléguer le traitement
+des MIB à un sous-agent.
+
+# Test de disponibilité de l'agent maître
+
+Net-SNMP exploite un modèle de programmation événementielle. Il
+fournit également des fonctions synchrones classiques mais celles-ci
+sont construites à partir des versions asynchrones. Il exploite sa
+propre boucle d'événements. Son implémentation d'AgentX semble alors
+un choix naturel pour ajouter un support SNMP dans une application
+asynchrone comme [Keepalived][keepalived], une solution de haute
+disponibilité et de répartition de charge.
+
+Malheureusement, un sous-agent doit vérifier régulièrement si l'agent
+maître est toujours disponible. Cette opération est effectuée
+automatiquement du moment que vous utilisez la fonction `run_alarms()`
+qui va à son tour faire appel à `agentx_check_session()` :
+
+    ::c
+    /*
+     * check a session validity for connectivity to the master agent.  If
+     * not functioning, close and start attempts to reopen the session 
+     */
+    void
+    agentx_check_session(unsigned int clientreg, void *clientarg)
+    {
+        /* [...] */
+        DEBUGMSGTL(("agentx/subagent", "checking status of session %p\n", ss));
+
+        if (!agentx_send_ping(ss)) {
+            snmp_log(LOG_WARNING,
+                     "AgentX master agent failed to respond to ping.  Attempting to re-register.\n");
+            /*
+             * master agent disappeared?  Try and re-register.
+             * close first, just to be sure .
+             */
+            agentx_unregister_callbacks(ss);
+            agentx_close_session(ss, AGENTX_CLOSE_TIMEOUT);
+            /* [...] */
+            if (main_session != NULL) {
+                /* [...] */
+                main_session = NULL;
+                agentx_reopen_session(0, NULL);
+            }
+            else {
+                snmp_close(main_session);
+                main_session = NULL;
+            }
+        } else {
+            DEBUGMSGTL(("agentx/subagent", "session %p responded to ping\n",
+                        ss));
+        }
+    }
+
+Ce code appelle directement ou indirectement les fonctions
+suivantes[^synchfunctions] qui font ensuite appel à
+`agentx_synch_response()` :
+
+ - `agentx_send_ping()`
+ - `agentx_open_session()`
+ - `agentx_reopen_session()`
+ - `agentx_close_session()`
+ - `agentx_register()`
+ - `agentx_unregister()`
+ - `agentx_register_index()`
+ - `agentx_unregister_index()`
+ - `agentx_add_agentcaps()`
+ - `agentx_remove_agentcaps()`
+ 
+[^synchfunctions]: `agentx_reopen_session()` appelle `agentx_close_session()`
+                   et `agentx_open_session()`. `agentx_register()` et les
+                   fonctions suivantes sont appelées par ces deux fonctions.
+
+`agentx_synch_response()` va attendre **de manière synchrone** une
+réponse de l'agent maître. Votre programme asynchrone va donc rester
+bloqué à ne rien faire pendant ce laps de temps. Par exemple,
+*keepalived* sera incapable d'envoyer les paquets VRRP nécessaires au
+bon fonctionnement du cluster.
+
+Les fonctions préfixées par `agentx_` ne font pas partie de l'API de
+NetSNMP et pourraient donc être corrigées.
+[Plus facile à dire][runalarms1] [qu'à faire][runalarms2]. De plus, il
+existe d'autres points de blocage enfouis dans NetSNMP. Ainsi, la
+connexion de bas niveau (TCP ou socket Unix) avec l'agent maître
+utilise la fonction `connect()` de manière synchrone. Cet aspect a de
+nombreuses ramifications difficiles à évoluer.
+
+Voici quelques contre-mesures (partielles) :
+
+ - Appeler `agentx_check_session()` moins souvent. Par défaut, cette
+   fonction est invoquée toutes les 15 secondes. La désactiver
+   complètement ou utiliser une valeur très élevée est déconseillé car
+   le sous-agent ne se reconnectera pas à l'agent maître en cas de
+   redémarrage de ce dernier. Voici comme porter l'intervalle à 20
+   secondes :
+
+        ::c
+        netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
+                           NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, 120);
+
+ - Ne pas appeler `agentx_check_session()` si l'agent maître a donné
+   des signes de vie récemment, notamment en envoyant une requête à
+   traiter. J'ai écrit un
+   [patch mettant en place une telle contre-mesure][noping]. L'ABI
+   reste inchangée et il n'y a donc besoin que de recompiler les
+   bibliothèques de Net-SNMP.
+
+ - Utiliser des valeurs plus faibles pour le délai d'attente et le
+   nombre d'essais. Par défaut, le délai d'attente est de 1 seconde et
+   le nombre d'essais est fixé à 5. En raison de l'utilisation de
+   plusieurs fonctions synchrones à la suite, il est possible de
+   rester bloqué jusqu'à 30 secondes. Voici comment[^how] désactiver
+   les essais supplémentaires et diminuer fortement le délai
+   d'attente :
+
+        ::c
+        static int
+        snmp_setup_session_cb(int majorID, int minorID,
+                      void *serverarg, void *clientarg)
+        {
+            netsnmp_session *sess = serverarg;
+            sess->timeout = ONE_SEC / 3;
+            sess->retries = 0;
+            return 0;
+        }
+
+        void some_init_function()
+        {
+            /* [...] */
+            snmp_register_callback(SNMP_CALLBACK_LIBRARY,
+               SNMP_CALLBACK_SESSION_INIT,
+               snmp_setup_session_cb, NULL);
+            /* [...] */
+        }
+
+[^how]: Les variables `NETSNMP_DS_AGENT_AGENTX_TIMEOUT`
+        et `NETSNMP_DS_AGENT_AGENTX_RETRIES` ne sont utilisées que pour
+        l'agent maître, pas pour un sous-agent.
+
+# Non réponse de l'agent maître
+
+Pourquoi l'agent maître peut ne pas répondre aux requêtes ? `snmpd`
+utilise également la programmation événementielle et il va se bloquer
+à de nombreuses occassions. Voici deux exemples :
+
+ - Les directives `pass` et `pass_persist` ne rendent pas la main
+   avant que la commande à exécuter n'affiche une ligne complète.
+
+        ::c
+        /* var_extensible_pass() in agent/mibgroup/ucd-snmp/pass.c */
+        /*
+         * valid call.  Exec and get output 
+         */
+        if ((fd = get_exec_output(passthru)) != -1) {
+            file = fdopen(fd, "r");
+            if (fgets(buf, sizeof(buf), file) == NULL) {
+                fclose(file);
+                wait_on_exec(passthru);
+                /* [...] */
+                continue;
+            }
+            /* [...] */
+            fclose(file);
+            wait_on_exec(passthru);
+            /* [...] */
+        }
+
+ - L'implémentation de `DISMAN-PING-MIB` se bloque pendant le
+   déroulement des *pings* vers l'hôte distant. Si ce dernier est
+   inaccessible, `snmpd` peut se bloquer pendant de longues
+   secondes. Un problème similaire existe pour
+   `DISMAN-TRACEROUTE-MIB`.
+
+# Agent maître minimal
+
+De plus en plus de code est exécuté par l'agent maître et donc la
+situation ne va pas aller en s'améliorant. Pour pallier à notre
+problème, nous allons intercaler un *agent maître minimal*. L'agent
+qui jouait jusqu'ici le rôle d'agent maître et servait un certain
+nombre de MIB va devenir un sous-agent. Les sous-agents existant se
+connecteront au nouvel agent maître.
+
+![Schema showing the use of a minimal master agent][minimal-snmpd]
+[minimal-snmpd]: [[!!images/minimal-snmpd.png]] "Adding a minimal master agent and turning snmpd into a subagent"
+
+Transformer `snmpd` en sous-agent est simple : il suffit d'utiliser le
+drapeau `-X`. Nous devons également désactiver certaines MIB selon le
+rôle de l'agent. Cela se fait avec le drapeau `-I`. L'agent minimal
+n'utilisera que les modules strictement nécessaires à son
+fonctionnement. Tous les autres modules[^modules] seront servis par
+`snmpd` en tant que sous-agent.
+
+    ::console
+    $ MODS="snmp_mib,sysORTable,usmConf,usmStats,usmUser,vacm_conf,vacm_context,vacm_vars"
+    $ snmpd -Lsd -Lf /dev/null -u snmp -g snmp \
+    >   -C -c /etc/snmp/snmpd.master.conf \
+    >   -p /var/run/snmpd.master.pid \
+    >   -I $MODS
+    $ snmpd -Lsd -Lf /dev/null -u snmp -g snmp \
+    >   -p /var/run/snmpd.pid -X \
+    >   -I -$MODS
+
+[^modules]: La commande `snmpd -Dmib_init -H` permet d'obtenir la
+            liste des modules. Le module `smux`, s'il est utilisé,
+            doit être ajouté à l'agent maître.
+
+La configuration des accès et la directive `master agentx` doivent se
+trouver dans `/etc/snmp/snmpd.master.conf`. Les autres directives
+(telles que `pass`, `pass_persist`, `load`, `sysname`, ...) doivent
+être dans `/etc/snmp/snmpd.conf`.
+
+Il est désormais peu probable d'observer un bloquage de l'agent
+maître. Bien que le problème soit potentiellement toujours présent, sa
+surface est considérablement réduite. Il est possible d'étendre cette
+solution en saucissonnant `snmpd` en plusieurs sous-agents: l'un pour
+les directives comme `pass` et `pass_persist`, un autre pour la
+plupart des modules et un dernier pour les modules plus litigieux,
+tels que `DISMAN-PING-MIB`.
+
+*[SNMP]: Simple Network Management Protocol
+*[VRRP]: Virtual Router Redundancy Protocol
+*[LVS]:  Linux Virtual Server
+
+[extending-netsnmp]: [[fr/blog/2012-etendre-netsnmp.html]]     "Étendre les fonctionnalités de Net-SNMP"
+[keepalived]:        [[fr/blog/2011-keepalived-snmp-ipv6.htm]] "Support SNMP pour Keepalived"
+
+[noping]: http://sourceforge.net/tracker/?func=detail&aid=3481686&group_id=12694&atid=312694 "Patch évitant l'utilisation du ping AgentX"
+[runalarms1]: https://sourceforge.net/tracker/index.php?func=detail&aid=3479744&group_id=12694&atid=112694 "run_alarms() peut bloquer un programme, système de suivi de Net-SNMP"
+[runalarms2]: http://groups.google.com/group/mailing.unix.net-snmp-users/browse_thread/thread/391697fb5391989d "run_alarms() peut bloquer un programme, liste de diffusion Net-SNMP"
+[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() n'est pas asynchrone, système de suivi de Net-SNMP"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

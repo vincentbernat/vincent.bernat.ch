@@ -91,18 +91,10 @@ check the logs for a ligne like this:
 `snmpd` through AgentX protocol should be asynchronous. However, the
 regular check of the connection is done synchronously. If the master
 agent becomes unresponsive, *keepalived* will also be unresponsive
-which is critical for the VRRP part. Several work-arounds exist:
+which is critical for the VRRP part. You may mitigate the problem by
+[applying some workarounds][workarounds].
 
- - The check is only done every two minutes.
- - A very low timeout is used to avoid any lockup.
- - You need to remove any potential lockup from `snmpd`. Check your
-   `pass` and `pass_persist` scripts which are the primary source of
-   such lockups.
- - A [patch][noping] allows to skip those synchronous checks as long
-   as there is some AgentX traffic. This patch should be applied on
-   Net-SNMP.
-
-[noping]: http://sourceforge.net/tracker/?func=detail&aid=3481686&group_id=12694&atid=312694 "Patch avoiding use of AgentX ping"
+[workarounds]: [[en/blog/2012-fixing-async-agentx.html]] "Mitigating the not really asynchronous AgentX protocol implementation"
 
 ## Lab
 

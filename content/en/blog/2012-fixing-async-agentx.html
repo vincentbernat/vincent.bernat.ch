@@ -1,0 +1,243 @@
+---
+title: "Asynchronicity & Net-SNMP AgentX protocol"
+keywords: "snmp, net-snmp, agentx, async, ping, alarm"
+uuid: caf3f98f-dd86-4d91-9dc8-51a8f81b1482
+tags:
+  - snmp
+---
+
+One of the best way to
+[add SNMP support to an application is the use of AgentX protocol][extending-netsnmp]:
+an application can act as a *subagent* and handle requests from a
+*master agent* using AgentX protocol. The most widespread
+implementation for such a task is the one from Net-SNMP.
+
+**TL;DR**: An application asynchronously leveraging Net-SNMP AgentX
+implementation has many opportunities to get stuck when the master
+agent becomes temporarily unavailable. A mostly efficient workaround
+is to dedicate a master agent for AgentX and delegate MIB handling to
+a subagent.
+
+# Pinging the master agent
+
+Net-SNMP uses an event-based model. It also provides some synchronous
+functions but they are built on top of the asynchronous ones. It is
+shipped with its own event loop. Therefore, Net-SNMP AgentX protocol
+implementation seems a fine choice to add SNMP support to an
+event-based program, for example in [Keepalived][keepalived], a VRRP
+daemon and a monitoring daemon for LVS clusters.
+
+Unfortunately, an AgentX subagent is expected to check, at a regular
+interval, if the master agent is alive . This is handled automatically
+with Net-SNMP implementation as long as you call `run_alarms()`
+function which will call `agentx_check_session()`:
+
+    ::c
+    /*
+     * check a session validity for connectivity to the master agent.  If
+     * not functioning, close and start attempts to reopen the session 
+     */
+    void
+    agentx_check_session(unsigned int clientreg, void *clientarg)
+    {
+        /* [...] */
+        DEBUGMSGTL(("agentx/subagent", "checking status of session %p\n", ss));
+
+        if (!agentx_send_ping(ss)) {
+            snmp_log(LOG_WARNING,
+                     "AgentX master agent failed to respond to ping.  Attempting to re-register.\n");
+            /*
+             * master agent disappeared?  Try and re-register.
+             * close first, just to be sure .
+             */
+            agentx_unregister_callbacks(ss);
+            agentx_close_session(ss, AGENTX_CLOSE_TIMEOUT);
+            /* [...] */
+            if (main_session != NULL) {
+                /* [...] */
+                main_session = NULL;
+                agentx_reopen_session(0, NULL);
+            }
+            else {
+                snmp_close(main_session);
+                main_session = NULL;
+            }
+        } else {
+            DEBUGMSGTL(("agentx/subagent", "session %p responded to ping\n",
+                        ss));
+        }
+    }
+
+This piece of code will end up calling (directly or indirectly) the
+following functions[^synchfunctions] which are using
+`agentx_synch_response()`:
+
+ - `agentx_send_ping()`
+ - `agentx_open_session()`
+ - `agentx_reopen_session()`
+ - `agentx_close_session()`
+ - `agentx_register()`
+ - `agentx_unregister()`
+ - `agentx_register_index()`
+ - `agentx_unregister_index()`
+ - `agentx_add_agentcaps()`
+ - `agentx_remove_agentcaps()`
+ 
+[^synchfunctions]: `agentx_reopen_session()` will call `agentx_close_session()`
+                   and `agentx_open_session()`. `agentx_register()` and
+                   the following functions will be called by those
+                   two functions.
+
+`agentx_synch_response()` will **synchronously** wait for an answer
+from the master agent. Your event-based program will just sit here
+doing nothing while this happens. For example, *keepalived* may be
+unable to send VRRP probes resulting in some serious havoc in your
+cluster.
+
+Functions prefixed by `agentx_` are not part of NetSNMP API and could
+therefore be rewritten to do their work asynchronously. Unfortunately,
+[talk is][runalarms1] [cheap][runalarms2]. Moreover, there exists
+other deep paths that will block a subagent. For example, the
+low-level connection to the master agent (using TCP or a Unix socket,
+but not with UDP) will use a blocking `connect()` call. It seems quite
+difficult to fix this.
+
+Here are some (partial) workarounds:
+
+ - Call `agentx_check_session()` less often. The default interval is
+   15 seconds. Disabling it completely or using a very high value is
+   not advised because this function is the only way to reestablish a
+   connection to the master agent when it is, for example,
+   restarted. Here is how to change the delay to 120 seconds:
+
+        ::c
+        netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
+                           NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, 120);
+
+ - Don't call `agentx_check_session()` if we know the master agent is
+   alive. For example, if it just sent us a new request, no need to
+   ping it. I have written a
+   [patch implementing such a workaround][noping]. The ABI is left
+   untouched, therefore, you only need to recompile Net-SNMP
+   libraries.
+
+ - Use a lower timeout and no retry. By default, the timeout for
+   synchronous requests is 1 second and a failed request will be
+   retried 5 times. Because several synchronous functions are used in
+   a row, you may be trapped for as long as 30 seconds with those
+   settings. Here is how[^how] to disable the retry mechanism and to
+   set the timeout to a very low value:
+
+        ::c
+        static int
+        snmp_setup_session_cb(int majorID, int minorID,
+                      void *serverarg, void *clientarg)
+        {
+            netsnmp_session *sess = serverarg;
+            sess->timeout = ONE_SEC / 3;
+            sess->retries = 0;
+            return 0;
+        }
+
+        void some_init_function()
+        {
+            /* [...] */
+            snmp_register_callback(SNMP_CALLBACK_LIBRARY,
+               SNMP_CALLBACK_SESSION_INIT,
+               snmp_setup_session_cb, NULL);
+            /* [...] */
+        }
+
+[^how]: `NETSNMP_DS_AGENT_AGENTX_TIMEOUT` and `NETSNMP_DS_AGENT_AGENTX_RETRIES`
+        variables are only used by the master agent, not by a subagent.
+
+# Unresponsive master agent
+
+Why is the master agent unresponsive? `snmpd` is also an event-based
+program and, trust me, there are a lot of places where it will become
+unresponsive. Here are two examples:
+
+ - When using the `pass` or the `pass_persist` directive, Net-SNMP
+   will block until the delegated command outputs a complete line.
+
+        ::c
+        /* var_extensible_pass() in agent/mibgroup/ucd-snmp/pass.c */
+        /*
+         * valid call.  Exec and get output 
+         */
+        if ((fd = get_exec_output(passthru)) != -1) {
+            file = fdopen(fd, "r");
+            if (fgets(buf, sizeof(buf), file) == NULL) {
+                fclose(file);
+                wait_on_exec(passthru);
+                /* [...] */
+                continue;
+            }
+            /* [...] */
+            fclose(file);
+            wait_on_exec(passthru);
+            /* [...] */
+        }
+
+ - `DISMAN-PING-MIB` implementation will just hang while pinging the
+   remote host. If the host is down and you have requested 5 probes
+   with a timeout of 1 second, `snmpd` will be unresponsive for 5
+   seconds. A similar problem exists with `DISMAN-TRACEROUTE-MIB`.
+
+# Minimal master agent
+
+More and more code is running in the main agent. You cannot expect it
+to not block. But we could add a *minimal master agent* to the mix: it
+will handle only a few MIB modules by itself while most MIB modules
+will be delagated to a complete agent running as a subagent. Your own
+subagent will connect to the minimal master agent.
+
+![Schema showing the use of a minimal master agent][minimal-snmpd]
+[minimal-snmpd]: [[!!images/minimal-snmpd.png]] "Adding a minimal master agent and turning snmpd into a subagent"
+
+It is quite easy to turn `snmpd` into a subagent: just use `-X`
+flag. We should also disable unwanted MIB modules for each agent with
+`-I` flag. For the minimal master agent, we only enable some
+modules. All other modules[^modules] will be served by `snmpd` acting
+as a subagent.
+
+    ::console
+    $ MODS="snmp_mib,sysORTable,usmConf,usmStats,usmUser,vacm_conf,vacm_context,vacm_vars"
+    $ snmpd -Lsd -Lf /dev/null -u snmp -g snmp \
+    >   -C -c /etc/snmp/snmpd.master.conf \
+    >   -p /var/run/snmpd.master.pid \
+    >   -I $MODS
+    $ snmpd -Lsd -Lf /dev/null -u snmp -g snmp \
+    >   -p /var/run/snmpd.pid -X \
+    >   -I -$MODS
+
+[^modules]: Use `snmpd -Dmib_init -H` to get the list of modules. You
+            may want to add `smux` module to the master agent.
+
+Access control configuration should be placed in
+`/etc/snmp/snmpd.master.conf`, as well as `master agentx`
+directive. Other directives (like `pass`, `pass_persist`, `load`,
+`sysname`, ...) in `/etc/snmp/snmpd.conf`.
+
+The minimal master agent is very unlikely to block and while the
+ground cause is still here, it is now very much mitigated. You may
+extend this solution by splicing `snmpd` into several subagents: one
+handling safe modules, one handling `pass` and `pass_persist` stuff
+and a last one for unsafe modules (like `DISMAN-PING-MIB`).
+
+*[SNMP]: Simple Network Management Protocol
+*[VRRP]: Virtual Router Redundancy Protocol
+*[LVS]:  Linux Virtual Server
+
+[extending-netsnmp]: [[en/blog/2012-extending-netsnmp.html]]   "Recipes for extending Net-SNMP"
+[keepalived]:        [[en/blog/2011-keepalived-snmp-ipv6.htm]] "SNMP support for keepalived"
+
+[noping]: http://sourceforge.net/tracker/?func=detail&aid=3481686&group_id=12694&atid=312694 "Patch avoiding use of AgentX ping"
+[runalarms1]: https://sourceforge.net/tracker/index.php?func=detail&aid=3479744&group_id=12694&atid=112694 "run_alarms() can block a program, in Net-SNMP bug tracker"
+[runalarms2]: http://groups.google.com/group/mailing.unix.net-snmp-users/browse_thread/thread/391697fb5391989d "run_alarms() can block a program, in Net-SNMP mailing list"
+[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() is not asynchronous, in Net-SNMP bug tracker"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
