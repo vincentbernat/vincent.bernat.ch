@@ -61,12 +61,12 @@ def build():
                 newname = newname[len('media/'):]
                 if ext == ".png":
                     # Fix CSS
-                    local("sed -i 's@%s@%s@g' media/css/*.css" % (f, newname))
+                    local("sed -i 's+%s+%s+g' media/css/*.css" % (f, newname))
                 else:
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s@\([\"']\)%s%s\1@\1%s%s\1@g"
+                          r"s+\([\"']\)%s%s\1+\1%s%s\1+g"
                           '"' % (media, f, media, newname))
         local("git add *")
         local("git diff --stat HEAD")
