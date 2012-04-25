@@ -1,0 +1,479 @@
+---
+title: "XBMC Eden & Debian Wheezy"
+keywords: "xbmc, media center, eden, debian, wheeze, logitech harmony, imon, zotac"
+uuid: ad787bd1-9bcc-4730-bc73-6ce694763ad1
+---
+
+Il y a deux ans, je me suis monté un HTPC pour y faire tourner
+[XBMC][]. À l'époque, j'étais parti sur une installation minimale de
+Ubuntu Lucid pour y installer les paquets officiels de l'équipe
+XBMC. Depuis, [la version Eden a été publiée][eden] and
+[XBMC a fait son apparition dans Debian unstable][xbmc-debian]. C'était
+donc une excellente occasion de faire le saut.
+
+![Logo non officiel pour XBMC Eden][xbmc-logo]
+[xbmc-logo]: [[!!images/xbmc-eden-logo.jpg]] "XBMC Media Center: Eden. Logo par FiroPyro. CC BY-NC 3.0"
+
+**En bref** : L'installation de XBMC sur une Debian Wheezy est
+extrêmement simple. La seule difficulté majeure est la configuration
+de la télécommande : soit le profil par défaut est satisfaisant, soit
+il est nécessaire de s'enfoncer des les arcanes pour y apporter les
+modifications nécessaires.
+
+Ma configuration matérielle est la suivante :
+
+ - un boîtier [Antec Micro Fusion 350][antec] comprenant un combiné
+   récepteur infra-rouge/afficheur LCD SoundGraph iMON[^lcd],
+ - une carte mère Zotac ION-ITX-D-E incluant un processeur Intel Atom
+   330 et une puce nVidia ION,
+ - un amplificateur home cinéma Onkyo connecté via HDMI,
+ - une télécommande [Logitech Harmony 555][555].
+
+[^lcd]: La lisibilité de l'afficheur LCD est désastreuse. Il est
+        hautement préférable de s'orienter vers la version VFD. Le
+        récepteur infra-rouge est également très médiocre et la
+        télécommande plus que minimaliste.
+
+[TOC]
+
+# Installation
+
+## Installer Debian Wheezy
+
+L'installation d'une Debian Wheezy[^wheezy] ne présente aucune
+difficulté. Obtenir une clef USB amorçable depuis
+[l'image ISO de l'installeur Debian pour Wheezy][debian-installer]
+est devenu très simple :
+
+    ::console
+    $ sudo dd if=debian-testing-i386-netinst.iso \
+    >         of=/dev/disk/by-id/usb...
+
+[^wheezy]: Debian Wheezy n'est pas encore publiée. Si vous n'êtes pas
+           familier avec Debian, il peut être assez pénible de
+           maintenir une telle installation jusqu'au début du gel dans
+           quelques mois.
+
+L'installation s'est déroulée sans problème à l'exception de
+l'incapacité de GRUB de s'installer sur le disque. Il s'agit d'un
+[bug connu][#662086] ne se produisant qu'en présence de partitions
+LVM. J'espère que celui-ci sera corrigé pour la publication de Wheezy.
+
+Cela n'a que peu de rapport avec XBMC, mais je voulais également en
+profiter pour tester [systemd][] qui pourrait devenir l'_init_ par
+défaut dans Debian (du moins dans Debian GNU/Linux). Voici un extrait
+du `README.Debian` :
+
+> `systemd` peut être installé aux côtés de `sysvinit` et, par défaut,
+> ne change absolument rien au comportement du système. C'est
+> voulu. Pour tester `systemd`, il convient d'ajouter
+> `init=/bin/systemd` à la ligne de commande du noyau et de
+> redémarrer. Une autre solution est d'installer le paquet
+> `systemd-sysv`.
+
+Le système final démarre en environ 15 secondes.
+
+## Configurer X
+
+Le [décodage vidéo dans le pilote _nouveau_][video-nouveau] en est
+encore à ses balbutiements. Il est donc encore nécessaire de se
+rabattre sur le pilote propriétaire de NVIDIA. Le fichier
+`/etc/apt/sources.list` doit être complété pour ajouter les dépôts
+`contrib` et `non-free`. Il faut ensuite installer les paquets
+`xserver-xorg-video-nvidia`, `nvidia-vdpau-driver` et `xserver-xorg`.
+
+Voici le contenu de mon `/etc/X11/xorg.conf.d/nvidia.conf` :
+
+    ::
+    Section "Device"
+        Identifier     "NVidia ION"
+        Driver         "nvidia"
+        VendorName     "NVIDIA Corporation"
+        Option         "HWCursor" "False"
+        Option         "NoFlip" "False"
+        Option         "FlatPanelProperties" "Scaling = Native"
+        Option         "DynamicTwinView" "False"
+        Option         "ConnectedMonitor" "DFP-1"
+        Option         "CustomEDID" "DFP-1:/etc/X11/edid.bin"
+        Option         "NoLogo" "True"
+    EndSection
+
+    Section "Extensions"
+        Option "Composite" "false"
+    EndSection
+
+L'option `CustomEDID` permet d'indiquer au pilote d'utiliser l'EDID
+indiqué notamment si l'ampli est éteint. Il est possible d'obtenir
+celui adapté à votre ampli en utilisant la commande `get-edid` issue
+du paquet `read-edid`.
+
+## Installer XBMC
+
+Grâce au travail d'Andrés Mejía, XBMC est désormais disponible
+officiellement dans Debian Wheezy. Pour l'installer, il suffit de
+taper `aptitude install xbmc`. J'ai placé ce fichier
+`xbmc.service` dans le répertoire `/etc/systemd/system` pour
+l'intégration de XBMC dans _systemd_ :
+
+    ::
+    [Unit]
+    Description = XBMC media center
+    After = syslog.target
+
+    [Service]
+    User = xbmc
+    Group = xbmc
+    Type = simple
+    ExecStart = /usr/bin/xinit /usr/bin/xbmc-standalone -- :0
+    Restart = on-failure
+
+    [Install]
+    WantedBy = multi-user.target
+
+La commande `systemctl enable xbmc.service` permet d'activer ce
+service au démarrage. Il convient également d'autoriser l'utilisateur
+`xbmc` de lancer X. Pour se faire, il suffit d'exécuter
+`dpkg-reconfigure -plow x11-common` et d'autoriser tout le monde à
+lancer le serveur X. `sudo` peut constituer une alternative.
+
+# Configuration
+
+## Son
+
+Bien que je souhaiterais utiliser PulseAudio, je veux également que la
+conversion stéréo vers 5.1 soit effectuée par l'ampli. Avec
+PulseAudio, l'ampli reçoit un signal sur six canaux et n'effectuera
+aucune conversion. J'opte donc pour l'utilisation directe d'ALSA.
+
+Activer les sorties numériques constitue la première étape :
+
+    ::console
+    $ amixer scontrols | grep IEC958
+    Simple mixer control 'IEC958',0
+    Simple mixer control 'IEC958 Default PCM',0
+    Simple mixer control 'IEC958',1
+    $ amixer sset 'IEC958',0 unmute
+    $ amixer sset 'IEC958 Default PCM',0 unmute
+    $ amixer sset 'IEC958',1 unmute
+    $ sudo systemctl stop alsa-utils.service
+
+L'ordre des différents canaux est incorrecte. Il est possible de le
+corriger avec le fichier `/etc/asound.conf` suivant où est déclarée
+une nouvelle sortie, `hdmi2` :
+
+    ::
+    pcm.hdmi2 {
+      type asym
+      playback.pcm {
+        type plug
+        slave.pcm "remap-surround51"
+      }
+    }
+
+    pcm.!remap-surround51 {
+      type route
+      slave.pcm "hdmi"
+      ttable {
+        0.0= 1
+        1.1= 1
+        2.4= 1
+        3.5= 1
+        4.2= 1
+        5.3= 1
+      }
+    }
+
+On indique ensuite à XBMC d'utiliser cette sortie au lieu de celle par
+défaut. La sortie `hdmi` classique doit cependant toujours être
+utilisée pour les signaux type AC3. La commande `speaker-test -D hdmi2
+-c 6` permet de vérifier le bon ordonnancement des canaux.
+
+## Afficheur LCD
+
+L'afficheur LCD intégré dans le SoundGraph iMON est supporté par le
+module noyau `imon` ainsi que par le paquet `lcdproc`. Voici les
+modifications qu'il faut apporter au fichier `/etc/LCDd.conf` pour le
+faire fonctionner :
+
+    ::
+    [server]
+    Driver=imonlcd
+    ServerScreen=off
+
+    [imonlcd]
+    Protocol=1
+    OnExit=2
+    Contrast=400
+
+## Télécommande
+
+Il s'agit de la partie la plus complexe. J'utilise une télécommande
+universelle Logitech Harmony. Le support pour Linux est satisfaisant :
+la configuration s'effectue à travers le
+[site web de Logitech][harmony] et l'utilitaire [congruity][] permet
+de pousser la configuration définie vers la télécommande.
+
+### Les télécommandes sous Linux
+
+**Avant Linux 2.6.36**, la plupart des télécommandes infra-rouges
+nécessitaient LIRC :
+
+ - Le pilote reçoit le signal du récepteur infra-rouge et le rend
+   disponible via `/dev/lirc`.
+ - `lircd`, avec l'aide d'un fichier de configuration décrivant le
+   protocole utilisé par la télécommande, lit ce signal et le
+   transforme en un code LIRC.
+ - XBMC, connecté à `lircd`, reçoit le code LIRC et le transforme en
+   une commande XBMC. Cette transformation est définie dans le fichier
+   `Lircmap.xml`.
+ - XBMC fait correspondre chaque commande à une action (telle que
+   `Play` ou `Fullscreen`) à l'aide d'une table de correspondance
+   également utilisée par les autres périphériques comme la souris, le
+   clavier ou un joystick.
+
+**Depuis Linux 2.6.36**, les télécommandes sont reconnues comme un
+périphérique d'entrée générique au même titre qu'un clavier :
+
+ - Le pilote reçoit le signal du récepteur infra-rouge.
+ - Un décodeur va transformer ce signal en un évènement (généralement
+   l'appui d'une touche). La configuration du décodeur est effectuée à
+   l'aide de `ir-keytable`.
+ - X reçoit ces évènements et les transforment en évènements X
+   destinés aux applications.
+ - XBMC les reçoit et utilise la table de correspondance appropriée
+   pour les transformer en actions.
+
+Pour compliquer un peu les choses, il est toujours possible d'utiliser
+LIRC : `lircd` va recevoir les évènements en provenance du noyau et
+les transformer en codes LIRC.
+
+
+De plus, le récepteur infra-rouge du SoundGraph iMON accepte deux
+protocoles différents : un protocole propriétaire et le protocole
+RC-6. Le pilote Linux sait gérer ces deux protocoles mais utilise par
+défaut le premier. Le protocole RC-6 est le protocole utilisé par de
+nombreuses télécommandes MCE.
+
+J'espère n'avoir perdu personne jusqu'ici.
+
+### La façon simple
+
+Il est possible d'obtenir une configuration fonctionnelle avec peu de
+configuration :
+
+Télécommande Logitech Harmony
+: La télécommande doit être déclarée comme étant un _Media Center PC_
+  de marque _Microsoft_: _Windows Media Center SE_.
+
+Récepteur infra-rouge iMON
+: Il doit être configuré pour utiliser le protocole RC-6. Voir ci-dessous pour les détails.
+
+LIRC
+: Dans `/etc/lirc/hardware.conf`, mettre
+  `DEVICE=/dev/input/by-id/usb-15c2_0038-event-if00` et
+  `DRIVER=devinput`. Dans `/etc/lirc/lircd.conf`, mettre simplement
+  `include "/usr/share/lirc/remotes/devinput/lircd.conf.devinput"`.
+
+XBMC
+: Une fois les autres éléments configurés, la télécommande doit
+  fonctionner sans aucune configuration supplémentaire dans XBMC.
+
+Pour utiliser le protocole RC-6, il faut installer le paquet
+`ir-keytable` et utiliser les commandes suivantes :
+
+    ::console
+    $ sudo modprobe rc-imon-mce
+    $ sudo ir-keytable -s rc0 -p rc-6 -c -w /lib/udev/rc_keymaps/imon_mce
+    Read imon_mce table
+    Old keytable cleared
+    Wrote 77 keycode(s) to driver
+    Protocols changed to RC-6 
+
+Pour rendre ce changement permanent, ajouter le module `rc-imon-mce`
+dans `/etc/modules` et créer le fichier
+`/etc/udev/rules.d/90-imon.rules` avec le contenu suivant :
+
+    ::
+    # Override the keytable for iMON
+    ACTION=="add|change", SUBSYSTEM=="rc", DRV_NAME="imon", \
+       RUN+="/usr/bin/ir-keytable -s $name -p rc-6 -c -w /lib/udev/rc_keymaps/imon_mce"
+
+### La façon compliquée
+
+Si la configuration par défaut ne convient pas totalement et que l'on
+désire lier certains boutons à certaines actions, il y a deux grandes
+solutions possibles :
+
+ 1. Partir de la configuration décrite ci-dessus avec LIRC et définir
+    les boutons supplémentaires à _cinq_ endroits différents.
+ 2. Retirer LIRC et configurer la télécommande Logitech pour émuler
+    un clavier Microsoft MCE.
+
+La première option est particulièrement pénible. Il faut d'abord
+trouver un code non utilisé au niveau de la Logitech Harmony, s'il en
+reste. Ensuite, il faut s'assurer que ce code est bien défini dans la
+table utilisée par l'utilitaire `ir-keytable`. Dans le cas contraire,
+il est possible de l'ajouter mais cela nécessite de compiler un
+[noyau avec des instructions de débogage][prdebug] pour le
+connaître. Ensuite, ce code doit être traduit dans le fichier
+`lircd.conf`. Il faut ensuite définir une traduction supplémentaire
+dans le fichier `Lircmap.xml`. Enfin, il faut définir l'action
+associée au niveau de XBMC.
+
+L'autre solution n'est pas non plus idéale mais me semble plus
+simple. La première étape est de configurer la télécommande Logitech
+Harmony en tant que _Microsoft MCE keyboard_. Cela nous permet d'avoir
+beaucoup de touches disponibles. En raison de l'absence de touches
+multimédias, il faut redéfinir la configuration de la télécommande. Le
+plus simple est de suivre la configuration d'un clavier dans XBMC :
+
+Bouton       | Commande           | Bouton       | Commande
+------------ | ------------------ | ------------ | ----------
+Channel Down | `PageDown`         | Stop         | `X`                    
+Channel Up   | `PageUp`           | Skip back    | `Comma`                
+Prev         | `Backspace`        | Skip forward | `.`                    
+Up           | `DirectionUp`      | Play         | `P`                    
+Down         | `DirectionDown`    | Rewind       | `R`                    
+Left         | `DirectionLeft`    | Fast forward | `F`                    
+Right        | `DirectionRight`   | Star         | `Delete`               
+OK           | `Enter`            | Pound        | `W`                    
+Menu         | `C`                | Red          | `F1`                   
+Exit         | `Esc`              | Green        | `F2`                   
+Guide        | `Tab`              | Yellow       | `F3`                   
+Info         | `I`                | Blue         | `F4`
+
+Malheureusement, le fichier de programmation fourni avec
+`ir-keytable` n'est pas complet. J'ai construit une
+[version plus complète][imon_mce][^missing]. Avec cette configuration,
+la plupart des fonctionnalités de XBMC fonctionneront sans avoir à
+modifier d'autres fichiers.
+
+[^missing]: Certaines touches ne sont pas présentes dans cette
+            table. Par exemple, le point d'exclamation dispose d'un
+            code dans le protocole RC-6 mais n'a pas de code
+            spécifique au niveau du noyau. Il partage en effet la
+            touche « 1 ». Il serait possible de l'affecter à un code
+            arbitraire mais cela risque de rendre les choses
+            difficiles à maintenir.
+
+Les touches supplémentaires peuvent être définies en écrivant une
+table de correspondance dédiée pour XBMC[^keymap]. Voici un extrait de
+[celle que j'utilise][keymap] :
+
+    ::xml
+    <keymap>
+     <global>
+      <keyboard>
+        <end>XBMC.ShutDown()</end>
+        <f1>XBMC.ActivateWindow(MusicLibrary)</f1>
+        <f2>XBMC.ActivateWindow(Videos,TvShowTitles)</f2>
+        <f3>XBMC.ActivateWindow(Videos,MovieTitles)</f3>
+        <f4>XBMC.ActivateWindow(Weather)</f4>
+      </keyboard>
+     </global>
+     <FullscreenVideo>
+      <keyboard>
+       <opensquarebracket>SubtitleDelayMinus</opensquarebracket>
+       <closesquarebracket>SubtitleDelayPlus</closesquarebracket>
+       <f6>xbmc.runscript(script.xbmc.subtitles)</f6>
+      </keyboard>
+     </FullscreenVideo>
+    </keymap>
+
+[^keymap]: Par exemple, dans `~/.xbmc/userdata/keymaps/harmony.xml`.
+
+## FTP
+
+Plutôt que d'utiliser SSH, je préfère déposer les nouveaux fichiers
+via FTP anonyme. _vsftpd_ permet de répondre très simplement à ce
+besoin. Voici mon fichier de configuration :
+
+    ::
+    listen=YES
+    xferlog_enable=YES
+    use_localtime=YES
+    setproctitle_enable=YES
+
+    secure_chroot_dir=/var/run/vsftpd/empty
+    nopriv_user=ftp
+    ftpd_banner=XBMC
+    hide_ids=YES
+
+    ftp_username=xbmc
+    anon_umask=022
+    anon_root=/home/xbmc/media
+    anonymous_enable=YES
+    write_enable=YES
+    anon_upload_enable=YES
+    anon_world_readable_only=YES
+
+_vsftpd_ n'est actuellement pas compatible avec _systemd_ (voir le bug
+[#670308][]). J'ai retiré le lien symbolique dans `/etc/rc2.d` et
+j'utilise le fichier `vsftpd.service` suivant :
+
+    ::
+    [Unit]
+    Description=Vsftpd ftp daemon
+    After=syslog.target network.target
+
+    [Service]
+    Type=simple
+    ExecStart=/usr/sbin/vsftpd /etc/vsftpd.conf
+    ExecReload=/bin/kill -HUP $MAINPID
+    ExecStartPre=-/bin/mkdir -p /var/run/vsftpd/empty
+
+    [Install]
+    WantedBy=multi-user.target
+
+## Divers
+
+ 1. Dans `/etc/default/grub`, réduire `TIMEOUT` à 0 permet d'obtenir
+    un démarrage plus rapide.
+
+ 2. Activer le mécanisme « [_dirty regions_][dirtyregions] » permet
+    d'augmenter la réactivité de XBMC.
+
+ 3. `aptitude install upower pm-utils` permet à XBMC
+    d'arrêter/suspendre la machine lui-même. Il est nécessaire de lui
+    donner les droits nécessaires en créant le fichier
+    `/var/lib/polkit-1/localauthority/50-local.d/xbmc.pkla` :
+    
+        ::
+        [Actions for xbmc user]
+        Identity=unix-user:xbmc
+        Action=org.freedesktop.upower.*;org.freedesktop.consolekit.system.*
+        ResultAny=yes
+        ResultInactive=yes
+        ResultActive=yes
+
+*[MCE]:  Media Center Edition
+*[HTPC]: Home Theather Personal Computer
+*[GRUB]: GRand Unified Bootloader
+*[EDID]: Extended Display Identification Data
+*[LIRC]: Linux Infrared Remote Control
+*[ALSA]: Advanced Linux Sound Architecture
+*[AV]:   Audio Video
+*[IR]:   Infrared
+
+[prdebug]: http://www.kernel.org/doc/local/pr_debug.txt "Activer la sortie de débogage dans certains modules Linux"
+[antec]: http://store.antec.com/Product/enclosure-veris_media/micro-fusion-remote-350/0-761345-15737-7.aspx "Boîtier Antec Micro Fusion Remote 350"
+[555]: http://www.logitech.com/en-roeu/440/376 "Logitech Harmony® 555 Advanced Universal Remote"
+[XBMC]: http://xbmc.org/ "XBMC Media Center"
+[eden]: http://xbmc.org/natethomas/2012/03/24/xbmc-11-0-eden/ "XBMC 11.0: Eden"
+[dirtyregions]: http://wiki.xbmc.org/index.php?title=Dirty_regions "Enabling dirty regions in XBMC Eden"
+[xbmc-debian]: http://xbmc.org/theuni/2012/04/10/xbmc-accepted-into-debian/ "XBMC accepté dans Debian"
+[imon_mce]: https://gist.github.com/2466098#file_imon_mce "Table ir-keytable pour récepteur iMON et clavier MCE"
+[keymap]: https://gist.github.com/2466098#file_harmony.xml "Configuration clavier pour XBMC avec Logitech Harmony"
+[congruity]: http://sourceforge.net/projects/congruity/ "Interface de programmation d'une télécommande Logitech Harmony"
+[harmony]: http://members.harmonyremote.com/ "Configurer sa télécommande Logitech Harmony"
+[xbmc-keynames]: http://wiki.xbmc.org/index.php?title=List_of_XBMC_keynames "XBMC wiki: List of XBMC keynames"
+[systemd]: http://www.freedesktop.org/wiki/Software/systemd "systemd, a system and service manager for Linux"
+[video-nouveau]: http://nouveau.freedesktop.org/wiki/VideoDecoding "Support du décodage vidéo avec nouveau"
+[debian-installer]: http://www.debian.org/devel/debian-installer/ "Version de développement de l'installeur Debian"
+[#662086]: http://bugs.debian.org/662086 "Bug #662086: grub-install failed with raid+lvm"
+[#670308]: http://bugs.debian.org/670308 "Bug #670308: vsftpd and systemd"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

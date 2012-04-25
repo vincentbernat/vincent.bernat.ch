@@ -1,0 +1,458 @@
+---
+title: "XBMC Eden on Debian Wheezy"
+keywords: "xbmc, media center, eden, debian, wheeze, logitech harmony, imon, zotac"
+uuid: ad787bd1-9bcc-4730-bc73-6ce694763ad1
+---
+
+I bought some HTPC a few years ago to run [XBMC][], a neat media
+center solution. At the time, to avoid any problems, I installed it on
+top of a minimal Ubuntu Lucid installation with the official packages
+from the team XBMC. Recently, [XBMC Eden has been released][eden] and
+[XBMC has landed into Debian unstable][xbmc-debian]. It was a good
+occasion to make the switch.
+
+![Unofficial XBMC logo for Eden][xbmc-logo]
+[xbmc-logo]: [[!!images/xbmc-eden-logo.jpg]] "XBMC Media Center: Eden. Logo by FiroPyro. CC BY-NC 3.0"
+
+**TL;DR**: Installing XBMC on Debian Wheezy is quite easy: it almost
+works out of the box. The big difficulty is the configuration of the
+remote control: either it works as you expect or you will have to
+scratch your head over the pile of layers needed to work with a remote
+control.
+
+The configuration of my HTPC is as follows:
+
+ - an [Antec Micro Fusion 350 housing][antec] featuring a SoundGraph
+   iMON IR receiver and LCD screen[^lcd],
+ - a Zotac ION-ITX-D-E motherboard with an Intel Atom 330 CPU and an
+   nVidia ION chipset,
+ - some Onkyo AV receiver connected through HDMI,
+ - a [Logitech Harmony 555][555] as remote control.
+
+[^lcd]: The readibility of the LCD screen is very bad. You should look
+        at the VFD version. The IR receiver reception is poor. The
+        provided remote control is a joke.
+
+[TOC]
+
+# Installation
+
+## Installing Debian Wheezy
+
+Installing Debian Wheezy[^wheezy] is pretty easy.  Nowadays, getting a
+bootable USB key from a
+[_netinst_ image of Debian Installer for Wheezy][debian-installer] is
+simplified:
+
+    ::console
+    $ sudo dd if=debian-testing-i386-netinst.iso \
+    >         of=/dev/disk/by-id/usb...
+
+[^wheezy]: Debian Wheezy is not yet released. If you are unfamiliar
+           with Debian, it may be cumbersome to maintain it until the
+           freeze happens in a few months.
+
+The installation was smooth with the exception of GRUB which was
+unable to install itself on the disk. This is a
+[known bug][#662086] when dealing with LVM and it comes with a
+simple workaround. I hope it will be corrected in time for Wheezy
+release.
+
+While this has little to do with the installation of XBMC, I wanted to
+test [systemd][] which may become the default _init_ in Debian (at
+least in Debian GNU/Linux). From `README.Debian`:
+
+> `systemd` can be installed alongside `sysvinit` and will not change
+> the behaviour of the system out of the box.  This is intentional.
+> To test `systemd`, add `init=/bin/systemd` to the kernel command
+> line and then rebooting, or install the `systemd-sysv` package.
+
+The final system boots in about 15 seconds.
+
+## Configuring X
+
+Because [video decoding in _nouveau_ driver][video-nouveau] is still a
+work in progress, the use of the proprietary NVIDIA drivers is
+mandatory to be able to watch high resolution videos. Therefore,
+`/etc/apt/sources.list` should be completed with `contrib` and
+`non-free` repository. Then, you can install the appropriate packages:
+`xserver-xorg-video-nvidia`, `nvidia-vdpau-driver` and `xserver-xorg`.
+
+Here is my `/etc/X11/xorg.conf.d/nvidia.conf`:
+
+    ::
+    Section "Device"
+        Identifier     "NVidia ION"
+        Driver         "nvidia"
+        VendorName     "NVIDIA Corporation"
+        Option         "HWCursor" "False"
+        Option         "NoFlip" "False"
+        Option         "FlatPanelProperties" "Scaling = Native"
+        Option         "DynamicTwinView" "False"
+        Option         "ConnectedMonitor" "DFP-1"
+        Option         "CustomEDID" "DFP-1:/etc/X11/edid.bin"
+        Option         "NoLogo" "True"
+    EndSection
+
+    Section "Extensions"
+        Option "Composite" "false"
+    EndSection
+
+The `CustomEDID` option allows the driver to get an appropriate EDID
+even when the AV receiver is off. You can get yours, free of charge,
+with `get-edid` from `read-edid` package.
+
+## Installing XBMC
+
+Thanks to the work of Andrés Mejía, XBMC is now available in Debian
+Wheezy. To install it, just type `aptitude install xbmc`. I have
+dropped the following `xbmc.service` in `/etc/systemd/system`
+directory:
+
+    ::
+    [Unit]
+    Description = XBMC media center
+    After = syslog.target
+
+    [Service]
+    User = xbmc
+    Group = xbmc
+    Type = simple
+    ExecStart = /usr/bin/xinit /usr/bin/xbmc-standalone -- :0
+    Restart = on-failure
+
+    [Install]
+    WantedBy = multi-user.target
+
+Enable this service on boot with `systemctl enable xbmc.service`. You
+need to allow `xbmc` user to run X. The simplest way is to run
+`dpkg-reconfigure -plow x11-common` and to allow anybody to run
+X. `sudo` may be an alternative.
+
+# Configuration
+
+## Sound
+
+While I wanted to use PulseAudio, I want the AV receiver to be
+able to upmix stereo streams itself. With PulseAudio, it would always
+receive a 6-channel signal. Therefore, I directly use ALSA.
+
+First, unmute the appropriate outputs:
+
+    ::console
+    $ amixer scontrols | grep IEC958
+    Simple mixer control 'IEC958',0
+    Simple mixer control 'IEC958 Default PCM',0
+    Simple mixer control 'IEC958',1
+    $ amixer sset 'IEC958',0 unmute
+    $ amixer sset 'IEC958 Default PCM',0 unmute
+    $ amixer sset 'IEC958',1 unmute
+    $ sudo systemctl stop alsa-utils.service
+
+The order of channels is incorrect. With the following
+`/etc/asound.conf`, we declare a new output, `hdmi2`, with a different
+mapping:
+
+    ::
+    pcm.hdmi2 {
+      type asym
+      playback.pcm {
+        type plug
+        slave.pcm "remap-surround51"
+      }
+    }
+
+    pcm.!remap-surround51 {
+      type route
+      slave.pcm "hdmi"
+      ttable {
+        0.0= 1
+        1.1= 1
+        2.4= 1
+        3.5= 1
+        4.2= 1
+        5.3= 1
+      }
+    }
+
+In XBMC, this output should be used instead of the default one. `hdmi`
+should still be used for passthrough. To check if each speaker is
+mapped correctly, one can use `speaker-test -D hdmi2 -c 6`.
+
+## LCD display
+
+The LCD display integrated into the SoundGraph iMON is supported by
+the `imon` kernel module and the `lcdproc` package. I have only
+modified a few lines of `/etc/LCDd.conf` to make it work:
+
+    ::
+    [server]
+    Driver=imonlcd
+    ServerScreen=off
+
+    [imonlcd]
+    Protocol=1
+    OnExit=2
+    Contrast=400
+
+## Remote control
+
+This is the most difficult part. I have a Logitech Harmony remote
+which is a great universal remote. Its support in Linux is acceptable:
+you can configure through [Logitech website][harmony] and use
+[congruity][] to push the new configuration.
+
+### Remote controls and Linux
+
+**Before Linux 2.6.36**, most remote controls would need LIRC to work:
+
+ - The driver receives the signal from the IR receiver and make it
+   available through `/dev/lirc`.
+ - `lircd`, with the help of a configuration file describing the
+   protocol used by the remote control, will read the signal and turn
+   it into the appropriate LIRC code.
+ - XBMC connects to `lircd` and receives incoming LIRC codes. It will
+   translate them to an XBMC command. This translation is specified in
+   `Lircmap.xml`.
+ - XBMC maps each command to an action (like `Play`, `Fullscreen`,
+   ...)  using a _keymap_. This keymap can handle commands received by
+   a remote control, but also by a keyboard, a mouse or a joystick.
+
+**Since Linux 2.6.36**, remote controls will be mapped as a generic
+input device (just like a keyboard):
+
+ - The driver receives the signal from the IR receiver.
+ - The signal will be handled by a decoder. The configuration of this
+   decoder is done in userland by `ir-keytable`. The decoder will
+   turn the signal into the appropriate event (usually, some
+   keypress).
+ - X will listen to those events and turn them into X key events.
+ - XBMC will receive them and use the appropriate _keymap_ to turn
+   them into actions.
+
+And to add more complexity to the mix, in this last case, you can
+still use LIRC: `lircd` will listen to events generated by the kernel
+and turn them into LIRC codes. This can be very confusing.
+
+Moreover, the SoundGraph iMON IR receiver accepts two IR protocols:
+the iMON protocol and the RC-6 one. The Linux driver accepts both of
+them but uses the first one by default. The RC-6 protocol is the
+protocol used by many MCE remote controls.
+
+I hope you are still with me here.
+
+### The easy way
+
+To get a reasonable configuration out of the box, here is how to
+configure each layer:
+
+Logitech Harmony remote
+: Configure it as a _Microsoft_ branded _Media Center PC_: _Windows
+  Media Center SE_.
+
+iMON IR receiver
+: It must use RC-6 protocol. See below for more details.
+
+LIRC
+: In `/etc/lirc/hardware.conf`, put
+  `DEVICE=/dev/input/by-id/usb-15c2_0038-event-if00` and
+  `DRIVER=devinput`. In `/etc/lirc/lircd.conf`, just put `include
+  "/usr/share/lirc/remotes/devinput/lircd.conf.devinput"`.
+
+XBMC
+: With the previous bits done, it should just work out of the box.
+
+To switch to RC-6 protocol, install the `ir-keytable` package and use
+the following commands:
+
+    ::console
+    $ sudo modprobe rc-imon-mce
+    $ sudo ir-keytable -s rc0 -p rc-6 -c -w /lib/udev/rc_keymaps/imon_mce
+    Read imon_mce table
+    Old keytable cleared
+    Wrote 77 keycode(s) to driver
+    Protocols changed to RC-6 
+
+To make the change permanent, add the `rc-imon-mce` module to
+`/etc/modules` and create `/etc/udev/rules.d/90-imon.rules` with the
+following content:
+
+    ::
+    # Override the keytable for iMON
+    ACTION=="add|change", SUBSYSTEM=="rc", DRV_NAME="imon", \
+       RUN+="/usr/bin/ir-keytable -s $name -p rc-6 -c -w /lib/udev/rc_keymaps/imon_mce"
+
+### The hard way
+
+Now, you may want to bind custom actions to some (physical or virtual)
+buttons. Basically, you are left with two solutions:
+
+ 1. Start from the basic configuration with LIRC and add more buttons
+    at each levels (there are five of them!).
+ 2. Remove LIRC and start with the Logitech Harmony acting as a
+    Microsoft MCE keyboard.
+
+The first option can be quite difficult. You need to find an unused
+code for the Logitech Harmony. You can try to make it learn a new code
+if you have some RC-6 remote control. Then, you need to ensure that
+this code will be present in the keytable used by `ir-keytable`. If
+not, you need to add it. That's not easy since you need a
+[to enable some debug stuff in the kernel][prdebug] to find the
+appropriate scancode. After that, the code needs to be translated in
+`lircd.conf`. You will then have to translate it again in
+`Lircmap.xml`. At least, you need to add it to a keymap in XBMC.
+
+The other way is not ideal but seems less cumbersome. The first step
+is to configure the Logitech Harmony as a _Microsoft MCE keyboard_: it
+has a lot of available keys. Because of the lack of multimedia keys,
+let's match the keyboard configuration of XBMC:
+
+Button       | Command            | Button       | Command    
+------------ | ------------------ | ------------ | ----------
+Channel Down | `PageDown`         | Stop         | `X`                    
+Channel Up   | `PageUp`           | Skip back    | `Comma`                
+Prev         | `Backspace`        | Skip forward | `.`                    
+Up           | `DirectionUp`      | Play         | `P`                    
+Down         | `DirectionDown`    | Rewind       | `R`                    
+Left         | `DirectionLeft`    | Fast forward | `F`                    
+Right        | `DirectionRight`   | Star         | `Delete`               
+OK           | `Enter`            | Pound        | `W`                    
+Menu         | `C`                | Red          | `F1`                   
+Exit         | `Esc`              | Green        | `F2`                   
+Guide        | `Tab`              | Yellow       | `F3`                   
+Info         | `I`                | Blue         | `F4`
+
+Unfortunately, the keytables provided with `ir-keytable` are not
+complete enough. I have built a
+[more complete table][imon_mce][^missing]. With this table and the
+bindings described above, most functions will work out of the box
+without LIRC.
+
+[^missing]: Some keys are missing from the provided table. For
+            example, there is no exclamation mark. While there is a
+            scan code for such a key in RC-6 protocol, there is no
+            appropriate key code to translate to: on a QWERTY
+            keyboard, the exclamation mark is on the same key as the
+            number 1. It is possible to map it to some other key code,
+            but the mapping would have been difficult to use.
+
+Additional keys can be configured in a dedicated keymap[^keymap]. Here
+is an excerpt of [mine][keymap]:
+
+    ::xml
+    <keymap>
+     <global>
+      <keyboard>
+        <end>XBMC.ShutDown()</end>
+        <f1>XBMC.ActivateWindow(MusicLibrary)</f1>
+        <f2>XBMC.ActivateWindow(Videos,TvShowTitles)</f2>
+        <f3>XBMC.ActivateWindow(Videos,MovieTitles)</f3>
+        <f4>XBMC.ActivateWindow(Weather)</f4>
+      </keyboard>
+     </global>
+     <FullscreenVideo>
+      <keyboard>
+       <opensquarebracket>SubtitleDelayMinus</opensquarebracket>
+       <closesquarebracket>SubtitleDelayPlus</closesquarebracket>
+       <f6>xbmc.runscript(script.xbmc.subtitles)</f6>
+      </keyboard>
+     </FullscreenVideo>
+    </keymap>
+
+[^keymap]: For example, in `~/.xbmc/userdata/keymaps/harmony.xml`.
+
+## FTP
+
+Instead of using SSH, I prefer to drop new files with anonymous
+FTP. _vsftpd_ fits this purpose. Here is my configuration file:
+
+    ::
+    listen=YES
+    xferlog_enable=YES
+    use_localtime=YES
+    setproctitle_enable=YES
+
+    secure_chroot_dir=/var/run/vsftpd/empty
+    nopriv_user=ftp
+    ftpd_banner=XBMC
+    hide_ids=YES
+
+    ftp_username=xbmc
+    anon_umask=022
+    anon_root=/home/xbmc/media
+    anonymous_enable=YES
+    write_enable=YES
+    anon_upload_enable=YES
+    anon_world_readable_only=YES
+
+It is currently not compatible with _systemd_ (see bug [#670308][]). I
+have removed the symlink in `/etc/rc2.d` and I have used the following
+unit file:
+
+    ::
+    [Unit]
+    Description=Vsftpd ftp daemon
+    After=syslog.target network.target
+
+    [Service]
+    Type=simple
+    ExecStart=/usr/sbin/vsftpd /etc/vsftpd.conf
+    ExecReload=/bin/kill -HUP $MAINPID
+    ExecStartPre=-/bin/mkdir -p /var/run/vsftpd/empty
+
+    [Install]
+    WantedBy=multi-user.target
+
+
+## Miscellaneous
+
+ 1. In `/etc/default/grub`, reduce `TIMEOUT` to 0 to shorten the boot
+    time.
+
+ 2. Enabling [dirty regions][dirtyregions] can help speed up XBMC.
+
+ 3. `aptitude install upower pm-utils` to be able to shutdown/suspend
+    from XBMC. Since XBMC was configured to be started outside any
+    session, you need to explicitely give the appropriate rights by
+    creating the following
+    `/var/lib/polkit-1/localauthority/50-local.d/xbmc.pkla`:
+    
+        ::
+        [Actions for xbmc user]
+        Identity=unix-user:xbmc
+        Action=org.freedesktop.upower.*;org.freedesktop.consolekit.system.*
+        ResultAny=yes
+        ResultInactive=yes
+        ResultActive=yes
+
+*[MCE]:  Media Center Edition
+*[HTPC]: Home Theather Personal Computer
+*[GRUB]: GRand Unified Bootloader
+*[EDID]: Extended Display Identification Data
+*[LIRC]: Linux Infrared Remote Control
+*[ALSA]: Advanced Linux Sound Architecture
+*[AV]:   Audio Video
+*[IR]:   Infrared
+
+[prdebug]: http://www.kernel.org/doc/local/pr_debug.txt "Enabling debug output in some Linux module"
+[antec]: http://store.antec.com/Product/enclosure-veris_media/micro-fusion-remote-350/0-761345-15737-7.aspx "Antec Micro Fusion Remote 350 housing"
+[555]: http://www.logitech.com/en-roeu/440/376 "Logitech Harmony® 555 Advanced Universal Remote"
+[XBMC]: http://xbmc.org/ "XBMC Media Center"
+[eden]: http://xbmc.org/natethomas/2012/03/24/xbmc-11-0-eden/ "XBMC 11.0: Eden"
+[dirtyregions]: http://wiki.xbmc.org/index.php?title=Dirty_regions "Enabling dirty regions in XBMC Eden"
+[xbmc-debian]: http://xbmc.org/theuni/2012/04/10/xbmc-accepted-into-debian/ "XBMC accepted into Debian"
+[imon_mce]: https://gist.github.com/2466098#file_imon_mce "Keytable for iMON IR receiver with MCE keyboard"
+[keymap]: https://gist.github.com/2466098#file_harmony.xml "Additional keymap for my setup with an Harmony remote control"
+[congruity]: http://sourceforge.net/projects/congruity/ "GUI application to program your Logitech Harmony"
+[harmony]: http://members.harmonyremote.com/ "Configure your Logitech Harmony"
+[xbmc-keynames]: http://wiki.xbmc.org/index.php?title=List_of_XBMC_keynames "XBMC wiki: List of XBMC keynames"
+[systemd]: http://www.freedesktop.org/wiki/Software/systemd "systemd, a system and service manager for Linux"
+[video-nouveau]: http://nouveau.freedesktop.org/wiki/VideoDecoding "Video decoding support for nouveau driver"
+[debian-installer]: http://www.debian.org/devel/debian-installer/ "Development version of the Debian Installer"
+[#662086]: http://bugs.debian.org/662086 "Bug #662086: grub-install failed with raid+lvm"
+[#670308]: http://bugs.debian.org/670308 "Bug #670308: vsftpd and systemd"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
