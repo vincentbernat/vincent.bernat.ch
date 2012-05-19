@@ -195,6 +195,25 @@ modified a few lines of `/etc/LCDd.conf` to make it work:
     OnExit=2
     Contrast=400
 
+**UPDATED:** The use of the LCD screen triggers various bugs
+including segfaults of `ir-keytable` and freezes. Since its
+readibility is less than ideal, I don't use it any more. I have
+uninstalled `lcdproc` and I am using this simple script to switch it
+off on start:
+
+    ::python
+    #!/usr/bin/python
+
+    import struct
+    open("/dev/lcd0", "w").write(struct.pack("Q",0x8800000000000008))
+
+This script is triggered by the following rule for `udev`:
+
+    ::
+    # Disable LCD screen
+    ACTION=="add", NAME=="lcd0",
+       RUN+="/usr/local/bin/disable_lcd"
+
 ## Remote control
 
 This is the most difficult part. I have a Logitech Harmony remote

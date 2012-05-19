@@ -205,6 +205,25 @@ faire fonctionner :
     OnExit=2
     Contrast=400
 
+**MISE À JOUR :** L'utilisation de l'écran LCD provoque un certain
+nombre de bugs incluant des plantages complets de la machine. Étant
+donné que la lisibilité de l'écran est particulièrement mauvaise, il
+m'a semblé plus simple de ne plus l'utiliser. J'ai donc retiré le
+paquet `lcdproc` et écrit ce petit script pour éteindre l'écran :
+
+    ::python
+    #!/usr/bin/python
+
+    import struct
+    open("/dev/lcd0", "w").write(struct.pack("Q",0x8800000000000008))
+
+J'utilise alors la règle suivante pour `udev` :
+
+    ::
+    # Disable LCD screen
+    ACTION=="add", NAME=="lcd0",
+       RUN+="/usr/local/bin/disable_lcd"
+
 ## Télécommande
 
 Il s'agit de la partie la plus complexe. J'utilise une télécommande
