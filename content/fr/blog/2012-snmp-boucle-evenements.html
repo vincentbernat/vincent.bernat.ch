@@ -1,0 +1,405 @@
+---
+title: "Intégration de NetSNMP dans une boucle d'événements"
+keywords: "snmp, libevent, event loop, boucle, asynchrone, netsnmp, twisted, python"
+uuid: 48576890-3afb-4b5b-91b9-c168ccd23a80
+tags:
+  - snmp
+---
+
+_NetSNMP_ utilise sa propre [boucle d'événements][event loop] basée
+sur l'appel système `select()`. Bien qu'il soit possible de l'utiliser
+dans un programme tiers, on lui préfère généralement sa propre boucle
+ou des bibliothèques telles que [libevent][], [libev][] ou
+[Twisted][].
+
+[TOC]
+
+# Boucle d'évènements propre
+
+Commençons par le cas le plus simple : vous avez mis en place votre
+propre boucle d'événements à l'aide de `select()`, `poll()`,
+`epoll()`, `kqueue()` ou quelque chose de similaire. Toutes ces
+fonctions prennent un ensemble de descripteurs de fichiers et
+attendent un certain temps que l'un d'eux devienne actif.
+
+Voici un exemple typique de l'utilisation de `select()`, inspiré de
+[Quagga][] :
+
+    ::c
+    readfd = m->readfd;
+    writefd = m->writefd;
+    exceptfd = m->exceptfd;
+    timer_wait = thread_timer_wait (&m->timer);
+    num = select (FD_SETSIZE,
+                  &readfd, &writefd, &exceptfd,
+                  timer_wait);
+    if (num < 0)
+      {
+        if (errno == EINTR)
+          continue; /* signal received - process it */
+        zlog_warn ("select() error: %s",
+                   safe_strerror (errno));
+        return NULL;
+      }
+    if (num == 0)
+      {
+        /* Timeout handling */
+        thread_timer_process (&m->timer);
+      }
+    if (num > 0)
+      {
+        thread_process_fd (&readfd);
+        thread_process_fd (&writefd);
+      }
+
+La fonction `thread_process_fd (fds)` va exécuter l'action associée à
+chaque descripetur `fd` si la condition `FD_ISSET (fds, fd)` est
+vérifiée.
+
+Intégrer _NetSNMP_ dans une telle boucle est relativement simple : on
+dispose de la fonction `snmp_select_info()` qui permet d'intégrer les
+descripteurs de fichiers liés à SNMP dans un ensemble existant. Voici
+le code adapté :
+
+    ::c
+    #if defined HAVE_SNMP
+    struct timeval snmp_timer_wait;
+    int snmpblock = 0;
+    int fdsetsize;
+    #endif
+
+    /* ... */
+    
+    #if defined HAVE_SNMP
+    fdsetsize = FD_SETSIZE;
+    snmpblock = 1;
+    if (timer_wait)
+      {
+        snmpblock = 0;
+        memcpy(&snmp_timer_wait, timer_wait,
+               sizeof(struct timeval));
+      }
+    snmp_select_info(&fdsetsize, &readfd,
+                     &snmp_timer_wait, &snmpblock);
+    if (snmpblock == 0)
+      timer_wait = &snmp_timer_wait;
+    #endif
+
+    num = select (FD_SETSIZE,
+                  &readfd, &writefd, &exceptfd,
+                  timer_wait);
+    if (num < 0) { /* ... */ }
+
+    #if defined HAVE_SNMP
+    if (num > 0)
+      snmp_read(&readfd);
+    else if (num == 0)
+      {
+        snmp_timeout();
+        run_alarms();
+      }
+    netsnmp_check_outstanding_agent_requests();
+    #endif
+
+    /* ... */
+
+L'appel à `snmp_select_info()` peut modifier l'ensemble des
+descripteurs de fichiers (ainsi que sa taille). Il peut également
+modifier le _timer_ fourni dans le cas où une action doit être
+exécutée avant que le _timer_ original ne soit écoulé.
+
+La compréhension de la variable `snmpblock` est importante. Alors que
+`select()` peut être invoquée avec son dernier paramètre à `NULL`, ce
+n'est pas le cas de `snmp_select_info()` : il faut toujours passer un
+pointeur valide. `snmpblock` doit être mis à 1 si le _timer_ fourni
+doit être ignoré (ce qui est le cas si on avait appelé `select()` avec
+`NULL`) ou 0 dans le cas contraire. `snmp_select_info()` placera
+`snmpblock` à 0 _si et seulement si_ il modifie le _timer_ fourni.
+
+Voici deux autres exemples d'intégration. Il s'agit dans les deux cas
+de sous-agents, mais le code peut être réutilisé tel quel pour un
+_manager_ :
+
+ - [Quagga](https://github.com/vincentbernat/quagga/blob/201abe248e0736e74e7333fd33a954b7cac91a9a/lib/thread.c#L1039-L1166)
+ - [Keepalived](https://github.com/vincentbernat/keepalived/blob/bfb75bc7291646040f6cc5ec677c6e4292c2b0e4/lib/scheduler.c#L501-L701)
+
+# Boucle d'événements tierce
+
+Avec une boucle d'événements tierce, il n'est plus possible d'accéder
+directement à l'appel système `select()` afin de l'altérer avec
+`snmp_select_info()`. Au lieu de cela, il convient, à chaque
+itération, de maintenir une liste des descripteurs de fichiers liés à
+SNMP en s'aidant de `snmp_select_info()`: les nouveaux descripteurs
+sont ajoutés à la boucle d'événements et les anciens sont retirés.
+
+## libevent
+
+Supposons que `snmp_fds` est la liste des événements liés à SNMP que
+nous souhaitons tenir à jour[^base]. Voici un exemple de fonction pour
+remplir cette tâche. Il s'agit d'une version partielle omettant
+certaines déclarations et la gestion des erreurs. Reportez-vous ci
+besoin à la
+[version complète](https://github.com/vincentbernat/lldpd/blob/5fd6695c090ddecb77e8324b6d6fb8b8fe43860a/src/event.c#L51-L188)
+issue de [lldpd][]:
+
+    ::c
+    static void
+    levent_snmp_update()
+    {
+        int maxfd = 0;
+        int block = 1;
+
+        FD_ZERO(&fdset);
+        snmp_select_info(&maxfd, &fdset, &timeout, &block);
+
+        /* We need to untrack any event whose FD is not in `fdset`
+           anymore */
+        for (snmpfd = TAILQ_FIRST(snmp_fds);
+             snmpfd;
+             snmpfd = snmpfd_next) {
+            snmpfd_next = TAILQ_NEXT(snmpfd, next);
+            if (event_get_fd(snmpfd->ev) >= maxfd ||
+                (!FD_ISSET(event_get_fd(snmpfd->ev), &fdset))) {
+                event_free(snmpfd->ev);
+                TAILQ_REMOVE(snmp_fds, snmpfd, next);
+                free(snmpfd);
+            } else
+                FD_CLR(event_get_fd(snmpfd->ev), &fdset);
+        }
+
+        /* Invariant: FD in `fdset` are not in list of FD */
+        for (int fd = 0; fd < maxfd; fd++)
+            if (FD_ISSET(fd, &fdset)) {
+                snmpfd->ev = event_new(base, fd,
+                    EV_READ | EV_PERSIST,
+                    levent_snmp_read,
+                    NULL);
+                event_add(snmpfd->ev, NULL);
+                TAILQ_INSERT_TAIL(snmp_fds, snmpfd, next);
+            }
+
+        /* If needed, handle timeout */
+        evtimer_add(snmp_timeout, block?NULL:&timeout);
+    }
+
+[^base]: La liste des événements liés à SNMP est globale mais il est
+         possible de maintenir une liste par base si nécessaire. Ce
+         n'est pas nécessaire dans le cas de _lldpd_ qui n'utilise
+         qu'une seule base.
+
+La boucle principale est généralement un appel à
+`event_base_dispatch()`. On la remplace par cette version :
+
+    ::c
+    do {
+        if (event_base_got_break(base) ||
+            event_base_got_exit(base))
+            break;
+        netsnmp_check_outstanding_agent_requests();
+        levent_snmp_update();
+    } while (event_base_loop(base, EVLOOP_ONCE) == 0);
+
+Voici comme sont définis les deux fonctions attachées aux événements
+mis en place:
+
+    ::c
+    static void
+    levent_snmp_read(evutil_socket_t fd, short what, void *arg)
+    {
+        FD_ZERO(&fdset);
+        FD_SET(fd, &fdset);
+        snmp_read(&fdset);
+        levent_snmp_update();
+    }
+
+    static void
+    levent_snmp_timeout(evutil_socket_t fd, short what, void *arg)
+    {
+        snmp_timeout();
+        run_alarms();
+        levent_snmp_update();
+    }
+
+## Twisted reactor
+
+Comme second exemple, nous allons voir comment intégrer _NetSNMP_ dans
+le réacteur de [Twisted][]. _Twisted_ est un ensemble de composants
+pour la programmation réseau basé sur le paradigme
+événementiel. Fourni avec le support de nombreux protocoles, il n'y a
+cependant rien pour SNMP[^twistedsnmp]. _Twisted_ étant écrit en
+Python, l'interface avec _NetSNMP_ doit se faire à l'aide d'une
+extension en C ou en utilisant le module `ctypes`.
+
+[^twistedsnmp]: [TwistedSNMP][] est un implémentation de SNMP pour _Twisted_
+                basée sur _PySNMP_. Elle n'est cependant
+                plus maintenue. [PySNMP][] est livré avec quelques
+                exemples d'intégration avec _Twisted_.
+
+La boucle d'événements de _Twisted_ est appelée le réacteur. Comme
+pour _libevent_, chaque événement doit etre y être enregistré. Il est
+possible d'y inscrire des descripteurs de fichiers en implémentant une
+classe respectant une certaine interface. Voici un exemple
+d'implémentation tiré de _PyNetSNMP_, un sous-projet de [Zenoss][],
+utilisant le module `ctypes` :
+
+    ::python
+    class SnmpReader:
+        "Respond to input events"
+        implements(IReadDescriptor)
+
+        def __init__(self, fd):
+            self.fd = fd
+
+        def doRead(self):
+            netsnmp.snmp_read(self.fd)
+
+        def fileno(self):
+            return self.fd
+
+Comme pour _libevent_, nous avons besoin d'une fonction pour mettre à
+jour la liste des événements liés à SNMP (il s'agit ici d'un
+dictionnaire associant un descripteur de fichier avec l'instance
+`SnmpReader` correspondante) :
+
+    ::python
+    class Timer(object):
+        callLater = None
+    timer = Timer()
+    fdMap = {}
+
+    def updateReactor():
+        "Add/remove event handlers for SNMP file descriptors and timers"
+
+        fds, t = netsnmp.snmp_select_info()
+        for fd in fds:
+            if fd not in fdMap:
+                reader = SnmpReader(fd)
+                fdMap[fd] = reader
+                reactor.addReader(reader)
+        current = Set(fdMap.keys())
+        need = Set(fds)
+        doomed = current - need
+        for d in doomed:
+            reactor.removeReader(fdMap[d])
+            del fdMap[d]
+        if timer.callLater:
+            timer.callLater.cancel()
+            timer.callLater = None
+        if t is not None:
+            timer.callLater = reactor.callLater(t, checkTimeouts)
+
+Contrairement à _libevent_, nous ne pouvons pas modifier la boucle
+principale pour appeler `updateReactor()` à chaque itération. Il est
+donc nécessaire d'appeler cette fonction après chaque appel d'une
+fonction liée à SNMP.
+
+Pour un autre exemple, le lecteur intéressé pourra consulter
+[mon implémentation sous forme d'extension C](https://github.com/vincentbernat/QCss-3/blob/ceb6520305fc7307891173b7bc211f06bcc85ed1/qcss3/collector/snmp.c#L75-L174).
+
+# Divers
+
+## Asynchronicité défaillante
+
+Intégrer _NetSNMP_ dans un programme reposant sur les événements n'est
+pas sans risque. Le lecteur souhaitant intégrer la fonctionnalité
+d'agent SNMP dans un programme existant est invité à lire de toute
+urgence mon article sur le
+[manque d'asynchronicité dans l'implémentation de _NetSNMP_ du protocole AgentX][lack].
+
+Côté _manager_, il y a des limitations similaires en SNMPv3. Pour
+interroger un agent en SNMPv3, il est nécessaire de connaître
+l'identifiant de l'agent distant. Celui-ci est habituellement
+découvert en interrogeant `SNMP-FRAMEWORK-MIB::‌snmpEngineID`, comme
+décrit dans la [RFC 5343][].
+
+Malheureusement, avec _NetSNMP_, cette découverte se fait de manière
+synchrone. Il existe un [rapport de bug][3446148] pour ce problème
+mais le correctif n'existe pas. Sur la liste de diffusion de
+_NetSNMP_, j'ai décrit une [méthode de contournement][workaround]
+autour de la fonction `snmp_sess_async_send()`.
+
+Un tel problème n'existe pas avec SNMPv2.
+
+## Limitation sur le nombre de descripteurs de fichiers
+
+`snmp_select_info()` et `snmp_read()` font usage du type `fd_set` pour
+gérer les ensembles de descripteurs de fichiers. Ce type doit être
+manipulé à l'aide de `FD_CLR()`, `FD_ISSET()`, `FD_SET()` et
+`FD_ZERO()`. Ces derniers peuvent être définis comme fonctions mais
+sont habituellement des macros. De plus, `fd_set` ne peut pas contenir
+de descripteurs de fichiers supérieurs à `FD_SETSIZE` (dont la valeur
+est habituellement de 1024). Il n'est donc pas possible d'utiliser
+`snmp_select_info()` avec des descripteurs de fichiers supérieurs à
+1024.
+
+À partir de _NetSNMP_ 5.5, il est possible d'utiliser
+`snmp_select_info2()` et `snmp_read2()` au lieu de
+`snmp_select_info()` et `snmp_read()`. Ils utilisent le type
+`netsnmp_large_fd_set` qui doit être manipulé avec des macros comme
+`NETSNMP_LARGE_FD_SET()`.
+
+Afin de garder la compatibilité avec _NetSNMP_ 5.4, il existe une
+autre possibilité. Le type `fd_set` est souvent un tableau d'entiers
+longs de taille fixe. Les macros `FD_CLR()`, `FD_ISSET()` et
+`FD_SET()` sont indépendantes de la taille de celui-ci à la différence
+de la macro `FD_ZERO()`. Ni `snmp_select_info()` ni `snmp_read()`
+n'utilisent `FD_ZERO()`. Il est donc possible d'utiliser un `fd_set`
+plus grand. Une façon commune de faire est de compiler votre programme
+avec `-D__FD_SETSIZE=4096`. Il est alors toujours possible d'utiliser
+`FD_ZERO()` sur les `fd_set` que vous créez. Cependant, cela ne
+fonctionne pas partout. Une autre méthode proche est d'allouer un
+tableau d'entiers et de le transtyper en un `fd_set`. Il faut alors
+redéfinir `FD_ZERO()`:
+
+    ::c
+    typedef struct {
+       long int fds_bits[4096/sizeof(long int)];
+    } my_fdset;
+
+    #undef FD_ZERO
+    #define FD_ZERO(fdset) memset((fdset), 0, sizeof(my_fdset))
+
+    {
+       /* ... */
+       my_fdset fdset;
+       FD_ZERO(&fdset);
+       /* ... */
+       rc = snmp_select_info(&n, (fd_set *)&fdset, &timeout, &block);
+       /* ... */
+    }
+
+## Threads
+
+_NetSNMP_ dispose de deux API :
+
+ - l'API _traditionnelle_ et
+ - l'API « _single session_ ».
+
+Les exemples ci-dessus ont fait usage de l'API
+traditionnelle. Celle-ci ne peut être utilisée que si toutes les
+opérations liées à SNMP sont faites dans un même fil d'exécution. Dans
+le cas contraire, il faut utiliser la seconde
+API. `snmp_select_info()` doit par exemple être renplacé par
+`snmp_sess_select_info()`, ce qui oblige à garder une liste des
+sessions SNMP utilisées.
+
+La partie agent de _NetSNMP_ n'est disponible que via la première API.
+
+[RFC 5343]: http://tools.ietf.org/html/rfc5343 "RFC 5343: SNMP Context EngineID Discovery"
+[event loop]: http://fr.wikipedia.org/wiki/Programmation_%C3%A9v%C3%A9nementielle "Programmation événementielle sur Wikipedia"
+[lack]: [[fr/blog/2012-snmp-async-agentx.html]] "De la non asynchronicité du protocole AgentX dans Net-SNMP"
+[3446148]: https://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() blocks during SNMPv3 probe"
+[workaround]: http://www.mail-archive.com/net-snmp-coders@lists.sourceforge.net/msg18746.html "Workaround for snmp_async_send() and SNMPv3"
+[libevent]: http://libevent.org/ "libevent – an event notification library"
+[libev]: http://software.schmorp.de/pkg/libev.html "libev – a full-featured and high-performance event loop"
+[Twisted]: http://twistedmatrix.com "an event-driven networking engine written in Python"
+[TwistedSNMP]: http://twistedsnmp.sourceforge.net/ "Set of SNMP protocol implementations for Python's Twisted Matrix networking framework"
+[PySNMP]: http://pysnmp.sourceforge.net/ "Cross-platform, pure-Python SNMP engine implementation"
+[Quagga]: http://www.nongnu.org/quagga/ "Quagga Routing Software Suite"
+[Zenoss]: http://www.zenoss.com/ "Open-source application, server, and network management platform"
+[lldpd]: https://github.com/vincentbernat/lldpd/wiki "lldpd — a 802.1ab implementation"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
