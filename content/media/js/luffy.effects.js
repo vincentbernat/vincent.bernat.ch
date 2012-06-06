@@ -14,13 +14,6 @@ luffy.effects = function() {
 	    .show();
     }();
 
-    /* -- Effect 2:
-          Animate portion of pages that needs to be animated.
-       -- */
-    e = function() {
-	$("html").addClass("lf-animate");
-    }();
-
     /* -- Effect 3:
           Scrolly headers (stolen from Steve Losh)
 	  https://github.com/sjl/stevelosh/blob/master/media/js/sjl.js
