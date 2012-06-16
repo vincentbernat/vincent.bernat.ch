@@ -1,0 +1,164 @@
+---
+title: "GPG Key Transition Statement 2012"
+keywords: "gnupg, gpg, key, debian, transition rsa"
+uuid: 186b2cbe-2120-4608-bc88-21fe2f4efa05
+---
+
+I am transitioning my GPG key from an old 1024-bit DSA key to a new
+4096-bit RSA key.  The old key will continue to be valid for some time
+but I prefer all new correspondance to be encrypted with the new
+key. I will be making all signatures going forward with the new key.
+
+I have followed the [excellent tutorial from Daniel Kahn Gillmor][]
+which also explains why this migration is needed. The only step that I
+did not execute is issuing a new certification for keys I have signed
+in the past. I did not find any search engine to tell me which key I
+have signed.
+
+Here is the signed transition statement (I have stolen it [from Zack][]):
+
+    ::raw
+    -----BEGIN PGP SIGNED MESSAGE-----
+    Hash: SHA256,SHA1
+
+    I am transitioning GPG keys from an old 1024-bit DSA key to a new
+    4096-bit RSA key.  The old key will continue to be valid for some
+    time, but I prefer all new correspondance to be encrypted in the new
+    key, and will be making all signatures going forward with the new key.
+
+    This transition document is signed with both keys to validate the
+    transition.
+
+    If you have signed my old key, I would appreciate signatures on my new
+    key as well, provided that your signing policy permits that without
+    reauthenticating me.
+
+    The old key, which I am transitional away from, is:
+
+      pub   1024D/F22A794E 2001-03-23
+          Key fingerprint = 5854 AF2B 65B2 0E96 2161  E32B 285B D7A1 F22A 794E
+
+    The new key, to which I am transitioning, is:
+
+      pub   4096R/353525F9 2012-06-16 [expires: 2014-06-16]
+          Key fingerprint = AEF2 3487 66F3 71C6 89A7  3600 95A4 2FE8 3535 25F9
+
+    To fetch the full new key from a public key server using GnuPG, run:
+
+      gpg --keyserver keys.gnupg.net --recv-key 95A42FE8353525F9
+
+    If you have already validated my old key, you can then validate that
+    the new key is signed by my old key:
+
+      gpg --check-sigs 95A42FE8353525F9
+
+    If you then want to sign my new key, a simple and safe way to do that
+    is by using caff (shipped in Debian as part of the "signing-party"
+    package) as follows:
+
+      caff 95A42FE8353525F9
+
+    Please contact me via e-mail at <vincent@bernat.im> if you have any
+    questions about this document or this transition.
+
+      Vincent Bernat
+      vincent@bernat.im
+      16-06-2012
+    -----BEGIN PGP SIGNATURE-----
+    Version: GnuPG v1.4.12 (GNU/Linux)
+
+    iQIcBAEBCAAGBQJP3LchAAoJEJWkL+g1NSX5fV0P/iEjcLp7EOky/AVkbsHxiV30
+    KId7aYmcZRLJpvLZPz0xxThZq2MTVhX+SdiPcrSTa8avY8Kay6gWjEK0FtB+72du
+    3RxhVYDqEQtrhUmIY2jOVyw9c0vMJh4189J+8iJ5HGQo9SjFEuRrP9xxNTv3OQD5
+    fRTMUBMC3q1/KcuhPA8ULp4L1OS0xTksRfvs6852XDfSJIZhsYxYODWpWqLsGEcu
+    DhQ7KHtbOUwjwsoiURGnjwdiFpbb6/9cwXeD3/GAY9uNHxac6Ufi4J64bealuPXi
+    O4GgG9cEreBTkPrUsyrHtCYzg43X0q4B7TSDg27j0xm+xd+jW/d/0AlBHPXcXemc
+    b+pw09qLOwQWbsd6d4bx22VXI75btSFs8HwR9hKHBeOAagMHz+AVl5pLXo2rYoiH
+    34fR1HWqyRdT3bCt19Ys1N+d0fznsZNFOMC+l23QyptOoMz7t7vZ6GbB20ExafrW
+    +gi7r1sV/6tb9sYMcVV2S3XT003Uwg8PXajyOnFHxPsMoX9zsk1ejo3lxkkTZs0H
+    yLZtUj3iZ3yX9e2yfv3eOxitR4+bIntEbMecnTI9xJn+33QTz/pWBqg9uDosqzUo
+    UoQtc6WVn9x3Zsi7aneDYcp06ZdphgsyWhgiLIhQG9MAK9wKthKiZv8DqGYDOsKt
+    WwpQFvns33e5x4SM4KxXiEYEARECAAYFAk/ctyEACgkQKFvXofIqeU5YLwCdFhEL
+    P7vpUJA2zv9+dpPN5GLfBlcAn0mDGJcjJpYZl/+aXEnP/8cE0day
+    =0QnC
+    -----END PGP SIGNATURE-----
+
+For easier access, I have also published it in text format. You can
+check it with:
+
+    ::console
+    $ gpg --keyserver keys.gnupg.net --recv-key 95A42FE8353525F9
+    gpg: requesting key 353525F9 from hkp server keys.gnupg.net
+    gpg: key 353525F9: "Vincent Bernat <bernat@luffy.cx>" not changed
+    gpg: Total number processed: 1
+    gpg:              unchanged: 1
+    $ curl http://vincent.bernat.im/media/files/key-transition-2012.txt | \
+    >       gpg --verify
+
+To avoid signing/encrypting with the old key who share the same email
+addresses than the new one, I have saved it, removed it from the
+keyring and added it again. The new key is now first in both the
+secret and the public keyrings and will be used whenever the
+appropriate email address is requested.
+
+    ::console
+    $ gpg --export-secret-keys F22A794E > ~/tmp/secret
+    $ gpg --export F22A794E > ~/tmp/public
+    $ gpg --delete-secret-key F22A794
+    sec  1024D/F22A794E 2001-03-23 Vincent Bernat <bernat@luffy.cx>
+
+    Delete this key from the keyring? (y/N) y
+    This is a secret key! - really delete? (y/N) y
+    $ gpg --delete-key F22A794E
+    pub  1024D/F22A794E 2001-03-23 Vincent Bernat <bernat@luffy.cx>
+
+    Delete this key from the keyring? (y/N) y
+    $ gpg --import ~/tmp/public
+    gpg: key F22A794E: public key "Vincent Bernat <bernat@luffy.cx>" imported
+    gpg: Total number processed: 1
+    gpg:               imported: 1
+    gpg: 3 marginal(s) needed, 1 complete(s) needed, classic trust model
+    gpg: depth: 0  valid:   2  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 2u
+    gpg: next trustdb check due at 2014-06-16
+    $ gpg --import ~/tmp/secret
+    gpg: key F22A794E: secret key imported
+    gpg: key F22A794E: "Vincent Bernat <bernat@luffy.cx>" not changed
+    gpg: Total number processed: 1
+    gpg:              unchanged: 1
+    gpg:       secret keys read: 1
+    gpg:   secret keys imported: 1
+    $ rm ~/tmp/public ~/tmp/secret
+    $ gpg --edit-key F22A794E
+    [...]
+    gpg> trust
+    [...]
+    Please decide how far you trust this user to correctly verify other users' keys
+    (by looking at passports, checking fingerprints from different sources, etc.)
+
+      1 = I don't know or won't say
+      2 = I do NOT trust
+      3 = I trust marginally
+      4 = I trust fully
+      5 = I trust ultimately
+      m = back to the main menu
+
+    Your decision? 5
+    Do you really want to set this key to ultimate trust? (y/N) y    
+
+I now need to gather some signatures for the new key. If this is
+appropriate for you, please sign the new key if you signed the old
+one.
+
+*[GPG]: GNU Privacy Guard
+*[PGP]: Pretty Good Privacy
+*[DSA]: Digital Signature Algorithm
+*[RSA]: Rivest Shamir Adleman
+
+[excellent tutorial from Daniel Kahn Gillmor]: http://www.debian-administration.org/users/dkg/weblog/48 "HOWTO prep for migration off of SHA-1 in OpenPGPG"
+[from Zack]: http://upsilon.cc/~zack/key-transition.2010.txt "Stefano Zacchiroli key transition statement"
+
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
