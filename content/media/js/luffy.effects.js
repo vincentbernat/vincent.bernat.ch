@@ -61,10 +61,11 @@ luffy.effects = function() {
 	if ($.browser.msie && parseInt($.browser.version, 10) < 8)
 	    return;
 	$("article img[title]").each(function() {
-	    var img = $(this);
+	    var img = $(this), title = img.attr("title");
+	    if (img.parent().is("a")) img = img.parent();
 	    $("<div>")
 		.addClass("lf-caption")
-		.text(img.attr("title"))
+		.text(title)
 		.appendTo(img.parent());
 	    img.parent().addClass("lf-captioned");
 	    img.hover(function() {
