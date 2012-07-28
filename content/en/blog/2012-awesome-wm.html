@@ -1,0 +1,287 @@
+---
+title: "Switching to the awesome window manager"
+keywords: "awesome, window manager, wm, gnome, tiling"
+uuid: afb860fa-3079-4906-8a98-6d0345598870
+attachments:
+ "https://github.com/vincentbernat/awesome-configuration": "GitHub repository"
+tags:
+ - desktop
+---
+
+I have happily [used FVWM][] as my window manager for more than 10
+years. However, I recently got tired of manually arranging windows and
+using the mouse so much. A window manager is one of the handful pieces
+of software getting in your way at every moment which explains why
+there are so many of them and why we might put so much time in it.
+
+I decided to try a [tiling window manager][]. While [i3][] seemed
+pretty hot and powerful (watch the [screencast][i3 screencast]!), I
+really wanted something configurable and extensible with some
+language. So far, the common choices are:
+
+ - [awesome][], written in C, configurable and extensible in [Lua][],
+ - [StumpWM][], written, configurable and extensible in [Common Lisp][],
+ - [xmonad][], written, configurable and extensible in [Haskell][].
+ 
+I chose _awesome_, despite the fact that _StumpWM_ vote for Lisp
+seemed a better fit (but it is more minimalist). I hope there is some
+parallel universe where I enjoy _StumpWM_.
+
+[TOC]
+
+Visually, here is what I got so far:
+
+[![awesome dual screen setup][s2]]([[!!images/awesome/screenshot-2012-07-21--20:18:45.jpg]])
+[s2]: [[!!images/awesome/screenshot-2012-07-21--20:18:45-small.jpg]] "Dualhead setup with awesome"
+
+# Awesome configuration
+
+Without a configuration file, _awesome_ does nothing. It does not come
+with any hard-coded behavior: **everything needs to be configured**
+through its _Lua_ configuration file. Of course, a default one is
+provided but you can also start from scratch. If you like to control
+your window manager, this is somewhat wonderful.
+
+_awesome_ is well documented. The [wiki][] provides a [FAQ][], a
+[good introduction][] and the [API reference][] is concise enough to
+be read from the top to the bottom. Knowing _Lua_ is not mandatory since
+it is quite easy to dive into such a language.
+
+I have posted my configuration on [GitHub][]. It should not be used as
+is but some snippets may be worth to be stolen and adapted into your
+own configuration. The following sections put light on some notable
+points.
+
+## Keybindings
+
+Ten years ago was the epoch of scavanger hunts to recover
+[IBM Model M keyboards][] from waste containers. They were great to
+type on and they did not feature the infamous Windows keys. Nowadays,
+this is harder to get such a keyboard. All my keyboards now have
+Windows keys. This is a major change with respect to configure a
+window manager: the left Windows key is mapped to `Mod4` and is
+usually unused by most applications and can therefore be dedicated to
+the window manager.
+
+The main problem with the ability to define many keybindings is to
+remember the less frequently used one. I have monkey-patched
+`awful.key` module to be able to attach a documentation string to a
+keybinding. I have documented the whole process on the
+[_awesome_ wiki][keydoc-wiki].
+
+![awesome online help][help]
+[help]: [[!!images/awesome/keybindings.jpg]] "Contextual help for available keybindings"
+
+[keydoc-wiki]: http://awesome.naquadah.org/wiki/Document_keybindings "Documenting keybindings in awesome wiki"
+
+## Quake console
+
+A _Quake console_ is a drop-down terminal which can be toggled with
+some key. I was heavily relying on it in FVWM. I think this is still a
+useful addition to any _awesome_ configuration. There are several
+possible solutions documented in the [_awesome_ wiki][quake-wiki]. I
+have added my own[^own] which works great for me.
+
+![Quake console][quake]
+[quake]: [[!!images/awesome/quake.jpg]] "Quake console at the top of the screen"
+
+[quake-wiki]: http://awesome.naquadah.org/wiki/Drop-down_terminal "Drop-down terminal on awesome wiki"
+
+[^own]: The console gets its own unique name. This allows _awesome_ to
+        reliably detect when it is spawned, even on restart. It is how
+        the Quake console works in the _mod_ of FVWM I was using.
+
+## XRandR
+
+XRandR is an extension which allows to dynamically reconfigure
+outputs: you plug an external screen to your laptop and you issue
+some command to enable it:
+
+    ::console
+    $ xrandr --output VGA-1 --auto --left-of LVDS-1
+
+_awesome_ detects the change and will restart automatically. Laptops
+usually come with a special key to enable/disable an external
+screen. Nowadays, this key does nothing unless configured
+appropriately. Out of the box, it is mapped to `XF86Display` symbol. I
+have associated this key to a function that will
+[cycle through possible configurations][xrandr] depending on the
+plugged screens. For example, if I plug an external screen to my
+laptop, I can cycle through the following configurations:
+
+ - only the internal screen,
+ - only the external screen,
+ - internal screen on the left, external screen on the right,
+ - external screen on the left, internal screen on the right,
+ - no change.
+
+The proposed configuration is displayed using _naughty_, the
+notification system integrated in _awesome_.
+
+![Notification of screen reconfiguration][xrandr-im]
+[xrandr-im]: [[!!images/awesome/xrandr.png]] "Notification displaying the configuration to be applied through XRandR"
+
+[xrandr]: https://github.com/vincentbernat/awesome-configuration/blob/master/rc/xrandr.lua
+
+## Widgets
+
+I was previously using [Conky][] to display various system-related
+information, like free space, CPU usage and network usage. _awesome_
+comes with widgets that can fit the same use. I am relying on
+_vicious_, a contributed widget manager, to manage most of them. It
+allows one to attach a function whose task is to fetch values to be
+displayed. This is quite powerful.
+
+Here is an example with a volume widget:
+
+    ::lua
+    local volwidget = widget({ type = "textbox" })
+    vicious.register(volwidget, vicious.widgets.volume,
+             '<span font="Terminus 8">$2 $1%</span>',
+            2, "Master")
+    volwidget:buttons(awful.util.table.join(
+                 awful.button({ }, 1, volume.mixer),
+                 awful.button({ }, 3, volume.toggle),
+                 awful.button({ }, 4, volume.increase),
+                 awful.button({ }, 5, volume.decrease)))
+
+You can also use a function to format the text as you wish. For
+example, you can display a value in red if it is too low. Have a look
+at my [battery widget][] for an example.
+
+![Various widgets][widgets]
+[widgets]: [[!!images/awesome/widgets.png]] "Various widgets: disk usage, CPU and memory usage, tags and layout, network usage, date and system tray, volume and date"
+
+[battery widget]: https://github.com/vincentbernat/awesome-configuration/blob/335b80262dd3c3995eb35848ddda6bb47bc742c6/rc/widgets.lua#L24-55 "Configuration of a battery widget with vicious"
+
+# Miscellaneous
+
+While I was working on my _awesome_ configuration, I also changed some
+other desktop-related bits.
+
+## Keyboard configuration
+
+I happen to setup all my keyboards to use the QWERTY layout. I use a
+[compose key][] to input special characters like "é". I have also
+recently use _Caps Lock_ as a _Control_ key. All this is perfectly
+supported since ages by X11 I am also mapping the _Pause_ key to
+`XF86ScreenSaver` key symbol which will in turn be bound to a function
+that will trigger `xautolock` to lock the screen.
+
+Thanks to a great article about
+[extending the X keyboard map with _xkb_][extend-xkb], I discovered
+that X was able to switch from one layout to another using
+groups[^perwindow]. I finally opted for this simple configuration:
+
+    ::console
+    $ setxkbmap us,fr '' compose:rwin ctrl:nocaps grp:rctrl_rshift_toggle
+    $ xmodmap -e 'keysym Pause = XF86ScreenSaver'
+
+I switch from `us` to `fr` by pressing both left _Control_ and left
+_Shift_ keys.
+
+[^perwindow]: However, the layout is global, not per-window. If you
+              are interested by a per-window layout, take a look at
+              [kbdd][].
+
+## Getting rid of most GNOME stuff
+
+Less than one year ago, to take a step forward to the future, I
+started to [heavily rely on some GNOME components][gnome] like _GNOME
+Display Manager_, _GNOME Power Manager_, the screen saver,
+`gnome-session`, `gnome-settings-daemon` and others. I had numerous
+problems when I tried to setup everything without pulling the whole
+GNOME stack. At each GNOME update, something was broken: the
+screensaver didn't start automatically anymore until a full session
+restart or some keybindings were randomly hijacked by
+`gnome-settings-daemon`.
+
+Therefore, I have decided to get rid of most of those components. I
+have replaced _GNOME Power Manager_ with system-level tools like
+_sleepd_ and the PM utilities. I replaced the GNOME screensaver with
+[i3lock][] and _xautolock_. _GDM_ has been replaced by [SLiM][] which
+now features _ConsoleKit_ support[^consolekit]. I use `~/.gtkrc-2.0`
+and `~/.config/gtk-3.0/settings.ini` to configure GTK+.
+
+The future will wait.
+
+[^consolekit]: Nowadays, you cannot really survive without
+               _ConsoleKit_. Many _PolicyKit_ policies do not rely on
+               groups any more to grant access to your devices.
+
+## Terminal color scheme
+
+I am using [rxvt-unicode][] as my terminal with a black background
+(and some light transparency). The default color scheme is suboptimal
+on the readability front.
+
+Sharing terminal color schemes seems a [popular][rxvt color scheme]
+[activity][xcolors.net]. I finally opted for the
+["_derp_" color scheme][derp] which brings a major improvement over the
+default configuration.
+
+![Comparison of terminal color schemes][term-colors]
+[term-colors]: [[!!images/awesome/terminal-colors.png]] "Comparison of the default color scheme (bottom) with the new one (top)"
+
+I have also switched to Xft for font rendering using _DejaVu Sans
+Mono_ as my default font (instead of `fixed`) with the following
+configuration in `~/.Xresources`:
+
+    ::
+    Xft.antialias: true
+    Xft.hinting: true
+    Xft.hintstyle: hintlight
+    Xft.rgba: rgb
+    URxvt.font: xft:DejaVu Sans Mono-8
+    URxvt.letterSpace: -1
+
+The result is less crisp but seems a bit more readable. I may switch
+back in the future.
+
+![Comparison of terminal fonts][term-fonts]
+[term-fonts]: [[!!images/awesome/terminal-fonts.png]] "Comparison of the fixed font (left) with DejaVu Sans Mono (right)"
+
+# Next steps
+
+My reliance to the mouse has been greatly reduced. However, I still
+need it for casual browsing. I am looking at [luakit][] a
+_WebKit_-based browser extensible with _Lua_ for this purpose.
+
+*[FVWM]: F? Virtual Window Manager
+*[GTK]: The GIMP Toolkit
+
+[used FVWM]: [[en/blog/2011-fvwm-configuration.html]] "My FVWM configuration"
+[tiling window manager]: http://en.wikipedia.org/wiki/Tiling_window_manager "Tiling window manager on Wikipedia"
+[i3]: http://i3wm.org/ "i3: improved tiling wm"
+[i3 screencast]: http://i3wm.org/screenshots/ "Screencast of i3 window manager"
+[Awesome]: http://awesome.naquadah.org "The awesome window manager"
+[Lua]: http://www.lua.org "The programming language Lua"
+[StumpWM]: http://www.nongnu.org/stumpwm/ "The Stump Window Manager"
+[Common Lisp]: http://en.wikipedia.org/wiki/Common_Lisp "Common Lisp on Wikipedia"
+[xmonad]: http://xmonad.org/ "xmonad, the tiling window manager that rocks"
+[Haskell]: http://www.haskell.org "The Haskell Programming Language"
+[gnome]: [[en/blog/2011-gnome-power-manager.html]] "GNOME Power Manager without GNOME desktop"
+[i3lock]: http://i3wm.org/i3lock/ "i3lock: a simpler screen locker"
+[SLiM]: http://slim.berlios.de/ "SLiM: Simple Login Manager"
+[rxvt-unicode]: http://software.schmorp.de/pkg/rxvt-unicode.html "rxvt-unicode homepage"
+[X11 royal blue]: http://en.wikipedia.org/wiki/Royal_Blue "Royal blue on Wikipedia"
+[rxvt color scheme]: https://bbs.archlinux.org/viewtopic.php?id=51818 "Terminal color scheme thread on Arch Linux forum"
+[xcolors.net]: http://xcolors.net/ "Xcolors.net"
+[derp]: http://xcolors.net/dl/derp "derp color scheme"
+[IBM Model M keyboards]: http://en.wikipedia.org/wiki/Model_M_keyboard "IBM Model M keyboard on Wikipedia"
+[wiki]: http://awesome.naquadah.org/wiki/Main_Page "awesome wiki"
+[FAQ]: http://awesome.naquadah.org/wiki/FAQ "awesome FAQ"
+[good introduction]: http://awesome.naquadah.org/wiki/My_first_awesome "awesome tutorial"
+[API reference]: file:///usr/share/doc/awesome/luadoc/index.html "awesome API reference"
+[GitHub]: https://github.com/vincentbernat/awesome-configuration "My awesome configuration on GitHub"
+[Conky]: http://conky.sourceforge.net/ "Conky, a light-weight system monitor"
+[compose key]: http://en.wikipedia.org/wiki/Compose_key "Compose key on Wikipedia"
+[kbdd]: https://github.com/qnikst/kbdd/ "kbdd: keyboard library for per-window keyboard layout"
+[kbdd-awesome]: https://github.com/vincentbernat/awesome-configuration/blob/dad27fe5d087869bc1cef5a626467fa359be5599/rc/keyboard.lua "Integration of kbdd into awesome"
+[extend-xkb]: http://madduck.net/docs/extending-xkb/ "Extending the X keyboard map with xkb"
+[luakit]: http://mason-larobina.github.com/luakit/ "luakit: Fast, small, webkit based browser framework extensible by Lua"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
