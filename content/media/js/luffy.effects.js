@@ -22,15 +22,16 @@ luffy.effects = function() {
 	if (!Modernizr.csstransforms || !Modernizr.rgba || !Modernizr.textshadow)
 	    return;
 	var header = $("<div>").addClass("lf-scrolling-header");
+	var base = $("article div[role='main']")
 	$("#lf-page").prepend(header);
 	$(window).scroll(function() {
 	    // Locate the appropriate title to display
-	    var h1s = $("article div[role='main'] h1");
+	    var h1s = base.find("h1");
 	    var y = $(window).scrollTop();
 	    var title = h1s.filter(function() {
-		return $(this).offset().top < y;
+		return ($(this).offset().top < y);
 	    }).last().html();
-	    if (!(title != null)) {
+	    if (!(title != null) || y > base.offset().top + base.height()) {
 		header.hide();
 	    } else {
 		header.html(title);
