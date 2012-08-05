@@ -19,35 +19,41 @@ luffy.effects = function() {
 	  https://github.com/sjl/stevelosh/blob/master/media/js/sjl.js
        -- */
     e = function() {
-	var header = $('<div id="lf-scrolling-header" />');
-	var h1s = $(".lf-article #lf-main h1");
-	var soff = 75;
-	$('body').append(header[0]);
+	if (!Modernizr.csstransforms || !Modernizr.rgba || !Modernizr.textshadow)
+	    return;
+	var header = $("<div>").addClass("lf-scrolling-header");
+	$("#lf-page").prepend(header);
 	$(window).scroll(function() {
-	    var width = $("#lf-pages").first().offset()['left'] - 25;
-	    if (width < 100) {
-		header.hide();
-		return;
-	    }
-	    var y = $(window).scrollTop(); // Current position
-	    var title = null;		   // Title to display
-	    h1s.each(function() {
-		// Do we need to display this specific header?
-		var header_y = $(this).offset()['top'] - soff;
-		if (y < header_y) return false;
-		// typogrify is adding a lot of non breakable spaces
-		title = $(this).html().replace(/&nbsp;/g, ' ');
-	    });
-	    if (title === null) {
+	    // Locate the appropriate title to display
+	    var h1s = $("article div[role='main'] h1");
+	    var y = $(window).scrollTop();
+	    var title = h1s.filter(function() {
+		return $(this).offset().top < y;
+	    }).last().html();
+	    if (!(title != null)) {
 		header.hide();
 	    } else {
-		var size = "18px";
-		if (width < 150) {
-		    size = "12px";
-		}
-		header.css({ top: soff,
-			     'font-size': size,
-			     width: width }).html(title).show();
+		header.html(title);
+		// Compute opacity before displaying
+		var distances = h1s.map(function() {
+		    var d1, d2;
+		    d1 = $(this).offset().top - y;
+		    d2 = $(this).offset().top - y - header.width();
+		    if (d1*d2 < 0) {
+			// Our scrolling header is between two sections
+			return 0;
+		    } else {
+			if (d1 < 0) d1 = -d1;
+			if (d2 < 0) d2 = -d2;
+			return Math.min(d1,d2);
+		    }
+		});
+		var opacity = Math.min.apply(Math, distances)/100;
+		if (opacity > 1) opacity = 1;
+		header.css({
+		    top: y - $("#lf-page").offset().top,
+		    opacity: opacity
+		}).toggle(opacity > 0);
 	    }
 	});
     }();
