@@ -54,7 +54,7 @@ luffy.effects = function() {
 		header.css({
 		    top: y - $("#lf-page").offset().top,
 		    opacity: opacity
-		}).toggle(opacity > 0);
+		});
 	    }
 	});
     }();
