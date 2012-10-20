@@ -1,0 +1,389 @@
+---
+title: "Network lab with KVM"
+keywords: "network lab, network, kvm, 9p, gdb, kgdb, virtualization"
+uuid: aac3ecda-175b-11e2-99e8-0018f3034e06
+attachments:
+ "https://github.com/vincentbernat/network-lab/tree/master/lab-ecmp-ipv6": "GitHub repository"
+tags:
+ - network
+---
+
+To experiment with network stuff, I was using
+[UML-based network labs][uml-lab]. Many alternatives exist, like
+[GNS3][], [Netkit][], [Marionnet][] or [Cloonix][]. All of them are
+great viable solutions but I still prefer to stick to my minimal
+home-made solution with UML virtual machines. Here is why:
+
+ - I didn't want to use **disk images**. They take a lot of space and
+   they have to be maintained. They also become cluttered, especially
+   if you try to reuse them across several labs. They are also
+   difficult to share.
+ - I want to be able to access my **home directory**. It contains the
+   important configuration files related to the lab and I can put them
+   in the right place thanks to symbolic links when the lab starts. It
+   also makes exchanging files with the lab quite easy.
+ - I don't want to **boot a complete system**. This allows me to be
+   cheap on memory and each virtual system should boot in a few
+   seconds.
+
+The use of UML had some drawbacks:
+
+ - It may be buggy. For example, it is currently not possible to use
+   [gdbserver inside UML][] without a patch. Sometimes, the kernel
+   won't even compile.
+ - It is slow.
+
+However, UML features [HostFS][], a filesystem providing access to any
+part of the host filesystem. This is the killer feature which allows
+me to not use any virtual disk image and to get access to my home
+directory right from the guest.
+
+I discovered recently that KVM provided [9P][], a similar filesystem
+on top of VirtIO, the paravirtualized IO framework.
+
+[TOC]
+
+# Setting up the lab
+
+The setup of the lab is done with a
+[single self-contained shell file][setup]. The layout is similar to
+[what I have done with UML][uml-lab]. I will only highlight here the
+most interesting steps.
+
+## Booting KVM with a minimal kernel
+
+My initial goal was to experiment with
+[Nicolas Dichtel's IPv6 ECMP patch][ecmp-ipv6]. Therefore, I needed to
+configure a custom kernel. I have started from `make defconfig`,
+removed everything that was not necessary, added what I needed for my
+lab (mostly network stuff) and added the appropriate options for VirtIO
+drivers:
+
+    ::
+    CONFIG_NET_9P_VIRTIO=y
+    CONFIG_VIRTIO_BLK=y
+    CONFIG_VIRTIO_NET=y
+    CONFIG_VIRTIO_CONSOLE=y
+    CONFIG_HW_RANDOM_VIRTIO=y
+    CONFIG_VIRTIO=y
+    CONFIG_VIRTIO_RING=y
+    CONFIG_VIRTIO_PCI=y
+    CONFIG_VIRTIO_BALLOON=y
+    CONFIG_VIRTIO_MMIO=y
+
+No modules. Grab the [complete configuration][.config] if you want to
+have a look.
+
+From here, you can start your kernel with the following command
+(`$LINUX` is the appropriate `bzImage`):
+
+    ::sh
+    kvm \
+      -m 256m \
+      -display none \
+      -nodefconfig -no-user-config -nodefaults \
+      \
+      -chardev stdio,id=charserial0,signal=off \
+      -device isa-serial,chardev=charserial0,id=serial0 \
+      \
+      -chardev socket,id=con0,path=$TMP/vm-$name-console.pipe,server,nowait \
+      -mon chardev=con0,mode=readline,default \
+      \
+      -kernel $LINUX \
+      -append "init=/bin/sh console=ttyS0"
+
+Of course, since there is no disk to boot from, the kernel will panic
+when trying to mount the root filesystem. KVM is configured to not
+display video output (`-display none`). A serial port is defined and
+uses `stdio` as a backend[^signal]. The kernel is configured to use
+this serial port as a console (`console=ttyS0`). A VirtIO console
+could have been used instead but it seems this is not possible to make
+it work early in the boot process.
+
+[^signal]: `stdio` is configured such that signals are not
+           enabled. KVM won't stop when receiving `SIGINT`. This is
+           important for the usage we want to have.
+
+The KVM monitor is setup to listen on an Unix socket. It is possible
+to connect to it with `socat UNIX:$TMP/vm-$name-console.pipe -`.
+
+## Initial ramdisk
+
+Theoretically, the root filesystem could be mounted from the command
+line but I was unable to do so[^mount]. A small initial ramdisk is
+used to bypass this difficulty. It is built by the following snippet:
+
+    ::sh
+    # Setup initrd
+    setup_initrd() {
+        info "Build initrd"
+        DESTDIR=$TMP/initrd
+        mkdir -p $DESTDIR
+    
+        # Setup busybox
+        copy_exec $($WHICH busybox) /bin/busybox
+        for applet in $(${DESTDIR}/bin/busybox --list); do
+            ln -s busybox ${DESTDIR}/bin/${applet}
+        done
+    
+        # Setup init
+        cp $PROGNAME ${DESTDIR}/init
+    
+        cd "${DESTDIR}" && find . | \
+           cpio --quiet -R 0:0 -o -H newc | \
+           gzip > $TMP/initrd.gz
+    }
+
+[^mount]: I am using the following kernel command line:
+          `root=rootshare rootflags=trans=virtio,version=9p2000.u ro
+          rootfstype=9p rootdelay=2`.  I get the following error on
+          boot: `9pnet_virtio: no channels available`.
+
+The `copy_exec` function is stolen from the `initramfs-tools` package
+in Debian. It will ensure that the appropriate libraries are also
+copied. Another solution would have been to use a static `busybox`.
+
+The setup script is copied as `/init` in the initial ramdisk. It will
+detect it has been invoked as such. If it was omitted, a shell would
+be spawned instead. Remove the `cp` call if you want to experiment
+manually.
+
+The flag `-initrd` allows KVM to use this initial ramdisk.
+
+## Root filesystem
+
+Let's mount our root filesystem using _9P_. This is quite easy. First
+KVM needs to be configured to export the host filesystem to
+the guest:
+
+    ::sh
+    kvm \
+      ${PREVIOUS_ARGS} \
+      -fsdev local,security_model=passthrough,id=fsdev-root,path=${ROOT},readonly \
+      -device virtio-9p-pci,id=fs-root,fsdev=fsdev-root,mount_tag=rootshare
+
+`${ROOT}` can either be `/` or any directory containing a complete
+filesystem. Mounting it from the guest is quite easy:
+
+    ::sh
+    mkdir -p /target/ro
+    mount -t 9p rootshare /target/ro -o trans=virtio,version=9p2000.u
+
+You should find a complete root filesystem inside `/target/ro`. I have
+used `version=9p2000.u` instead of `version=9p2000.L` because the
+later does not allow a program to `stat()` a host mount
+point[^9pversion].
+
+[^9pversion]: And `busybox` mount tries to call `stat()` before
+              mounting something on a directory. Therefore, it is not
+              possible to mound a fresh `/proc` on top of the existing
+              one. I have searched a bit but didn't find why. Any
+              comments on this is welcome.
+
+Now, you have a read-only root filesystem (because you don't want to
+mess with your existing root filesystem and moreover, you did not run
+this lab as root, did you?). Let's use an union filesystem. Debian
+comes with [AUFS][] while Ubuntu and OpenWRT have migrated to
+[overlayfs][]. I was previously using AUFS but got errors on some
+specific cases. It is still not clear
+[which one will end up in the kernel][lwn-overlayfs]. So, let's try
+_overlayfs_.
+
+I didn't find any patchset ready to be applied on top of my kernel
+tree. I was working with [David Miller's net-next tree][davem]. Here
+is how I have applied the _overlayfs_ patch on top of it:
+
+    ::console
+    $ git remote add torvalds git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux-2.6.git
+    $ git fetch torvalds
+    $ git remote add overlayfs git://git.kernel.org/pub/scm/linux/kernel/git/mszeredi/vfs.git
+    $ git fetch overlayfs
+    $ git merge-base overlayfs.v15 v3.6
+    4cbe5a555fa58a79b6ecbb6c531b8bab0650778d
+    $ git checkout -b net-next+overlayfs
+    $ git cherry-pick 4cbe5a555fa58a79b6ecbb6c531b8bab0650778d..overlayfs.v15
+
+Don't forget to enable `CONFIG_OVERLAYFS_FS` in `.config`. Here is how
+I configured the whole root filesystem:
+
+    ::sh
+    info "Setup overlayfs"
+    mkdir /target
+    mkdir /target/ro
+    mkdir /target/rw
+    mkdir /target/overlay
+    # Version 9p2000.u allows to access /dev, /sys and mount new
+    # partitions over them. This is not the case for 9p2000.L.
+    mount -t 9p        rootshare /target/ro      -o trans=virtio,version=9p2000.u
+    mount -t tmpfs     tmpfs     /target/rw      -o rw
+    mount -t overlayfs overlayfs /target/overlay -o lowerdir=/target/ro,upperdir=/target/rw
+    mount -n -t proc  proc /target/overlay/proc
+    mount -n -t sysfs sys  /target/overlay/sys
+    
+    info "Mount home directory on /root"
+    mount -t 9p homeshare /target/overlay/root -o trans=virtio,version=9p2000.L,access=0,rw
+    
+    info "Mount lab directory on /lab"
+    mkdir /target/overlay/lab
+    mount -t 9p labshare /target/overlay/lab -o trans=virtio,version=9p2000.L,access=0,rw
+    
+    info "Chroot"
+    export STATE=1
+    cp "$PROGNAME" /target/overlay
+    exec chroot /target/overlay "$PROGNAME"
+
+You have to export your `${HOME}` and the lab directory from host:
+
+    ::sh
+    kvm \
+      ${PREVIOUS_ARGS} \
+      -fsdev local,security_model=passthrough,id=fsdev-root,path=${ROOT},readonly \
+      -device virtio-9p-pci,id=fs-root,fsdev=fsdev-root,mount_tag=rootshare \
+      -fsdev local,security_model=none,id=fsdev-home,path=${HOME} \
+      -device virtio-9p-pci,id=fs-home,fsdev=fsdev-home,mount_tag=homeshare \
+      -fsdev local,security_model=none,id=fsdev-lab,path=$(dirname "$PROGNAME") \
+      -device virtio-9p-pci,id=fs-lab,fsdev=fsdev-lab,mount_tag=labshare
+
+## Network
+
+You know what is missing from our network lab? Network setup. For each
+LAN that I will need, I spawn a VDE switch:
+
+    ::sh
+    # Setup a VDE switch
+    setup_switch() {
+        info "Setup switch $1"
+        screen -t "sw-$1" \
+            start-stop-daemon --make-pidfile --pidfile "$TMP/switch-$1.pid" \
+            --start --startas $($WHICH vde_switch) -- \
+            --sock "$TMP/switch-$1.sock"
+        screen -X select 0
+    }
+
+To attach an interface to the newly created LAN, I use:
+
+    ::sh
+    mac=$(echo $name-$net | sha1sum | \
+                awk '{print "52:54:" substr($1,0,2) ":" substr($1, 2, 2) ":" substr($1, 4, 2) ":" substr($1, 6, 2)}')
+    kvm \
+      ${PREVIOUS_ARGS} \
+      -net nic,model=virtio,macaddr=$mac,vlan=$net \
+      -net vde,sock=$TMP/switch-$net.sock,vlan=$net
+
+The use of a VDE switch allows me to run the lab as a non-root
+user. It is possible to give Internet access to each VM, either by
+using `-net user` flag or using `slirpvde` on a special switch. I
+prefer the latest solution since it will allow the VM to speak to each
+others.
+
+# Debugging
+
+This lab was mostly done to debug both the kernel and Quagga. Each of
+them can be debugged remotely.
+
+## Kernel debugging
+
+While the kernel features [KGDB][], its own debugger, compatible with
+[GDB][], it is easier to use the _remote GDB server_ built inside
+KVM.
+
+    ::sh
+    kvm \
+      ${PREVIOUS_ARGS} \
+      -gdb unix:$TMP/vm-$name-gdb.pipe,server,nowait
+
+To connect to the remote GDB server from the host, first locate the
+`vmlinux` file at the root of the source tree and run GDB on it. The
+kernel has to be compiled with `CONFIG_DEBUG_INFO=y` to get the
+appropriate debugging symbols. Then, use `socat` with the Unix socket
+to attach to the remote debugger:
+
+    ::console
+    $ gdb vmlinux
+    GNU gdb (GDB) 7.4.1-debian
+    Reading symbols from /home/bernat/src/linux/vmlinux...done.
+    (gdb) target remote | socat UNIX:$TMP/vm-$name-gdb.pipe -
+    Remote debugging using | socat UNIX:/tmp/tmp.W36qWnrCEj/vm-r1-gdb.pipe -
+    native_safe_halt () at /home/bernat/src/linux/arch/x86/include/asm/irqflags.h:50
+    50  }
+    (gdb) 
+
+You can now set breakpoints and resume the execution of the kernel.
+
+It is easier to debug the kernel if optimizations are not
+enabled. However, it is not possible to
+[disable them globally][gcc20217]. You can however disable them
+for some files. For example, to debug `net/ipv6/route.c`, just add
+`CFLAGS_route.o = -O0` to `net/ipv6/Makefile`, remove
+`net/ipv6/route.o` and type `make`.
+
+## Userland debugging
+
+To debug a program inside KVM, you can just use `gdb` as usual. Your
+`$HOME` directory is available and it should be therefore
+straightforward. However, if you want to perform some remote
+debugging, that's quite easy. Add a new serial port to KVM:
+
+    ::sh
+    kvm \
+      ${PREVIOUS_ARGS} \
+      -chardev socket,id=charserial1,path=$TMP/vm-$name-serial.pipe,server,nowait \
+      -device isa-serial,chardev=charserial1,id=serial1
+
+Starts `gdbserver` in the guest:
+
+    ::console
+    $ libtool execute gdbserver /dev/ttyS1 zebra/zebra
+    Process /root/code/orange/quagga/build/zebra/.libs/lt-zebra created; pid = 800
+    Remote debugging using /dev/ttyS1
+
+And from the host, you can attach to the remote process:
+
+    ::console
+    $ libtool execute gdb zebra/zebra
+    GNU gdb (GDB) 7.4.1-debian
+    Reading symbols from /home/bernat/code/orange/quagga/build/zebra/.libs/lt-zebra...done.
+    (gdb) target remote | socat UNIX:/tmp/tmp.W36qWnrCEj/vm-r1-serial.pipe
+    Remote debugging using | socat UNIX:/tmp/tmp.W36qWnrCEj/vm-r1-serial.pipe
+    Reading symbols from /lib64/ld-linux-x86-64.so.2...(no debugging symbols found)...done.
+    Loaded symbols for /lib64/ld-linux-x86-64.so.2
+    0x00007ffff7dddaf0 in ?? () from /lib64/ld-linux-x86-64.so.2
+    (gdb)
+
+# Demo
+
+For a demo, have a look at the following video (it is also available
+as an [Ogg Theora video][ogv]).
+
+[[dailymotion:xuglsg]]
+
+[ogv]: [[!!videos/2012-network-lab-kvm.ogv]]
+
+*[UML]: User Mode Linux
+*[KVM]: Kernel-based Virtual Machine
+*[VM]: Virtual Machine
+
+[uml-lab]: [[en/blog/2011-uml-network-lab.html]] "Network lab with UML"
+[Cloonix]: http://clownix.net/ "Cloonix: dynamical topology virtual networks"
+[Marionnet]: http://www.marionnet.org/ "Marionnet: a virtual network laboratory"
+[Netkit]: http://www.netkit.org "Netkit: the poor man's system to experiment computer networking"
+[GNS3]: http://www.gns3.net/ "GNS3: Graphical Network Simulator"
+
+[HostFS]: http://user-mode-linux.sourceforge.net/hostfs.html "UML: Host File Access"
+[gdbserver inside UML]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=676184 "Bug #676184: gdbserver not usable inside UML"
+[9P]: http://wiki.qemu.org/Documentation/9psetup "Setting up 9P in KVM"
+[ecmp-ipv6]: http://patchwork.ozlabs.org/patch/188562/ "ipv6: add support of ECMP"
+[setup]: https://github.com/vincentbernat/network-lab/blob/master/lab-ecmp-ipv6/setup
+[AUFS]: http://aufs.sourceforge.net/ "AUFS: advanced multi-layered unification filesystem"
+[overlayfs]: http://git.kernel.org/?p=linux/kernel/git/mszeredi/vfs.git;a=summary "overlayfs git repository"
+[lwn-overlayfs]: http://lwn.net/Articles/447650/ "LWN: Debating overlayfs"
+[davem]: http://git.kernel.org/?p=linux/kernel/git/davem/net-next.git;a=summary "net-next git repository"
+[.config]: https://github.com/vincentbernat/network-lab/blob/master/lab-ecmp-ipv6/config-3.6%2Becmp%2Boverlayfs "Minimal .config"
+[KGDB]: http://kgdb.linsyssoft.com/ "KGDB: Linux Kernel Source Level Debugger"
+[GDB]: http://www.gnu.org/software/gdb/ "GDB: The GNU Project Debugger"
+[gcc20217]: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=20217 "Bug 20217 - Switching off the optimization triggers undefined reference at link time when building Linux kernel"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
