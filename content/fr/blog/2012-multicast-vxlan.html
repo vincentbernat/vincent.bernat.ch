@@ -1,0 +1,427 @@
+---
+title: "Réseaux virtuels avec VXLAN"
+keywords: "vxlan, réseau, virtualisation, sdn, multicast, xorp, linux, kvm"
+uuid: 7502d803-3f6a-409f-b590-f8e1eb34eb0a
+attachments:
+ "https://github.com/vincentbernat/network-lab/tree/master/lab-vxlan": "Dépôt GitHub"
+tags:
+ - network
+---
+
+_Virtual eXtensible Local Area Network_ (VXLAN) est un protocole
+permettant de superposer un réseau virtuel L2 au-dessus d'un réseau IP
+existant avec quasiment aucune configuration. Il ne s'agit pour le
+moment que d'une [proposition de RFC][VXLAN-draft]. Par rapport aux
+VLAN, tout en gardant le principe d'isolation, les VXLAN apportent les
+avantages suivants :
+
+ 1. Un identifiant sur 24 bits, le _VXLAN Network Identifier_ (VNI),
+    permet de numéroter suffisamment de VXLAN pour isoler de très
+    nombreux clients.
+ 2. Les trames L2 sont encapsulées dans des datagrammes UDP. Cela
+    permet de se reposer sur certaines propriétés intéressantes des
+    réseaux IP comme la disponibilité ou le passage à l'échelle. Les
+    segments VXLAN ont alors un champ d'action plus important que les
+    VLAN.
+
+Les équipements s'occupant d'encapsuler et de décapsuler les trames
+contenues dans les VXLAN sont des _VXLAN Tunnel End Point_
+(VTEP). Grâce à une série de patches de Stephen Hemminger,
+[Linux peut maintenant assurer ce rôle][linux]. Regardons comment cela
+fonctionne.
+
+[TOC]
+
+# À propos d'IPv6
+
+J'essaie dans la mesure du possible d'utiliser IPv6 pour illustrer des
+concepts liés aux réseaux. Dans le cas de ce labo, ce n'est pas le
+cas. Il y a plusieurs raisons :
+
+ 1. VXLAN fait usage de la multidiffusion IP (_multicast_) et les
+    implémentations de PIM-SM, nécessaire pour le routage multicast,
+    en IPv6 sont rares. Elles existent cependant. C'est la raison pour
+    laquelle ce labo s'appuie sur [XORP][] : il supporte PIM-SM en
+    IPv4 et en IPv6.
+ 2. La [proposition de RFC pour VXLAN][VXLAN-draft] ne parle pour le
+    moment que d'IPv4. Cela peut sembler un peu curieux pour un
+    protocole L2 voyageant au-dessus d'UDP. Il existe cependant
+    [certaines implémentations de VXLAN fonctionnant avec IPv6][upa-vxlan].
+ 3. Toutefois, ce n'est pas le cas de l'implémentation actuelle dans
+    Linux. Le support d'IPv6 ne sera
+    [ajouté que plus tard][vxlan-ipv6]. Lorsque ce sera le cas, il
+    sera simple d'adapter ce labo.
+
+# Labo
+
+Voici le labo utilisé. `R1`, `R2` et `R3` seront les VTEP. Ils ne
+participent pas à PIM-SM : ils ne disposent que d'une route multicast
+sur `eth0`. `E1`, `E2` et `E3` sont des routeurs de périphérie tandis
+que `C1`, `C2` et `C3` sont les routeurs de cœur. Le réseau ainsi
+construit n'est pas résilient mais il est assez pratique pour
+expliquer les concepts essentiels. Le labo s'appuie sur des machines
+KVM. Mon [article précédent][] contient plus de détails à ce sujet.
+
+![Labo VXLAN][1]
+[1]: [[!!images/vxlan/lab.png]] "Topologie du labo VXLAN"
+
+Les fichiers nécessaires pour mettre en place ce labo sont hébergés
+sur [GitHub][]. Pour faciliter les choses, le noyau que j'utilise est
+également inclus. XORP est déjà configuré mais il faut mettre
+manuellement en place la partie VXLAN. Pour ceci, il faut une version
+récente de la commande `ip`.
+
+    ::console
+    $ sudo apt-get install screen vde2 kvm iproute xorp git
+    $ git clone git://git.kernel.org/pub/scm/linux/kernel/git/shemminger/iproute2.git
+    $ cd iproute2
+    $ ./configure && make
+    You get `ip' as `ip/ip' and `bridge' as `bridge/bridge'.
+    $ cd ..
+    $ git clone git://github.com/vincentbernat/network-lab.git
+    $ cd network-lab/lab-vxlan
+    $ ./setup
+
+## Routage unicast
+
+La première étape est de mettre en place le routage unicast. Le
+protocole utilisé à cet effet est OSPF via le démon de routage
+[XORP][]. La commande `xorpsh` permet de vérifier que tout est bien en
+place :
+
+    ::console
+    root@c1# xorpsh
+    root@c1$ show ospf4 neighbor   
+      Address         Interface             State      ID              Pri  Dead
+    192.168.11.11    eth0/eth0              Full      3.0.0.1          128    36
+    192.168.12.22    eth1/eth1              Full      3.0.0.2          128    33
+    192.168.101.133  eth2/eth2              Full      2.0.0.3          128    36
+    192.168.102.122  eth3/eth3              Full      2.0.0.2          128    38
+    root@c1$ show route table ipv4 unicast ospf   
+    192.168.1.0/24  [ospf(110)/2]
+                    > to 192.168.11.11 via eth0/eth0
+    192.168.2.0/24  [ospf(110)/2]
+                    > to 192.168.12.22 via eth1/eth1
+    192.168.3.0/24  [ospf(110)/3]
+                    > to 192.168.102.122 via eth3/eth3
+    192.168.13.0/24 [ospf(110)/2]
+                    > to 192.168.102.122 via eth3/eth3
+    192.168.21.0/24 [ospf(110)/2]
+                    > to 192.168.101.133 via eth2/eth2
+    192.168.22.0/24 [ospf(110)/2]
+                    > to 192.168.12.22 via eth1/eth1
+    192.168.23.0/24 [ospf(110)/2]
+                    > to 192.168.101.133 via eth2/eth2
+    192.168.103.0/24        [ospf(110)/2]
+                    > to 192.168.102.122 via eth3/eth3
+
+## Routage multicast
+
+Une fois le routage unicast en place, il convient de configurer la
+partie multicast. Deux protocoles entrent alors en jeu : _IGMP_ et
+_PIM-SM_. Le second permet de router les paquets multicast tandis que
+le premier permet à des hôtes d'indiquer aux routeurs situés sur le
+même réseau les flux qu'ils désirent recevoir.
+
+### IGMP
+
+IGMP permet à des routeurs IP de déterminer de façon dynamique les
+groupes multicast qui disposent de clients dans un sous-réseau. Dans
+notre cas, il est par exemple utilisé par `R2` pour informer `E2` de
+l'inscrire au flux `239.0.0.11` (un groupe multicast).
+
+Il est très simple de configurer IGMP dans XORP. Ensuite, pour tester
+le bon fonctionnement, il est possible d'utiliser `iperf` sur `R2` :
+
+    ::console
+    root@r2# iperf -u -s -l 1000 -i 1 -B 239.0.0.11
+    ------------------------------------------------------------
+    Server listening on UDP port 5001
+    Binding to local address 239.0.0.11
+    Joining multicast group  239.0.0.11
+    Receiving 1000 byte datagrams
+    UDP buffer size:  208 KByte (default)
+    ------------------------------------------------------------
+
+Sur `E2`, on vérifie que l'interface attachée à `R2` est bien inscrite
+au groupe `239.0.0.11` :
+
+    ::console
+    root@e2$ show igmp group
+    Interface    Group           Source          LastReported Timeout V State
+    eth0         239.0.0.11      0.0.0.0         192.168.2.2      248 2     E
+
+La documentation de XORP contient des
+[explications plus détaillées sur le fonctionnement d'IGMP][xorp-igmp].
+
+### PIM-SM
+
+PIM-SM est plus compliqué. Ce protocole ne sait pas découvrir la
+topologie du réseau. Il se base sur les informations fournies par un
+autre protocole de routage comme OSPF.
+
+Je décrit par la suite une vision simplifiée du fonctionnement de
+PIM-SM. La documentation de XORP contient
+[plus de détails à son sujet][xorp-pimsm].
+
+Tout d'abord, les routeurs PIM-SM **élisent un point de rendez-vous**
+(RP). Dans notre labo, seuls `C1`, `C2` et `C3` ont été configurés
+pour devenir point de rendez-vous. De plus, `C3` est configuré de
+façon à gagner les élections.
+
+![Élection du RP][2]
+[2]: [[!!images/vxlan/multicast-rp.png]] "C3 a été élu RP"
+
+    ::console
+    root@e1$ show pim rps   
+    RP              Type      Pri Holdtime Timeout ActiveGroups GroupPrefix       
+    192.168.101.133 bootstrap 100      150     135            0 239.0.0.0/8       
+
+Supposons maintenant que nous démarrons `iperf` sur `R2` et `R3`. À
+l'aide d'IGMP, ils s'inscrivent au groupe `239.0.0.11` auprès de `E2`
+et `E3`. Ces derniers vont envoyer des messages _(*,G) join_ au RP
+(`C3`) pour le groupe `239.0.0.11`. À l'aide du chemin unicast suivi
+pour joindre le RP, **les routeurs se trouvant sur ce chemin mettent
+en place un arbre partagé unidirectionnel** (_RP tree_) dont la racine
+est `C3`. Chaque routeur de l'arbre sait alors comment envoyer des
+paquets multicast pour `239.0.0.11` : il les envoie vers les feuilles.
+
+![Arbre partagé unidirectionnel][3]
+[3]: [[!!images/vxlan/multicast-rptree.png]] "Arbre partagé unidirectionnel pour 239.0.0.11"
+
+    ::console
+    root@e3$ show pim join   
+    Group           Source          RP              Flags
+    239.0.0.11      0.0.0.0         192.168.101.133 WC   
+        Upstream interface (RP):   eth2
+        Upstream MRIB next hop (RP): 192.168.23.133
+        Upstream RPF'(*,G):        192.168.23.133
+        Upstream state:            Joined 
+        Join timer:                5
+        Local receiver include WC: O...
+        Joins RP:                  ....
+        Joins WC:                  ....
+        Join state:                ....
+        Prune state:               ....
+        Prune pending state:       ....
+        I am assert winner state:  ....
+        I am assert loser state:   ....
+        Assert winner WC:          ....
+        Assert lost WC:            ....
+        Assert tracking WC:        O.O.
+        Could assert WC:           O...
+        I am DR:                   O..O
+        Immediate olist RP:        ....
+        Immediate olist WC:        O...
+        Inherited olist SG:        O...
+        Inherited olist SG_RPT:    O...
+        PIM include WC:            O...
+
+Supposons maintenant que `R1` envoie des paquets pour le groupe
+`239.0.0.11`. `E1` les reçoit mais n'a aucune information particulière
+concernant ce groupe. Il va alors **encapsuler les paquets et les
+envoyer au RP**. Le RP va ensuite décapsuler les paquets et les
+envoyer via l'arbre partagé unidirectionnel construit lors de l'étape
+précédente afin que `R2` et `R3` les réceptionnent.
+
+![Routage multicast via le RP][4]
+[4]: [[!!images/vxlan/multicast-register.png]] "R1 envoie des paquets multicast pour 239.0.0.11 via le RP"
+
+    ::console
+    root@r1# iperf -c 239.0.0.11 -u -b 10k -t 30 -T 10
+    ------------------------------------------------------------
+    Client connecting to 239.0.0.11, UDP port 5001
+    Sending 1470 byte datagrams
+    Setting multicast TTL to 10
+    UDP buffer size:  208 KByte (default)
+    ------------------------------------------------------------
+    root@e1# tcpdump -pni eth0
+    10:58:23.424860 IP 192.168.1.1.35277 > 239.0.0.11.5001: UDP, length 1470
+    root@c3# tcpdump -pni eth0
+    10:58:23.552903 IP 192.168.11.11 > 192.168.101.133: PIMv2, Register, length 1480
+    root@e2# tcpdump -pni eth0
+    10:58:23.896171 IP 192.168.1.1.35277 > 239.0.0.11.5001: UDP, length 1470
+    root@e3# tcpdump -pni eth0
+    10:58:23.824647 IP 192.168.1.1.35277 > 239.0.0.11.5001: UDP, length 1470
+
+Le routage effectué ainsi n'est pas optimal. Non seulement, le chemin
+entre `R1` et `R2` pourrait éviter `C3`, mais l'encapsulation est
+coûteuse. Pour résoudre ce problème, le RP va décider de passer en
+multicast natif[^native]. Enraciné sur `R1`, **l'arbre couvrant
+minimal pour le groupe multicast est construit**. Cet arbre est appelé
+le _shortest-path first tree_ (SPT). Il est construit en utilisant des
+messages _(S,G) join_.
+
+[^native]: La décision est généralement motivée par la bande passante
+           consommée par le flux. Avec XORP, ce choix est contrôlé
+           avec la directive `switch-to-spt-threshold`. Toutefois, je
+           n'ai jamais vu cette bascule fonctionner comme
+           attendu. XORP a donc été configuré pour effectuer cette
+           bascule dès le premier paquet reçu.
+
+![Routage multicast sans passer par le RP][5]
+[5]: [[!!images/vxlan/multicast-native.png]] "R1 envoie des paquets multicast pour 239.0.0.11 sans passer par le RP"
+
+Chaque routeur situé dans l'arbre sait alors comment router les
+paquets de `R1` à destination du groupe sans utiliser le RP. Par
+exemple, `E1` sait qu'il doit dupliquer le paquet et envoyer une copie
+sur l'interface qui le lie à `C3` et l'autre sur l'interface qui le
+lie à `C1` :
+
+    ::console
+    root@e1$ show pim join   
+    Group           Source          RP              Flags
+    239.0.0.11      192.168.1.1     192.168.101.133 SG SPT DirectlyConnectedS 
+        Upstream interface (S):    eth0
+        Upstream interface (RP):   eth1
+        Upstream MRIB next hop (RP): 192.168.11.111
+        Upstream MRIB next hop (S):  UNKNOWN
+        Upstream RPF'(S,G):        UNKNOWN
+        Upstream state:            Joined 
+        Register state:            RegisterPrune RegisterCouldRegister 
+        Join timer:                7
+        KAT(S,G) running:          true
+        Local receiver include WC: ....
+        Local receiver include SG: ....
+        Local receiver exclude SG: ....
+        Joins RP:                  ....
+        Joins WC:                  ....
+        Joins SG:                  .OO.
+        Join state:                .OO.
+        Prune state:               ....
+        Prune pending state:       ....
+        I am assert winner state:  ....
+        I am assert loser state:   ....
+        Assert winner WC:          ....
+        Assert winner SG:          ....
+        Assert lost WC:            ....
+        Assert lost SG:            ....
+        Assert lost SG_RPT:        ....
+        Assert tracking SG:        OOO.
+        Could assert WC:           ....
+        Could assert SG:           .OO.
+        I am DR:                   O..O
+        Immediate olist RP:        ....
+        Immediate olist WC:        ....
+        Immediate olist SG:        .OO.
+        Inherited olist SG:        .OO.
+        Inherited olist SG_RPT:    ....
+        PIM include WC:            ....
+        PIM include SG:            ....
+        PIM exclude SG:            ....
+    root@e1$ show pim mfc  
+    Group           Source          RP             
+    239.0.0.11      192.168.1.1     192.168.101.133
+        Incoming interface :      eth0
+        Outgoing interfaces:      .OO.
+    root@e1$ exit
+    [Connection to XORP closed]
+    root@e1# ip mroute
+    (192.168.1.1, 239.0.0.11)        Iif: eth0       Oifs: eth1 eth2 
+
+## Mise en place de VXLAN
+
+Une fois le routage multicast fonctionnel, la mise en place de VXLAN
+est plutôt facile. Il y a toutefois actuellement quelques prérequis :
+
+ - Un noyau récent. Au moins un 3.7-rc3. Il faut activer l'option
+   `CONFIG_VXLAN`. Il est ensuite nécessaire d'y ajouter un patch
+   permettant de [configurer un TTL supérieur à 1][vxlan-ttl].
+ - Une version très récente de `ip`. Le plus simple est de se procurer
+   une version via _git_.
+
+Sur `R1`, `R2` et `R3`, nous créons une interface `vxlan42` à l'aide
+des commandes suivantes :
+
+    ::console
+    root@rX# ./ip link add vxlan42 type vxlan id 42 \
+    >                               group 239.0.0.42 \
+    >                               ttl 10 dev eth0
+    root@rX# ip link set up dev vxlan42
+    root@rX# ./ip -d link show vxlan42
+    10: vxlan42: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1460 qdisc noqueue state UNKNOWN mode DEFAULT 
+    link/ether 3e:09:1c:e1:09:2e brd ff:ff:ff:ff:ff:ff
+    vxlan id 42 group 239.0.0.42 dev eth0 port 32768 61000 ttl 10 ageing 300 
+
+Ajoutons une IP dans `192.168.99.0/24` pour chaque routeur et
+vérifions le bon fonctionnement avec `ping` :
+
+    ::console
+    root@r1# ip addr add 192.168.99.1/24 dev vxlan42
+    root@r2# ip addr add 192.168.99.2/24 dev vxlan42
+    root@r3# ip addr add 192.168.99.3/24 dev vxlan42
+    root@r1# ping 192.168.99.2                    
+    PING 192.168.99.2 (192.168.99.2) 56(84) bytes of data.
+    64 bytes from 192.168.99.2: icmp_req=1 ttl=64 time=3.90 ms
+    64 bytes from 192.168.99.2: icmp_req=2 ttl=64 time=1.38 ms
+    64 bytes from 192.168.99.2: icmp_req=3 ttl=64 time=1.82 ms
+
+    --- 192.168.99.2 ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2003ms
+    rtt min/avg/max/mdev = 1.389/2.375/3.907/1.098 ms
+
+Vérifions que les paquets sont bien encapsulés :
+
+    ::console
+    root@r1# tcpdump -pni eth0
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
+    11:30:36.561185 IP 192.168.1.1.43349 > 192.168.2.2.8472: UDP, length 106
+    11:30:36.563179 IP 192.168.2.2.33894 > 192.168.1.1.8472: UDP, length 106
+    11:30:37.562677 IP 192.168.1.1.43349 > 192.168.2.2.8472: UDP, length 106
+    11:30:37.564316 IP 192.168.2.2.33894 > 192.168.1.1.8472: UDP, length 106
+
+De plus, les paquets broadcast (comme les requêtes ARP) sont
+encapsulés dans des paquets multicast :
+
+    ::console
+    root@r1# tcpdump -pni eth0
+    11:31:27.464198 IP 192.168.1.1.41958 > 239.0.0.42.8472: UDP, length 106
+    11:31:28.463584 IP 192.168.1.1.41958 > 239.0.0.42.8472: UDP, length 106
+
+Il existe également un utilitaire `bridge` permettant d'inspecter la
+FDB de l'interface VXLAN (qui se comporte comme un switch) :
+
+    ::console
+    root@r1# ../bridge/bridge fdb show vxlan42
+    3e:09:1c:e1:09:2e dev vxlan42 dst 192.168.2.2 self 
+    0e:98:40:c6:58:10 dev vxlan42 dst 192.168.3.3 self 
+
+# Démonstration
+
+Voici une courte démonstration du labo ainsi obtenu (cette vidéo est
+également disponible au format [Ogg Theora][ogv]).
+
+[[dailymotion:xusell]]
+
+[ogv]: [[!!videos/2012-multicast-vxlan.ogv]]
+
+*[KVM]: Kernel-based Virtual Machine
+*[VM]: Virtual Machine
+*[VXLAN]: Virtual eXtensible Local Area Network
+*[VNI]: VXLAN Network Identifier
+*[VTEP]: VXLAN Tunnel End Point
+*[PIM-SM]: Protocol Independant Multicast - Sparse Mode
+*[IGMP]: Internet Group Management Protocol
+*[OSPF]: Open Shortest Path First
+*[RP]: Rendez-vous Point
+*[RPT]: Rendez-vous Point Tree
+*[SPT]: Shortest-path Tree
+*[FDB]: Forwarding Database
+
+[vxlan-ttl]: http://patchwork.ozlabs.org/patch/195622/ "vxlan: allow a user to set TTL value"
+[lab-pimsm]: https://github.com/vincentbernat/network-lab/tree/master/lab-vxlan/xorp.c3.conf "Configuration de XORP pour C3"
+[xorp-pimsm]: http://xorp.run.montefiore.ulg.ac.be/latex2wiki/user_manual/pim_sparse_mode "Documentation de XORP pour PIM-SM"
+[xorp-igmp]: http://xorp.run.montefiore.ulg.ac.be/latex2wiki/user_manual/igmp_and_mld "Documentation de XORP pour IGMP et MLD"
+[GitHub]: https://github.com/vincentbernat/network-lab/tree/master/lab-vxlan "Lab VXLAN"
+[article précédent]: [[fr/blog/2012-lab-reseau-kvm.html]] "Labo virtuel avec KVM"
+[XORP]: http://www.xorp.org/ "XORP: Extensible open source routing platform"
+[upa-vxlan]: https://github.com/upa/vxlan/ "VXLAN implementation using Linux tap interfaces"
+[vxlan-ipv6]: http://www.spinics.net/lists/netdev/msg214956.html "Plan for adding IPv6 support for VXLAN in Linux"
+[linux]: http://lwn.net/Articles/518292/ "vxlan: virtual extensible lan"
+[VXLAN-draft]: http://tools.ietf.org/html/draft-mahalingam-dutt-dcops-vxlan-02 "VXLAN: A Framework for Overlaying Virtualized Layer 2 Networks over"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
