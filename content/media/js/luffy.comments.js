@@ -30,4 +30,10 @@ luffy.comments = function() {
 	var top = el.offset().top - 300;
 	if (bottom >= top) load();
     });
+
+    /* Load if we have an anchor */
+    if (location.hash.match("^#comment-[0-9]+")) {
+        load();
+    }
+
 };
