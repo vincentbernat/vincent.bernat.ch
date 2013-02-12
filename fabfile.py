@@ -61,7 +61,7 @@ def build():
                 root, ext = os.path.splitext(f)
                 newname = "%s.%s%s" % (root, md5, ext)
                 # Symlink
-                local("ln -s %s %s" % (os.path.basename(f), newname))
+                local("cp %s %s" % (f, newname))
                 # Remove deploy/media
                 f = f[len('media/'):]
                 newname = newname[len('media/'):]
@@ -118,14 +118,42 @@ def push_s3():
         # This is a simplified version of the site. Notably, we
         # don't have a separate media site.
         local(r"find .final/* -type f -print0 | xargs -0 sed -i 's+\(src\|href\)=\"\(%s\|//media.luffy.cx/\)+\1=\"/media/+g'" % media)
+        # Compress HTML, CSS and JS
+        for t in "css js html".split():
+            local(r"find .final/* -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % t)
+        # In js/libs, never change, compress
         _s3cmd(" --add-header=Expires:'Thu, 31 Dec 2037 23:55:55 GMT'"
                " --add-header=Cache-Control:'max-age=315360000'"
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=application/x-javascript"
+               " --encoding=UTF-8"
                "   sync .final/media/js/libs/ s3://vincent.bernat.im/media/js/libs/")
+        # JS and CSS in media, 30 days, compress
         _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
-               " --exclude=js/libs/*"
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=application/x-javascript"
+               " --encoding=UTF-8"
+               " --exclude=* --include=*.js"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=text/css"
+               " --encoding=UTF-8"
+               " --exclude=* --include=*.css"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        # Other files in media, 30 days, don't compress
+        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
                "   sync .final/media/favicon.ico s3://vincent.bernat.im/")
+        # HTML files, 1h, compress
+        _s3cmd(" --add-header=Cache-Control:'max-age=3600'" # 1h
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=text/html"
+               " --encoding=UTF-8"
+               " --exclude=* --include=*.html"
+               "   sync .final/ s3://vincent.bernat.im/")
+        # Remaining files, 1h, don't compress
         _s3cmd(" --add-header=Cache-Control:'max-age=3600'" # 1h
                " --exclude=media/* --exclude=nginx.conf"
                "   sync .final/ s3://vincent.bernat.im/")
