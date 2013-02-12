@@ -11,6 +11,9 @@ env.shell = "/bin/sh -c"
 env.command_prefixes = [ 'export PATH=$HOME/.virtualenvs/hyde/bin:$PATH',
                          'export VIRTUAL_ENV=$HOME/.virtualenvs/hyde' ]
 
+conf = "site-production.yaml"
+media = yaml.load(file(conf))['media_url']
+
 def _hyde(args):
     return local('python ../hyde/h %s' % args)
 
@@ -44,8 +47,6 @@ def build():
     """Build production content"""
     local("git checkout master")
     local("rm -rf .final/*")
-    conf = "site-production.yaml"
-    media = yaml.load(file(conf))['media_url']
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
         for p in [ 'media/js/*.js',
@@ -93,12 +94,41 @@ def build():
 @task
 def push():
     """Push production content to ace"""
+    push_main()
+    push_s3()
+
+@task
+def push_main():
     local("git push github")
     local("git push ace.luffy.cx")
-
 
     # media.luffy.cx
     local("rsync --exclude=.git -a .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
 
     # HTML
     local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
+
+def _s3cmd(args):
+    local("s3cmd --exclude=.git/* --no-preserve --config=./s3cmd.cfg "
+          "-F -P --no-check-md5 %s" % args)
+
+@task
+def push_s3():
+    try:
+        # This is a simplified version of the site. Notably, we
+        # don't have a separate media site.
+        local(r"find .final/* -type f -print0 | xargs -0 sed -i 's+\(src\|href\)=\"\(%s\|//media.luffy.cx/\)+\1=\"/media/+g'" % media)
+        _s3cmd(" --add-header=Expires:'Thu, 31 Dec 2037 23:55:55 GMT'"
+               " --add-header=Cache-Control:'max-age=315360000'"
+               "   sync .final/media/js/libs/ s3://vincent.bernat.im/media/js/libs/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
+               " --exclude=js/libs/*"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
+               "   sync .final/media/favicon.ico s3://vincent.bernat.im/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=3600'" # 1h
+               " --exclude=media/* --exclude=nginx.conf"
+               "   sync .final/ s3://vincent.bernat.im/")
+    finally:
+        with lcd(".final"):
+            local("git reset --hard")
