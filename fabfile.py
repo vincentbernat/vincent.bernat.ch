@@ -14,19 +14,23 @@ env.command_prefixes = [ 'export PATH=$HOME/.virtualenvs/hyde/bin:$PATH',
 def _hyde(args):
     return local('python ../hyde/h %s' % args)
 
+@task
 def regen():
     """Regenerate dev content"""
     local('rm -rf deploy')
     gen()
 
+@task
 def gen():
     """Generate dev content"""
     _hyde('gen')
 
+@task
 def serve():
     """Serve dev content"""
     _hyde('serve -a 0.0.0.0')
 
+@task
 def sprite():
     """Regenerate sprites"""
     with lcd("content/media/css"):
@@ -35,6 +39,7 @@ def sprite():
         local("sed 's/ /display: inline-block; /' sprite.less > luffy.sprite.less")
         local("rm sprite.less")
 
+@task
 def build():
     """Build production content"""
     local("git checkout master")
@@ -85,6 +90,7 @@ def build():
             local("git reset --hard")
             local("git clean -d -f")
 
+@task
 def push():
     """Push production content to ace"""
     local("git push github")
