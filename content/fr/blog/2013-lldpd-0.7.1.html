@@ -31,6 +31,25 @@ depuis la précédente version majeure sortie il y a un an.
 
 # Version & journal des modifications
 
+**MISE À JOUR :** [Guillem Jover][] m'a indiqué comment il avait fait
+pour [libbsd][] :
+
+ 1. Sauvegarder la version issue de _git_ dans `.dist-version` et la
+    réutiliser si elle existe. Cela permet de pouvoir reconstruire le
+    `./configure` à partir de l'archive publiée sans perdre la
+    version, ce qui permet de répondre à la
+    [critique de Thorsten Glaser][tg] sans perdre en souplesse.
+ 2. Inclure le fichier `CHANGELOG` dans `DISTCLEANFILES`.
+
+C'est une meilleure façon de faire que j'ai donc
+[adoptée][adopted]. Les deux sections suivantes sont donc en partie
+obsolètes dans leur réalisation technique.
+
+[tg]: https://www.mirbsd.org/permalinks/wlog-10_e20130220-tg.htm#e20130220-tg_wlog-10 "GNU autotools generated files"
+[Guillem Jover]: http://www.hadrons.org/~guillem/ "Guillem Jover's Home Page"
+[libbsd]: http://libbsd.freedesktop.org/wiki/ "libbsd"
+[adopted]: https://github.com/vincentbernat/lldpd/commit/a888bea6f08687177330c2d95569864009e769d6 "build: use the same way as libbsd for version and changelog"
+
 ## Version automatique
 
 Le numéro de version était précédemment en dur dans le fichier
@@ -279,7 +298,7 @@ de ces deux canaux. À titre d'exemple, il est possible de regarder
 
 Afin de fournir une solution plus robuste, une bibliothèque partagée,
 `liblldpctl`, existe désormais. J'ai suivi les grandes directions
-suivantes dans sa conception :
+suivantes dans sa conception[^library] :
 
  - Une convention de nommage uniforme. Tous les symboles exportés sont
    préfixés par `lldpctl_`. Pas de pollution de l'espace de nommage.
@@ -298,6 +317,9 @@ suivantes dans sa conception :
    est alors triviale. Une fine couche synchrone est également
    fournie.
  - Des types opaques avec des fonctions d'accès.
+
+[^library]: Pour des conseils plus élaborés, jetez un œil sur
+            [Writing a C library][].
 
 L'accès aux informations est fait à travers un « atome » qui est un
 conteneur opaque de type `lldpctl_atom_t`. D'un atome, il est possible
@@ -727,6 +749,7 @@ bibliothèque C _Bionic_, nous savons désormais que
 [LLDP-MIB]: http://www.ieee802.org/1/files/public/MIBs/LLDP-MIB-200505060000Z.txt "LLDP-MIB"
 [how Vyatta made the integration]: http://git.vyatta.com/git/?p=vyatta-lldp.git;a=summary "Intégration de lldpd dans Vyatta"
 [include file]: https://github.com/vincentbernat/lldpd/blob/0.7.1/src/lib/lldpctl.h "lldpctl.h"
+[Writing a C library]: http://davidz25.blogspot.fr/2011/07/writing-c-library-intro-conclusion-and.html "Writing a C library"
 
 {# Local Variables:      #}
 {# mode: markdown        #}

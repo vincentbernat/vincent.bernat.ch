@@ -30,6 +30,24 @@ latest major release one year ago. Lots of C stuff ahead!
 
 # Version & changelog
 
+**UPDATED:** [Guillem Jover][] told me how he met the same goals for
+[libbsd][] :
+
+ 1. Save the version from git into `.dist-version` and use this file
+    if it exists. This allows one to rebuild `./configure` from the
+    published tarball without losing the version. This also handles
+    [Thorsten Glaser's critic][tg].
+ 2. Include `CHANGELOG` in `DISTCLEANFILES` variable.
+
+Since this is a better solution, I have [adopted][] the appropriate
+line of codes from _libbsd_. The two following sections are partly
+technically outdated.
+
+[tg]: https://www.mirbsd.org/permalinks/wlog-10_e20130220-tg.htm#e20130220-tg_wlog-10 "GNU autotools generated files"
+[Guillem Jover]: http://www.hadrons.org/~guillem/ "Guillem Jover's Home Page"
+[libbsd]: http://libbsd.freedesktop.org/wiki/ "libbsd"
+[adopted]: https://github.com/vincentbernat/lldpd/commit/a888bea6f08687177330c2d95569864009e769d6 "build: use the same way as libbsd for version and changelog"
+
 ## Automated version
 
 In `configure.ac`, I was previously using a static version number that
@@ -269,7 +287,7 @@ of those two channels. As an exemple, you can have a look at
 
 To provide a more robust solution, I have added a shared library,
 `liblldpctl`, with a stable and well-defined API. `lldpctl` is now
-using it. I have followed those directions:
+using it. I have followed those directions[^library]:
 
  - Consistent naming (all exported symbols are prefixed by
    `lldpctl_`). No pollution of the global namespace.
@@ -288,6 +306,9 @@ using it. I have followed those directions:
    event-loop. A thin synchronous layer is provided on top of this
    API.
  - Opaque types with accessor functions.
+
+[^library]: For more comprehensive guidelines, be sure to check
+            [Writing a C library][].
 
 Accessing bits of information is done through "atoms" which are opaque
 containers of type `lldpctl_atom_t`. From an atom, you can extract
@@ -696,6 +717,7 @@ ripping them for its Bionic C library, we know that
 [LLDP-MIB]: http://www.ieee802.org/1/files/public/MIBs/LLDP-MIB-200505060000Z.txt "LLDP-MIB"
 [how Vyatta made the integration]: http://git.vyatta.com/git/?p=vyatta-lldp.git;a=summary "Integration of lldpd in Vyatta"
 [include file]: https://github.com/vincentbernat/lldpd/blob/0.7.1/src/lib/lldpctl.h "lldpctl.h"
+[Writing a C library]: http://davidz25.blogspot.fr/2011/07/writing-c-library-intro-conclusion-and.html "Writing a C library"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
