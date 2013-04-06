@@ -1,0 +1,904 @@
+---
+title: "Comptabilité d'une EURL avec GnuCash"
+keywords: "EURL, comptabilité, fiscalité, écriture comptable, GnuCash, plan comptable général"
+uuid: aeacd87c-fcd7-4d09-a325-bf079e53fe1f
+attachments:
+  "PlanComptable.gnucash": Plan comptable général
+  "resultat-model.pdf": Modèle de bilan
+---
+
+Afin de mener une activité de conseils, j'ai monté une EURL. Une
+comptabilité à jour est une des obligations majeures pour une
+entreprise.
+
+Dans le monde libre, il existe plusieurs solutions pour faire de la
+comptabilité d'entreprise. Cela va de systèmes plutôt simples comme
+[GnuCash][] à des systèmes très compliqués comme [OpenERP][]. Jonathan
+Corbet, l'éditeur de [LWN][] a écrit un article assez intéressant sur
+l'état des
+[logiciels de comptabilité libres pour petites entreprises][]. Sa
+conclusion était qu'il n'existait rien qui remplisse ses besoins. Il a
+toutefois apprécié [Ledger][], un système qui se manipule en ligne de
+commande et à travers un éditeur de texte classique. Il y a consacré
+[un article][Ledger-LWN].
+
+J'ai pour ma part opté pour [GnuCash][]. Il existe un peu de
+littérature sur le sujet, avec notamment le livre assez complet
+[Gnucash 2.4 Small Business Accounting][]. Le très grande majorité des
+ressources est orientée vers la comptabilité dans les pays
+anglo-saxons. La comptabilité en France utilise des codes très
+différents.
+
+Je propose donc de livrer mon expérience sur _GnuCash_ dans le cadre
+suivant :
+
+ - Gestion d'une **EURL**.
+ - **Pas de salariés**. Étant gérant majoritaire, je me verse une
+   indemnité et non un salaire.
+ - Activité de **conseil en informatique**. Ni stock, ni marchandise.
+ - **Impôt sur les sociétés** au réel simplifié. TVA au réel simplifié
+   également.
+
+Dans ce cadre, _GnuCash_ est une solution tout à fait valable pour les
+opérations courantes. Il a quelques lacunes mais effectue globalement
+bien son boulot. Il dispose de plus d'une gestion des clients et des
+fournisseurs plutôt correcte. Il peut sortir tout un tas de rapports
+plus laids les uns que les autres.
+
+Les opérations de fin d'année sont par contre une autre paire de
+manches. Il y a non seulement la complexité comptable mais également
+toutes les démarches administratives. Il me semble préférable de
+confier celles-ci à comptable[^comptable] et donc de vérifier que
+celui-ci acceptera les données issues de _GnuCash_.
+
+[^comptable]: Outre la vérification, le comptable pourra aussi prendre
+              en charge la télétransmission qui est actuellement
+              obligatoire pour l'IS et qui pourrait le devenir pour
+              d'autres déclarations. Voir la section dédiée à cet
+              effet.
+
+À noter que je ne suis pas comptable et donc certains conseils peuvent
+être erronés.
+
+[TOC]
+
+# Introduction à la comptabilité
+
+La comptabilité est un outil permettant de recenser et d'évaluer tous
+les événements qui influent sur la valeur de l'entreprise. Un
+événement, cela peut être l'émission d'une créance vers un client,
+l'achat d'une agrafeuse, le recouvrement de la TVA collectée ou le
+don d'un tracteur agricole.
+
+## Comptabilité en partie double
+
+En entreprise, la comptabilité s'effectue en [partie double][]:
+
+> La comptabilité en partie double est la base du système comptable
+> utilisé par toutes les entreprises et organisations. Elle est fondée
+> sur l'idée selon laquelle les opérations et la situation financière
+> d'une organisation peuvent être représentées par des comptes. Chaque
+> compte contient l'historique des modifications de la valeur
+> monétaire d'un aspect particulier de l'organisation. On parle de
+> partie double quand l'enregistrement d'écriture est inscrit dans
+> deux comptes (au moins) : un compte débité, et un compte crédité.
+
+Pour chaque événement, il faut **créditer** un certain nombre de
+comptes et en **débiter** d'autres. De plus, le total des crédits doit
+être égal au total des débits.
+
+La notion de _débit_ et de _crédit_ est assez compliquée à appréhender
+et peu intuitive. Ainsi, pour acheter une agrafeuse, on va _créditer_
+le compte bancaire et _débiter_ le compte recensant les petits
+achats. Un événement implique toujours une **ressource** et un
+**emploi**. La ressource permet de financer l'emploi. Elle est
+toujours marquée au crédit d'un compte alors que l'emploi est toujours
+marqué au débit. Dans notre exemple d'agrafeuse, l'achat se fait avec
+l'argent du compte en banque qui est une ressource et il faut donc
+créditer le compte. Inversement, quand on vend une prestation à un
+client, la ressource est la prestation et l'emploi est le client. Il
+faut donc débiter le compte du client et créditer le compte des
+prestations.
+
+Si vous êtes déjà perdus ici, pas de panique. L'important est d'être
+attentif aux exemples. De plus, _GnuCash_ utilise par défaut des
+termes plus compréhensibles selon le type de compte (mais parfois mal
+francisés), à moins de choisir dans les préférences d'utiliser la
+terminologie comptable.
+
+Chaque opération donne lieu à une écriture comptable qui va concerner
+un ou plusieurs comptes. Sur papier, il fallait écrire la même
+opération dans chaque compte. Profitant des progrés en informatique de
+ces dernières années, _GnuCash_ gère cela tout seul. Si, si. Voici à
+quoi ressemble notre achat d'agrafeuse[^ecriture] :
+
+
+Compte |                        | Débit   | Crédit
+------ | ---------------------- | ------- | -------
+512    | Banque                 |         | 35,88 €
+6063   | Petit matériel         | 30,00 € |
+4456   | TVA déductible         |  5,88 € |
+
+[^ecriture]: Une écriture comptable doit également comporter la date
+             et une description. Je les omets ici pour ne pas
+             surcharger la présentation.
+
+Cette transaction a mis en jeu trois comptes. L'écriture va donc se
+trouver sur les trois comptes à la fois.
+
+ - Le compte bancaire de l'entreprise qui a été _crédité_ de 35,88 €
+   qui est le prix toutes taxes comprises de notre agrafeuse. Le
+   crédit de ce compte provoque un retrait de l'argent qui s'y
+   trouvait et donc un appauvrissement de l'entreprise.
+ - Le compte recensant les achats de petit matériel. Il a été _débité_
+   de 30,00 € qui correspond au prix hors taxes de l'agrafeuse. Il
+   s'agit d'une charge pour l'entreprise. L'agrafeuse ne rentre pas
+   dans le patrimoine de l'entreprise.
+ - Le compte recensant la TVA que l'on peut déduire de notre prochaine
+   déclaration. L'État devient alors débiteur de la somme de 5,88 €
+   qu'il devra nous rembourser lors de la prochaine déclaration.
+
+On remarque que la somme des débits est égal à la somme des
+crédits. C'est obligatoire. Pour toute écriture, la **balance doit
+être équilibrée**.
+
+## Plan comptable général
+
+Maintenant que vous avez vaguement compris comment marchait une
+écriture comptable, vous vous demandez peut-être quels sont les
+comptes qu'il faut utiliser. Le système comptable français définit
+très précisément les comptes à utiliser dans le **plan comptable
+général**.
+
+Il existe en fait trois plans comptables :
+
+ 1. le système de base,
+ 2. le système abrégé comprenant _moins_ de comptes,
+ 3. le système développé comprenant _plus_ de comptes.
+
+Le système à choisir dépend de la taille de l'entreprise. On choisit
+généralement le système correspondant au bilan et au compte de
+résultat demandé par les impôts en fin d'exercice. Pour une société au
+réel simplifié, il est possible d'opter pour le système abrégé. Le
+plan comptable général est disponible sur le site de
+l'[autorité des normes comptables][]. Il fait plus de 400
+pages. L'[article correspondant de Wikipedia][] fournit la liste des
+comptes.
+
+Chaque compte est identifié par un nombre. Le premier chiffre indique
+la classe du compte :
+
+ 1. Les comptes de capitaux (capitaux propres, emprunts).
+ 2. Les comptes d'immobilisation (peu utilisés dans notre cas).
+ 3. Les comptes de stocks et d'en-cours (peu utilisés également).
+ 4. Les comptes de tiers (les fournisseurs, les clients, l'État, vous).
+ 5. Les comptes financiers (le compte en banque).
+ 6. Les comptes de charges (ce qui appauvrit votre entreprise).
+ 7. Les comptes de produits (ce qui enrichit votre entreprise).
+
+Les cinq premières classes de comptes sont les comptes de bilan. Ils
+permettent de savoir ce que votre entreprise possède (l'actif et le
+passif) à tout moment. Les deux dernières classes sont les comptes de
+résultat. Ils sont remis à zéro après chaque exercice. Ils permettent
+notamment de connaître le résultat d'une entreprise sur un exercice.
+
+Parmi les comptes les plus importants, on notera :
+
+Compte | Description
+------ | ---------
+101    | Le capital de la société.
+401    | Les comptes des fournisseurs.
+411    | Les comptes des clients.
+445    | Les comptes pour la TVA.
+455    | Le compte de l'associé (pour se faire rembourser les frais).
+512    | Le compte bancaire de l'entreprise.
+6063   | Le compte pour l'achat de fournitures dont la valeur ne dépasse pas 500 €.
+625    | Le compte pour les frais liés aux déplacements et aux missions. On y colle notamment les frais de restauration.
+6410   | Le compte permettant de verser une indemnité au gérant.
+706    | Le compte où sont crédités les revenus liés à des prestations de service.
+
+Il en existe bien d'autres. Si un compte dispose d'un sous-compte, il
+faut utiliser uniquement l'un des sous-comptes.
+
+_GnuCash_ n'a pas le plan comptable général parmi les plans comptables
+proposés par défaut. Vous pouvez soit télécharger le
+[plan comptable mis à disposition par Vincent Laure][], soit
+télécharger le [plan comptable que j'utilise][] qui correspond au
+système abrégé avec quelques comptes supplémentaires et certains
+comptes retirés. Il comprend également un compte fournisseur et deux
+comptes clients dont l'un en devises américaines.
+
+# Écritures comptables
+
+Pour chaque écriture comptable, il faut connaître les comptes à
+débiter et les comptes à créditer. Généralement, cela n'a pas grand
+chose à voir avec _GnuCash_. Il est donc possible de se référer à
+l'abondante littérature sur le sujet ainsi qu'aux nombreux forums
+spécialisés dans la comptabilité.
+
+Généralement, je fais une recherche préfixée par « écriture
+comptable » pour trouver mon bonheur. Je regarde les deux ou trois
+premières réponses pour me faire une idée. Les numéros de comptes
+indiqués sont généralement à cinq chiffres. Il n'est pas nécessaire de
+créer le compte exact : il suffit d'utiliser le compte du système
+abrégé ayant le même préfixe.
+
+Il est crucial de ne pas s'emmêler avec les débits et les
+crédits. Dans une représentation en colonnes, les débits sont toujours
+dans la colonne de gauche. Les crédits sont dans la colonne de droite.
+
+Enfin, _GnuCash_ propose d'associer un numéro à chaque requête. Je
+scanne chaque pièce justificative et indique son numéro et une
+description dans le nom de fichier.
+
+## Opérations de création
+
+La création de l'entreprise entraîne un certain nombre d'écritures. Il
+est important de noter que les écritures ne peuvent pas être
+antérieures à la création de l'entreprise.
+
+### Capital initial
+
+L'apport du capital initial se fait en deux fois. Chaque associé fait
+d'abord une promesse d'apport en capital. Il devient alors débiteur du
+capital promis sur un compte dédié à cet effet. Ensuite, lorsque
+l'argent arrive sur le compte de l'entreprise, l'associé est crédité
+de cet apport.
+
+Compte |                   | Débit  | Crédit
+------ | ----------------- | ------ | ------
+456    | Promesse d'apport | 5000 € |
+101    |                   |        | 5000 €
+
+Compte |                   | Débit  | Crédit
+------ | ----------------- | ------ | ------
+456    | Versement apport  |        | 5000 €
+512    |                   | 5000 € |
+
+### Publication de l'annonce légale
+
+Une des étapes de la création d'entreprise est la publication d'une
+annonce légale. Généralement, un associé avance l'argent et est
+remboursé après la création.
+
+Compte |                   | Débit   | Crédit
+------ | ----------------- | ------- | ------
+623    | Annonce légale    | 97,71 € |
+445    | TVA déductible    | 19,16 € |
+455    |                   |         | 116,87 €
+
+### Dépôt des statuts au greffe
+
+Le dépôt des statuts au greffe suit la même logique.
+
+Compte |                    | Débit   | Crédit
+------ | ------------------ | ------- | ------
+622    | Greffe du tribunal | 72,08 € |
+445    | TVA déductible     | 14,13 € |
+455    |                    |         |  86,21 €
+
+## Opérations courantes
+
+Les opérations courantes impliquant un flux financier créditent soit
+le compte bancaire de l'entreprise (512) ou celui de l'associé
+(455). Dans ce sens, c'est généralement interchangeable. L'associé
+peut être crédité de l'argent que l'entreprise lui doit par une
+écriture débitant le compte de l'entreprise :
+
+Compte |                     | Débit   | Crédit
+------ | ------------------- | ------- | ------
+455    | Remboursement frais | 100 €   |
+512    |                     |         | 100 €
+
+### Repas du midi
+
+Une écriture courante est le remboursement du repas du midi. Il y a
+beaucoup de théories à ce sujet. Il peut y avoir un plafond (environ
+17 €), une somme forfaitaire à déduire (environ 4 €) et la
+déductibilité ou non de la TVA. À noter que le paiement d'une somme
+forfaitaire pour le repas de midi ne semble pas admise. Tout repas
+doit venir avec un justificatif.
+
+Pour ma part, je n'applique aucun plafond, je ne déduis aucune somme
+forfaitaire mais je ne déduis pas la TVA, à moins qu'il s'agisse d'une
+invitation. Je paie toujours avec ma carte de crédit personnelle.
+
+Compte |                    | Débit   | Crédit
+------ | ------------------ | ------- | ------
+6256   | Repas du midi      | 13,20 € |
+455    |                    |         |  13,20 €
+
+### Indemnités kilométriques
+
+Si vous vous déplacez avec votre véhicule personnel, vous pouvez vous
+verser des indemnités kilométriques. Si le trajet est régulier, il
+semble qu'il n'est pas nécessaire de tenir un journal des
+déplacements. À noter que le barème évolue chaque année et dépend de
+la distance parcourue dans l'année. Dans le cas de trajets réguliers,
+je ne fais qu'une seule écriture par mois.
+
+Compte |                                    | Débit    | Crédit
+------ | ---------------------------------- | -------- | ------
+6251   | IK pour trajet de X à Y, 20 jours  | 141,50 € |
+455    |                                    |          | 141,50 €
+
+Le train, l'avion, le taxi, les voitures de location se notent de la
+même façon. À noter dans ce cas qu'il n'est jamais possible de
+récupérer la TVA sur un transport de personnes.
+
+### Abonnements téléphoniques & ADSL
+
+S'il y a usage professionnel, il est possible de se faire rembourser
+tout ou partie d'un abonnement téléphonique ou ADSL. Il faudra pouvoir
+justifier de l'usage professionnel. Certains indiquant que la TVA
+n'est normalement déductible que si la facture est au nom de
+l'entreprise. Personnellement, je la déduis tout de même.
+
+Compte |                    | Débit   | Crédit
+------ | ------------------ | ------- | ------
+626    | Abonnement ADSL    | 10,89 € |
+445    | TVA déductible     |  2,14 € |
+455    |                    |         |  13,03 €
+
+Je fais passer de la même façon les abonnements à des services Web
+comme Amazon ou l'achat de noms de domaine.
+
+### Autres frais déductibles
+
+Si le siège de votre entreprise est votre domicile, il est également
+possible de déduire au prorata de la surface utilisée :
+
+ - une partie du loyer (je ne fais pas),
+ - une partie des factures EDF, d'eau, des charges locatives (compte
+   6061),
+ - une partie de l'assurance locative (compte 616)
+ - une partie de la taxe d'habitation (compte 635)
+
+### Achats divers
+
+Pour l'achat d'un bouquin, il faut utiliser le compte 6181. Pour
+l'achat d'une fourniture ou d'un matériel dont la valeur n'excède pas
+500 €, il faut utiliser le compte 6063. Je vous renvoie à l'exemple de
+l'agrafeuse en introduction.
+
+Voici un autre exemple avec des frais de ports :
+
+Compte |                        | Débit   | Crédit
+------ | ---------------------- | ------- | -------
+512    |                        |         | 35,88 €
+6063   | Petit matériel         | 27,00 € |
+624    | Frais de ports         |  3,00 € |
+4456   | TVA déductible         |  5,88 € |
+
+Pour les montants supérieurs à 500 €, l'achat devient une
+immobilisation et non une charge. Il faut de plus en gérer
+l'amortissement.
+
+### Facturation et paiement d'un client
+
+La principale source de revenus provient normalement des paiements des
+clients. Il y a deux étapes :
+
+ 1. Il faut d'abord adresser une facture au client. Celui-ci est alors
+    débiteur du montant demandé.
+ 2. Quelques jours, mois, années plus tard, le client paie. On crédite
+    alors son compte et s'il a payé exactement la somme facturée, son
+    solde devient nul.
+
+Les deux opérations n'ont généralement pas lieu à la même date. Chaque
+client dispose de son propre compte sous le compte 411 : il ne faut
+pas utiliser directement le compte 411.
+
+On effectue de plus la collecte de la TVA pour l'État. Si le client
+est un professionnel, il récupérera la TVA de son côté. Si le client
+se trouve dans l'Union Européenne et qu'il fournit un numéro de TVA
+intracommunautaire, il n'est pas nécessaire de lui faire payer la
+TVA. Sinon, la TVA française s'applique. Il semble être d'usage
+d'utiliser un compte spécial (7062 au lieu de 706) dans ce cas. S'il
+est hors Union Européenne, les prestations de service sont exonérées
+de TVA.
+
+_GnuCash_ dispose d'un module d'édition des factures qui fait assez
+bien son boulot. Je n'utilise toutefois pas la possibilité d'imprimer
+la facture. Le rendu est assez désolant et je préfère donc faire mes
+factures manuellement avec LaTeX.
+
+_GnuCash_ gère aussi la TVA, mais de manière partielle. L'entreprise
+n'est redevable de la TVA qu'au moment du paiement. Au moment de la
+facturation, la TVA est placée dans un compte de régularisation
+(4458). _GnuCash_ va calculer automatiquement la TVA et placer
+l'écriture suivante au moment de valider la facture :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+411×   | Client Durant      | 1196 €     |
+4458   | TVA à régulariser  |            | 196 €
+706    | Prestation conseil |            | 1000 €
+
+Par contre, au moment du paiement, il va simplement créditer le compte
+du client et débiter le compte en banque. Il faut alors penser à
+ajouter manuellement le transfert de la TVA au crédit du compte de la
+TVA collectée (4457). L'écriture du paiement ressemble à ceci :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+411×   | Client Durant      |            | 1196 €
+4457   | TVA collectée      |            | 196 €
+4458   | TVA à régulariser  | 196 €      |
+512    |                    | 1196 €     |
+
+### Facturation avec des devises étrangères
+
+Si votre client vous paie en devises étrangères, les choses se
+compliquent énormément. En effet, votre client va disposer dans votre
+système d'un compte en dollars (par exemple). Mais tous vos autres
+comptes sont en euros. _GnuCash_ gère cette situation en permettant
+d'indiquer un taux de change. Voici l'écriture qui apparaîtra dans le
+compte du client :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+411×   | Client Scott       | 1000 $     |
+706    | Prestation conseil |            | 1000 $
+
+_GnuCash_ va vous demander le taux de change actuel. Du coup, dans le
+compte 706, vous verrez :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+411×   | Client Scott       | 767 €      |
+706    | Prestation conseil |            | 767 €
+
+Au moment du paiement, les choses se compliquent. Votre client vous
+paie 1000 $. Toutefois, ce ne sont pas 767 € qui arrivent sur votre
+compte, mais seulement 738 €. En effet, au moment du paiement, le
+taux de change a évolué. Vous avez alors une perte de change. Cette
+parte va s'inscrire au compte 666. S'il y avait eu gain, ce serait le
+compte 766.
+
+Une façon simple de gérer le problème est de passer l'écriture en
+euros de cette façon :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+512    |                    | 738 €      |
+666    | Perte de change    |   29 €     |
+411×   | Client Scott       |            | 767 €
+
+Il faut alors réutiliser le taux de change _initial_. De cette façon,
+on obtient dans le compte du client :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+512    |                    | 960,00 $   |
+666    | Perte de change    |  40,00 $   |
+411×   | Client Scott       |            | 1000 $
+
+Le problème de devises peut aussi se poser pour l'achat de
+services. Toutefois, si la valeur est assez faible, il me semble plus
+simple de passer ces services sous forme d'une charge en euros.
+
+### Facturation d'un fournisseur
+
+Si vous achetez des prestations à un fournisseur et que les montants
+sont suffisamment élevés (sinon, vous pouvez les passer directement en
+charges), vous pouvez créer un compte pour le fournisseur. Le schéma
+est similaire à la facturation d'un client. Le fournisseur vous envoie
+une facture, vous l'enregistrez et créditez le compte du fournisseur
+et débitez le compte de charge correspondant. Au paiement, vous
+débitez le fournisseur et créditez le compte en banque. Par exemple,
+pour un serveur dédié en Allemagne (pas de TVA) :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+626    |                    | 41 €       |
+401x   | Fournisseur Albert |            | 41 €
+
+Au paiement de la facture :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+401x   |                    | 41 €       |
+512    | Paiement facture   |            | 41 €
+
+### Frais bancaires
+
+Tous les mois, la banque va vous adresser une facture pour ses
+services. C'est généralement plus salé que lorsqu'on est un
+particulier. Personne ne sait trop bien pourquoi.
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+512    |                    |            | 23,92 €
+627    | Frais mensuels XX  | 20,00 €    |
+4456   | TVA déductible     |  3,92 €    |
+
+### Paiement de la TVA
+
+Une fois par trimestre, il va falloir verser un accompte sur la TVA
+collectée pour l'État. On en profite aussi pour se faire rembourser la
+TVA déductible. Il semble d'usage de passer par deux écritures
+comptables qui ont généralement lieu en même temps :
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+4457   | TVA collectée      | 2500 €     |
+4456   | TVA déductible     |            | 100 €
+4455   | TVA à décaisser    |            | 2400 €
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+4455   | TVA à décaisser    | 2400 €     |
+512    | Paiement TVA       |            | 2400 €
+
+Le réglement se fait en ligne sur le site des impôts. Il y a deux cases à remplir :
+
+ - la base hors taxe des opérations imposables pour la TVA à 19,6 %
+   (12 755 € dans notre cas pour arriver à une TVA de 2500 €),
+ - la TVA déductible sur les factures de 100 €.
+
+En fin d'année, il y a un formulaire supplémentaire pour régulariser
+la situation. Il me semble plus simple de toujours payer exactement ce
+qu'il faut sur les accomptes. Cela ne vous dispense pas de remplir le
+formulaire adéquat.
+
+### Rémunération du gérant
+
+De temps en temps, il est possible de vous verser une rémunération. Le
+versement est net. Il faudra payer des cotisations URSSAF et RSI par
+la suite. Il ne s'agit pas d'un salaire.
+
+Compte |                    | Débit      | Crédit
+------ | ------------------ | ---------- | ------
+6410   | Rémunération Juin  | 3000 €     |
+512    |                    |            | 3000 €
+
+### Cotisations URSSAF & RSI
+
+Lorsque vous payez vos cotisations URSSAF et RSI, vous devez obtenir
+un reçu indiquant la répartition des montants. Voici par exemple comme
+régler la première cotisation forfaitaire de 448 € pour l'URSSAF :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+645    | Allocations familiales     | 144 €   |
+63     | CSG déductible             | 136 €   |
+455    | CSG non déductible         | 64 €    |
+455    | CRDS                       | 13 €    |
+63     | Formation professionnelle  | 91 €    |
+512    |                            |         | 448 €
+
+On notera qu'une partie de la CSG est imputée en charges pour
+l'entreprise tandis qu'une partie est payée par l'associé.
+
+## Opérations de fin d'exercice
+
+Les opérations courantes sont relativement simples à appréhender après
+les premiers mois. Les opérations de fin d'exercice sont par contre
+beaucoup plus complexes. Je vous conseillerais plutôt de prendre un
+comptable pour cette partie. Ce qui suit est à prendre avec des
+pincettes : personne n'est venu vérifier la validité de ma
+comptabilité.
+
+Toutes les écritures sont à passer à la date du dernier jour de
+l'exercice. Elles doivent normalement régulariser les écritures
+concernant l'exercice passé. On y trouve :
+
+ - régularisation du compte bancaire avec le relevé bancaire,
+ - régularisation des charges et des produits
+
+Les charges (ou les produits) qui sont à cheval sur deux exercices
+(comme le réglement d'une prime d'assurance, un abonnement de trois
+mois, ...) doivent faire l'objet d'une écriture pour charges
+constatées d'avance. Dans le cas d'une petite entreprise, il semble
+que l'exercice soit optionnel si les sommes mises en jeu sont faibles.
+
+Il existe d'autres écritures mais qui ne nous concernent pas s'il n'y
+a pas eu d'écritures correspondantes dans l'année passée :
+
+ - régularisation des stocks
+ - régularisation des immobilisations
+ - régularisation des placements
+ - régularisation des amortissements
+ - régularisation des dépréciations
+ - régularisation des provisions
+
+### Provisions pour rémunération
+
+C'est aussi le bon moment pour décider de compléter votre
+rémunération. En effet, le bénéfice de l'entreprise peut être
+distribuée en rémunérations (soumises à l'IR) ou en dividendes. Dans
+le second cas, la somme destinée à cet effet sera d'abord soumise à
+l'impôt sur les sociétés. Le calcul peut être effectué via un
+[simulateur][sim3]. Les dividendes étant taxés comme des revenus à
+partir de 2013 pour la part dépassant les 10 % du capital de la
+société, il n'est pas très intéressant de se verser des dividendes.
+
+Si vous voulez compléter votre rémunération de 10 000 €, il suffirait
+de passer l'écriture suivante au dernier jour de l'exercice :
+
+Compte |                             | Débit    | Crédit
+------ | --------------------------- | -------- | -------
+6410   | Provision pour rémunération | 10 000 € |
+455    |                             |          | 10 000 €
+
+Il faudra alors ensuite provisionner les charges correspondantes.
+
+### Provisions pour charges sociales
+
+Il est possible de provisionner les sommes qui seront demandées par
+les différents organismes sociaux (URSSAF, CIPAV, RSI) et de les
+déduire du résultat. Il faut donc déterminer une approximation des
+cotisations qui seront réclamées à l'aide d'un des [nombreux][sim1]
+[simulateurs][sim2] que l'on trouve sur le web. Ensuite, l'écriture
+semble être la suivante[^provision] :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+645    | Maladie/Vieillesse/AF      | 4000 €  |
+63     | CSG déductible             | 1000 €  |
+43     | Provisions pour charges    |         | 5000 €
+
+Pour chaque paiement, il faudra débiter le compte 43 au lieu des
+comptes 645 et 63. Par exemple, pour les cotisations URSSAF, on
+ferait :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+43     | Allocations familiales     | 144 €   |
+43     | CSG déductible             | 136 €   |
+455    | CSG non déductible         | 64 €    |
+455    | CRDS                       | 13 €    |
+43     | Formation professionnelle  | 91 €    |
+512    |                            |         | 448 €
+
+Si la provision s'avère trop importante en fin d'année suivante, il
+faudra affecter le surplus au compte 787.
+
+[^provision]: À noter qu'il existe un compte de provisions pour les
+              charges (681). Il peut sembler idéal pour ce type
+              d'opération. Toutefois, ce compte ne doit être utilisé
+              que pour une charge _probable_. Si la charge est _certaine_
+              (comme c'est le cas ici), il n'y a pas lieu
+              d'utiliser ce compte.
+
+### Clôture des comptes
+
+Une fois les régularisations effectuées, on passe aux travaux de
+clôture et de réouverture des comptes. Il s'agit de **solder** tous
+les comptes de charges (dont le numéro commence par 6) et de produits
+(dont le numéro commence par 7). Solder signifie mettre la balance du
+compte à zéro.
+
+Si le compte 709 est débiteur, il faut le solder manuellement dans un
+autre compte (le 706 par exemple). Si les comptes 609, 619 ou 629 sont
+créditeurs, il faut les solder avec l'un des voisins (par exemple,
+6063, 6181 et 6251). Ces comptes sont particuliers car ils
+fonctionnent dans le sens inverse des comptes de la même catégorie.
+
+Vient ensuite la clôture proprement dite. _GnuCash_ dispose d'une
+fonction pour vous aider à la réaliser. Dans le menu « Outils »,
+choisir la fonction « Clôturer le livre ». Indiquer la date de clôture
+(dernier jour de l'exercice) et les comptes à utiliser pour les
+revenus et les dépenses. Dans le cadre du système abrégé, il s'agit du
+compte 12. On obtient l'écriture suivante :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+706    | Prestations conseil        | 50 000 €|
+627    | Services bancaires         |         | 100 €
+63     | Impôts et taxes            |         | 200 €
+6251   | Voyages et déplacements    |         | 1000 €
+6256   | Frais de missions          |         | 1000 €
+6410   | Rémunération du gérant     |         | 20 000 €
+645    | Charges sociales           |         | 8000 €
+6063   | Petit matériel             |         | 1000 €
+12     | Transfert des charges      | 31 300 €|
+12     | Transfert des produits     |         | 50000 €
+
+On se retrouve avec un **résultat bénéficiaire** de 18 700 €.
+
+Pour la réouverture des comptes, il était d'usage d'utiliser des
+livres papiers différents pour chaque exercice. Certains préconisent
+de faire de même en repartant de zéro pour le nouvel exercice. J'ai
+personnellement choisi de garder tous les exercices dans un seul
+fichier _GnuCash_. Cela dispense de fastidieuses écritures de bilan.
+
+### Calcul de l'impôt sur les sociétés
+
+Le bénéfice permet de calculer l'impôt dû pour l'exercice
+précédent. Sur le bénéfice calculé précédemment, l'impôt dû est de
+15 % pour la partie inférieure à 38 120 € et de 33,3 % pour le
+reste. Dans notre exemple, l'impôt dû est donc de 2 805 €.
+
+Avec cette information, vous pouvez revenir quelques étapes en arrière
+en annulant la clôture des comptes (il suffit d'effacer les deux
+écritures) et en ajustant la provision pour rémunération. Dans le cas
+contraire, vous pourrez toujours récupérer le résultat en dividendes
+mais l'imposition est plutôt prohibitive.
+
+Une fois que votre calcul est définitif, il faut passer l'écriture
+suivante :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+695    | Paiement de l'IS           | 2 805 € |
+444    |                            |         | 2 805 €
+
+Puis clôturer de nouveau le compte 695[^cloture] :
+
+Compte |                            | Débit   | Crédit
+------ | -------------------------- | ------- | -------
+12     | Transfert des charges      | 2 805 € |
+695    |                            |         | 2 805 €
+
+[^cloture]: Il semble que cette façon de faire soit
+            contestable. Toutefois, je ne vois pas comment s'assurer
+            que ce compte ne perturbe pas l'exercice suivant s'il
+            n'est pas soldé.
+
+### Établissement du compte de résultat et du bilan
+
+Le compte de résultat s'intéresse à ce qui s'est passé durant
+l'exercice au niveau des comptes de charges et de produits. Le bilan
+donne une image des autres comptes au dernier jour de l'exercice.
+
+Le [plan comptable général][autorité des normes comptables] comprend
+les modèles adéquats pour le compte de résultat et le bilan. Il existe
+un notamment modèle adapté au système abrégé. On peut aussi le trouver
+sous un [format exploitable par un tableur][]. Malheureusement, il n'y
+a pas la correspondance entre les diverses cases à remplir et les
+numéros de comptes.
+
+Le **compte de résultat** est assez simple à remplir. Toutes les
+informations nécessaires sont dans les écritures de clôture (celles
+vers le compte 12). Il suffit donc de les inspecter et de les ventiler
+dans les cases appropriées.
+
+J'ai reporté la ventilation que j'ai adoptée dans un
+[modèle de compte de résultat][modèle] ([sources][tex]). Une fois le
+total effectué, on en calcule la différence et on a le reporte soit
+sur la ligne « solde créditeur » (en cas de bénéfices), soit sur la
+ligne « solde débiteur » (en cas de pertes). Cette différence doit
+être le solde du compte 12. Les totaux généraux sont alors équilibrés.
+
+Le **bilan** est un peu plus délicat pour deux raisons :
+
+ - les comptes de tiers (4xx) mélangent à la fois l'actif et le passif
+ - les amortissements et les provisions doivent être déduits de l'actif
+
+Le second point est pour moi tout théorique car je n'ai ni
+amortissement, ni provision. Le premier point est plus problématique
+et il faudra donc faire attention à bien comptabiliser les créances
+des tiers au niveau de l'actif et vos dettes au niveau du passif. J'ai
+indiqué la difficulté dans mon [modèle de bilan][modèle] par une
+étoile.
+
+Pour établir le bilan, _GnuCash_ peut nous aider en demandant dans le
+menu « Rapports » l'établissement du bilan. Il convient ensuite de
+ventiler attentivement. Si tout se passe bien, les totaux généraux
+s'équilibrent.
+
+### Affectation du résultat
+
+Une fois le bénéfice correctement calculé, le bilan dressé et le
+compte de résultat établi, il est possible d'affecter le résultat si
+celui-ci est créditeur[^débiteur] :
+
+ - le résultat est diminué du report à nouveau de l'exercice précédent
+   s'il est débiteur,
+ - si la **réserve légale** n'est pas égale à au moins 10 % du capital
+   social total, 5 % du résultat restant sont affectés à celle-ci,
+ - le résultat est augmenté du report à nouveau de l'exercice
+   précédent s'il est créditeur,
+ - le résultat peut alors être distribué sous forme de dividendes s'il
+   reste créditeur,
+ - le reste du résultat est crédité au compte du **report à nouveau**
+   (11).
+
+[^débiteur]: Si le résultat est débiteur, il est simplement enregistré
+             au débit du report à nouveau.
+             
+Sachant qu'il est désormais prohibitif de se distribuer le résultat en
+dividendes en France (au-delà de la limite de 10 % du capital social),
+il est donc peu intéressant d'avoir un résultat important. Voici un
+exemple de distribution dans le cas où la réserve légale n'existe pas
+encore :
+
+Compte |                            | Débit    | Crédit
+------ | -------------------------- | -------- | -------
+120    | Résultat 2012              | 15 895 € |
+1061   | Réserve légale             |          | 794 €
+457    | Dividendes à payer         |          | 1000 €
+11     | Report à nouveau           |          | 14 101 €
+
+Ces transactions sont datées au 31 décembre 2012. Lors du paiement
+effectif des dividendes, il faudra penser à retirer les prélevements
+sociaux (15,5 % pour 2013) et les créditer sur le compte 442 ou 447.
+
+### Déclaration de l'IS
+
+L'épreuve finale est désormais la déclaration de résultats auprès des
+impôts. Dans l'optique de faire supporter les coûts de déclaration au
+contribuable, l'administration impose désormais une télétransmission
+au format EDI via un partenaire tierce[^intermédiaire] qu'il vous
+faudra rétribuer. Comptez environ 200 €.
+
+[^intermédiaire]: Il est possible de devenir soi-même partenaire
+                  EDI. Il suffit de passer une convention avec la
+                  direction des impôts qui peut accepter ou
+                  refuser. Il faudra ensuite vous palucher les specs
+                  du protocole basé sur le standard [EDIFACT][],
+                  respecter le cahier des charges annuel et obtenir le
+                  label nécessaire pour pouvoir télétransmettre. Nul
+                  doute que l'ensemble est fait dans la plus totale
+                  obscurité. Nous vous attendez pas à trouver un dépôt
+                  GitHub.
+
+L'intermédiaire peut demander les balances sous un certain
+format. Dans mon cas, il est possible de fournir les balances au
+format CSV. Malheureusement, _GnuCash_ n'est pas particulièrement
+brillant dans ce domaine. Il existe une [entrée dans la FAQ][export] à
+ce sujet, mais cela consiste généralement à effectuer des
+manipulations complexes.
+
+J'ai simplement formaté manuellement la balance dans un fichier
+CSV. Il s'agit plus ou moins de refaire une nouvelle fois son
+bilan car il faut donner les détails :
+
+ 1. Recopier le détail du compte de résultat en s'aidant simplement
+    des écritures des comptes de charges et de produits vers le
+    compte 12.
+ 2. Recopier l'état des autres comptes tels qu'ils étaient avant
+    l'écriture comptable de l'affectation du résultat. Ne pas recopier
+    le compte 12 (sinon, il n'y a pas équilibre).
+ 3. Inclure l'écriture comptable du compte 695 vers le compte 444.
+
+La balance est normalement équilibrée et le logiciel de saisie
+retrouve le même résultat comptable.
+
+Il reste ensuite à compléter correctement les 11 formulaires de
+déclaration. Chaque case peut faire l'objet d'une recherche
+approfondie sur le sujet. Par exemple, sur le formulaire 2033—B,
+faut-il reporter les charges sociales dans la case 380 ? Il semble que
+dans le cas d'une EURL à l'IS, il n'y a pas d'exploitant et il faut
+donc laisser cette case vide, malgré la remarque attachée à la
+case 252.
+
+Bref, un comptable sera d'une grande aide.
+
+*[TVA]: Taxe sur la Valeur Ajoutée
+*[EURL]: Entreprise Unipersonnelle à Responsabilité Limitée
+*[URSSAF]: Unions de Recouvrement des Cotisations de Sécurité Sociale et d'Allocations Familiales
+*[RSI]: Régime social des indépendants
+*[IK]: Indemnités kilométriques
+*[CSG]: Contribution sociale généralisée
+*[CRDS]: Contribution pour le remboursement de la dette sociale
+*[IS]: Impôt sur les sociétés
+
+[GnuCash]: http://www.gnucash.org "GnuCash"
+[Ledger]: http://ledger-cli.org/ "Ledger"
+[hledger]: http://hledger.org/ "hledger"
+[OpenERP]: https://www.openerp.com/ "OpenERP"
+[LWN]: http://lwn.net "Linux Weekly News"
+[logiciels de comptabilité libres pour petites entreprises]: http://lwn.net/Articles/496158/ "Accounting systems: a rant and a quest"
+[Ledger-LWN]: http://lwn.net/Articles/501681/ "The accounting quest: Ledger"
+[Gnucash 2.4 Small Business Accounting]: http://www.packtpub.com/gnucash-24-small-business-accounting-beginners-guide/book "Gnucash 2.4 Small Business Accounting"
+[partie double]: http://fr.wikipedia.org/wiki/Comptabilit%C3%A9_en_partie_double "Comptabilité en partie double sur Wikipedia"
+[autorité des normes comptables]: http://www.anc.gouv.fr/sections/normes_privees/plans_comptables/plans_comptables/cpsdocument_view "Plan comptable général français"
+[article correspondant de Wikipedia]: http://fr.wikipedia.org/wiki/Plan_comptable_g%C3%A9n%C3%A9ral_(France) "Plan comptable général sur Wikipedia"
+[plan comptable mis à disposition par Vincent Laure]: http://gnucash.entreprise.free.fr/page6.html "Plan comptable pour les TPE"
+[plan comptable que j'utilise]: [[!!files/PlanComptable.gnucash]] "Plan comptable abrégé pour GnuCash"
+[sim1]: http://www.entrepriseindividuelle.info/Calc_CharSoc.php "Simulateur de calcul des charges sociales"
+[sim2]: http://www.guide-tns.fr/chargesprofessionnelliberal2012.html "Simulateur de calcul des charges sociales"
+[sim3]: http://www.entrepriseindividuelle.info/Calc_CharSoc.php "Simulateur de répartition dividendes/rémunération pour un gérant"
+[format exploitable par un tableur]: http://www.plancomptable.com/comptes_annuels/comptes_annuels.htm "Bilan et compte de résultat au format Excel"
+[tex]: [[!!files/resultat-modele.tex]] "Modèle de compte de résultat et de bilan au format TeX"
+[modèle]: [[!!files/resultat-modele.pdf]] "Modèle de compte de résultat et de bilan au format PDF"
+[EDIFACT]: http://en.wikipedia.org/wiki/UN/EDIFACT "United Nations/Electronic Data Interchange For Administration, Commerce and Transport"
+[export]: http://wiki.gnucash.org/wiki/FAQ#Q:_How_can_I_export_data.3F "Export data from GnuCash"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
