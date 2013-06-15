@@ -30,7 +30,7 @@ luffy.effects = function() {
 	    var y = $(window).scrollTop();
 	    var title = h1s.filter(function() {
 		return ($(this).offset().top < y);
-	    }).last().html();
+	    }).last().text();
 	    if (!(title != null) || y > base.offset().top + base.height()) {
 		header.hide();
 	    } else {
