@@ -1,0 +1,292 @@
+---
+title: "lanĉo: un lanceur de tâches utilisant les cgroups"
+keywords: "lanco, tasks, cgroups, linux, systemd"
+uuid: faf5ee0d-dd10-4eea-a785-ff14bee22c55
+---
+
+Il y a quelques mois, je cherchais à lancer des **tâches
+persistantes** pour le compte d'un démon tierce dans le but que
+celles-ci ne soient pas interrompues lorsque le démon est
+redémarré. Voici le cahier des charges :
+
+ - Aucun privilège n'est nécessaire pour lancer une tâche.
+ - Les tâches à lancer ne sont pas connues par avance.
+ - La sortie de chaque tâche est redirigée dans un journal.
+ - Les tâches sont identifiées par un nom fourni.
+ - Ce nom permet ensuite de vérifier si une tâche tourne toujours ou
+   de la tuer.
+ - Une tâche ne doit pas être interrompue par un événement externe
+   comme un changement de configuration ou une mise à jour logicielle.
+
+Le dernier point est la raison pour laquelle les tâches ne sont pas
+exécutées directement par le demandeur dont le mode d'opération ou la
+complexité peut nécessiter des redémarrages réguliers. Bien qu'il soit
+possible de réexécuter un démon tout en gardant les processus fils
+([à l'instar de _Upstart_][stateful re-exec support in _Upstart_]), il
+s'agit d'une tâche difficile : elle nécessite de sérialiser l'état
+interne du processus et de le restaurer. Une partie de cet état peut
+être contenu dans des bibliothèques tierces.
+
+Alors que [Upstart][] ou [systemd][] semblent être de bons candidats,
+je n'ai pas trouvé de moyen simple de leur faire lancer des tâches
+arbitraires sans privilège particulier[^user].
+
+[^user]: _systemd_ et _Upstart_ sont difficile à faire tourner sans
+         être ni PID 1, ni _root_. Ils supportent tous les deux les
+         sessions utilisateurs mais il est alors nécessaire de les
+         utiliser comme PID 1. J'ai découvert par la suite (mais trop
+         tard) que [runit][] correspondait bien aux besoins : il ne
+         nécessite ni de tourner en PID 1 ou en _root_ et le
+         répertoire utilisé pour définir les services peut être choisi
+         avec une variable d'environnement.
+
+Ainsi est né [lanĉo][][^name]. Il s'agit d'un lanceur de tâches très
+simple : il peut lancer des tâches, les arrêter et vérifier si elles
+sont toujours présentes. Il utilise les [cgroups][] disponibles dans
+les noyaux Linux récents. Il n'y a aucun démon.
+
+[^name]: _Lanĉo_ signifie _lanceur_ en Espéranto. L'accent inhabituel
+         sur la lettre « c » est absent de la plupart des fontes Web
+         ce qui explique le rendu un peu curieux.
+
+# Vue d'ensemble
+
+Avant de regarder les rouages de [lanĉo][], regardons comment
+l'utiliser. Pour éviter les conflits entre différents utilisateurs,
+les tâches sont exécutées dans le contexte d'un espace de noms qui
+doit être initialisé :
+
+    ::console
+    $ sudo lanco testns init -u $(id -un) -g $(id -gn)
+
+Il s'agit de la seule commande nécessitant l'usage des droits
+_root_. Les suivantes sont lancées sans privilège particulier. Lançons
+une première tâche :
+
+    ::console
+    $ lanco testns run first-task openssl speed aes
+    $ lanco testns check first-task && echo "Still running"
+    Still running
+    $ lanco testns ls
+    testns
+     ├ first-task
+     │  → 28456 openssl speed aes 
+     ╯
+
+La sortie de cette tâche est placé dans un journal :
+
+    ::console
+    $ head -3 /var/log/lanco-testns/task-first-task.log
+    Doing aes-128 cbc for 3s on 16 size blocks: 8678442 aes-128 cbc's in 2.85s
+    Doing aes-128 cbc for 3s on 64 size blocks: 2478283 aes-128 cbc's in 2.99s
+    Doing aes-128 cbc for 3s on 256 size blocks: 628105 aes-128 cbc's in 3.00s
+
+Si la tâche prend trop de temps, il est possible de l'arrêter :
+
+    ::console
+    $ lanco testns run first-task openssl speed aes
+    $ lanco testns stop first-task
+
+Il n'est pas possible d'exécuter une tâche qui tourne déjà ou
+d'arrêter une tâche qui n'existe pas :
+
+    ::console
+    $ lanco testns run first-task openssl speed aes
+    2013-06-09T22:50:34 [WARN/run] task first-task is already running
+    $ lanco testns stop second-task
+    2013-06-09T22:50:45 [WARN/stop] task second-task is not running
+
+Grâce à l'utilisation des _cgroups_, _lanĉo_ est capable de s'y
+retrouver même si une tâche multiplie les processus[^forkbomb] :
+
+    ::console
+    $ lanco testns run second-task sh -c \
+    >  "while true; do (sleep 30 &)& sleep 1; done"
+    $ lanco testns ls
+    testns
+     ├ first-task
+     │  → 28456 openssl speed aes 
+     ├ second-task
+     │  → 29572 sh -c while true; do (sleep 30 &)& sleep 1; done 
+     │  → 29575 sleep 30 
+     │  → 29593 sleep 30 
+     │  → 29596 sleep 30 
+     │  → 29599 sleep 30 
+     │  → 29622 sleep 30 
+     │  → 29644 sleep 1 
+     │  → 29645 sleep 30 
+     ╯
+    $ lanco testns stop second-task
+    $ lanco testns check second-task || echo "Killed!"
+    Killed!
+
+[^forkbomb]: Les _cgroups_ dans Linux ne fournissent pas de moyen
+             particulier pour tuer toutes les tâches d'un groupe. Il
+             est alors nécessaire de tuer les tâches une à
+             une. _lanĉo_ n'essaie pas de stopper les tâches avant des
+             les tuer. Il est donc inefficace contre les _fork bombs_
+             un peu violentes.
+
+Il y a également une commande dont la sortie est similaire à `top`
+(`lanco testns top`) :
+
+![lanco top][lanco-top]
+[lanco-top]: [[!!images/lanco-top.png]] "top-like output of running tasks"
+
+# Utiliser les _cgroups_
+
+Les groupes de contrôle (_cgroups_) permettent de partitionner un
+ensemble de tâches et leur descendance dans une hiérarchie de groupes
+attaché à des ressources.
+
+## Hiérarchie
+
+Commençons par la partie hiérarchique. Pour créer une nouvelle
+hiérarchie, il suffit de monter le pseudo système de fichiers `cgroup`
+dans un répertoire vide. Habituellement, toutes les hiérarchies sont
+regroupées dans `/sys/fs/cgroups` qui est un système de fichiers
+`tmpfs` :
+
+    ::console
+    # mount -t tmpfs tmpfs /sys/fs/cgroup -o nosuid,nodev,noexec,relatime,mode=755
+
+Nous pouvons alors créer notre première hiérarchie :
+
+    ::console
+    # cd /sys/fs/cgroup
+    # mkdir my-first-hierarchy
+    # mount -t cgroup cgroup my-first-hierarchy -o name=my-first-hierarchy,none
+    # ls -1 my-first-hierarchy
+    cgroup.clone_children
+    cgroup.event_control
+    cgroup.procs
+    notify_on_release
+    release_agent
+    tasks
+
+L'option `none` est obligatoire et nous verrons sa signification par
+la suite. Le fichier le plus intéressant est `tasks` : il contient
+l'ensemble des tâches associées au groupe. Comme nous n'avons pas
+encore créé de sous-groupe, tous les processus du système sont
+présents dans ce fichier. Créons un sous-groupe et déplaçons un
+processus dans celui-ci :
+
+    ::console
+    # mkdir first-child
+    # cd first-child
+    # ls -1
+    cgroup.clone_children
+    cgroup.event_control
+    cgroup.procs
+    notify_on_release
+    tasks
+    # echo $$ > tasks
+    # cat tasks
+    23184
+    23311
+    # cat /proc/$$/cgroup 
+    9:name=my-first-hierarchy:/first-child
+    8:perf_event:/
+    7:blkio:/
+    6:net_cls:/
+    5:freezer:/
+    4:devices:/
+    3:cpuacct,cpu:/
+    2:cpuset:/
+    1:name=systemd:/user/bernat/1
+
+Le shell courant et toute sa descendance a été ajouté au nouveau
+groupe. Cela explique pourquoi nous avons deux tâches : le shell et
+`cat`. La dernière commande est intéressante : pour chaque hiérarchie,
+elle montre à quel groupe appartient un processus. Pour une hiérarchie
+donnée, un processus fait partie d'exactement un _cgroup_.
+
+_lanĉo_ utilise essentiellement cette seule fonctionnalité : un espace
+de noms est matérialisé par une hiérarchie et chaque tâche est
+enfermée dans un groupe.
+
+## Sous-systèmes
+
+Un _sous-système_ permet d'assigner des ressources particulières à
+l'ensemble des tâches contenues dans un _cgroup_. Chaque sous-système
+disponible ne peut être attaché qu'à une seule
+hiérarchie. Habituellement, chacun est affecté à une hiérarchie
+différente afin de ne pas coupler les ressources entre elles.[^cpu].
+
+[^cpu]: Les sous-systèmes `cpu` et `cpuacct` sont une exception. Étant
+        complémentaires, ils sont habituellement montés sur la même
+        hiérarchie.
+
+Regardons comment fonctionne le sous-système `cpuset` qui permet
+d'assigner les tâches à un sous-ensemble de CPU et de nœuds de mémoire
+(systèmes NUMA). Supposons que notre machine a quatre cœurs et que
+nous voulons affecter le premier au système et les trois suivants à
+_nginx_ :
+
+    ::console
+    # cd /sys/fs/cgroup
+    # mkdir cpuset
+    # mount -t cgroup cgroup cpuset -o cpuset
+    # echo 0-3 > cpuset/cpuset.cpus
+    # echo 0 > cpuset/cpuset.mems
+    
+    # mkdir cpuset/system
+    # echo 0 > cpuset/system/cpuset.cpus
+    # echo 0 > cpuset/system/cpuset.mems
+    # for task in $(cat cpuset/tasks); do
+    >    echo $task > cpuset/system/tasks
+    > done
+    
+    # mkdir cpuset/nginx
+    # echo 1-3 > cpuset/nginx/cpuset.cpus
+    # echo 0 > cpuset/nginx/cpuset.mems
+    # for task in $(pidof nginx); do
+    >    echo $task > cpuset/nginx/tasks
+    > done
+
+La première commande `mount` n'est nécessaire que si la hiérarchie n'a
+pas déjà été configurée (par _systemd_ par exemple). Suite à la
+configuration ci-dessus, si un processus système quelconque devient
+fou, il ne devrait pas affecter les performances CPU du serveur web.
+
+Le noyau contient une [documentation plus complète][cgroups.txt]. Il y
+a également quelques outils pour manipuler les _cgroups_, comme ceux
+de [libcg][], mais ils sont assez invasifs et pas tout à fait au
+point.
+
+## Usage dans lanĉo
+
+Voici comment sont exploités les _cgroups_ dans _lanĉo_ :
+
+ - Pour chaque espace de noms, une hiérarchie sans sous-système
+   attaché est créée.
+ - En appliquant les droits appropriés sur cette hiérarchie, un
+   utilisateur non privilégié peut créer de nouveaux groupes.
+ - Chaque tâche est placée dans son propre sous-groupe.
+ - Des actions peuvent être exécutées quand une tâche se termine en
+   utilisant mécanisme d'agent (_release agent_)[^agent].
+ - Le sous-système `cpuacct` est utilisé pour suivre l'usage CPU : un
+   groupe est créé à cet effet dans ce sous-système.
+
+[^agent]: Malheureusement, l'agent est attaché à une hiérarchie et non
+          à un groupe. Pour permettre d'exécuter une commande pour
+          chaque tâche qui se termine, il est donc nécessaire de
+          stocker cette commande dans le système de fichiers afin que
+          l'agent puisse l'exécuter.
+
+*[cgroups]: Control Groups
+*[NUMA]: Non-Uniform Memory Access
+
+[Upstart]: http://upstart.ubuntu.com/ "upstart: event-based init daemon"
+[systemd]: http://www.freedesktop.org/wiki/Software/systemd/ "systemd: system and service manager for Linux"
+[runit]: http://smarden.org/runit/ "runit: a UNIX init scheme with service supervision"
+[lanĉo]: https://github.com/vincentbernat/lanco "lanĉo: a task launcher which does not want to be an init program"
+[cgroups]: http://en.wikipedia.org/wiki/Cgroups "Wikipedia article on Linux cgroups"
+[cgroups.txt]: https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt "Control groups documentation"
+[libcg]: http://libcg.sourceforge.net/ "Library for Control Groups"
+[stateful re-exec support in _Upstart_]: https://wiki.ubuntu.com/FoundationsTeam/Specs/QuantalUpstartStatefulReexec "Upstart stateful re-exec"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
