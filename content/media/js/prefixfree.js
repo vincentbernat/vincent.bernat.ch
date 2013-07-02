@@ -1,5 +1,5 @@
 /**
- * StyleFix 1.0.2
+ * StyleFix 1.0.3 & PrefixFree 1.0.7
  * @author Lea Verou
  * MIT license
  */
@@ -24,42 +24,52 @@ var self = window.StyleFix = {
 
 		var url = link.href || link.getAttribute('data-href'),
 		    base = url.replace(/[^\/]+$/, ''),
+		    base_scheme = (/^[a-z]{3,10}:/.exec(base) || [''])[0],
+		    base_domain = (/^[a-z]{3,10}:\/\/[^\/]+/.exec(base) || [''])[0],
+		    base_query = /^([^?]*)\??/.exec(url)[1],
 		    parent = link.parentNode,
 		    xhr = new XMLHttpRequest(),
 		    process;
-
-		// Naive fix for issue #49, "Version 1.0.2 breaks when using AdBlock 2.5.19 in webkit"
-		// https://github.com/LeaVerou/prefixfree/issues/49
-		if (url === "data:text/css,") {
-			return;
-		}
 		
 		xhr.onreadystatechange = function() {
 			if(xhr.readyState === 4) {
 				process();
 			}
-		}
+		};
 
 		process = function() {
 				var css = xhr.responseText;
 				
-				if(css && link.parentNode) {
+				if(css && link.parentNode && (!xhr.status || xhr.status < 400 || xhr.status > 600)) {
 					css = self.fix(css, true, link);
 					
 					// Convert relative URLs to absolute, if needed
 					if(base) {
-						css = css.replace(/url\(((?:"|')?)(.+?)\1\)/gi, function($0, quote, url) {
-							if(!/^([a-z]{3,10}:|\/|#)/i.test(url)) { // If url not absolute & not a hash
+						css = css.replace(/url\(\s*?((?:"|')?)(.+?)\1\s*?\)/gi, function($0, quote, url) {
+							if(/^([a-z]{3,10}:|#)/i.test(url)) { // Absolute & or hash-relative
+								return $0;
+							}
+							else if(/^\/\//.test(url)) { // Scheme-relative
 								// May contain sequences like /../ and /./ but those DO work
+								return 'url("' + base_scheme + url + '")';
+							}
+							else if(/^\//.test(url)) { // Domain-relative
+								return 'url("' + base_domain + url + '")';
+							}
+							else if(/^\?/.test(url)) { // Query-relative
+								return 'url("' + base_query + url + '")';
+							}
+							else {
+								// Path-relative
 								return 'url("' + base + url + '")';
 							}
-							
-							return $0;						
 						});
 
 						// behavior URLs shoudn’t be converted (Issue #19)
-						css = css.replace(RegExp('\\b(behavior:\\s*?url\\(\'?"?)' + base, 'gi'), '$1');
-					}
+						// base should be escaped before added to RegExp (Issue #81)
+						var escaped_base = base.replace(/([\\\^\$*+[\]?{}.=!:(|)])/g,"\\$1");
+						css = css.replace(RegExp('\\b(behavior:\\s*?url\\(\'?"?)' + escaped_base, 'gi'), '$1');
+						}
 					
 					var style = document.createElement('style');
 					style.textContent = css;
@@ -69,6 +79,8 @@ var self = window.StyleFix = {
 					
 					parent.insertBefore(style, link);
 					parent.removeChild(link);
+					
+					style.media = link.media; // Duplicate is intentional. See issue #31
 				}
 		};
 
@@ -90,6 +102,9 @@ var self = window.StyleFix = {
 	},
 
 	styleElement: function(style) {
+		if (style.hasAttribute('data-noprefix')) {
+			return;
+		}
 		var disabled = style.disabled;
 		
 		style.textContent = self.fix(style.textContent, true, style);
@@ -121,9 +136,9 @@ var self = window.StyleFix = {
 			.splice(index === undefined? self.fixers.length : index, 0, fixer);
 	},
 	
-	fix: function(css, raw) {
+	fix: function(css, raw, element) {
 		for(var i=0; i<self.fixers.length; i++) {
-			css = self.fixers[i](css, raw) || css;
+			css = self.fixers[i](css, raw, element) || css;
 		}
 		
 		return css;
@@ -156,59 +171,85 @@ function $(expr, con) {
 })();
 
 /**
- * PrefixFree 1.0.4
- * @author Lea Verou
- * MIT license
+ * PrefixFree
  */
-(function(root, undefined){
+(function(root){
 
 if(!window.StyleFix || !window.getComputedStyle) {
 	return;
 }
 
+// Private helper
+function fix(what, before, after, replacement, css) {
+	what = self[what];
+	
+	if(what.length) {
+		var regex = RegExp(before + '(' + what.join('|') + ')' + after, 'gi');
+
+		css = css.replace(regex, replacement);
+	}
+	
+	return css;
+}
+
 var self = window.PrefixFree = {
-	prefixCSS: function(css, raw) {
+	prefixCSS: function(css, raw, element) {
 		var prefix = self.prefix;
 		
-		function fix(what, before, after, replacement) {
-			what = self[what];
-			
-			if(what.length) {
-				var regex = RegExp(before + '(' + what.join('|') + ')' + after, 'gi');
-
-				css = css.replace(regex, replacement);
-			}
+		// Gradient angles hotfix
+		if(self.functions.indexOf('linear-gradient') > -1) {
+			// Gradients are supported with a prefix, convert angles to legacy
+			css = css.replace(/(\s|:|,)(repeating-)?linear-gradient\(\s*(-?\d*\.?\d*)deg/ig, function ($0, delim, repeating, deg) {
+				return delim + (repeating || '') + 'linear-gradient(' + (90-deg) + 'deg';
+			});
 		}
 		
-		fix('functions', '(\\s|:|,)', '\\s*\\(', '$1' + prefix + '$2(');
-		fix('keywords', '(\\s|:)', '(\\s|;|\\}|$)', '$1' + prefix + '$2$3');
-		fix('properties', '(^|\\{|\\s|;)', '\\s*:', '$1' + prefix + '$2:');
+		css = fix('functions', '(\\s|:|,)', '\\s*\\(', '$1' + prefix + '$2(', css);
+		css = fix('keywords', '(\\s|:)', '(\\s|;|\\}|$)', '$1' + prefix + '$2$3', css);
+		css = fix('properties', '(^|\\{|\\s|;)', '\\s*:', '$1' + prefix + '$2:', css);
 		
 		// Prefix properties *inside* values (issue #8)
 		if (self.properties.length) {
 			var regex = RegExp('\\b(' + self.properties.join('|') + ')(?!:)', 'gi');
 			
-			fix('valueProperties', '\\b', ':(.+?);', function($0) {
+			css = fix('valueProperties', '\\b', ':(.+?);', function($0) {
 				return $0.replace(regex, prefix + "$1")
-			});
+			}, css);
 		}
 		
 		if(raw) {
-			fix('selectors', '', '\\b', self.prefixSelector);
-			fix('atrules', '@', '\\b', '@' + prefix + '$1');
+			css = fix('selectors', '', '\\b', self.prefixSelector, css);
+			css = fix('atrules', '@', '\\b', '@' + prefix + '$1', css);
 		}
 		
 		// Fix double prefixing
 		css = css.replace(RegExp('-' + prefix, 'g'), '-');
 		
+		// Prefix wildcard
+		css = css.replace(/-\*-(?=[a-z]+)/gi, self.prefix);
+		
 		return css;
 	},
 	
-	// Warning: prefixXXX functions prefix no matter what, even if the XXX is supported prefix-less
+	property: function(property) {
+		return (self.properties.indexOf(property)? self.prefix : '') + property;
+	},
+	
+	value: function(value, property) {
+		value = fix('functions', '(^|\\s|,)', '\\s*\\(', '$1' + self.prefix + '$2(', value);
+		value = fix('keywords', '(^|\\s)', '(\\s|$)', '$1' + self.prefix + '$2$3', value);
+		
+		// TODO properties inside values
+		
+		return value;
+	},
+	
+	// Warning: Prefixes no matter what, even if the selector is supported prefix-less
 	prefixSelector: function(selector) {
 		return selector.replace(/^:{1,2}/, function($0) { return $0 + self.prefix })
 	},
 	
+	// Warning: Prefixes no matter what, even if the property is supported prefix-less
 	prefixProperty: function(property, camelCase) {
 		var prefixed = self.prefix + property;
 		
@@ -334,13 +375,20 @@ functions['repeating-radial-gradient'] =
 functions['radial-gradient'] =
 functions['linear-gradient'];
 
+// Note: The properties assigned are just to *test* support. 
+// The keywords will be prefixed everywhere.
 var keywords = {
 	'initial': 'color',
 	'zoom-in': 'cursor',
 	'zoom-out': 'cursor',
 	'box': 'display',
 	'flexbox': 'display',
-	'inline-flexbox': 'display'
+	'inline-flexbox': 'display',
+	'flex': 'display',
+	'inline-flex': 'display',
+	'grid': 'display',
+	'inline-grid': 'display',
+	'min-content': 'width'
 };
 
 self.functions = [];
