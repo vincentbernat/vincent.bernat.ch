@@ -9,8 +9,8 @@ luffy.mathjax = function() {
     if ($("#lf-main").text().indexOf(delim) === -1) return;
 
     /* Otherwise, load. Input: TeX/AMS. Output: HTML+CSS.*/
-    yepnope({ load: mathjax + "?config=TeX-AMS_HTML-full&delayStartupUntil=configured",
-	      complete: function() {
+    $script(mathjax + "?config=TeX-AMS_HTML-full&delayStartupUntil=configured",
+	    function() {
 		  /* Add more configuration stuff */
 		  MathJax.Hub.Config({
 		      elements: ["lf-main"], // Only process part of the page.
@@ -26,5 +26,5 @@ luffy.mathjax = function() {
 		  });
 		  MathJax.Hub.Configured();
 		  MathJax.Hub.Startup.onload();
-	      }});
+	    });
 };

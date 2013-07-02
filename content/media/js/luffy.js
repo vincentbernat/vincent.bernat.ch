@@ -1,6 +1,8 @@
 ---
 combine:
-    files: luffy.*.js
+    files:
+      - script.js
+      - luffy.*.js
     where: top
     remove: yes
 ---

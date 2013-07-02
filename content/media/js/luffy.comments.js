@@ -13,10 +13,9 @@ luffy.comments = function() {
 	    done = true;	// Don't want to load twice.
 	    var loading = el.text('Loading/Chargement...');
             var src = '//' + disqus_shortname + '.disqus.com/embed.js';
-	    yepnope({ load: src,
-		      complete: function() {
-			  loading.hide();
-		      }});
+	    $script(src, function() {
+		loading.hide();
+	    });
 	}
     }();
 
