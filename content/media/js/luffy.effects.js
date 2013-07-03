@@ -8,7 +8,7 @@ luffy.effects = function() {
        -- */
     e = function() {
 	/* Set appropriate height for rotated pages */
-	$(".csstransforms #lf-page-1, .csstransforms #lf-page-2")
+	$(".mod-csstransforms #lf-page-1, .mod-csstransforms #lf-page-2")
 	    .css("height",$("#lf-page").innerHeight())
 	    .css("width", $("#lf-page").innerWidth())
 	    .show();
