@@ -1,0 +1,461 @@
+---
+title: "Empaqueter un démon pour OS X"
+keywords: "autoconf, osx, mac, paquets, productbuild, pkgbuild, xcode, lipo, universal binaries, installeur"
+uuid: 0828c92d-7dcc-4721-a204-1645005231b0
+---
+
+Il existe trois façons de distribuer un démon pour OS X :
+
+ 1. Distribuer le code source accompagné d'instructions de compilation.
+ 2. Utiliser un système de paquets tierce comme [Homebrew][].
+ 3. Fournir un [paquet pour l'installeur][installer package].
+
+[TOC]
+
+# Homebrew
+
+[Homebrew][] est un système de gestion de paquets plutôt populaire. Il
+fonctionne à l'image des ports BSD : téléchargement, compilation et
+installation tout en gérant les éventuelles dépendances
+automatiquement. La création d'un nouveau paquet est plutôt simple et
+il y a [beaucoup d'exemples][lot of examples available].
+
+Cependant, il y a quelques limitations à cette approche :
+
+ - Il n'y a pas réellement construction d'un paquet, mais exécution
+   d'une recette pour installer localement le logiciel.
+ - Il est nécessaire de disposer d'outils de développement, comme par
+   exemple une installation complète de [Xcode][][^creditcard].
+ - S'il est nécessaire d'effectuer certaines étapes en tant que
+   _root_, comme l'ajout d'un utilisateur dédié ou l'intégration dans
+   `launchd`, celles-ci devront être expliquées à l'utilisateur qui
+   devra les exécuter manuellement.
+
+[^creditcard]: Bien que _Xcode_ soit disponible gratuitement, il est
+               nécessaire de s'enregistrer auprès d'Apple pour le
+               télécharger. Cela nécessite de fournir un numéro de
+               carte de crédit. Plutôt perturbant.
+
+Si ces limitations vous paraissent importantes, la création d'un
+paquet pour l'installeur est une bonne alternative.
+
+# Création d'un paquet pour l'installeur
+
+OX X est livré avec un installeur graphique et un autre en ligne de
+commande. La version graphique s'exécute en ouvrant un paquet depuis
+le [Finder][]. L'utilisateur est alors confronté à un assistant
+d'installation standard.
+
+![Installeur graphique pour OS X][osx-installer]
+[osx-installer]: [[!!images/osx-installer.png]] "Exemple d'écran pour l'installeur graphique d'OS X"
+
+La documentation pour construire un tel paquet est souvent obsolète ou
+peu adaptée à une utilisation hors de _Xcode_. Je vais tenter de
+fournir ici des informations relativement précises s'appliquant dans
+le contexte suivant :
+
+ 1. **Pas d'interface graphique**.
+ 2. Construction basée sur [Autoconf][] et [Automake][].
+ 3. Support de **plusieurs architectures**.
+ 4. Support des **versions précédentes d'OS X**.
+
+## Création manuelle d'un paquet
+
+Par le passé, l'outil pour créer un paquet était
+_PackageMaker_. Celui-ci n'est plus disponible et est remplacé par le
+tandem [pkgbuild][]/[productbuild][]. Un
+[article plutôt complet sur Stackoverflow][Stackoverflow article]
+détaille le fonctionnement de ces deux outils.
+
+Un paquet se construit en deux étapes :
+
+ 1. Création des **composants** (_component packages_).
+ 2. Combinaison de ceux-ci en un **produit** (_product archive_).
+
+Un _composant_ contient un ensemble de fichiers et de scripts à
+exécuter à différentes étapes de l'installation du logiciel. Il est
+possible d'avoir plusieurs composants : par exemple, un composant pour
+le démon et un composant pour le client. Ces composants sont
+construits avec `pkgbuild`.
+
+Un _produit_ est la combinaison de composants ainsi que d'un fichier
+qui décrit différentes facettes de l'installeur (composants
+facultatifs, licences, texte d'introduction, etc.).
+
+Pour créer un composant, les fichiers adéquats doivent être installés
+dans un répertoire cible :
+
+    ::console
+    $ ./configure --prefix=/usr --sysconfdir=/private/etc
+    $ make
+    $ make install DESTDIR=$PWD/osx-pkg
+
+Le contenu du répertoire `osx-pkg` peut alors être transformé en un
+composant avec `pkgbuild` :
+
+    ::console
+    $ mkdir pkg1
+    $ pkgbuild --root osx-pkg \
+    >    --identifier org.someid.daemon \
+    >    --version 0.47 \
+    >    --ownership recommended
+    >    pkg1/output.pkg
+    pkgbuild: Inferring bundle components from contents of osx-pkg
+    pkgbuild: Wrote package to output.pkg
+
+Attention au choix de l'identifiant. Il doit permettre d'identifier à
+la fois le logiciel dans son ensemble ainsi que le composant. Un
+fichier XML décrivant l'installeur est ensuite nécessaire pour créer
+le produit. Par convention, il est appelé `distribution.xml` :
+
+    ::xml
+    <?xml version="1.0" encoding="utf-8" standalone="no"?>
+    <installer-gui-script minSpecVersion="1">
+        <title>Some daemon</title>
+        <organization>org.someid</organization>
+        <domains enable_localSystem="true"/>
+        <options customize="never" require-scripts="true" rootVolumeOnly="true" />
+        <!-- Define documents displayed at various steps -->
+        <welcome    file="welcome.html"    mime-type="text/html" />
+        <license    file="license.html"    mime-type="text/html" />
+        <conclusion file="conclusion.html" mime-type="text/html" />
+        <!-- List all component packages -->
+        <pkg-ref id="org.someid.daemon"
+                 version="0"
+                 auth="root">output.pkg</pkg-ref>
+        <!-- List them again here. They can now be organized
+             as a hierarchy if you want. -->
+        <choices-outline>
+            <line choice="org.someid.daemon"/>
+        </choices-outline>
+        <!-- Define each choice above -->
+        <choice
+            id="org.someid.daemon"
+            visible="false"
+            title="some daemon"
+            description="The daemon"
+            start_selected="true">
+          <pkg-ref id="org.someid.daemon"/>
+        </choice>
+    </installer-gui-script>
+
+Ce fichier est
+[documenté dans la bibliothèque du développeur Apple][documented on Apple Developer Library]. Comme
+nous n'avons qu'un seul composant, nous demandons à l'installeur de ne
+pas proposer le choix des composants avec l'option
+`customize="never"`. L'attribut `rootVolumeOnly="true"` indique quant
+à lui que le logiciel ne peut être installé que pour tout le
+système. Il est marqué comme déprécié dans la documentation mais
+fonctionne toujours et est préféré à son remplaçant qui affiche des
+une interface déroutante pour l'utilisateur.
+
+Les documents HTML[^format] sont à placer dans un répertoire
+`resources`. Il est aussi possible de choisir une image de fond avec
+la balise `<background/>`.
+
+[^format]: Les textes peuvent être rédigés dans d'autres formats (tels
+           que RTF) mais il me paraît beaucoup plus aisé de manipuler
+           du HTML.
+
+La commande suivante se charge de construire le produit :
+
+    ::console
+    $ productbuild --distribution distribution.xml \
+    >              --resources resources \
+    >              --package-path pkg1 \
+    >              --version 0.47 \
+    >              ../final.pkg
+    productbuild: Wrote product to ../final.pkg
+
+## Scripts
+
+Il est possible d'exécuter des scripts à l'installation du
+paquet. Disons que nous voulons enregistrer le démon auprès de
+`launchd`. Pour cela, il faut installer dans `/Library/LaunchDaemons`
+un fichier `org.someid.plist` avec un contenu similaire à ceci :
+
+    ::xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+      <key>Label</key>
+      <string>org.someid</string>
+      <key>ProgramArguments</key>
+      <array>
+        <string>/usr/sbin/mydaemon</string>
+        <string>-d</string>
+      </array>
+      <key>RunAtLoad</key><true/>
+      <key>KeepAlive</key><true/>
+    </dict>
+    </plist>
+
+L'enregistrement se fait à l'aide du script `scripts/postinstall` :
+
+    ::sh
+    #!/bin/sh
+    
+    set -e
+    /bin/launchctl load "/Library/LaunchDaemons/org.someid.plist"
+
+Pour les mises à jour, il semble d'usage de se désinscrire de
+`launchd`, via le script `scripts/preinstall` :
+
+    ::sh
+    #!/bin/bash
+    
+    set -e
+    if /bin/launchctl list "org.someid" &> /dev/null; then
+        /bin/launchctl unload "/Library/LaunchDaemons/org.someid.plist"
+    fi
+
+Ces deux scripts doivent être exécutables et signalés à `pkgbuild` via
+l'option `--scripts scripts`.
+
+La commande [dscl][] permet de manipuler les utilisateurs et les
+groupes du système.
+
+## Dépendances
+
+L'installeur d'OS X n'effectue aucune gestion des dépendances. Il faut
+donc s'assurer que le paquet ainsi distribué contient tout le
+nécessaire et n'utilise que des bibliothèques du système de base. Par
+exemple, `lldpd` fait usage de [libevent][], une bibliothèque de
+gestion des évènements, qui n'est pas fournie avec OS X. Quand elle
+est absente, `./configure` utilisera une copie embarquée. Toutefois,
+si vous avez installé _libevent_ via _Homebrew_, `lldpd` se trouvera
+lié à cette installation locale de _libevent_ et ne fonctionnera pas
+sur un autre système.
+
+La sortie de `otool -L` permet de détecter les dépendances
+superflues :
+
+    ::console
+    $ otool -L build/usr/sbin/lldpd
+    build/usr/sbin/lldpd:
+            /usr/lib/libresolv.9.dylib (compatibility version 1.0.0, current version 1.0.0)
+            /System/Library/Frameworks/IOKit.framework/Versions/A/IOKit (compatibility version 1.0.0, current version 275.0.0)
+            /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 744.19.0)
+            /System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 945.18.0)
+            /usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 169.3.0)
+
+## Compilation pour des anciennes versions d'OS X
+
+Le paquet ainsi construit ci-dessus ne fonctionnera que sur une
+version d'OS X identique ou plus récente que celle utilisée lors de la
+compilation. Pour pouvoir fonctionner sur une version antérieure, il
+faut télécharger le SDK approprié[^sdk].
+
+[^sdk]: Malheureusement, Apple rend l'accès aux SDKs précédents
+        difficiles. La façon la plus simple de récupérer le SDK pour
+        Mac OS X 10.6 est de télécharger _Xcode_
+        4.3.3 et d'extraire de l'image le SDK approprié pour le placer
+        dans `/Developer/SDKs`.
+
+Il suffit ensuite d'indiquer au compilateur la version cible d'OS X
+ainsi que l'emplacement du SDK. Cela peut se faire via les variables
+`CFLAGS` et `LDFLAGS` :
+
+    ::console
+    $ SDK=/Developer/SDKs/MacOSX10.6.sdk
+    $ ./configure --prefix=/usr --sysconfdir=/private/etc \
+    >         CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+    >         LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+
+Le drapeau `-mmacosx-version-min` est utilisé par diverses macros dans
+les fichiers d'entête pour indiquer que telle ou telle fonction est
+disponible ou obsolète pour telle version d'OS X. Il semble également
+avoir une influence sur l'éditeur de liens.
+
+L'option `-isysroot` indique l'emplacement du SDK. Les fichiers
+d'entête et les bibliothèques seront d'abord recherchés à cet endroit
+
+## Binaires universels
+
+Mac OS X 10.6 est disponible à la fois pour les architectures IA-32 et
+x86-64. Pour permettre à un même paquet de fonctionner sur les deux
+architectures, il est possible de construire des
+[binaires universels][universal binaries]. Le format objet _Mach_,
+utilisé par OS X, permet de stocker dans un même fichier plusieurs
+versions de l'exécutable. Le système d'exploitation sélectionnera la
+version la plus appropriée.
+
+Une façon simple de générer de tels fichiers est de passer les options
+`-arch i386 -arch x86_64` au compilateur :
+
+    ::console
+    $ ./configure --prefix=/usr --sysconfdir=/private/etc \
+    >     CC="gcc -arch i386 -arch x86_64" \
+    >     CPP="gcc -E"
+
+Toutefois, c'est une approche plutôt déconseillée. Supposons que
+`./configure` détermine lors de son exécution la valeur de certains
+paramètres dépendant de l'architecture (par exemple, avec la macro
+`AC_CHECK_SIZEOF`). La valeur correspondante sera celle de
+l'architecture _hôte_. L'exécutable généré pour l'autre architecture
+va alors utiliser une valeur erronée.
+
+La meilleure façon de construire des binaires universels est
+d'effectuer deux compilations séparées et de construire le binaire
+avec [lipo][] :
+
+    ::console
+    $ for arch in i386 x86_64; do
+    >   mkdir $arch ; cd $arch
+    >   ../configure --prefix=/usr --sysconfdir=/private/etc \
+    >       CC="gcc -arch $ARCH" \
+    >       CPP="gcc -E"
+    >   make
+    >   make install DESTDIR=$PWD/../target-$ARCH
+    >   cd ..
+    > done
+    [...]
+    $ lipo -create -output daemon i386/usr/sbin/daemon x86_64/usr/sbin/daemon
+
+Étant donné que `lipo` ne fonctionne que sur des fichiers, j'ai écrit
+un script Python permettant
+d'[appliquer `lipo` récursivement sur un ensemble de répertoires][rlipo].
+
+## Mise en place
+
+Pour automatiser le tout, il est possible de fournir un simple
+script. Toutefois, pour une meilleure intégration dans le système de
+construction, un fichier `Makefile.am` semble plus approprié. Il
+permettra d'exploiter des variables les variables issues de
+`./configure`, telles que `@VERSION@` et de générer des versions
+adaptées de `distribution.xml` et du fichier de configuration de
+`launchd`. La première étape est d'ajouter dans le fichier
+`configure.ac` ces instructions :
+
+    ::m4
+    AC_CONFIG_FILES([osx/Makefile osx/distribution.xml osx/im.bernat.lldpd.plist])
+    AC_CONFIG_FILES([osx/scripts/preinstall],  [chmod +x osx/scripts/preinstall])
+    AC_CONFIG_FILES([osx/scripts/postinstall], [chmod +x osx/scripts/postinstall])
+    AC_SUBST([CONFIGURE_ARGS], [$ac_configure_args])
+
+
+Regardons maintenant le fichier [`osx/Makefile.am`][Makefile.am]. Tout
+d'abord, nous définissons quelques variables :
+
+    ::make
+    PKG_NAME=@PACKAGE@-@VERSION@.pkg
+    PKG_TITLE=@PACKAGE@ @VERSION@
+    PKG_DIR=@PACKAGE@-@VERSION@
+    ARCHS=@host_cpu@
+
+Si nous désirons construire un paquet pour plusieurs architectures, il
+suffira d'utiliser la commande `make ARCHS="x86_64 i386"`.
+
+La cible `install-data-local` permet d'installer les fichiers
+spécifiques à OS X :
+
+    ::make
+    install-data-local:
+    	install -m 0755 -d $(DESTDIR)/Library/LaunchDaemons
+    	install -m 0644 im.bernat.@PACKAGE@.plist $(DESTDIR)/Library/LaunchDaemons
+    uninstall-local:
+    	rm -f $(DESTDIR)/Library/LaunchDaemons/im.bernat.@PACKAGE@.plist
+
+La cible principe est le produit, construit avec `productbuild` :
+
+    ::make
+    ../$(PKG_NAME): pkg.1/$(PKG_NAME) distribution.xml resources
+    	$(PRODUCTBUILD) \
+    		--distribution distribution.xml \
+    		--resources resources \
+    		--package-path pkg.1 \
+    		--version @VERSION@ \
+    		$@
+
+Sa principale dépendance est le composant, construit avec `pkgbuild` :
+
+    ::make
+    pkg.1/$(PKG_NAME): $(PKG_DIR) scripts
+    	[ -d pkg.1 ] || mkdir pkg.1
+    	$(PKGBUILD) \
+    		--root $(PKG_DIR) \
+    		--identifier im.bernat.@PACKAGE@.daemon \
+    		--version @VERSION@ \
+    		--ownership recommended \
+    		--scripts scripts \
+    		$@
+
+Il nous faut maintenant construire `$(PKG_DIR)` :
+
+    ::make
+    $(PKG_DIR): stamp-$(PKG_DIR)
+    stamp-$(PKG_DIR): $(ARCHS:%=%/$(PKG_DIR))
+    	$(srcdir)/lipo $(PKG_DIR) $^
+    	touch $@
+
+
+`$(ARCHS:%=%/$(PKG_DIR))` est interprété comme `x86_64/$(PKG_DIR)
+i386/$(PKG_DIR)`. C'est une fonctionnalité
+[ajoutée récemment dans POSIX][pattern macro expansion] mais supportée
+depuis longtemps par _GNU make_.
+
+Avant l'application du script basé sur `lipo`, nous devons construire
+les répertoires contenant les versions spécifiques à chaque
+architecture du composant :
+
+    ::make
+    pkg_curarch = $(@:stamp-%=%)
+    $(ARCHS:%=%/$(PKG_DIR)): %/$(PKG_DIR): stamp-%
+    $(ARCHS:%=stamp-%): stamp-%: im.bernat.lldpd.plist
+    	[ -d $(pkg_curarch) ] || mkdir -p $(pkg_curarch)
+    	(cd $(pkg_curarch) && \
+    		$(abs_top_srcdir)/configure @CONFIGURE_ARGS@ \
+    			CC="@CC@ -arch $(pkg_curarch)" \
+    			CPP="@CPP@")
+    	(cd $(pkg_curarch) && \
+    		$(MAKE) install DESTDIR=$(abs_builddir)/$(pkg_curarch)/$(PKG_DIR))
+    	touch $@
+
+C'est un peu intimidant, mais cela correspond exactement à ce qui a
+été décrit auparavant. Notez l'utilisation de la variable
+`@CONFIGURE_ARGS` qui a été définie dans `configure.ac` au début de
+cette section.
+
+Voici comment un utilisateur s'y prendrait pour créer un paquet pour
+OS X avec ce système de construction :
+
+    ::console
+    $ SDK=/Developer/SDKs/MacOSX10.6.sdk
+    $ mkdir build && cd build
+    $ ../configure --prefix=/usr --sysconfdir=/private/etc --with-embedded-libevent \
+       CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+       LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+    [...]
+    $ make -C osx pkg ARCHS="i386 x86_64"
+    [...]
+    productbuild: Wrote product to ../lldpd-0.7.5-21-g5b90c4f-dirty.pkg
+    The package has been built in ../lldpd-0.7.5-21-g5b90c4f-dirty.pkg.
+
+*[SDK]: Software Development Kit
+
+[lldpd]: http://vincentbernat.github.io/lldpd/ "lldpd: a 802.1ab implementation (LLDP)"
+[Homebrew]: http://mxcl.github.io/homebrew/ "Homebrew: the missing package manager for OS X"
+[installer package]: http://en.wikipedia.org/wiki/Installer_(OS_X) "OS X Installer on Wikipedia"
+[Finder]: http://en.wikipedia.org/wiki/Finder_(software) "Finder on Wikipedia"
+[lot of examples available]: https://github.com/mxcl/homebrew/tree/master/Library/Formula "Homebrew available formulas"
+[Xcode]: https://itunes.apple.com/us/app/xcode/id497799835 "Xcode on Mac App Store"
+[Stackoverflow article]: http://stackoverflow.com/questions/11487596/making-os-x-installer-packages-like-a-pro-xcode4-developer-id-mountain-lion-re "Making OS X Installer Packages like a Pro"
+[Autoconf]: http://www.gnu.org/software/autoconf/ "Autoconf: automatically configure software source code packages"
+[Automake]: http://www.gnu.org/software/automake/ "Automake: automatic Makefile generation"
+[pkgbuild]: https://developer.apple.com/library/mac/documentation/darwin/reference/manpages/man1/pkgbuild.1.html "pkgbuild(1) manual page"
+[productbuild]: https://developer.apple.com/library/mac/documentation/Darwin/Reference/ManPages/man1/productbuild.1.html "productbuild() manual page"
+[documented on Apple Developer Library]: https://developer.apple.com/library/mac/#documentation/DeveloperTools/Reference/DistributionDefinitionRef/Chapters/Distribution_XML_Ref.html "Distribution Definition XML Schema Reference"
+[dscl]: https://github.com/vincentbernat/lldpd/blob/master/osx/scripts/postinstall.in "Exemple d'utilisation de dscl pour ajouter un utilisateur système"
+[libevent]: http://libevent.org/ "libevent: an event notification library"
+[universal binaries]: https://en.wikipedia.org/wiki/Universal_binary "Universal binary on Wikipedia"
+[lipo]: https://developer.apple.com/library/mac/documentation/darwin/reference/manpages/man1/lipo.1.html "lipo(1) manual page"
+[rlipo]: https://github.com/vincentbernat/lldpd/blob/master/osx/lipo "Script d'application récursive de lipo"
+[Makefile.am]: https://github.com/vincentbernat/lldpd/blob/master/osx/Makefile.am "Fichier Automake pour la génération d'un paquet"
+[substitution reference]: http://www.chemie.fu-berlin.de/chemnet/use/info/make/make_6.html#SEC59 "Substitution References dans GNU make"
+[pattern macro expansion]: http://austingroupbugs.net/view.php?id=519 "Acceptance of pattern macro expansion in POSIX make"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
