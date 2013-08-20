@@ -1,0 +1,78 @@
+---
+title: Debian package sponsoring guidelines
+keywords: "debian, sponsor, mentor, guidelines"
+uuid: ed2e2b6c-53b3-4aff-9b7e-0ca8bb2492d9
+created:
+---
+
+This page presents what I expect when sponsoring a package. Be warned
+that I will be picky. Other sponsors may have different requirements.
+
+I may spend a lot of time to review your package. I expect you to
+maintain it during its whole lifetime. If it hits a stable release,
+you will have to maintain it for at least three years. If you just
+seek to maintain _any_ package, have a look at the list of
+[Work-Needing and Prospective Packages][wnpp] instead of uploading
+some random package. We also have a lot of teams suffering from lack
+of people.
+
+# How to seek sponsorship
+
+ - If there is a [packaging team][] that would fit the subject of your
+   package, you should request sponsorship through them. This is
+   usually easier than traditional sponsorship. For example, if you
+   are packaging a Python module, join the
+   [Debian Python Modules Team][DPMT].
+ - Use [mentors.debian.net][] and carefully read the
+   [introduction][mentors-intro]. Publish your package through this
+   platform and use the provided RFS template. File a bug report
+   against `sponsorship-requests` pseudo-package as explained on the
+   site. You can only send me the request directly if I have sponsored
+   one of your packages in the past.
+
+# Technical checklist
+
+ - I only accept `3.0 (quilt)` format packages.
+ - I don't mind if you use **CDBS** or **debhelper**. However, if you
+   use _debhelper_, I expect you to use `dh` command sequencer and use
+   override targets. Also, I expect `debian/rules` to be as small as
+   possible. Remove any unneeded comments and try to use files likes
+   `debian/manpages` or `debian/install`.
+ - The package must be **lintian-clean**. Use `lintian -viI` to check
+   this. If you are really sure that _lintian_ is wrong, you can add
+   an override. If you are not running _Debian unstable_, consider
+   using a chroot. There are tools like [schroot][] that should help.
+ - I expect a [machine-readable `debian/copyright` file][dep5].
+ - All patches must contain meta-information as defined in the
+   [Patch Tagging Guidelines][dep3].
+ - A `debian/watch` file is mandatory. If you cannot provide one for
+   some reason, just create it with a comment explaining why.
+ - The package must be built in a **clean unstable chroot**. Learn how
+   to use [cowbuilder][] for this purpose. It is quite easy. Really.
+ - Be careful with the **description**. The short description should
+   tell exactly what the purpose of the package is. Avoid unneeded
+   words. The long description can explain the features of the package
+   and how it is different of other packages.
+
+When iterating on your package, keep only one entry in the
+changelog. If this is a new package, don't explain all the changes: we
+don't care. If this is an update to a new package, explain all the
+changes since the last uploaded version.
+
+Happy hacking!
+
+*[RFS]: Request For Sponsor
+
+[mentors.debian.net]: http://mentors.debian.net/
+[mentors-intro]: http://mentors.debian.net/intro-maintainers "Introduction for maintainers: How will my package get into Debian"
+[packaging team]: https://wiki.debian.org/Teams#Packaging_teams "Incomplete list of packaging teams in Debian"
+[DPMT]: https://wiki.debian.org/Teams/PythonModulesTeam "Debian Python Modules Team"
+[dep5]: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/ "Machine-readable debian/copyright file"
+[dep3]: http://dep.debian.net/deps/dep3/ "Patch Tagging Guidelines"
+[cowbuilder]: http://packages.debian.org/unstable/cowbuilder "cowbuilder: pbuilder running on cowdancer"
+[schroot]: http://packages.debian.org/unstable/schroot "schroot: execute commands in a chroot environment"
+[wnpp]: http://www.debian.org/devel/wnpp/ "Work-Needing and Prospective Packages"
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
