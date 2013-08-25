@@ -1,0 +1,192 @@
+---
+title: "Modèle de projet C basé sur les autotools"
+keywords: "autoconf, c, automake, boilerplate, bootstrap, cookiecutter"
+uuid: 8fc5aeee-7493-476a-a528-c665ac1bd49f
+---
+
+[HTML5 Boilerplate][] est souvent utilisé comme modèle pour mettre en
+place un projet en HTML. Il est à la fois utile pour les développeurs
+peu expérimentés et pour ceux plus aguerris car il implémente les bonnes
+pratiques actuelles et permet d'éviter d'en oublier certaines.
+
+J'ai récemment développé quelques projets en C pour un client. Plutôt
+que d'utiliser le projet précédent comme base, j'ai pensé qu'il serait
+utile de construire un modèle qui pourrait être réutilisé par la
+suite. Ainsi est né [bootstrap.c][][^name], un modèle pour de petits
+projets en C se basant sur les _autotools_.
+
+[^name]: Rétrospectivement, je pense que j'aurais dû nommer ce projet
+         `boilerplate.c`.
+
+# Utilisation
+
+La création d'un nouveau projet s'effectue en suivant trois étapes :
+
+ 1. Lancer [Cookiecutter][], un outil en ligne de commande pour créer
+    des projets à partir de modèles, et répondre aux questions.
+ 2. Configurer _Git_.
+ 3. Compléter la « _todo list_ ».
+
+## Cookiecutter
+
+[Cookiecutter][] est un nouvel outil permettant de créer un projet à
+partir d'un modèle. Il utilise [Jinja2][] comme moteur, aussi bien
+pour le nom des fichiers que pour le contenu. Il est indépendant du
+langage de programmation utilisé et peut donc être utilisé pour du
+Python, du HTML, du Javascript ou... du C !
+
+_Cookiecutter_ est un outil se concentrant sur l'essentiel. Vous
+pouvez lire
+[l'introduction de Daniel Greenfeld][introduction from Daniel Greenfeld]
+pour en savoir plus. Le paquet Debian est actuellement en attente dans
+la [file NEW][NEW queue] et devrait être disponible dans quelques
+semaines dans _Debian Sid_. Il est aussi possible de l'installer avec
+`pip`.
+
+Initier un nouveau projet est enfantin :
+
+    ::console
+    $ cookiecutter https://github.com/vincentbernat/bootstrap.c.git
+    Cloning into 'bootstrap.c'...
+    remote: Counting objects: 90, done.
+    remote: Compressing objects: 100% (68/68), done.
+    remote: Total 90 (delta 48), reused 64 (delta 22)
+    Unpacking objects: 100% (90/90), done.
+    Checking connectivity... done
+    
+    full_name (default is "Vincent Bernat")? Alfred Thirsty
+    email (default is "bernat@luffy.cx")? alfred@thirsty.eu
+    repo_name (default is "bootstrap")? secretproject
+    project_name (default is "bootstrap")? secretproject
+    project_description (default is "boilerplate for small C programs with autotools")? Super secret project for humans
+
+_Cookiecutter_ pose quelques questions pour instantier le modèle. Le
+résultat est ensuite disponible dans le répertoire `supersecret` :
+
+    ::text
+    .
+    ├── autogen.sh
+    ├── configure.ac
+    ├── get-version
+    ├── m4
+    │   ├── ax_cflags_gcc_option.m4
+    │   └── ax_ld_check_flag.m4
+    ├── Makefile.am
+    ├── README.md
+    └── src
+        ├── log.c
+        ├── log.h
+        ├── Makefile.am
+    ├── secretproject.8
+    ├── secretproject.c
+    └── secretproject.h
+    
+    2 directories, 13 files
+
+## Étapes suivantes
+
+Il reste quelques étapes à exécuter manuellement. Il convient tout
+d'abord d'initialiser _Git_ qui est nécessaire pour exploiter
+certaines fonctionnalités de ce modèle :
+
+    ::console
+    $ git init
+    Initialized empty Git repository in /home/bernat/tmp/secretproject/.git/
+    $ git add .
+    $ git commit -m "Initial import"
+    [...]
+
+Les étapes suivantes sont ensuite extraites des commentaires contenus
+dans les fichiers sources :
+
+    ::console
+    $ git ls-tree -r --name-only HEAD | \
+    >   xargs grep -nH "T[O]DO:" | \
+    >   sed 's/\([^:]*:[^:]*\):\(.*\)T[O]DO:\(.*\)/\3 (\1)/' | \
+    >   sort -ns | \
+    >   awk '(last != $1) {print ""} {last=$1 ; print}'
+    
+    2003 Add the dependencies of your project here. (configure.ac:52)
+    2003 The use of "Jansson" here is an example, you don't have (configure.ac:53)
+    2003 to keep it. (configure.ac:54)
+    
+    2004 Each time you have used `PKG_CHECK_MODULES` macro (src/Makefile.am:12)
+    2004 in `configure.ac`, you get two variables that (src/Makefile.am:13)
+    2004 you can substitute like above. (src/Makefile.am:14)
+    
+    3000 It's time for you program to do something. Add anything (src/secretproject.c:76)
+    3000 you want here. */ (src/secretproject.c:77)
+    [...]
+
+Ces étapes peuvent être complétées en quelques minutes.
+
+# Qu'obtient-on ?
+
+Voici les principales fonctionnalités :
+
+ - Un `configure.ac` et un `Makefile.am` minimalistes.
+ - Le journal des changements généré depuis _Git_ ainsi que la gestion
+   automatique des versions depuis les étiquettes _Git_[^ref].
+ - Un squelette pour la page de manuel.
+ - Une infrastructure de journalisation utilisant des fonctions
+   variadiques telles que `log_warn()` et `log_info()`.
+
+![Sortie en couleurs de lldpd][lldpd-logging]
+[lldpd-logging]: [[!!images/lldpd-logging.png]] "Exemple de sortie en couleurs"
+
+[^ref]: Pour plus d'informations sur ces deux fonctionnalités, jetez
+        un œil sur
+        l'[article précédent à propos de _lldpd_][previous post about _lldpd_].
+
+# À propos de l'utilisation des autotools
+
+Les _autotools_ sont une suite d'outils formant un moteur de
+production (_build system_). On y trouve notamment :
+
+ - `autoconf` pour construire un script de configuration,
+ - `automake` pour construire des _makefiles_ en utilisant un langage
+   similaire mais de plus haut niveau.
+
+Comprendre le fonctionnement des _autotools_ est souvent une activité
+peu appréciée. Il est facile de dénicher de très mauvaises
+documentations en commençant par le mauel officiel qui se concentre
+sur des cas qui ne seront utiles que si vous voulez porter votre
+projet sur une obscure version de HP-UX. Pourquoi donc partir sur ce
+système ?
+
+ 1. J'ai investi beaucoup de temps dans sa compréhension. Une fois que
+    ses principes sont assimilés, il couvre la plupart des
+    besoins. Peut-être que [CMake][] est plus adapté mais c'est un
+    autre système à apprendre. De plus, l'utilisation des _autotools_
+    est si répandue qu'il est nécessaire d'en connaître le
+    fonctionnement.
+ 2. Il existe beaucoup de macros disponibles pour `autoconf`. La
+    plupart d'entre elles se trouvent prêtes à l'emploi dans
+    l'[archive GNU Autoconf][GNU Autoconf Archive]. Leur qualité est
+    souvent bonne. Si vous avez besoin de détecter correctement
+    comment compiler un programme avec _GNU Readline_ ou quelque chose
+    de vaguement compatible, il y a une macro pour ça.
+
+Si vous voulez en apprendre plus sur les _autotools_, il ne faut
+**pas** lire le manuel. Lisez plutôt l'excellent
+[Autotools Mythbuster][]. Commencez avec un `configure.ac` minimal et
+n'ajoutez des macros supplémentaires que pour résoudre un réel
+problème de compatibilité.
+
+*[HTML]: HyperText Markup Language
+
+[HTML5 Boilerplate]: http://html5boilerplate.com/ "HTML5 Boilerplate: le modèle le plus populaire du web"
+[bootstrap.c]: https://github.com/vincentbernat/bootstrap.c "boostrap.c: modèle pour de petits projets en C"
+[Cookiecutter]: https://github.com/audreyr/cookiecutter "Cookiecutter: création de projets depuis des modèles de projets"
+[Jinja2]: http://jinja.pocoo.org/docs/ "Jinja2: moteur de modèles pour Python"
+[introduction from Daniel Greenfeld]: http://pydanny.com/cookie-project-templates-made-easy.html "Cookiecutter: Project Templates Made Easy"
+[NEW queue]: http://ftp-master.debian.org/new/cookiecutter_0.6.1-1.html "cookiecutter is NEW"
+[previous post about _lldpd_]: [[en/blog/2013-lldpd-0.7.1.html]] "lldpd 0.7.1"
+[GNU Autoconf Archive]: https://www.gnu.org/software/autoconf-archive/ "GNU Autoconf Archive"
+[Autotools Mythbuster]: https://www.flameeyes.eu/autotools-mythbuster/ "Autotools Mythbuster: a no-nonsense guide to Autotools"
+[CMake]: http://www.cmake.org/ "CMake: Cross-platform Make"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

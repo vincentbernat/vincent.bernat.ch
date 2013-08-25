@@ -1,0 +1,184 @@
+---
+title: "Boilerplate for autotools-based C project"
+keywords: "autoconf, c, automake, boilerplate, bootstrap, cookiecutter"
+uuid: 8fc5aeee-7493-476a-a528-c665ac1bd49f
+---
+
+When starting a new HTML project, a common base is to use
+[HTML5 Boilerplate][] which helps by setting up the essential
+bits. Such a template is quite useful for both beginners and
+experienced developers as it is kept up-to-date with best practices
+and it avoids forgetting some of them.
+
+Recently, I have started several little projects written in C for a
+customer. Each project was bootstrapped from the previous one. I
+thought it would be useful to start a template that I could reuse
+easily. Hence, [bootstrap.c][][^name], a template for simple projects written
+in C with the _autotools_, was born.
+
+[^name]: Retrospectively, I think `boilerplate.c` would have been a
+         better name.
+
+# Usage
+
+A new project can be created from this template in three steps:
+
+ 1. Run [Cookiecutter][], a command-line tool to create projects from
+    project templates, and answer the questions.
+ 2. Setup _Git_.
+ 3. Complete the "todo list".
+
+## Cookiecutter
+
+[Cookiecutter][] is a new tool to create projects from project
+templates. It uses [Jinja2][] as a template engine for file names and
+contents. It is language agnostic: you can use it for Python, HTML,
+Javascript or... C!
+
+_Cookiecutter_ is quite simple. You can read an
+[introduction from Daniel Greenfeld][]. The Debian package is
+currently waiting in the [NEW queue][] and should be available in a
+few weeks in _Debian Sid_. You can also install it with `pip`.
+
+Bootstrapping a new project is super easy:
+
+    ::console
+    $ cookiecutter https://github.com/vincentbernat/bootstrap.c.git
+    Cloning into 'bootstrap.c'...
+    remote: Counting objects: 90, done.
+    remote: Compressing objects: 100% (68/68), done.
+    remote: Total 90 (delta 48), reused 64 (delta 22)
+    Unpacking objects: 100% (90/90), done.
+    Checking connectivity... done
+    
+    full_name (default is "Vincent Bernat")? Alfred Thirsty
+    email (default is "bernat@luffy.cx")? alfred@thirsty.eu
+    repo_name (default is "bootstrap")? secretproject
+    project_name (default is "bootstrap")? secretproject
+    project_description (default is "boilerplate for small C programs with autotools")? Super secret project for humans
+
+_Cookiecutter_ asks a few questions to instantiate the template
+correctly. The result has been stored in the `supersecret`
+directory:
+
+    ::text
+    .
+    ├── autogen.sh
+    ├── configure.ac
+    ├── get-version
+    ├── m4
+    │   ├── ax_cflags_gcc_option.m4
+    │   └── ax_ld_check_flag.m4
+    ├── Makefile.am
+    ├── README.md
+    └── src
+        ├── log.c
+        ├── log.h
+        ├── Makefile.am
+    ├── secretproject.8
+    ├── secretproject.c
+    └── secretproject.h
+    
+    2 directories, 13 files
+
+## Remaining steps
+
+There are still some steps to be executed manually. You first need to
+initalize _Git_, as some features of this template rely on it:
+
+    ::console
+    $ git init
+    Initialized empty Git repository in /home/bernat/tmp/secretproject/.git/
+    $ git add .
+    $ git commit -m "Initial import"
+    [...]
+
+Then, you need to extract the todo list built from the comments
+contained in source files:
+
+    ::console
+    $ git ls-tree -r --name-only HEAD | \
+    >   xargs grep -nH "T[O]DO:" | \
+    >   sed 's/\([^:]*:[^:]*\):\(.*\)T[O]DO:\(.*\)/\3 (\1)/' | \
+    >   sort -ns | \
+    >   awk '(last != $1) {print ""} {last=$1 ; print}'
+    
+    2003 Add the dependencies of your project here. (configure.ac:52)
+    2003 The use of "Jansson" here is an example, you don't have (configure.ac:53)
+    2003 to keep it. (configure.ac:54)
+    
+    2004 Each time you have used `PKG_CHECK_MODULES` macro (src/Makefile.am:12)
+    2004 in `configure.ac`, you get two variables that (src/Makefile.am:13)
+    2004 you can substitute like above. (src/Makefile.am:14)
+    
+    3000 It's time for you program to do something. Add anything (src/secretproject.c:76)
+    3000 you want here. */ (src/secretproject.c:77)
+    [...]
+
+Only a few minutes are needed to complete those steps.
+
+# What do you get?
+
+Here are the main features:
+
+ - Minimal `configure.ac` and `Makefile.am`.
+ - Changelog based on _Git_ logs and automatic version from _Git_ tags[^ref].
+ - Manual page skeleton.
+ - Logging infrastructure with variadic functions like `log_warn()`,
+   `log_info()`.
+
+![logging output of lldpd][lldpd-logging]
+[lldpd-logging]: [[!!images/lldpd-logging.png]] "Example of colored logging output"
+
+[^ref]: For more information on those features, have a look at their
+        presentation in a [previous post about _lldpd_][].
+
+# About the use of the autotools
+
+The _autotools_ are a suite of tools to provide a build system for a
+project, including:
+
+ - `autoconf` to generate a configure script, and
+ - `automake` to generate _makefiles_ using a similar but higher-level
+   language.
+
+Understanding the _autotools_ can be a quite difficult task. There are
+a lot of bad documentations on the web and the manual does not help by
+describing corner-cases that would be useful if you wanted your
+project to compile for HP-UX. So, why do I use it?
+
+ 1. I have invested a lot of time in the understanding of this build
+    system. Once you grasp how it should be used, it works reasonably
+    well and can cover most of your needs. Maybe [CMake][] would be a
+    better choice but I have yet to learn it. Moreover, the
+    _autotools_ are so widespread that you have to know how they work.
+ 2. There are a lot of macros available for `autoconf`. Many of them
+    are included in the [GNU Autoconf Archive][] and ready to use. The
+    quality of such macros are usually quite good. If you need to
+    correctly detect the appropriate way to compile a program with
+    _GNU Readline_ or something compatible, there is a macro for that.
+
+If you want to learn more about the _autotools_, do **not** read the
+manual. Instead, have a look at [Autotools Mythbuster][]. Start with a
+minimal `configure.ac` and do not add useless macros: a macro should
+be used only if it solves a real problem.
+
+Happy hacking!
+
+*[HTML]: HyperText Markup Language
+
+[HTML5 Boilerplate]: http://html5boilerplate.com/ "HTML5 Boilerplate: the web's most popular front-end template"
+[bootstrap.c]: https://github.com/vincentbernat/bootstrap.c "boostrap.c: boilerplate for small C projects"
+[Cookiecutter]: https://github.com/audreyr/cookiecutter "Cookiecutter: create projects from project templates"
+[Jinja2]: http://jinja.pocoo.org/docs/ "Jinja2: templating engine for Python"
+[introduction from Daniel Greenfeld]: http://pydanny.com/cookie-project-templates-made-easy.html "Cookiecutter: Project Templates Made Easy"
+[NEW queue]: http://ftp-master.debian.org/new/cookiecutter_0.6.1-1.html "cookiecutter is NEW"
+[previous post about _lldpd_]: [[en/blog/2013-lldpd-0.7.1.html]] "lldpd 0.7.1"
+[GNU Autoconf Archive]: https://www.gnu.org/software/autoconf-archive/ "GNU Autoconf Archive"
+[Autotools Mythbuster]: https://www.flameeyes.eu/autotools-mythbuster/ "Autotools Mythbuster: a no-nonsense guide to Autotools"
+[CMake]: http://www.cmake.org/ "CMake: Cross-platform Make"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
