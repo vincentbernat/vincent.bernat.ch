@@ -1,0 +1,590 @@
+---
+title: "Redondance avec ExaBGP"
+keywords: "exabgp, bgp, ospf, ha, haute disponibilité, répartiteur de charge, load balancer, high availability, round-robin dns, keepalived, vrrp"
+uuid: 7ce9e1c2-3eec-43f9-8ce5-fa2e15901720
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-exabgp": "Dépôt GitHub"
+tags:
+  - network
+---
+
+Plusieurs options sont disponibles pour redonder un service :
+
+ - Le service est placé derrière un couple de **répartiteurs de
+   charge** qui vont détecter toute défaillance. Il est alors
+   nécessaire d'assurer la disponibilité de cette nouvelle couche.
+ - Les nœuds fournissant le service peuvent reprendre l'IP d'un autre
+   nœud s'il est considéré comme défaillant (**IP failover**) à l'aide
+   de protocoles tels que VRRP[^vrrp] ou CARP. Tous les nœuds doivent
+   cependant se trouver dans le même sous-réseau IP.
+ - Les clients peuvent demander à un tiers quels sont les nœuds
+   disponibles. Ce tiers est le plus souvent le **DNS** : seuls les
+   nœuds fonctionnels sont annoncés dans l'enregistrement DNS. Le
+   délai de mise à jour peut être particulièrement long en raison du
+   mécanisme de cache.
+
+[^vrrp]: L'usage premier de VRRP est de fournir une passerelle
+         hautement disponible pour un sous-réseau. Cette passerelle
+         est assurée par un routeur virtuel qui est la représentation
+         abstraite de plusieurs routeurs physiques. L'adresse IP
+         virtuelle est détenue par le routeur maître. Un routeur
+         esclave peut être promu maître en cas de défaillance de
+         celui-ci. En pratique, VRRP peut aussi être utilisé pour
+         redonder des services classiques.
+
+Le plus souvent, ces trois techniques sont utilisées ensemble : les
+serveurs sont placés derrière un couple de répartiteurs de charge
+assurant ainsi la redondance et la répartition des requêtes. Pour
+assurer leur redondance, ces répartiteurs utilisent VRRP. L'ensemble
+est répliqué dans un autre datacentre et un DNS « _round-robin_ » est
+utilisé pour assurer redondance et répartition des datacentres.
+
+Il existe une quatrième option similaire à l'utilisation de VRRP mais
+qui se base sur le routage dynamique et n'implique pas de réunir les
+services dans un même sous-réseau :
+
+ - Les nœuds indiquent leur disponibilité à l'aide de **BGP** en
+   annonçant les adresses IP qu'ils peuvent servir. Chaque adresse est
+   pondérée de façon à répartir les IP parmi les serveurs.
+
+Nous allons voir comment implémenter cette option à l'aide de
+[ExaBGP][], le couteau-suisse BGP, dans un labo
+[basé sur KVM][based on KVM]. Les sources de celui-ci sont disponibles
+sur [GitHub][lab]. _ExaBGP_ 3.2.5 est nécessaire à son bon
+fonctionnement.
+
+[TOC]
+
+# Environnement
+
+Voici l'environnement de départ :
+
+![Labo avec 3 nœuds web][1]
+[1]: [[!!images/exabgp/lab.png]] "Réseau routé avec trois serveurs web"
+
+## Configuration de BGP
+
+BGP est activé sur _ER2_ et _ER3_ afin d'échanger des routes avec des
+partenaires et des transitaires (_R1_ dans notre
+cas). L'implémentation utilisée est [BIRD][]. Voici un fragment de sa
+configuration :
+
+    ::nginx
+    router id 1.1.1.2;
+    
+    protocol static NETS { # ➊
+      import all;
+      export none;
+      route 2001:db8::/40 reject;
+    }
+    protocol bgp R1 { # ➋
+      import all;
+      export where proto = "NETS";
+      local as 64496;
+      neighbor 2001:db8:1000::1 as 64511;
+    }
+    protocol bgp ER3 { # ➌
+      import all;
+      export all;
+      next hop self;
+      local as 64496;
+      neighbor 2001:db8:1::3 as 64496;
+    }
+
+En ➊, nous déclarons les routes que nous voulons exporter vers
+Internet. Celles-ci seront inconditionnellement annoncées. Ensuite, en
+➋, _R1_ est déclaré comme voisin et nous lui envoyons la route
+définie précédemment. De plus, nous acceptons toutes les routes
+soumises par _R1_. En ➌, nous partageons toutes les informations de
+routage avec le routeur jumeau _ER3_, via iBGP.
+
+## Configuration d'OSPF
+
+OSPF va permettre de distribuer les routes à l'intérieur de l'AS. Ce
+protocole est activé sur _ER2_, _ER3_, _DR6_, _DR7_ et _DR8_. À titre
+d'exemple, voici les fragments pertinents de la configuration de
+_DR6_ :
+
+    ::nginx
+    router id 1.1.1.6;
+    protocol kernel {
+       persist;
+       import none;
+       export all;
+    }
+    protocol ospf INTERNAL {
+      import all;
+      export none;
+      area 0.0.0.0 {
+        networks {
+          2001:db8:1::/64;
+          2001:db8:6::/64;
+        };
+        interface "eth0";
+        interface "eth1" { stub yes; };
+      };
+    }
+
+_ER2_ et _ER3_ **injectent une route par défaut** dans OSPF :
+
+    ::nginx
+    protocol static DEFAULT {
+      import all;
+      export none;
+      route ::/0 via 2001:db8:1000::1;
+    }
+    filter default_route {
+      if proto = "DEFAULT" then accept;
+      reject;
+    }
+    protocol ospf INTERNAL {
+      import all;
+      export filter default_route;
+      area 0.0.0.0 {
+        networks {
+          2001:db8:1::/64;
+        };
+        interface "eth1";
+      };
+    }
+
+## Serveurs web
+
+Les serveurs web disposent simplement d'une route par défaut statique
+vers le routeur le plus proche. À noter qu'ils sont chacuns dans un
+**réseau IP distinct** : il n'est alors pas possible de partager une
+IP avec VRRP[^vxlan].
+
+Pourquoi a-t'on placé ces serveurs sur des réseaux différents ? Ils
+peuvent être situés dans des datacentres différents ou le réseau peut
+être
+[complétement routé jusqu'à la couche d'accès][routed access layer].
+
+Voyons comment mettre en œuvre BGP pour redonder ces serveurs.
+
+[^vxlan]: Toutefois, il serait possible de déployer un couche L2 par
+          dessus ce réseau en utilisant, par exemple, [VXLAN][].
+
+# Redondance avec ExaBGP
+
+[ExaBGP][] est un outil pratique pour interfacer des scripts avec
+BGP. Ils peuvent alors **recevoir et annoncer des routes**. _ExaBGP_
+s'occupe de communiquer avec les routeurs. Les scripts lisent les
+routes reçues sur l'entrée standard et en envoient sur la sortie
+standard.
+
+## Vue d'ensemble
+
+Voici ce que nous allons construire :
+
+![Utilisation d'ExaBGP pour publier des services web][2]
+[2]: [[!!images/exabgp/lab-with-rs.png]] "Haute disponibilité avec ExaBGP et deux serveurs de routes"
+
+ 1. **Trois adresses IP** sont allouées : `2001:db8:30::1`,
+    `2001:db8:30::2` et `2001:db8:30::3`. Elles sont distinctes des
+    IP réelles des serveurs.
+
+ 2. Chaque **nœud va annoncer toutes les IP** aux serveurs de
+    routes. Je reviens par la suite sur ces derniers.
+
+ 3. Chaque route annoncée contient une métrique qui permet d'aider les
+    serveurs de routes à choisir le serveur destination. Les métriques
+    sont choisies de façon à ce qu'en situation nominale, chaque IP
+    est routée vers un serveur différent.
+
+ 4. Les **serveurs de routes** (qui ne sont pas des routeurs)
+    annoncent ensuite les **meilleures routes** qu'ils ont apprises
+    vers tous les routeurs du réseau, via BGP.
+
+ 5. Pour chaque adresse IP, chaque routeur a appris la destination à
+    utiliser. Les routes appropriées sont installées dans les
+    tables de routage.
+
+Voici les métriques respectives pour les routes annoncées par _W1_,
+_W2_ et _W3_ quand le fonctionnement est nominal :
+
+Route          | W1  | W2  | W3      | Best   | Backup
+-------------- | --- | --- | ------- | ------ | -------
+2001:db8:30::1 | 102 | 101 | **100** | **W3** | W2
+2001:db8:30::2 | 101 | **100** | 102 | **W2** | W1
+2001:db8:30::3 | **100** | 102 | 101 | **W1** | W3
+
+## Configuration d'ExaBGP
+
+La configuration d'_ExaBGP_ est très simple :
+
+    ::nginx
+    group rs {
+      neighbor 2001:db8:1::4 {
+        router-id 1.1.1.11;
+        local-address 2001:db8:6::11;
+        local-as 65001;
+        peer-as 65002;
+      }
+      neighbor 2001:db8:8::5 {
+        router-id 1.1.1.11;
+        local-address 2001:db8:6::11;
+        local-as 65001;
+        peer-as 65002;
+      }
+    
+      process watch-nginx {
+          run /usr/bin/python /lab/healthcheck.py -s --config /lab/healthcheck-nginx.conf --start-ip 0;
+      }
+    }
+
+Le script a comme responsabilité de vérifier le bon fonctionnement du
+service et de publier les adresses IP vers les deux serveurs de
+routes. Il peut être lancé manuellement de façon à observer son
+fonctionnement :
+
+    ::console
+    $ python /lab/healthcheck.py --config /lab/healthcheck-nginx.conf --start-ip 0
+    INFO[healthcheck] send announces for UP state to ExaBGP
+    announce route 2001:db8:30::3/128 next-hop self med 100
+    announce route 2001:db8:30::2/128 next-hop self med 101
+    announce route 2001:db8:30::1/128 next-hop self med 102
+    [...]
+    WARNING[healthcheck] Check command was unsuccessful: 7
+    INFO[healthcheck] Output of check command:  curl: (7) Failed connect to ip6-localhost:80; Connection refused
+    WARNING[healthcheck] Check command was unsuccessful: 7
+    INFO[healthcheck] Output of check command:  curl: (7) Failed connect to ip6-localhost:80; Connection refused
+    WARNING[healthcheck] Check command was unsuccessful: 7
+    INFO[healthcheck] Output of check command:  curl: (7) Failed connect to ip6-localhost:80; Connection refused
+    INFO[healthcheck] send announces for DOWN state to ExaBGP
+    announce route 2001:db8:30::3/128 next-hop self med 1000
+    announce route 2001:db8:30::2/128 next-hop self med 1001
+    announce route 2001:db8:30::1/128 next-hop self med 1002
+
+Lorsque le service devient indisponible, la situation est détectée par
+le script qui va réessayer plusieurs fois avant d'abandonner. Les
+adresses IP sont alors annoncées avec une métrique plus élevée et le
+service sera alors routé vers un autre nœud (celui qui publie
+`2001:db8:30::3/128` avec une métrique de 101).
+
+Ce script fait désormais partie de _ExaBGP_.
+
+## Les serveurs de routes
+
+Nous aurions pu connecter _ExaBGP_ directement aux
+routeurs. Toutefois, si nous avions une vingtaine de routeurs et une
+dizaine de serveurs web, il faudrait maintenir environ 200
+sessions. Les serveurs de routes ont trois rôles :
+
+ 1. Réduire le **nombre de sessions BGP** entre les équipements. Moins
+    de configuration, moins d'erreurs.
+
+ 2. Éviter de **modifier la configuration des routeurs** à chaque
+    ajout de service.
+
+ 3. **Séparer** les décisions de routage (prises par les serveurs de
+    routes) du processus de routage (effectué par les routeurs).
+
+Une question que l'on peut légitemement se poser est : « pourquoi ne
+pas utiliser OSPF ? ».
+
+ - OSPF pourrait être activé sur chaque serveur web et les adresses
+   publiées via ce protocole. Cependant, OSPF a plusieurs
+   limitations : on ne peut pas ajouter des participants à l'infini,
+   toutes les topologies ne sont pas possibles, il est difficile de
+   filtrer les routes et une erreur de configuration peut facilement
+   affecter l'ensemble du réseau. Ainsi, il est considéré comme
+   souhaitable de limiter OSPF à des routeurs.
+
+ - Les routes apprises par les serveurs de routes pourraient être
+   injectées directement dans OSPF. Ce serait pratique au niveau de la
+   configuration puisqu'il ne serait plus nécessaire de configurer les
+   adjacences. Sur le papier, OSPF sait utiliser un champ
+   « _next-hop_ ». Toutefois, je n'ai trouvé aucun moyen d'injecter le
+   champ correspondant de BGP dans celui-ci. Le BGP _next-hop_ est
+   résolu localement en utilisant les informations issues d'OSPF. Si
+   le résultat est injecté dans OSPF, les routeurs envoient le trafic
+   à destination des IP de service vers _RS4_.
+
+Voyons comment configurer les serveurs de routes. _RS4_ utilise _BIRD_
+tandis que _RS5_ utilise [Quagga][]. L'utilisation de deux
+implémentations différentes permet d'être résilient aux bugs qui
+peuvent affecter une implémentation.
+
+### Configuration de BIRD
+
+Il y a deux parties dans la configuration de BGP : les sessions BGP avec
+les nœuds _ExaBGP_ et celles avec les routeurs. Voici la configuration
+concernant cette dernière :
+
+    ::nginx
+    template bgp INFRABGP {
+      export all;
+      import none;
+      local as 65002;
+      rs client;
+    }
+    protocol bgp ER2 from INFRABGP {
+      neighbor 2001:db8:1::2 as 65003;
+    }
+    protocol bgp ER3 from INFRABGP {
+      neighbor 2001:db8:1::3 as 65003;
+    }
+    protocol bgp DR6 from INFRABGP {
+      neighbor 2001:db8:1::6 as 65003;
+    }
+    protocol bgp DR7 from INFRABGP {
+      neighbor 2001:db8:1::7 as 65003;
+    }
+    protocol bgp DR8 from INFRABGP {
+      neighbor 2001:db8:1::8 as 65003;
+    }
+
+Le numéro d'AS utilisé pour les serveurs de routes est 65002 tandis
+que 65003 est utilisé pour les routeurs (et 65001 pour les
+serveurs). Ces AS sont pris dans le lot des numéros réservés pour
+un usage privé par la [RFC 6996][].
+
+Toutes les routes connues du serveur de routes sont exportées vers les
+routeurs mais aucune route n'est acceptée de ceux-ci.
+
+Voyons la deuxième partie :
+
+    ::nginx
+    # Only import loopback IPs
+    filter only_loopbacks { # ➊
+      if net ~ [ 2001:db8:30::/64{128,128} ] then accept;
+      reject;
+    }
+    
+    # General template for an EXABGP node
+    template bgp EXABGP {
+      local as 65002;
+      import filter only_loopbacks; # ➋
+      export none;
+      route limit 10; # ➌
+      rs client;
+      hold time 6; # ➍
+      multihop 10;
+    }
+    
+    protocol bgp W1 from EXABGP {
+      neighbor 2001:db8:6::11 as 65001;
+    }
+    protocol bgp W2 from EXABGP {
+      neighbor 2001:db8:7::12 as 65001;
+    }
+    protocol bgp W3 from EXABGP {
+      neighbor 2001:db8:8::13 as 65001;
+    }
+
+Pour assurer une bonne séparation des responsabilités, nous sommes un
+peu plus pointilleux. En combinant ➊ et ➋, seules les adresses IP de
+loopback incluses dans le bon sous-réseau sont acceptées. Aucun
+serveur ne doit pouvoir injecter des routes arbitraires dans notre
+réseau. Grâce à ➌, le nombre de routes qu'un même serveur peut
+annoncer est limité.
+
+Avec ➍, nous réduisons le temps de détection d'indisponibilité (_hold
+time_) de 240 à 6 secondes. C'est particulièrement important pour être
+capable de réagir rapidement si un serveur devient indisponible.
+
+### Configuration de Quagga
+
+La configuration de Quagga est un peu plus verbeuse mais strictement
+équivalente :
+
+    ::raw
+    router bgp 65002 view EXABGP
+     bgp router-id 1.1.1.5
+     bgp log-neighbor-changes
+     no bgp default ipv4-unicast
+    
+     neighbor R peer-group
+     neighbor R remote-as 65003
+     neighbor R ebgp-multihop 10
+    
+     neighbor EXABGP peer-group
+     neighbor EXABGP remote-as 65001
+     neighbor EXABGP ebgp-multihop 10
+     neighbor EXABGP timers 2 6
+    !
+     address-family ipv6
+    
+     neighbor R activate
+     neighbor R soft-reconfiguration inbound
+     neighbor R route-server-client
+     neighbor R route-map R-IMPORT import
+     neighbor R route-map R-EXPORT export
+     neighbor 2001:db8:1::2 peer-group R
+     neighbor 2001:db8:1::3 peer-group R
+     neighbor 2001:db8:1::6 peer-group R
+     neighbor 2001:db8:1::7 peer-group R
+     neighbor 2001:db8:1::8 peer-group R
+    
+     neighbor EXABGP activate
+     neighbor EXABGP soft-reconfiguration inbound
+     neighbor EXABGP maximum-prefix 10
+     neighbor EXABGP route-server-client
+     neighbor EXABGP route-map RSCLIENT-IMPORT import
+     neighbor EXABGP route-map RSCLIENT-EXPORT export
+     neighbor 2001:db8:6::11 peer-group EXABGP
+     neighbor 2001:db8:7::12 peer-group EXABGP
+     neighbor 2001:db8:8::13 peer-group EXABGP
+    
+     exit-address-family
+    !
+    ipv6 prefix-list LOOPBACKS seq 5 permit 2001:db8:30::/64 ge 128 le 128
+    ipv6 prefix-list LOOPBACKS seq 10 deny any
+    !
+    route-map RSCLIENT-IMPORT deny 10
+    !
+    route-map RSCLIENT-EXPORT permit 10
+      match ipv6 address prefix-list LOOPBACKS
+    !
+    route-map R-IMPORT permit 10
+    !
+    route-map R-EXPORT deny 10
+    !
+
+L'utilisation d'une vue permet d'éviter d'installer les routes dans le
+noyau[^view].
+
+[^view]: Il m'a été indiqué sur les listes de diffusion de _Quagga_
+         qu'une telle configuration était peu commune et qu'il était
+         préférable de remplacer la vue par l'utilisation du paramètre
+         `--no_kernel` pour invoquer `bgpd`.
+
+## Les routeurs
+
+La configuration de _BIRD_ sur les routeurs est assez simple :
+
+    ::nginx
+    # BGP with route servers
+    protocol bgp RS4 {
+      import all;
+      export none;
+      local as 65003;
+      neighbor 2001:db8:1::4 as 65002;
+      gateway recursive;
+    }
+    protocol bgp RS5 {
+      import all;
+      export none;
+      local as 65003;
+      neighbor 2001:db8:8::5 as 65002;
+      multihop 4;
+      gateway recursive;
+    }
+
+Il est important d'utiliser `gateway recursive` car la plupart du
+temps, le routeur ne peut pas atteindre la destination
+directement. Dans ce cas, par défaut, _BIRD_ utilise l'adresse IP du
+routeur à l'origine de l'annonce (le serveur de routes).
+
+## Tests
+
+Vérifions que tout fonctionne comme attendu. Voici ce que voit _RS5_ :
+
+    ::console
+    # show ipv6  bgp  
+    BGP table version is 0, local router ID is 1.1.1.5
+    Status codes: s suppressed, d damped, h history, * valid, > best, i - internal,
+                  r RIB-failure, S Stale, R Removed
+    Origin codes: i - IGP, e - EGP, ? - incomplete
+    
+       Network          Next Hop            Metric LocPrf Weight Path
+    *  2001:db8:30::1/128
+                        2001:db8:6::11         102             0 65001 i
+    *>                  2001:db8:8::13         100             0 65001 i
+    *                   2001:db8:7::12         101             0 65001 i
+    *  2001:db8:30::2/128
+                        2001:db8:6::11         101             0 65001 i
+    *                   2001:db8:8::13         102             0 65001 i
+    *>                  2001:db8:7::12         100             0 65001 i
+    *> 2001:db8:30::3/128
+                        2001:db8:6::11         100             0 65001 i
+    *                   2001:db8:8::13         101             0 65001 i
+    *                   2001:db8:7::12         102             0 65001 i
+    
+    Total number of prefixes 3
+
+Par exemple, le trafic vers `2001:db8:30::2` doit être routé via
+`2001:db8:7::12` (qui est _W2_). Les autres IP sont affectées à _W1_
+et _W3_.
+
+_RS4_ voit exactement la même chose[^output] :
+
+    ::console
+    $ birdc6 show route 
+    BIRD 1.3.11 ready.
+    2001:db8:30::1/128 [W3 22:07 from 2001:db8:8::13] * (100/20) [AS65001i]
+                       [W1 23:34 from 2001:db8:6::11] (100/20) [AS65001i]
+                       [W2 22:07 from 2001:db8:7::12] (100/20) [AS65001i]
+    2001:db8:30::2/128 [W2 22:07 from 2001:db8:7::12] * (100/20) [AS65001i]
+                       [W1 23:34 from 2001:db8:6::11] (100/20) [AS65001i]
+                       [W3 22:07 from 2001:db8:8::13] (100/20) [AS65001i]
+    2001:db8:30::3/128 [W1 23:34 from 2001:db8:6::11] * (100/20) [AS65001i]
+                       [W3 22:07 from 2001:db8:8::13] (100/20) [AS65001i]
+                       [W2 22:07 from 2001:db8:7::12] (100/20) [AS65001i]
+
+[^output]: La sortie de `birdc6` peut parfois prêter à confusion. Je
+           donne ici une version simplifiée.
+
+Voyons _DR6_ :
+
+    ::console
+    $ birdc6 show route
+    2001:db8:30::1/128 via fe80::5054:56ff:fe6e:98a6 on eth0 * (100/20) [AS65001i]
+                       via fe80::5054:56ff:fe6e:98a6 on eth0 (100/20) [AS65001i]
+    2001:db8:30::2/128 via fe80::5054:60ff:fe02:3681 on eth0 * (100/20) [AS65001i]
+                       via fe80::5054:60ff:fe02:3681 on eth0 (100/20) [AS65001i]
+    2001:db8:30::3/128 via 2001:db8:6::11 on eth1 * (100/10) [AS65001i]
+                       via 2001:db8:6::11 on eth1 (100/10) [AS65001i]
+
+Ainsi, `2001:db8:30::3` est bien routé vers `W1` qui se trouve
+directement derrière `DR6`. Les deux autres IP sont envoyées vers une
+autre partie du réseau via les adresses apprises par OSPF.
+
+Stoppons _nginx_ sur `W1`. Quelques secondes plus tard, _DR6_ apprend
+de nouvelles routes :
+
+    ::console
+    $ birdc6 show route
+    2001:db8:30::1/128 via fe80::5054:56ff:fe6e:98a6 on eth0 * (100/20) [AS65001i]
+                       via fe80::5054:56ff:fe6e:98a6 on eth0 (100/20) [AS65001i]
+    2001:db8:30::2/128 via fe80::5054:60ff:fe02:3681 on eth0 * (100/20) [AS65001i]
+                       via fe80::5054:60ff:fe02:3681 on eth0 (100/20) [AS65001i]
+    2001:db8:30::3/128 via fe80::5054:56ff:fe6e:98a6 on eth0 * (100/20) [AS65001i]
+                       via fe80::5054:56ff:fe6e:98a6 on eth0 (100/20) [AS65001i]
+
+# Démo
+
+Voici une vidéo montrant un aperçu du lab en fonctionnement. Elle est
+également disponible au format [Ogg Theora video][ogv]).
+
+[[dailymotion:x14auqz]]
+
+[ogv]: [[!!videos/2013-exabgp-highavailability.ogv]]
+
+*[VRRP]: Virtual Router Redundancy Protocol
+*[CARP]: Common Address Redundancy Protocol
+*[BGP]: Border Gateway Protocol
+*[OSPF]: Open Shortest Path First
+*[IGP]: Internal Gateway Protocol
+*[EGP]: External Gateway Protocol
+*[DNS]: Domain Name Service
+*[L2]: OSI layer 2
+*[L3]: OSI layer 3
+
+[Keepalived]: http://www.keepalived.org/ "Keepalived: healthchecking for LVS and high-availability"
+[VXLAN]: [[fr/blog/2012-multicast-vxlan.html]] "Réseaux virtuels avec VXLAN"
+[ExaBGP]: https://github.com/Thomas-Mangin/exabgp "ExaBGP, the BGP swiss army knife of networking"
+[based on KVM]: [[fr/blog/2012-network-lab-kvm.html]] "Labo virtuel avec KVM"
+[lab]: https://github.com/vincentbernat/network-lab/tree/master/lab-exabgp "Labo pour ExaBGP avec KVM"
+[BIRD]: http://bird.network.cz/ "The BIRD Internet Routing Daemon Project"
+[Quagga]: http://www.nongnu.org/quagga/ "Quagga Routing Suite"
+[routed access layer]: http://www.cisco.com/en/US/docs/solutions/Enterprise/Campus/routed-ex.html "High Availability Campus Network Design — Routed Access Layer using EIGRP or OSPF"
+[RFC 6996]: http://tools.ietf.org/html/rfc6996 "RFC 6996: Autonomous System Reservation for Private Use"
+[Andrey Avkhimovich]: http://www.jamendo.com/fr/artist/368142/andrey-avkhimovich "Andrey Avkhimovich sur Jamendo"
+[r7-521-sn9132478]: http://www.jamendo.com/fr/track/773629/r7-521-sn9132478 "r7-521-sn9132478 par Andrey Avkhimovich sur Jamendo"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
