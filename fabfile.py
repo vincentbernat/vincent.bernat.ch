@@ -42,6 +42,17 @@ def sprite():
         local("sed 's/ /display: inline-block; /' sprite.less > luffy.sprite.less")
         local("rm sprite.less")
 
+# For both the following tasks, please check that the appropriate
+# fonts are installed on the system. The rendering engine of both
+# wkhtmltopdf and cutycapt is QT and it doesn't support web fonts
+# yet. There is also a bug when multiple fonts are used under the same
+# name. Here are the two relevant bugs:
+#  https://code.google.com/p/wkhtmltopdf/issues/detail?id=145
+#  https://code.google.com/p/wkhtmltopdf/issues/detail?id=783
+#
+# Google Fonts can be downloaded from:
+#   http://www.google.com/fonts#UsePlace:use/Collection:Source+Sans+Pro:700|Inconsolata|Merriweather:400,400italic
+
 @task
 def pdf():
     """Generate resume PDF"""
@@ -49,6 +60,28 @@ def pdf():
         local("wkhtmltopdf --quiet --zoom 0.7 --use-xserver --print-media-type -s A4 "
               "http://localhost:8080/{lang}/cv.html "
               "content/media/files/cv-{lang}.pdf || true".format(lang=lang))
+
+@task
+def screenshots():
+    """Generate screenshots"""
+    now = time.asctime().replace(" ", "-")
+    os.makedirs("screenshots/{now}".format(now=now))
+    for url in ["en/",
+                "en/cv.html",
+                "en/blog",
+                "en/projects.html",
+                "en/blog/2011-ssl-perfect-forward-secrecy.html",
+                "en/blog/2011-thinkpad-edge-11.html"]:
+        for width in [320, 600, 1024, 1280]:
+            local("cutycapt "
+                  "--url=http://localhost:8080/{url} "
+                  "--out=screenshots/{now}/{width}px-{slug}.png "
+                  "--delay=1000 "
+                  "--max-wait=5000 "
+                  "--min-width={width}".format(width=width,
+                                               now=now,
+                                               url=url,
+                                               slug=url.replace("/", "-").replace(".", "-")))
 
 @task
 def build():
