@@ -43,6 +43,14 @@ def sprite():
         local("rm sprite.less")
 
 @task
+def pdf():
+    """Generate resume PDF"""
+    for lang in ["en", "fr"]:
+        local("wkhtmltopdf --quiet --zoom 0.7 --use-xserver --print-media-type -s A4 "
+              "http://localhost:8080/{lang}/cv.html "
+              "content/media/files/cv-{lang}.pdf || true".format(lang=lang))
+
+@task
 def build():
     """Build production content"""
     local("git checkout master")
