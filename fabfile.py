@@ -134,12 +134,13 @@ def build():
 
 @task
 def push():
-    """Push production content to ace"""
+    """Push built site to production"""
     push_main()
     push_s3()
 
 @task
 def push_main():
+    """Push built site to ace"""
     local("git push github")
     local("git push ace.luffy.cx")
 
@@ -155,6 +156,7 @@ def _s3cmd(args):
 
 @task
 def push_s3():
+    """Push built site to S3"""
     try:
         # This is a simplified version of the site. Notably, we
         # don't have a separate media site.
