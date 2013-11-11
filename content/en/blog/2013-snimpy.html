@@ -1,0 +1,224 @@
+---
+title: "Snimpy: SNMP & Python"
+keywords: "snmp, python, snimpy, mib, smi, network"
+uuid: ce260d95-a456-4e9c-8780-f155da37ce54
+---
+
+While quite old fashioned, [SNMP][] is still an ubiquitous protocol
+supported by most network equipments. It comes handy to expose
+**various metrics**, like network interface counters, to be gathered
+for the purpose of monitoring. It can also be used to **retrieve and
+modify equipments' configuration**.
+
+Variables exposed by SNMP _agents_ (servers) are organized inside a
+[Management Information Base][] (MIB) which is a hierarchical
+database[^smi]. Each entry is identified by an OID. Querying a
+specific OID allows a _manager_ (client) to get the value of an
+associated variable.
+
+[^smi]: A MIB is defined using a subset of ASN.1 called SMI. However,
+        it is not uncommon to refer to the definition as a MIB too.
+
+For example, one common MIB-module is `IF-MIB` defined in [RFC 2863][]. It
+contains objects used to manage network interfaces. One of them is
+`ifTable` whose rows are representing agent's logical network
+interfaces. Each row will expose the interface name, characteristics
+and various associated counters.
+
+|  ifIndex  |  ifDescr  |  ifPhysAddress  |  ifOperStatus  |  ifOutOctets  |
+| --------- | --------- | --------------- | -------------- | ------------- |
+|  1        | lo        |                 |  up            |  545721741    |
+|  2        | eth0      | 0:18:f3:3:4e:4  |  up            |   78875421    |
+|  3        | eth1      | 0:18:f3:3:4e:5  |  down          |          0    |
+
+`ifTable` is indexed by its first column `ifIndex`. If you want to get
+the operational status of the second interface, you need to query
+`IF-MIB::ifOperStatus.2` which is translated to OID
+`.1.3.6.1.2.1.2.2.1.8.2` using information provided by the MIB definition.
+
+# Scripting SNMP
+
+An SNMP agent can deliver a lot of interesting information:
+
+ - interface counters with [IF-MIB][RFC 2863],
+ - IP addresses with [IP-MIB][RFC 4293],
+ - routing tables with [IP-FORWARD-MIB][RFC 4292],
+ - inventory with [ENTITY-MIB][RFC 4133],
+ - neighbors with [LLDP-MIB][IEEE 802.1AB].
+
+You can gather those information manually with tools like `snmpget`
+and `snmpwalk`:
+
+    ::console
+    $ snmpwalk -v 2c -c public localhost IF-MIB::ifDescr      
+    IF-MIB::ifDescr.1 = STRING: lo
+    IF-MIB::ifDescr.2 = STRING: eth0
+    IF-MIB::ifDescr.3 = STRING: eth1
+
+However, building robust scripts with them is quite challenging. For
+example, if you wanted to get the descriptions of all active interfaces
+as well as the total number of octets transmitted, you could do
+something like that:
+
+    ::sh
+    #!/bin/sh
+    
+    set -e
+    
+    host="${1:-localhost}"
+    community="${2:-public}"
+    args="-v2c -c $community $host"
+    
+    for idx in $(snmpwalk -Ov -OQ $args IF-MIB::ifIndex); do
+        descr=$(snmpget -Ov -OQ $args IF-MIB::ifDescr.$idx)
+        oper=$(snmpget -Ov -OQ $args IF-MIB::ifOperStatus.$idx)
+        in=$(snmpget -Ov -OQ $args IF-MIB::ifInOctets.$idx)
+        out=$(snmpget -Ov -OQ $args IF-MIB::ifOutOctets.$idx)
+        [ x"$descr" != x"lo" ] || continue
+        [ x"$oper" = x"up" ] || continue
+        echo $descr $in $out
+    done
+
+Hopefully, SNMP bindings in various languages are pretty common. For
+example, Net-SNMP ships with a Python binding:
+
+    ::python
+    import argparse
+    import netsnmp
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("host", default="localhost", nargs="?",
+                        help="Agent to retrieve variables from")
+    parser.add_argument("community", default="public", nargs="?",
+                        help="Community to query the agent")
+    options = parser.parse_args()
+    args = {
+        "Version": 2,
+        "DestHost": options.host,
+        "Community": options.community
+    }
+    
+    for idx in netsnmp.snmpwalk(netsnmp.Varbind("IF-MIB::ifIndex"),
+                                **args):
+        descr, oper, cin, cout = netsnmp.snmpget(
+            netsnmp.Varbind("IF-MIB::ifDescr", idx),
+            netsnmp.Varbind("IF-MIB::ifOperStatus", idx),
+            netsnmp.Varbind("IF-MIB::ifInOctets", idx),
+            netsnmp.Varbind("IF-MIB::ifOutOctets", idx),
+            **args)
+        assert(descr is not None and
+               cin is not None and
+               cout is not None) # ➊
+        if descr == "lo":
+            continue
+        if oper != "1": # ➋
+            continue
+        print("{} {} {}".format(descr, cin, cout))
+
+This binding is quite primitive and has several drawbacks:
+
+ 1. It exports everything as strings. See ➋.
+ 2. Error handling is just deficient. If you mispell something, like
+    a variable name, you'll get `snmp_build: unknown failure` on the
+    standard error. No exception. If a variable does not exist,
+    you'll get `None` instead. See ➊.
+
+This inability to sanely handle failures makes this binding quite
+dangerous to use in scripts. Imagine making important modifications on
+the basis of the returned values. If you forget to check against
+`None`, your script may cause havoc!
+
+# Snimpy
+
+Because I didn't find any reliable Python binding for SNMP, I decided
+to write [Snimpy][] with two goals in mind:
+
+ 1. Leverage information contained in MIBs to provide a **pythonic
+    interface**.
+ 2. Any error condition should raise an **exception**.
+
+Here is how the previous script could be written:
+
+    ::python
+    #!/usr/bin/env snimpy
+    
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("host", default="localhost", nargs="?",
+                        help="Agent to retrieve variables from")
+    parser.add_argument("community", default="public", nargs="?",
+                        help="Community to query the agent")
+    options = parser.parse_args()
+    
+    m = M(options.host, options.community, 2)
+    
+    load("IF-MIB")
+    for idx in m.ifDescr:
+        if m.ifDescr[idx] == "lo":
+            continue
+        if m.ifOperStatus[idx] != "up":
+            continue
+        print("{} {} {}".format(m.ifDescr[idx],
+                                m.ifInOctets[idx],
+                                m.ifOutOctets[idx]))
+
+You can also use a list comprehension:
+
+    ::python
+    load("IF-MIB")
+    print("\n".join([ "{} {} {}".format(m.ifDescr[idx],
+                                        m.ifInOctets[idx],
+                                        m.ifOutOctets[idx])
+                      for idx in m.ifDescr
+                      if m.ifDescr[idx] != "lo"
+                      and m.ifOperStatus[idx] == "up" ]))
+
+Here is another simple example to get the routing database from the
+agent:
+
+    ::python
+    load("IP-FORWARD-MIB")
+    m=M("localhost", "public", 2)
+    routes = m.ipCidrRouteNextHop
+    for x in routes:
+        net, netmask, tos, src = x
+        print("{:>15s}/{:<15s} via {:<15s} src {:<15s}".format(
+            net, netmask, routes[x], src))
+
+`IP-FORWARD-MIB::ipCidrRouteNextHop` is a more complex table with a
+compound index. Despite this, querying the table still seems natural.
+
+Have a look at [Snimpy's documentation][] for more information. Behind
+the hood, SNMP requests are handled by [PySNMP][] and MIB parsing is
+done with [libsmi][][^libsmi]. _Snimpy_ supports both Python 2, Python
+3 and Pypy.
+
+[^libsmi]: Unfortunately, there is currently no robust SMI parser
+           written in pure Python. For example, [PySNMP][] relies
+           on `smidump` which comes with [libsmi][]. _Snimpy_ uses a
+           custom [CFFI][] wrapper around _libsmi_.
+
+*[SNMP]: Simple Network Management Protocol
+*[OID]: Object Identifier
+*[MIB]: Management Information Base
+*[SMI]: Structure of Management Information
+*[ASN.1]: Abstract Syntax Notation One
+
+[SNMP]: http://en.wikipedia.org/wiki/Snmp "Simple Network Management Protocol on Wikipedia"
+[Management Information Base]: http://en.wikipedia.org/wiki/Management_information_base "Management Information Base on Wikipedia"
+[RFC 2863]: http://tools.ietf.org/html/rfc2863 "The Interfaces Group MIB"
+[RFC 4133]: http://tools.ietf.org/html/rfc4133 "Entity MIB"
+[RFC 4292]: http://tools.ietf.org/html/rfc4292 "IP Forwarding Table MIB"
+[RFC 4293]: http://tools.ietf.org/html/rfc4293 "Management Information Base for the Internet Protocol (IP)"
+[IEEE 802.1AB]: http://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol "LLDP on Wikipedia"
+[Snimpy]: https://github.com/vincentbernat/snimpy "Snimpy: interactive SNMP tool with Python"
+[PySNMP]: http://pysnmp.sourceforge.net/ "The PySNMP project"
+[libsmi]: http://www.ibr.cs.tu-bs.de/projects/libsmi/ "libsmi: a library to access SMI MIB information"
+[Snimpy's documentation]: http://snimpy.readthedocs.org/ "Snimpy documentation on ReadTheDocs"
+[CFFI]: http://cffi.readthedocs.org/ "CFFI: Foreign Function interface for Python calling C code"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
