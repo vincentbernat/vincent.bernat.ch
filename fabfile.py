@@ -90,9 +90,9 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
-        for p in [ 'media/js/*.js',
-                   'media/css/*.css',
-                   'media/images/l/sprite.png' ]:
+        for p in [ 'media/images/l/sprite.png',
+                   'media/js/*.js',
+                   'media/css/*.css' ]:
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
                 # Compute hash
