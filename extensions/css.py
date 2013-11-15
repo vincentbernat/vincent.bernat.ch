@@ -11,4 +11,7 @@ class CSSPrefixerPlugin(Plugin):
     def text_resource_complete(self, resource, text):
         if not resource.source_file.kind in ("less", "css"):
             return
-        return cssprefixer.process(text, debug=False, minify=True)
+        return cssprefixer.process(text,
+                                   debug=False,
+                                   minify=True).replace("display:inline-block;",
+                                                        "display:inline-block;zoom:1;*display:inline;")
