@@ -1,0 +1,280 @@
+---
+title: "Tester son infrastructure avec serverspec"
+keywords: "serverspec, rspec, ruby, infrastructure, tdd, specinfra"
+uuid: 7e4dd6df-8979-43bf-9b1c-94c3131c9b7d
+attachments:
+  "https://github.com/vincentbernat/serverspec-example": "Dépôt GitHub"
+---
+
+La configuration d'une ferme de serveurs peut être vérifiée par des
+outils de déploiement tels que [Puppet][], [Chef][], [Ansible][] ou
+[Salt][]. Ils permettent à un administrateur de décrire la
+configuration cible et de s'assurer que celle-ci est correctement
+appliquée. Il est également possible d'obtenir des rapports sur les
+serveurs dont la configuration n'est pas conforme.
+
+[serverspec][] exploite quant à lui le très connu [RSpec][], un outil
+de test pour le langage _Ruby_ fréquemment utilisé dans le
+[développement piloté par les tests][test-driven development]. Il
+permet de **tester l'état des serveurs** à travers une connexion SSH.
+
+Pourquoi utiliser un tel outil supplémentaire ? Certaines choses sont
+plus faciles à tester qu'à décrire via un changement de configuration,
+comme par exemple le bon fonctionnement d'un applicatif que l'on teste
+en vérifiant qu'il écoute sur un port donné.
+
+[TOC]
+
+# Premiers pas
+
+Une bonne connaissance de _Ruby_ peut aider mais n'est pas essentielle
+pour utiliser _serverspec_. L'écriture des tests se fait généralement
+dans un langage presque naturel. Toutefois, voici deux ressources
+intéressantes pour apprendre rapidement l'essentiel de _Ruby_ :
+
+ - [Ruby in Twenty Minutes][]
+ - [Ruby Primer][]
+
+[Le site web de _serverspec_][serverspec] contient une courte
+introduction présentant l'essentiel. je vous invite à la parcourir
+rapidement. À titre d'exemple, voici un test qui vérifie qu'un service
+est bien en écoute sur le port 80 :
+
+    ::ruby
+    describe port(80) do
+      it { should be_listening }
+    end
+
+Si vous voulez repérer les serveurs qui n'ont pas été mis à jour en
+Debian Wheezy, le test suivant fera l'affaire :
+
+    ::ruby
+    describe command("lsb_release -d") do
+      it { should return_stdout /wheezy/ }
+    end
+
+Le test suivant permet de vérifier la bonne valeur du paramètre
+`miimon` de l'interface `bond0`, uniquement si cette dernière existe :
+
+    ::ruby
+    has_bond0 = file('/sys/class/net/bond0').directory?
+    
+    # miimon should be set to something other than 0, otherwise, no checks
+    # are performed.
+    describe file("/sys/class/net/bond0/bonding/miimon"), :if => has_bond0 do
+      it { should be_file }
+      its(:content) { should_not eq "0\n" }
+    end
+
+_serverspec_ dispose d'une
+[documentation complète des resources disponibles][doc] (telles que
+`port` et `command`) qui peuvent être utilisées après le mot-clef
+`describe`.
+
+Si un test est trop complexe pour s'exprimer de cette manière, il est
+possible d'utiliser des commandes arbitraires. Dans l'exemple
+ci-dessous, nous vérifions que `memcached` est configuré pour utiliser
+quasiment toute la mémoire disponible sur le système :
+
+    ::ruby
+    # We want memcached to use almost all memory. With a 2GB margin.
+    describe "memcached" do
+      it "should use almost all memory" do
+        total = command("vmstat -s | head -1").stdout # ➊
+        total = /\d+/.match(total)[0].to_i
+        total /= 1024
+        args = process("memcached").args # ➋
+        memcached = /-m (\d+)/.match(args)[1].to_i
+        (total - memcached).should be > 0
+        (total - memcached).should be < 2000
+      end
+    end
+
+Bien que plus complexe, ce test est toujours assez simple à
+comprendre. En ➊, le résultat de la commande `vmstat` est récupérée
+pour être comparé avec une valeur obtenue en ➋ via une autre ressource
+fournie par _serverspec_.
+
+# Utilisation avancée
+
+La documentation de _serverspec_ fournit
+[quelques exemples d'utilisation plus avancée][tips], comme la
+possibilité de partager des tests dans une ferme de serveurs ou
+d'exécuter plusieurs tests en parallèle.
+
+J'ai mis en place un [dépôt _GitHub_][github] destiné à être utilisé
+comme base pour obtenir les fonctionnalités suivantes :
+
+ - assigner des rôles à chaque serveur et des tests à chaque rôle,
+ - exécution parallèle,
+ - génération et visualisation de rapports de test.
+
+## Taxinomie des serveurs
+
+Par défaut, `serverspec-init` fournit une base où chaque serveur
+dispose de son répertoire avec son propre ensemble de
+tests. Toutefois, rien ne nous empêche de grouper les tests selon des
+rôles. _serverspec_ se concentrant sur l'exécution des tests sur un
+serveur donné, la décision des serveurs et des tests à exécuter sur
+ceux-ci est déléguée à un `Rakefile`[^rakefile]. Ainsi, au lieu de se
+baser sur le contenu d'un répertoire, la liste des serveurs peut être
+extraite depuis un fichier (ou un serveur LDAP ou toute autre
+source). Pour chacun d'eux, la liste des rôles associés est
+calculée via une fonction :
+
+    ::ruby
+    hosts = File.foreach("hosts")
+      .map { |line| line.strip }
+      .map do |host|
+      {
+        :name => host.strip,
+        :roles => roles(host.strip),
+      }
+    end
+
+[^rakefile]: Un `Rakefile` est l'équivalent d'un `Makefile`. Les
+             tâches et leurs dépendances sont décrites en _Ruby_ et
+             seront exécutées dans l'ordre par l'utilitaire `rake`.
+
+La fonction `roles()` est chargée de fournir les rôles assignés à un
+serveur. Elle peut par exemple se baser sur le nom du serveur :
+
+    ::ruby
+    def roles(host)
+      roles = [ "all" ]
+      case host
+      when /^web-/
+        roles << "web"
+      when /^memc-/
+        roles << "memcache"
+      when /^lb-/
+        roles << "lb"
+      when /^proxy-/
+        roles << "proxy"
+      end
+      roles
+    end
+
+Le code ci-dessous crée ensuite une tâche pour chaque serveur. Voyez,
+en ➋, comment les rôles associés au serveurs vont influencer les tests
+exécutés. De plus, en ➊, une tâche `server:all` va permettre
+de lancer les tests sur tous les serveurs.
+
+    ::ruby
+    namespace :server do
+      desc "Run serverspec to all hosts"
+      task :all => hosts.map { |h| h[:name] } # ➊
+      
+      hosts.each do |host|
+        desc "Run serverspec to host #{host[:name]}"
+        ServerspecTask.new(host[:name].to_sym) do |t|
+          t.target = host[:name]
+          # ➋: Build the list of tests to execute from server roles
+          t.pattern = './spec/{' + host[:roles].join(",") + '}/*_spec.rb'
+        end
+      end
+    end
+
+La commande `rake -T` permet de lister les tâches ainsi créées :
+
+    ::console
+    $ rake -T
+    rake check:server:all      # Run serverspec to all hosts
+    rake check:server:web-10   # Run serverspec to host web-10
+    rake check:server:web-11   # Run serverspec to host web-11
+    rake check:server:web-12   # Run serverspec to host web-12
+
+## Exécution parallèle
+
+Par défaut, chaque tâche est exécutée une fois la précédente
+terminée. Avec de nombreux serveurs à tester, cela peut prendre un
+certain temps. `rake` permet d'exécuter des tests en parallèle en
+combinant l'option `-j` et l'option `-m` :
+
+    ::console
+    $ rake -j 10 -m check:server:all
+
+## Rapports de test
+
+Pour chaque serveur, `rspec` est exécuté. Par défaut, la sortie
+produite ressemble à cela :
+
+    ::console
+    $ rake spec
+    env TARGET_HOST=web-10 /usr/bin/ruby -S rspec spec/web/apache2_spec.rb spec/all/debian_spec.rb
+    ......
+    
+    Finished in 0.99715 seconds
+    6 examples, 0 failures
+    
+    env TARGET_HOST=web-11 /usr/bin/ruby -S rspec spec/web/apache2_spec.rb spec/all/debian_spec.rb
+    ......
+    
+    Finished in 1.45411 seconds
+    6 examples, 0 failures
+
+Avec plusieurs dizaines ou centaines de serveurs, la lisibilité est
+plutôt médiocre, d'autant qu'en cas d'exécution en parallèle des
+tests, les lignes se retrouvent mélangées. Heureusement, `rspec`
+permet de sauvegarder le résultat au format JSON. Il est
+ensuite possible de consolider ces résultats en un unique
+fichier. Tout ceci peut se faire dans le `Rakefile` :
+
+ 1. Pour chaque tâche, on assigne la valeur `--format json --out
+    ./reports/current/#{target}.json` à `rspec_opts`. La sous-classe
+    `ServerspecTask` se charge de cette partie ainsi que de la
+    transmission du nom du serveur et de la production d'une sortie
+    plus compacte en en couleurs sur la console lors du déroulement du
+    test.
+
+ 2. On ajoute une tâche pour consolider les fichiers JSON en un seul
+    rapport. Le code source de tous les tests est également ajouté à
+    ce rapport afin de le rendre indépendant des changements qui
+    peuvent survenir par la suite. Cette tâche est exécutée
+    automatiquement après la dernière tâche liée à _serverspec_.
+
+N'hésitez pas à jeter un œil au [fichier `Rakefile` complet][rakefile]
+pour obtenir plus de détails.
+
+Enfin, une interface web minimaliste permet d'afficher le rapport
+ainsi généré[^viewer]. Elle montre le résultat des tests sous la forme
+d'une matrice où les tests qui ont échoué sont représentés par une
+pastille rouge.
+
+![Exemple de rapport][report-viewer-1]
+[report-viewer-1]: [[!!images/serverspec-1.png]] "Exemple d'un court rapport affiché via l'interface web"
+
+En cliquant sur un test, les informations détaillées s'affichent :
+description du test, code, message d'erreur et trace d'exécution.
+
+![Visualistion d'une erreur][report-viewer-2]
+[report-viewer-2]: [[!!images/serverspec-2.png]] "Informations détaillées sur un test en échec"
+
+[^viewer]: Cette interface est disponible sur le [dépôt GitHub][github]
+           dans le répertoire `viewer/`.
+
+J'espère que ces quelques ajouts au-dessus de _serverspec_ permettent
+d'en faire une corde supplémentaire à l'arc des outils IT. Elle se
+situerait à mi-chemin entre l'outil de déploiement et l'outil de
+supervision.
+
+*[IT]: Infrastructure Technology
+
+[Puppet]: http://puppetlabs.com/puppet/puppet-open-source "Puppet: IT Automation Software for System Administrators"
+[Chef]: http://www.getchef.com/chef/ "Chef: IT automation for speed and awesomeness"
+[Ansible]: http://www.ansibleworks.com/ "AnsibleWorks: Radically simple IT automation"
+[Salt]: http://www.saltstack.com/ "SaltStack: fast, scalable and flexible software for data center automation"
+[serverspec]: http://serverspec.org/ "serverspec: RSpec tests for your servers"
+[doc]: http://serverspec.org/resource_types.html "serverspec: available resource types"
+[tips]: http://serverspec.org/advanced_tips.html "serverspec: advanced tips"
+[RSpec]: http://rspec.info/ "RSpec: testing tool for the Ruby programming language"
+[test-driven development]: http://fr.wikipedia.org/wiki/Test_Driven_Development "Article sur le développement piloté par les tests sur Wikipedia"
+[Ruby in Twenty Minutes]: https://www.ruby-lang.org/en/documentation/quickstart/ "Ruby in Twenty Minutes"
+[Ruby Primer]: https://rubymonk.com/learning/books/1-ruby-primer "Ruby Primer"
+[github]: https://github.com/vincentbernat/serverspec-example "Utilisation avancée de serverspec"
+[rakefile]: https://github.com/vincentbernat/serverspec-example/blob/eba4d1ec12d36fdfd3dd23f5c9322781221191ed/Rakefile "Rakefile complet"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
