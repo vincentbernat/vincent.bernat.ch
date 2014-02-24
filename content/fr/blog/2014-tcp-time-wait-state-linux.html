@@ -1,0 +1,545 @@
+---
+title: "TCP TIME-WAIT & les serveurs Linux à fort trafic"
+keywords: "linux, tcp, timewait, documentation, tcp_tw_recycle, tcp_tw_reuse"
+uuid: 7ef1dd49-92be-4aea-b96f-f91ab1b84f02
+tags:
+ - network
+---
+
+**En bref** : n'activez pas `net.ipv4.tcp_tw_recycle` !
+
+La documentation du noyau Linux n'est pas très prolixe sur les effets
+de `net.ipv4.tcp_tw_recycle` :
+
+> Active le reyclage rapide des connexions dans l'état `TIME-WAIT`. La
+> valeur par défaut est 0. Elle ne doit pas être changé sans en aviser
+> vos experts techniques.
+
+Son petit frère, `net.ipv4.tcp_tw_reuse`, est à peine mieux
+documenté :
+
+> Autoriser la réutilisation des connexions dans l'état `TIME-WAIT`
+> pour les nouvelles connexions quand cela ne pose pas de problème du
+> point de vue du protocole. La valeur par défaut est 0. Elle ne doit
+> pas être changé sans en aviser vos experts techniques.
+
+Le manque de documentation à ce sujet a conduit à l'apparition de très
+nombreux guides conseillant d'activer ces deux paramètres afin de se
+débarasser des entrées dans l'état `TIME-WAIT`. Toutefois, comme
+indiqué dans la page de manuel `tcp(7)`, l'option
+`net.ipv4.tcp_tw_recycle` peut s'avérer problématique car elle présente
+des difficultés à gérer correctement des clients derrière une même
+IP. Ce problème est particulièrement difficile à diagnostiquer quand il
+survient :
+
+> Active le recyclage rapide des connexions dans l'état
+> `TIME-WAIT`. Activer cette option n'est pas recommandé car elle
+> cause des problèmes avec la translation d'adresses (NAT).
+
+Dans l'espoir de renverser la tendance, je fournis ici une explication
+plus détaillée sur le fonctionnement de l'état `TIME-WAIT` dans Linux.
+
+![xkcd illustration][xkcd-image]
+
+À noter que malgré la présence de `ipv4` dans le nom des options,
+celles-ci s'appliquent également à IPv6. Gardez de plus à l'esprit que
+nous nous intéressons à la pile TCP de Linux qui n'a quasiment aucun
+lien avec le suivi de connexions de _Netfilter_[^netfilter].
+
+[^netfilter]: Notamment, les paramètres tels que `net.netfilter.nf_conntrack_tcp_timeout_time_wait`
+              n'ont absolument aucune infuence sur la gestion des connexions dans l'état `TIME-WAIT`.
+
+[TOC]
+
+# À propos de l'état `TIME-WAIT`
+
+Commençons d'abord par comprendre comment fonctionne l'état
+`TIME-WAIT` et les problèmes qu'il peut poser. Regardons le diagramme
+d'état TCP ci-dessous[^source] :
+
+![Diagramme d'état TCP][tcp-state-diagram]
+[tcp-state-diagram]: [[!!images/tcp/tcp-state-diagram.png]] "Diagramme d'état TCP"
+
+[^source]: Ce diagramme est disponible sous la licence [LaTeX Project Public License 1.3][].
+           Le fichier original est disponible sur cette [page][source].
+
+[source]: http://www.texample.net/tikz/examples/tcp-state-machine/ "Diagramme d'état TCP par Ivan Griffin"
+
+Seul l'**hôte fermant la connexion en premier** se retrouve dans
+l'état `TIME-WAIT`. L'autre pair suit un chemin qui conduit
+généralement à la libération complète et rapide de la connexion.
+
+La commande `ss -tan` permet d'observer l'état de toutes les
+connexions sur le système :
+
+    ::console
+    $ ss -tan | head -5
+    LISTEN     0  511             *:80              *:*     
+    SYN-RECV   0  0     192.0.2.145:80    203.0.113.5:35449
+    SYN-RECV   0  0     192.0.2.145:80   203.0.113.27:53599
+    ESTAB      0  0     192.0.2.145:80   203.0.113.27:33605
+    TIME-WAIT  0  0     192.0.2.145:80   203.0.113.47:50685
+
+## Mission
+
+L'état `TIME-WAIT` a deux buts :
+
+  - Le premier est d'**empêcher les segments en retard** d'être
+    acceptés dans une connexion utilisant le même quadruplet
+    (adresse source, port source, adresse cible, port cible). La
+    [RFC 1337][] explique en détail ce qui peut arriver si l'état
+    `TIME-WAIT` ne joue pas son rôle. Voici un exemple de ce
+    qui peut être évité si l'état `TIME-WAIT` n'est pas raccourci :
+
+![Segments dupliqués acceptés dans une autre connexion][duplicate-segment]
+[duplicate-segment]: [[!!images/tcp/duplicate-segment.png]] "En raison d'un état TIME-WAIT trop bref, un segment TCP en retard est accepté dans une connexion sans rapport."
+
+  - Le second but est d'assurer **que l'hôte distant a bien fermé la
+    connexion**. Lorsque que le dernier _ACK_ est perdu, l'hôte
+    distant reste dans l'état `LAST-ACK`[^lastack]. Si l'état
+    `TIME-WAIT` n'existait pas, une connexion vers cet hôte pourrait
+    être tentée. Le segment _SYN_ peut alors être accueilli avec un
+    _RST_.  La nouvelle connexion se termine alors avec une erreur :
+
+![Dernier ACK perdu][last-ack]
+[last-ack]: [[!!images/tcp/last-ack.png]] "Lorsque le pair distant reste dans l'état LAST-ACK, ouvrir une nouvelle connexion avec le même quadruplet échoue."
+
+[^lastack]: Dans l'état `LAST-ACK`, une connexion retransmet
+            régulièrement le dernier segment _FIN_ jusqu'à recevoir le
+            segment _ACK_ attendu. Il est donc normalement peu
+            probable de rester très longtemps dans cet état.
+
+La [RFC 793][] demande à ce que l'état `TIME-WAIT` dure au moins deux
+fois le MSL. Sur Linux, cette durée n'est pas configurable. Elle est
+définie dans `include/net/tcp.h` et vaut une minute :
+
+    ::c
+    #define TCP_TIMEWAIT_LEN (60*HZ) /* how long to wait to destroy TIME-WAIT
+                                      * state, about 60 seconds     */
+
+Il y a eu des
+[propositions pour rendre ce paramètre configurable][tcp_tw_interval]
+mais celles-ci ont été rejetées en raison de la nécessité de conserver
+le bon fonctionnement de l'état `TIME-WAIT`.
+
+## Problèmes
+
+Voyons maintenant pourquoi cet état peut devenir ennuyeux sur un
+serveur gérant de nombreuses connexions. Il y a trois aspects à
+considérer :
+
+ - l'entrée prise dans la table des connexions et empêchant de **nouvelles connexions**,
+ - la **mémoire** occupée par la socket dans le noyau,
+ - l'**usage CPU** additionnel.
+
+Le résultat de la commande `ss -tan state time-wait | wc -l` n'est pas
+un problème en soi !
+
+### Table des connexions
+
+Une connexion dans l'état `TIME-WAIT` est gardée pendant une minute
+dans la table des connexions. Cela signifie qu'une connexion avec le
+même _quadruplet_ (adresse source, port source, adresse destination,
+port destination) ne peut pas exister.
+
+Pour un serveur web, l'adresse destination et le port destination sont
+constants. Si ce serveur se situe en plus derrière un répartiteur de
+charge L7, l'adresse IP source est également constante. Linux alloue
+par défaut les ports pour les connexions sortantes dans un intervalle
+d'environ 30 000 ports (cela se règle en modifiant
+`net.ipv4.ip_local_port_range`). Chaque minute, au plus 30 000
+connexions peuvent donc être établies vers le serveur web, soit
+environ **500 connexions par seconde**.
+
+Si l'état `TIME-WAIT` se situe côté client, une telle situation se
+détecte facilement. L'appel à `connect()` retourne `EADDRNOTAVAIL` et
+l'application va journaliser l'erreur. Côté serveur, la situation est
+plus complexe à décéler. Dans le doute, il convient de savoir mesurer
+s'il y a saturation des quadruplets disponibles :
+
+    ::console
+    $ ss -tan 'sport = :80' | awk '{print $(NF)" "$(NF-1)}' | \
+    >     sed 's/:[^ ]*//g' | sort | uniq -c
+        696 10.24.2.30 10.33.1.64
+       1881 10.24.2.30 10.33.1.65
+       5314 10.24.2.30 10.33.1.66
+       5293 10.24.2.30 10.33.1.67
+       3387 10.24.2.30 10.33.1.68
+       2663 10.24.2.30 10.33.1.69
+       1129 10.24.2.30 10.33.1.70
+      10536 10.24.2.30 10.33.1.73
+
+La solution à ces problèmes est d'utiliser **plus de
+quadruplets**[^outgoing]. Il y a plusieurs solutions (par ordre de
+difficulté) :
+
+ - utiliser **plus de ports clients** en modifiant
+   `net.ipv4.ip_local_port_range`,
+ - utiliser **plus de ports serveurs** en configurant le serveur web
+   pour écouter sur des ports supplémentaires (81, 82, 83, ...),
+ - utiliser **plus d'IP clients** en configurant des IP
+   supplémentaires sur le répartiteur de charge et en les utilisant
+   l'une après l'autre,
+ - utiliser **plus d'IP serveurs** en configurant des IP
+   supplémentaires sur le serveur web[^others].
+
+[^outgoing]: Côté client, les noyaux plus anciens doivent également
+             trouver un tuple local disponible (adresse source, port
+             source) pour chaque connexion sortante. Augmenter les
+             paramètres côté serveur n'a donc pas d'effet. Un noyau
+             Linux 3.2 est toutefois assez récent pour partager un
+             même tuple local vers différentes destinations. Merci à
+             Willy Tarreau pour son [point de vue][insight] sur la
+             question.
+
+[^others]: La dernière solution peut sembler un peu stupide par
+           rapport à l'utilisation de ports supplémentaires mais
+           certains serveurs ne permettent pas d'écouter sur plusieurs
+           ports. L'avant-dernière solution est plus économique en
+           nombre d'IP consommées.
+
+[insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
+
+Une dernière solution est de modifier `net.ipv4.tcp_tw_reuse` et
+`net.ipv4.tcp_tw_recycle`. Patientez encore un peu, nous y arriverons
+plus tard.
+
+### Mémoire
+
+Avec beaucoup de connexions à gérer, garder des entrées inactives
+pendant une minute occupe de la mémoire. Par exemple, si un serveur
+gère 10 000 connexions par seconde, il peut y avoir en permanence
+600 000 entrées `TIME-WAIT`. Quelle quantité de mémoire cela
+représente-t'il ? Pas tant que ça.
+
+Tout d'abord, côté applicatif, une connexion en `TIME-WAIT` n'existe
+plus. Elle a été fermée. Dans le noyau, une connexion dans l'état
+`TIME-WAIT` est matérialisée à trois endroits pour trois usages
+différents :
+
+ 1. La **table de hachage des connexions**, appelée la « table des
+    connexions TCP établies » (bien qu'elle contienne des connexions
+    dans un autre état), permet de localiser une connexion existante
+    lors, par exemple, de la réception d'un nouveau segment.
+    
+    Chaque entrée de cette table pointe sur deux listes : une liste
+    des connexions dans l'état `TIME-WAIT` et une liste des connexions
+    dans un autre état. La taille de cette table dépend de la quantité
+    de mémoire sur le système et est indiquée lors du démarrage :
+    
+        ::console
+        $ dmesg | grep "TCP established hash table"
+        [    0.169348] TCP established hash table entries: 65536 (order: 8, 1048576 bytes)
+    
+    Il est possible de spécifier soi-même la taille avec le paramètre
+    `thash_entries`.
+    
+    Chaque élément de la liste des connexions dans l'état `TIME-WAIT`
+    est de type `struct tcp_timewait_sock`, tandis que les élements de
+    l'autre liste sont de type `struct tcp_sock`[^tcptimewaitsock] :
+    
+        ::c
+        struct tcp_timewait_sock {
+            struct inet_timewait_sock tw_sk;
+            u32    tw_rcv_nxt;
+            u32    tw_snd_nxt;
+            u32    tw_rcv_wnd;
+            u32    tw_ts_offset;
+            u32    tw_ts_recent;
+            long   tw_ts_recent_stamp;
+        };
+    
+        struct inet_timewait_sock {
+            struct sock_common  __tw_common;
+        
+            int                     tw_timeout;
+            volatile unsigned char  tw_substate;
+            unsigned char           tw_rcv_wscale;
+            __be16 tw_sport;
+            unsigned int tw_ipv6only     : 1,
+                         tw_transparent  : 1,
+                         tw_pad          : 6,
+                         tw_tos          : 8,
+                         tw_ipv6_offset  : 16;
+            unsigned long            tw_ttd;
+            struct inet_bind_bucket *tw_tb;
+            struct hlist_node        tw_death_node;
+        };
+
+
+ 2. Un **ensemble de listes de connexions** appelé le « couloir de la
+    mort ». Il est utilisé pour expirer les connexions dans l'état
+    `TIME-WAIT`. Les connexions sont ordonnées suivant la date
+    d'expiration.
+    
+    Ces connexions utilisent le même espace mémoire que pour les
+    entrées dans la table de hachage décrite au point précédent. Il
+    s'agit du membre `struct hlist_node tw_death_node`.
+
+ 3. Une **table de hachage des ports locaux utilisés** permet de
+    déterminer ou de trouver rapidement un port local pour une
+    nouvelle connexion. La taille de cette table est la même que la
+    table de hachage des connexions :
+    
+        ::console
+        $ dmesg | grep "TCP bind hash table"
+        [    0.169962] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
+    
+    Chaque élément est de type `struct inet_bind_socket` qui
+    correspond à un port local. Une connexion dans l'état `TIME-WAIT`
+    vers un serveur web correspond au port local 80 et partage donc
+    son entrée avec les autres connexions du même type. D'un autre
+    côté, chaque connexion sortante utilise un port local aléatoire et
+    ne partage donc généralement pas son entrée.
+
+[^tcptimewaitsock]: L'utilisation d'une structure dédiée pour les
+                    connexions dans l'état `TIME-WAIT` remonte au
+                    noyau Linux 2.6.14.
+
+Chaque connexion (entrante ou sortante) a donc besoin d'un `struct
+tcp_timewait_sock` De plus, chaque connexion sortante est attachée à
+un `struct inet_bind_socket` dédié.
+
+La taille d'un `struct tcp_timewait_sock` est de 168 octets tandis
+qu'un `struct inet_bind_socket` occupe 48 octets :
+
+    ::console
+    $ sudo apt-get install linux-image-$(uname -r)-dbg
+    [...]
+    $ gdb /usr/lib/debug/boot/vmlinux-$(uname -r)
+    (gdb) print sizeof(struct tcp_timewait_sock)
+     $1 = 168
+    (gdb) print sizeof(struct tcp_sock)
+     $2 = 1776
+    (gdb) print sizeof(struct inet_bind_bucket)
+     $3 = 48
+
+Ainsi, 40 000 connexions entrantes dans l'état `TIME-WAIT` occupent
+environ 10 Mo alors que 40 000 connexions sortantes occupent en plus
+2,5 Mo. L'utilitaire `slabtop` permet de confirmer ce calcul. Voyez ce
+qui est indiqué pour un serveur avec 50 000 connexions dans l'état
+`TIME-WAIT` dont 45 000 connexions sortantes :
+
+    ::console
+    $ sudo slabtop -o | grep -E '(^  OBJS|tw_sock_TCP|tcp_bind_bucket)'
+      OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME                   
+     50955  49725  97%    0.25K   3397       15     13588K tw_sock_TCP            
+     44840  36556  81%    0.06K    760       59      3040K tcp_bind_bucket
+
+
+Il n'y a rien à modifier ici : la mémoire occupée par les connexions
+dans l'état `TIME-WAIT` est **très faible**. Si votre serveur doit
+gérer des milliers de nouvelles connexions par seconde, la mémoire
+nécessaire pour pouvoir pousser efficacement les données rend la
+présence des connexions dans l'état `TIME-WAIT` négligeable.
+
+### CPU
+
+Coté CPU, la recherche d'un port local de libre est effectué par la
+[fonction `inet_csk_get_port()`][inet_csk_get_port] qui emploie un
+verrou et utilise la table de hachage des ports locaux jusqu'à trouver
+un port libre. Un très grand nombre d'entrées dans cette table
+n'impacte généralement pas les performances car si les connexions sont
+relativement homogènes, cette fonction parcourt les ports locaux de
+manière séquentielle et retourne donc rapidement un résultat.
+
+# Autres solutions
+
+Arrivé à ce point, si vous pensez toujours avoir un problème avec
+l'état `TIME-WAIT`, il existe trois autres solutions :
+
+ - désactiver le _socket lingering_,
+ - `net.ipv4.tcp_tw_reuse`,
+ - `net.ipv4.tcp_tw_recycle`.
+
+## Socket lingering
+
+Lorsque `close()` est appelé, les octets restants dans le noyau seront
+envoyées en tâche de fond et la connexion terminera dans l'état
+`TIME-WAIT`. L'application récupère immédiatement la main avec la
+certitude que les données finiront par être livrées.
+
+Toutefois, une application peut désactiver ce comportement (connu sous
+le nom _socket lingering_). Il y a deux possibilités :
+
+ 1. La première est de désactiver entièrement le mécanisme. Les
+    **données restantes seront perdues** et la connexion est terminée
+    par l'envoi d'un segment _RST_. L'hôte distant détectera alors
+    une erreur. La connexion ne passera pas par l'état `TIME-WAIT`.
+
+ 2. La seconde est d'attendre un certain temps que les données soient
+    livrées et seulement ensuite de casser la connexion comme dans le
+    point précédent. L'appel à `close()` est alors bloquant jusqu'à ce
+    que les données soient livrées ou que le délai défini soit
+    écoulé. Il est possible d'éviter ce bloquage en passant la
+    connexion en mode non bloquant. Le processus s'effectue alors en
+    tâche de fond. Si les données sont livrées avec succès, la
+    connexion passera dans l'état `TIME-WAIT`. Dans le cas contraire,
+    un segment _RST_ sera envoyé et les données seront perdues.
+
+Dans les deux cas, **désactiver le _socket lingering_ n'est pas une
+solution universelle**. Certaines applications telles que [HAProxy][]
+ou [Nginx][] peuvent employer sous certaines conditions une telle
+technique mais cela n'est pas systématique.
+
+## `net.ipv4.tcp_tw_reuse`
+
+L'état `TIME-WAIT` permet d'éviter que des segments en retard ne
+soient acceptés dans une connexion différente. Toutefois, sous
+certaines conditions, il est possible de différencier de manière
+certaine les segments d'une connexion précédente des segments d'une
+connexion actuelle.
+
+La [RFC 1323][] introduit un ensemble d'extensions pour améliorer les
+performances de TCP. Parmi celles-ci, on trouve l'horodatage sous
+forme de deux marqueurs : l'un correspond à l'horloge de l'expéditeur
+et l'autre au marqueur le plus récent reçu par ce dernier.
+
+En activant `net.ipv4.tcp_tw_reuse`, Linux va réutiliser une connexion
+dans l'état `TIME-WAIT` pour une nouvelle **connexion sortante** à
+condition que la date soit strictement plus grande que la dernière date
+utilisée pour l'ancienne connexion (ce qui correspond le plus souvent
+à une seconde de différence).
+
+Est-ce sûr ? Le premier but de l'état `TIME-WAIT` est d'éviter que des
+segments dupliqués soient acceptés dans une connexion
+différente. L'usage de l'horodatage permet d'éviter ce problème car
+les segments en question arriveront avec un marqueur trop vieux et
+seront ignorés.
+
+Le second but est de s'assurer que l'hôte distant ne se trouve pas
+dans l'état `LAST-ACK` suite à la perte du dernier segment
+_ACK_. L'hôte distant retransmet le segment _FIN_ jusqu'à ce qu'une
+des conditions suivantes se réalise :
+
+ 1. expiration de l'état
+ 2. réception du segment _ACK_ attendu
+ 3. réception d'un segment _RST_
+
+Dans tous les cas, la connexion est ensuite détruite. Si les segments
+_FIN_ ainsi envoyés sont reçus alors que l'état `TIME-WAIT` existe
+toujours, le _ACK_ attendu sera retransmis.
+
+Lorsque l'état `TIME-WAIT` est remplacé par une nouvelle connexion,
+l'horodatage garantit que le segment _SYN_ de la nouvelle connexion
+sera ignoré et qu'un nouveau segment _FIN_ sera renvoyé. Ce segment
+_FIN_ arrivant pour une connexion désormais dans l'état `SYN-SENT`, il
+recevra en réponse un segment _RST_ qui permettra de sortir de l'état
+`LAST-ACK`. Le segment _SYN_ initialement ignoré sera retransmis au
+bout d'une seconde (car il n'a pas eu de réponse) et la connexion sera
+alors établie sans erreur apparente en dehors du délai d'une seconde :
+
+![Dernier ACK perdu et réutilisation du TIME-WAIT][last-ack-reuse]
+[last-ack-reuse]: [[!!images/tcp/last-ack-reuse.png]] "Si le pair distant est dans l'état LAST-ACK, il pourra en sortir lors de la réception d'un segment RST."
+
+À noter que chaque connexion ainsi réutilisée implique l'incrément du
+compteur _TWRecycled_ (malgré son nom).
+
+## `net.ipv4.tcp_tw_recycle`
+
+Ce mécanisme s'appuie également sur l'horodatage des segments mais
+influence à la fois **les connexions entrantes et les connexions
+sortantes** ce qui est utile quand les états `TIME-WAIT` s'accumulent
+côté serveur[^serverfirst].
+
+[^serverfirst]: Quand un serveur ferme la connexion en premier, la
+                connexion atteint l'état `TIME-WAIT` de son côté
+                alors que le client considère que le quadruplet en
+                question est disponible pour une nouvelle connexion.
+
+L'état `TIME-WAIT` va expirer plus tôt : il sera supprimé après
+écoulement du délai de retransmission (_RTO_) qui est calculé à partir
+du RTT et de sa variance. Les valeurs en question peuvent être
+obtenues pour les connexions en cours avec la commande `ss` :
+
+    ::console
+    $ ss --info  sport = :2112 dport = :4057
+    State      Recv-Q Send-Q    Local Address:Port        Peer Address:Port   
+    ESTAB      0      1831936   10.47.0.113:2112          10.65.1.42:4057    
+             cubic wscale:7,7 rto:564 rtt:352.5/4 ato:40 cwnd:386 ssthresh:200 send 4.5Mbps rcv_space:5792
+
+Afin de garantir les mêmes propriétés fournies par l'état `TIME-WAIT`
+tout en gardant cet état moins longtemps, quand une connexion atteint
+l'état `TIME-WAIT`, le dernier horodatage observé est enregistré dans
+une structure dédiée avec l'IP de l'hôte distant concerné.  Linux
+ignorera alors pendant une minute tout segment provenant d'un hôte
+connu mais dont l'horodatage est en contradiction avec la valeur
+mémorisée :
+
+    ::c
+    if (tmp_opt.saw_tstamp &&
+        tcp_death_row.sysctl_tw_recycle &&
+        (dst = inet_csk_route_req(sk, &fl4, req, want_cookie)) != NULL &&
+        fl4.daddr == saddr &&
+        (peer = rt_get_peer((struct rtable *)dst, fl4.daddr)) != NULL) {
+            inet_peer_refcheck(peer);
+            if ((u32)get_seconds() - peer->tcp_ts_stamp < TCP_PAWS_MSL &&
+                (s32)(peer->tcp_ts - req->ts_recent) >
+                                            TCP_PAWS_WINDOW) {
+                    NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSPASSIVEREJECTED);
+                    goto drop_and_release;
+            }
+    }
+
+Lorsque plusieurs hôtes partagent une même IP (courant avec du NAT),
+cette condition les empêchent de pouvoir se connecter car ils
+n'utilisent pas la même horloge pour l'horodatage. Dans le doute, il
+est donc préférable de ne pas activer cette option car elle conduit à
+des problèmes **difficiles à détecter** et **difficile à
+diagnostiquer**.
+
+L'état `LAST-ACK` est géré de la même façon que dans le cas de
+`net.ipv4.tcp_tw_recycle`.
+
+# Résumé
+
+La solution universelle est d'**augmenter le nombre de combinaisons
+possibles pour les quadruplets** en utilisant, par exemple, plusieurs
+ports côté serveur.
+
+**Côté serveur**, ne pas activer `net.ipv4.tcp_tw_recycle` à moins
+d'être sûr de ne jamais avoir à interagir avec des machines se
+partageant la même IP. Activer `net.ipv4.tcp_tw_reuse` est sans
+effet sur les connexions entrantes.
+
+**Côté client**, activer `net.ipv4.tcp_tw_reuse` est une solution
+quasiment fiable. Activer en plus `net.ipv4.tcp_tw_recycle` est alors
+quasi-inutile.
+
+Pour terminer, voici une citation de [W. Richard Stevens][] issue de [Unix Network Programming][]:
+
+> L'état `TIME_WAIT` est notre ami et est là pour nous aider (i.e.,
+> permettre aux segments dupliqués d'expirer en transit). Plutôt que
+> de tenter de supprimer cet état, nous devons le comprendre.
+
+*[NAT]: Network Address Translation
+*[TCP]: Transmission Control Protocol
+*[MSL]: Maximum Segment Lifetime
+*[TCB]: Transmission Control Block
+*[DCCP]: Datagram Congestion Control Protocol
+*[PAWS]: Protect Against Wrapped Sequences
+*[RTO]: Retransmission Timeout
+*[RTT]: Round-Trip Time
+
+[Creative-Commons Attribution-Share Alike 3.0]: http://creativecommons.org/licenses/by-sa/3.0/deed.en "Creative-Commons Attribution-Share Alike 3.0 unported"
+[LaTeX Project Public License 1.3]: http://www.latex-project.org/lppl.txt "LaTeX Project Public License 1.3"
+[RFC 793]: http://tools.ietf.org/html/rfc793 "RFC 793: Transmission Control Protocol"
+[RFC 1323]: http://tools.ietf.org/html/rfc1323 "RFC 1323: TCP Extensions for High Performance"
+[RFC 1337]: http://tools.ietf.org/html/rfc1337 "RFC 1337: TIME-WAIT Assassination Hazards in TCP"
+[RFC 6191]: http://tools.ietf.org/search/rfc6191 "RFC 6191: Reducing the TIME-WAIT State Using TCP Timestamps"
+[xkcd]: http://xkcd.com/386/ "xkcd: Duty Calls"
+[xkcd-image]: http://imgs.xkcd.com/comics/duty_calls.png "xkcd: Duty Calls — Someone is wrong on the Internet"
+[serverfault]: http://serverfault.com/questions/342741/what-are-the-ramifications-of-setting-tcp-tw-recycle-reuse-to-1 "Server Fault: What are the ramifications of setting tcp_tw_recycle/reuse to 1?"
+[tcp_tw_interval]: http://comments.gmane.org/gmane.linux.network/244411 "[RFC PATCH net-next] tcp: introduce tcp_tw_interval to specifiy the time of TIME-WAIT"
+[sock_common]: http://lxr.free-electrons.com/source/include/net/sock.h?v=3.12#L157 "Définition de struct sock_common"
+[inet_csk_get_port]: http://lxr.free-electrons.com/source/net/ipv4/inet_connection_sock.c?v=3.12#L104 "Définition de inet_csk_get_port()"
+[twemproxy]: https://github.com/twitter/twemproxy "twemproxy: fast, light-weight proxy for memcached and redis"
+[HAProxy]: http://haproxy.org/ "HAProxy: The Reliable, High Performance TCP/HTTP Load Balancer"
+[Nginx]: http://nginx.org "Nginx"
+[W. Richard Stevens]: http://www.kohala.com/start/ "W. Richard Stevens' Home Page"
+[Unix Network Programming]: http://www.amazon.com/Unix-Network-Programming-Volume-Networking/dp/0131411551 "Unix Network Programming, Volume 1: The Sockets Networking API"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
