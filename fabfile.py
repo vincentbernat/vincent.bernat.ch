@@ -42,7 +42,7 @@ def sprite():
         local("sed 's/ /display: inline-block; /' sprite.less > luffy.sprite.less")
         local("rm sprite.less")
 
-# For both the following tasks, please check that the appropriate
+# For the following task, please check that the appropriate
 # fonts are installed on the system. The rendering engine of both
 # wkhtmltopdf and cutycapt is QT and it doesn't support web fonts
 # yet. There is also a bug when multiple fonts are used under the same
@@ -54,20 +54,11 @@ def sprite():
 #   http://www.google.com/fonts#UsePlace:use/Collection:Source+Sans+Pro:700|Inconsolata|Merriweather:400,400italic
 
 @task
-def pdf():
-    """Generate resume PDF"""
-    for lang in ["en", "fr"]:
-        local("wkhtmltopdf --quiet --zoom 0.7 --use-xserver --print-media-type -s A4 "
-              "http://localhost:8080/{lang}/cv.html "
-              "content/media/files/cv-{lang}.pdf || true".format(lang=lang))
-
-@task
 def screenshots():
     """Generate screenshots"""
     now = time.asctime().replace(" ", "-")
     os.makedirs("screenshots/{now}".format(now=now))
     for url in ["en/",
-                "en/cv.html",
                 "en/blog",
                 "en/projects.html",
                 "en/blog/2011-ssl-perfect-forward-secrecy.html",
