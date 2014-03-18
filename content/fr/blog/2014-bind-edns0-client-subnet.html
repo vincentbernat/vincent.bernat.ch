@@ -1,0 +1,185 @@
+---
+title: "EDNS client subnet & BIND"
+keywords: "bind, geoip, edns0, client subnet"
+uuid: 0348fbfa-fb81-48c2-98f1-d4fe967acc7d
+attachments:
+  "https://gist.github.com/vincentbernat/6524506": "Patch pour le support de « EDNS client subnet » dans BIND"
+tags:
+  - network
+---
+
+Afin de fournir des des réponses tenant compte de la **localisation du
+client**, un [patch ajoutant le support GeoIP][geoip] est couramment
+mis en œuvre pour [BIND][]. Il permet de diriger un client vers le
+serveur le plus proche :
+
+    ::text
+    view "FRANCE" {
+         match-clients { geoip_cityDB_country_FR; };
+         zone "example.com" in {
+             type master;
+             file "france.example.com.dns";
+         };
+    };
+    view "GERMANY" {
+         match-clients { geoip_cityDB_country_DE; };
+         zone "example.com" in {
+             type master;
+             file "germany.example.com.dns";
+         };
+    };
+    /* [...] */
+    view "DEFAULT" {
+        zone "example.com" in {
+            type master;
+            file "example.com.dns";
+        };
+    };
+
+Toutefois, l'utilisateur final ne parle généralement pas directement
+aux serveurs autoritaires. Il délègue cette tâche à un **serveur
+récursif tierce**. Ce dernier maintient également un cache des
+réponses afin de pouvoir les servir directement à d'autres clients.
+
+Dans la plupart des cas, il est toujours possible de se baser sur la
+localisation géographique du serveur récursif car il se situe lui-même
+dans le réseau du FAI de l'utilisateur, comme le montre le schéma
+suivant :
+
+![Requête pour www.example.com à travers le serveur récursif d'un FAI][1]
+[1]: [[!!images/dns-isp-recursor.png]] "Cas idéal : le serveur récursif utilisé est à proximité de l'utilisateur final."
+
+ 1. Juan habite en Chine et désire connaître l'IP de
+    `www.example.com`. Elle interroge le résolveur mis à disposition
+    par son FAI.
+ 2. Le résolveur relaie la requête au serveur autoritaire.
+ 3. Comme l'adresse IP du **résolveur** est également localisée en
+    Chine, le serveur autoritaire décide de répondre avec l'adresse IP du
+    serveur web le plus proche, situé au Japon.
+ 4. Juan bénéficie alors d'une connexion rapide avec le serveur web.
+
+Toutefois, ce n'est plus le cas en utilisant un serveur récursif
+public tel que ceux fournis par [Google][] ou [OpenDNS][]. L'adresse
+IP du client et l'adresse IP utilisée par le serveur récursif peuvent
+ne pas partager la même localisation. Ainsi, dans le schéma suivant,
+le serveur autoritaire pense avoir affaire avec un client en Europe et
+redirige Juan sur un serveur Européen :
+
+![Requête pour www.example.com à travers un serveur récursif public][2]
+[2]: [[!!images/dns-open-recursor.png]] "Pire des cas : le serveur récursif interroge le serveur autoritaire depuis une autre localisation."
+
+De plus, la **mise en cache empire la situation**.
+
+Afin de résoudre ce problème, une
+[extension EDNS pour exposer le sous-réseau du client][EDNS extension to expose the client subnet]
+a été proposée. Le serveur récursif va utiliser cette extension pour
+fournir le sous-réseau du client au serveur autoritaire qui va en
+tenir compte pour donner une réponse optimisée. Le sous-réseau est
+suffisamment vague pour préserver la vie privée de l'utilisateur mais
+suffisamment précis pour pouvoir le localiser. Une
+[version modifiée de `dig`][dig] permet de construire de telles
+requêtes :
+
+    ::console
+    $ geoiplookup 138.231.136.0
+    GeoIP Country Edition: FR, France
+    $ ./bin/dig/dig @dns-02.dailymotion.com www.dailymotion.com \
+    >     +client=138.231.136.0/24
+    
+    ; <<>> DiG 9.8.1-P1-geoip-1.3 <<>> @dns-02.dailymotion.com www.dailymotion.com +client=138.231.136.0/24
+    ; (1 server found)
+    ;; global options: +cmd
+    ;; Got answer:
+    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 23312
+    ;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+    ;; WARNING: recursion requested but not available
+    
+    ;; OPT PSEUDOSECTION:
+    ; EDNS: version: 0, flags:; udp: 4096
+    ; CLIENT-SUBNET: 138.231.136.0/24/24
+    ;; QUESTION SECTION:
+    ;www.dailymotion.com.           IN      A
+    
+    ;; ANSWER SECTION:
+    www.dailymotion.com.    600     IN      A       195.8.215.136
+    www.dailymotion.com.    600     IN      A       195.8.215.137
+    
+    ;; Query time: 20 msec
+    ;; SERVER: 188.65.127.2#53(188.65.127.2)
+    ;; WHEN: Sun Oct 20 15:44:47 2013
+    ;; MSG SIZE  rcvd: 91
+
+    $ geoiplookup 195.8.215.136
+    GeoIP Country Edition: FR, France
+
+Dans l'exemple ci-dessus, un client en France obtient en réponse deux
+adresses IP situées en France. Par contre, ci-dessous, un client aux
+États-Unis obtient des IP américaines.
+
+    ::console
+    $ geoiplookup 170.149.100.0
+    GeoIP Country Edition: US, United States
+    $ ./bin/dig/dig @dns-02.dailymotion.com www.dailymotion.com \
+    >     +client=170.149.100.0/24
+    
+    ; <<>> DiG 9.8.1-P1-geoip-1.3 <<>> @dns-02.dailymotion.com www.dailymotion.com +client=170.149.100.0/24
+    ; (1 server found)
+    ;; global options: +cmd
+    ;; Got answer:
+    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 23187
+    ;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+    ;; WARNING: recursion requested but not available
+    
+    ;; OPT PSEUDOSECTION:
+    ; EDNS: version: 0, flags:; udp: 4096
+    ; CLIENT-SUBNET: 170.149.100.0/24/24
+    ;; QUESTION SECTION:
+    ;www.dailymotion.com.           IN      A
+    
+    ;; ANSWER SECTION:
+    www.dailymotion.com.    600     IN      A       188.65.120.135
+    www.dailymotion.com.    600     IN      A       188.65.120.136
+    
+    ;; Query time: 18 msec
+    ;; SERVER: 188.65.127.2#53(188.65.127.2)
+    ;; WHEN: Sun Oct 20 15:47:22 2013
+    ;; MSG SIZE  rcvd: 91
+    
+    $ geoiplookup 188.65.120.135
+    GeoIP Country Edition: US, United States
+
+Le serveur récursif indique dans son cache les sous-réseaux contenus
+dans la réponse du serveur afin de n'utiliser le cache que pour les
+clients du même sous-réseau. Avec cette nouvelle extension, le serveur
+autoritaire sait désormais que Juan est située en Chine et répond avec
+une IP appropriée :
+
+![Requête pour www.example.com à travers un serveur récursif public utilisant l'extension][3]
+[3]: [[!!images/dns-open-recursor-with-edns.png]] "Le serveur récursif fournit le sous-réseau du client et obtient une réponse adaptée à celui-ci."
+
+Peu de serveurs autoritaires supportent cette extension (à ma
+connaissance, uniquement [PowerDNS][] et [gdnsd][]). À [Dailymotion][],
+nous avons mis au point un [patch pour _BIND_][subnet-bind]. Il ne
+fonctionne que lorsque _BIND_ est utilisé en tant que serveur
+autoritaire et n'expose aucune directive de configuration. Une fois
+installé, il convient de se faire connaître auprès de
+[OpenDNS][rOpenDNS] et [Google][rGoogle] pour recevoir des requêtes
+utilisant l'extension.
+
+[Dailymotion]: http://www.dailymotion.com "Watch, publish, share videos"
+[BIND]: http://www.isc.org/downloads/bind/ "BIND"
+[geoip]: https://code.google.com/p/bind-geoip/ "Patch pour BIND permettant d'utiliser les bases de MaxMind"
+[Google]: https://developers.google.com/speed/public-dns/docs/using "Using Google Public DNS"
+[OpenDNS]: http://www.opendns.com/ "OpenDNS"
+[EDNS extension to expose the client subnet]: http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-02 "Client Subnet in DNS Requests"
+[dig]: http://wilmer.gaa.st/edns-client-subnet/ "Patch ajoutant le support de « EDNS client subnet » à dig"
+[PowerDNS]: http://powerdns.com "PowerDNS"
+[gdnsd]: http://gdnsd.org/ "gdnsd: authoritative-only DNS server with geographic balancing"
+[subnet-bind]: https://gist.github.com/vincentbernat/6524506 "Support de « EDNS client subnet » pour BIND"
+[rGoogle]: https://code.google.com/a/google.com/p/public-dns/ "Google Public DNS"
+[rOpenDNS]: http://www.opendns.com/support/ "OpenDNS support"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

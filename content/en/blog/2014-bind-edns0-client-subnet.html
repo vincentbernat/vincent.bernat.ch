@@ -1,0 +1,180 @@
+---
+title: "EDNS client subnet support for BIND"
+keywords: "bind, geoip, edns0, client subnet"
+uuid: 0348fbfa-fb81-48c2-98f1-d4fe967acc7d
+attachments:
+  "https://gist.github.com/vincentbernat/6524506": "EDNS client subnet support patch for BIND"
+tags:
+  - network
+---
+
+To provide **geolocation-aware answers** with [BIND][], a common
+solution is to use a [patch adding GeoIP support][geoip]. A client can
+be directed to the closest (and hopefully fastest) web server:
+
+    ::text
+    view "FRANCE" {
+         match-clients { geoip_cityDB_country_FR; };
+         zone "example.com" in {
+             type master;
+             file "france.example.com.dns";
+         };
+    };
+    view "GERMANY" {
+         match-clients { geoip_cityDB_country_DE; };
+         zone "example.com" in {
+             type master;
+             file "germany.example.com.dns";
+         };
+    };
+    /* [...] */
+    view "DEFAULT" {
+        zone "example.com" in {
+            type master;
+            file "example.com.dns";
+        };
+    };
+
+However, an end user does not usually talk directly to authoritative
+servers. They proxy the query to a **third-party recursor server**
+which will query the authoritative server on their behalf. The
+recursor also caches the answer to be able to serve it directly to
+other clients.
+
+On most cases, we can still rely on the recursor GeoIP location to
+forward the client to the closest web server because it is located in
+the client's ISP network, as shown on the following schema:
+
+![Query for www.example.com through an ISP recursor][1]
+[1]: [[!!images/dns-isp-recursor.png]] "Ideal case: the recursor is located close to the end user."
+
+ 1. Juan is located in China and wants to know the IP address of
+    `www.example.com`. She queries her ISP resolver.
+ 2. The resolver asks the authoritative server for the answer.
+ 3. Because the IP address of the **resolver** is located in China, the
+    authoritative server decides to answer with the IP address of the
+    web server located in Japan which is the closest one.
+ 4. Juan can now enjoy short round-trips with the web server.
+
+However, this is not the case when using a public recursor as provided
+by [Google][] or [OpenDNS][]. In this case, the IP address of the end
+client and the source IP address of the recursor may not share the same
+locality. For example, in the following schema, the authoritative
+server now thinks it is in relation with an European customer and
+answers with the IP address of the web server located in Europe:
+
+![Query for www.example.com through an open recursor][2]
+[2]: [[!!images/dns-open-recursor.png]] "Worst case: the recursor queries the authoritative server through a remote node."
+
+Moreover, **caching makes the problem worse**.
+
+To solve this problem, a new
+[EDNS extension to expose the client subnet][] has been proposed. When
+using this extension, the recursor will provide the client subnet to
+the authoritative server for it to build an optimized reply. The
+subnet is vague enough to respect client's privacy but precise enough
+to be able to locate it. A [patched version of `dig`][dig] allows one
+to make queries with this new extension:
+
+    ::console
+    $ geoiplookup 138.231.136.0
+    GeoIP Country Edition: FR, France
+    $ ./bin/dig/dig @dns-02.dailymotion.com www.dailymotion.com \
+    >     +client=138.231.136.0/24
+    
+    ; <<>> DiG 9.8.1-P1-geoip-1.3 <<>> @dns-02.dailymotion.com www.dailymotion.com +client=138.231.136.0/24
+    ; (1 server found)
+    ;; global options: +cmd
+    ;; Got answer:
+    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 23312
+    ;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+    ;; WARNING: recursion requested but not available
+    
+    ;; OPT PSEUDOSECTION:
+    ; EDNS: version: 0, flags:; udp: 4096
+    ; CLIENT-SUBNET: 138.231.136.0/24/24
+    ;; QUESTION SECTION:
+    ;www.dailymotion.com.           IN      A
+    
+    ;; ANSWER SECTION:
+    www.dailymotion.com.    600     IN      A       195.8.215.136
+    www.dailymotion.com.    600     IN      A       195.8.215.137
+    
+    ;; Query time: 20 msec
+    ;; SERVER: 188.65.127.2#53(188.65.127.2)
+    ;; WHEN: Sun Oct 20 15:44:47 2013
+    ;; MSG SIZE  rcvd: 91
+
+    $ geoiplookup 195.8.215.136
+    GeoIP Country Edition: FR, France
+
+In the above example, a client located in France gets a reply with two IP
+addresses located in France. If we now are an US client, we will get
+IP addresses located in the US:
+
+    ::console
+    $ geoiplookup 170.149.100.0
+    GeoIP Country Edition: US, United States
+    $ ./bin/dig/dig @dns-02.dailymotion.com www.dailymotion.com \
+    >     +client=170.149.100.0/24
+    
+    ; <<>> DiG 9.8.1-P1-geoip-1.3 <<>> @dns-02.dailymotion.com www.dailymotion.com +client=170.149.100.0/24
+    ; (1 server found)
+    ;; global options: +cmd
+    ;; Got answer:
+    ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 23187
+    ;; flags: qr aa rd; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+    ;; WARNING: recursion requested but not available
+    
+    ;; OPT PSEUDOSECTION:
+    ; EDNS: version: 0, flags:; udp: 4096
+    ; CLIENT-SUBNET: 170.149.100.0/24/24
+    ;; QUESTION SECTION:
+    ;www.dailymotion.com.           IN      A
+    
+    ;; ANSWER SECTION:
+    www.dailymotion.com.    600     IN      A       188.65.120.135
+    www.dailymotion.com.    600     IN      A       188.65.120.136
+    
+    ;; Query time: 18 msec
+    ;; SERVER: 188.65.127.2#53(188.65.127.2)
+    ;; WHEN: Sun Oct 20 15:47:22 2013
+    ;; MSG SIZE  rcvd: 91
+    
+    $ geoiplookup 188.65.120.135
+    GeoIP Country Edition: US, United States
+
+The recursor is expected to cache the two different answers and only
+serve them if the client matches the appropriate subnet (the one
+confirmed in the answer from the authoritative server). With this new
+extension, the authoritative server knows that Juan is located in
+China and answers with the appropriate IP address:
+
+![Query for www.example.com through an open recursor with client subnet][3]
+[3]: [[!!images/dns-open-recursor-with-edns.png]] "Corrected case: the recursor queries the authoritative server through a remote node but provides the client subnet."
+
+Not many authoritative servers support this extension ([PowerDNS][]
+and [gdnsd][], as far as I know). At [Dailymotion][], we have built a
+[patch for _BIND_][subnet-bind]. It only works when _BIND_ is
+configured as an authoritative server and it doesn't expose no
+configuration knobs. Feel free to use it (at your own risk). Once
+installed, you need to register yourself to [OpenDNS][rOpenDNS] and to
+[Google][rGoogle] to receive queries with the extension enabled.
+
+[Dailymotion]: http://www.dailymotion.com "Watch, publish, share videos"
+[BIND]: http://www.isc.org/downloads/bind/ "BIND"
+[geoip]: https://code.google.com/p/bind-geoip/ "Patch to BIND for integration with MaxMind databases"
+[Google]: https://developers.google.com/speed/public-dns/docs/using "Using Google Public DNS"
+[OpenDNS]: http://www.opendns.com/ "OpenDNS"
+[EDNS extension to expose the client subnet]: http://tools.ietf.org/html/draft-vandergaast-edns-client-subnet-02 "Client Subnet in DNS Requests"
+[dig]: http://wilmer.gaa.st/edns-client-subnet/ "Patches to add support for EDNS client subnet to dig"
+[PowerDNS]: http://powerdns.com "PowerDNS"
+[gdnsd]: http://gdnsd.org/ "gdnsd: authoritative-only DNS server with geographic balancing"
+[subnet-bind]: https://gist.github.com/vincentbernat/6524506 "EDNS client subnet support patch for BIND"
+[rGoogle]: https://code.google.com/a/google.com/p/public-dns/ "Google Public DNS"
+[rOpenDNS]: http://www.opendns.com/support/ "OpenDNS support"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
