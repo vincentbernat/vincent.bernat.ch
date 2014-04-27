@@ -1,0 +1,653 @@
+---
+title: "Dépôts APT locaux en entreprise"
+keywords: "reprepro, debian, ubuntu, apt, repository, ppa, deb"
+uuid: 70eb6428-0a3f-428b-a109-ad4a551c0f5c
+tags:
+  - debian
+---
+
+Distribuer de manière efficace des logiciels sur l'ensemble d'une
+plateforme peut être ardu. Chaque distribution fournit un gestionnaire
+de paquets qui est généralement bien adapté à cette tâche. Dans le cas
+de [Debian][] ou d'une distribution dérivée, il s'agit d'APT.
+
+Certains logiciels ne sont pas présent dans les dépôts officiels ou
+peuvent être disponibles dans une version trop ancienne. La mise en
+place d'un dépôt local permet de contourner cet écueil.
+
+Ce qui est présenté ici a été mis en place pour [Dailymotion][] et a
+été fortement inspiré du travail de [Raphaël Pinson][] chez Orange.
+
+[TOC]
+
+# Configuration des dépôts locaux
+
+Les dépôts à mettre en place peuvent se classer dans trois
+catégories :
+
+ 1. Les **miroirs de distributions**. Ils permettent d'économiser de la
+    bande passante, d'obtenir un meilleur débit et un accès permanent
+    même lorsque l'accès à Internet est perturbé.
+
+ 2. Les **dépôts maisons** pour vos propres paquets avec la
+    possibilité de passer par une zone de test pour valider les
+    paquets sur quelques machines avant de les pousser en production.
+
+ 3. Les miroirs pour les **dépôts non officiels**, tels que des
+    [PPA Ubuntu][Ubuntu PPA]. Pour éviter tout changement inattendu,
+    de tels dépôts sont aussi dôtés d'une zone de test et d'une zone
+    de production.
+
+Avant de continuer, il est important de s'accorder sur la terminologie
+à employer. Examinons une ligne issue de mon `/etc/apt/sources.list`:
+
+    ::sources.list
+    deb http://ftp.debian.org/debian/ unstable main contrib non-free
+
+Dans cet exemple, `http://ftp.debian.org/debian/` est un **dépôt** et
+`unstable` est une **distribution**. Une distribution est divisée en
+un certain nombre de **composants**. Nous en avons ici trois : `main`,
+`contrib` et `non-free`.
+
+La mise en place des différents dépôts se fera avec le logiciel
+[reprepro][]. Ce n'est pas la seule solution disponible mais il est à
+la fois plutôt versatile et simple à mettre en place. _reprepro_ ne
+gère qu'un seul dépôt. Le premier choix à effectuer est donc de savoir
+comment répartir les paquets dans les dépôts, les distributions et les
+composants.
+
+Voici quelques billes pour choisir :
+
+ - Un **dépôt** ne peut pas contenir deux paquets identiques (même
+   nom, même version, même architecture).
+ - À l'intérieur d'un **composant**, il n'est possible d'avoir qu'une
+   seule version d'un paquet.
+ - Habituellement, une **distribution est un sous-ensemble des
+   versions** tandis qu'un **composant est un sous-ensemble des
+   paquets**. Par exemple, dans Debian, la distribution `unstable`
+   permet d'obtenir des paquets dans des versions très récentes tandis
+   que le composant `main` permet de se limiter aux paquets respectant
+   la DFSG.
+
+En partant sur plusieurs dépôts, il faudra gérer plusieurs instances
+de _reprepro_ et la copie entre deux instances se fait
+manuellement. À [Dailymotion][], nous sommes partis sur un seul dépôt, mais il aurait été possible de partir sur trois dépôts :
+
+ - un pour les miroirs de distributions,
+ - un pour les paquets maisons,
+ - un pour les miroirs de dépôts tiers.
+
+Voici ce que nous allons mettre en place :
+
+![Local APT repository][2]
+[2]: [[!!images/apt-repository.png]] "Un dépôt avec trois distributions comprenant également une zone de test."
+
+## Mise en place
+
+La première étape est de créer un utilisateur pour travailler sur les
+dépôts :
+
+    ::console
+    $ adduser --system --disabled-password --disabled-login \
+    >         --home /srv/packages \
+    >         --group reprepro
+
+Toutes les opérations qui suivent doivent utiliser exclusivement cet
+utilisateur. Chaque dépôt aura son propre répertoire dans lequel on
+trouvera les sous-répertoires suivants :
+
+ - `conf/` qui contient les fichiers de configuration,
+ - `gpg/` qui contient les fichiers permettant de signer et
+   authentifier les dépôts avec GPG[^sharegpg],
+ - `logs/` qui contient les journaux,
+ - `www/` qui contient les fichiers du dépôt à rendre visible par un
+   quelconque server web.
+
+[^sharegpg]: Le répertoire `gpg/` peut être partagé par plusieurs
+             dépôts.
+
+Voici le contenu de `conf/options` :
+
+    outdir +b/www
+    logdir +b/logs
+    gnupghome +b/gpg
+
+Créons la clef GPG pour signer le dépôt :
+
+    ::console
+    $ GNUPGHOME=gpg gpg --gen-key
+    Please select what kind of key you want:
+       (1) RSA and RSA (default)
+       (2) DSA and Elgamal
+       (3) DSA (sign only)
+       (4) RSA (sign only)
+    Your selection? 1
+    RSA keys may be between 1024 and 4096 bits long.
+    What keysize do you want? (2048) 4096
+    Requested keysize is 4096 bits
+    Please specify how long the key should be valid.
+             0 = key does not expire
+          <n>  = key expires in n days
+          <n>w = key expires in n weeks
+          <n>m = key expires in n months
+          <n>y = key expires in n years
+    Key is valid for? (0) 10y
+    Key expires at mer. 08 nov. 2023 22:30:58 CET
+    Is this correct? (y/N) y
+    
+    Real name: Dailymotion Archive Automatic Signing Key
+    Email address: the-it-operations@dailymotion.com
+    Comment: 
+    [...]
+
+Un mot de passe vide permet à _reprepro_ de tourner sans intervention
+de l'utilisateur (notamment pour les mises à jour nocturnes). La clef
+publique devra être distribuée pour permettre à APT de vérifier les
+signatures de l'archive. Une façon commode de faire est de la placer
+dans un paquet.
+
+## Miroir local d'une distribution officielle
+
+Commençons par mettre en place un miroir pour Ubuntu Precise. Nous
+avons besoin de faire deux choses :
+
+ 1. Configurer une nouvelle **distribution** dans le fichier `conf/distributions`.
+ 2. Configurer les **sources** dans le fichier `conf/updates`.
+
+Ajoutons ce bloc dans `conf/distributions`:
+
+    ::ini
+    # Ubuntu Precise
+    Origin: Ubuntu
+    Label: Ubuntu
+    Suite: precise
+    Version: 12.04
+    Codename: precise
+    Architectures: i386 amd64
+    Components: main restricted universe multiverse
+    UDebComponents: main restricted universe multiverse
+    Description: Ubuntu Precise 12.04 (with updates and security)
+    Contents: .gz .bz2
+    UDebIndices: Packages Release . .gz
+    Tracking: minimal
+    Update: - ubuntu-precise ubuntu-precise-updates ubuntu-precise-security
+    SignWith: yes
+
+Il définit la distribution `precise` dans notre dépôt. Elle contient
+quatre composants : `main`, `restricted`, `universe` et `multiverse`
+(comme la distribution présente dans les dépôts officiels).
+
+La ligne `Update` commence par un tiret. Cela signifie que _reprepro_
+va marquer tous les paquets comme à effacer avant d'appliquer les
+mises à jour indiquées. Les paquets supprimés de la distribution
+officielle ne seront donc pas conservés dans notre miroir. Dans
+`conf/updates`, nous définissons les sources :
+
+    ::ini
+    # Ubuntu Precise
+    Name: ubuntu-precise
+    Method: http://fr.archive.ubuntu.com/ubuntu
+    Fallback: http://de.archive.ubuntu.com/ubuntu
+    Suite: precise
+    Components: main main multiverse restricted universe
+    UDebComponents: main restricted universe multiverse
+    Architectures: amd64 i386
+    VerifyRelease: 437D05B5
+    GetInRelease: no
+    
+    # Ubuntu Precise Updates
+    Name: ubuntu-precise-updates
+    Method: http://fr.archive.ubuntu.com/ubuntu
+    Fallback: http://de.archive.ubuntu.com/ubuntu
+    Suite: precise-updates
+    Components: main restricted universe multiverse
+    UDebComponents: main restricted universe multiverse
+    Architectures: amd64 i386
+    VerifyRelease: 437D05B5
+    GetInRelease: no
+    
+    # Ubuntu Precise Security
+    Name: ubuntu-precise-security
+    Method: http://fr.archive.ubuntu.com/ubuntu
+    Fallback: http://de.archive.ubuntu.com/ubuntu
+    Suite: precise-security
+    Components: main restricted universe multiverse
+    UDebComponents: main restricted universe multiverse
+    Architectures: amd64 i386
+    VerifyRelease: 437D05B5
+    GetInRelease: no
+
+Les lignes `VerifyRelease` indiquent les empreintes des clefs GPG à
+utiliser pour vérifier la signature des dépôts distants. Il faut
+importer la clef en question dans l'anneau local :
+
+    ::console
+    $ gpg --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg \
+    >     --export 437D05B5 | GNUPGHOME=gpg gpg --import
+
+Un autre point important est le fait que nous avons fusionné trois
+distributions (`precise`, `precise-updates` et `precise-security`)
+dans une seule distribution (`precise`) dans notre dépôt local. Cela
+peut provoquer des difficultés avec les outils, tels que le Debian
+Installer[^installer], qui s'attendent à trouver les trois
+distributions classiques.
+
+[^installer]: Il est possible d'apprendre à l'installeur Debian de
+              travailler avec un tel dépôt en utilisant un [fichier de configuration approprié][preseed].
+
+Il est ensuite possible de lancer _reprepro_ pour mettre à jour le
+miroir :
+
+    ::console
+    $ reprepro update
+
+Cela prend un certain temps la première fois. _reprepro_ n'est pas la
+solution la plus efficace pour mettre en place un miroir, mais sa
+prise en main est simple et il est particulièrement fiable.
+
+## Dépôt maison
+
+Passons au dépôt pour les paquets maisons. Pour chaque distribution
+officielle (telle que `precise`), nous mettons en place deux
+distributions :
+
+ * `precise-staging` contient les paquets en cours de test.
+ * `precise-prod` contient les paquets testés issus de
+   `precise-staging`.
+
+Dans cette organisation, les paquets sont introduits dans
+`precise-staging` où ils peuvent être testés sur quelques serveurs
+avant d'être copiés dans `precise-prod` pour être disponible sur
+l'ensemble de la plateforme. La déclaration dans `conf/distributions`
+se fait ainsi :
+
+    ::ini
+    # Dailymotion Precise packages (staging)
+    Origin: Dailymotion # ➌
+    Label: dm-staging   # ➌
+    Suite: precise-staging
+    Codename: precise-staging
+    Architectures: i386 amd64 source
+    Components: main role/dns role/database role/web # ➊
+    Description: Dailymotion Precise staging repository
+    Contents: .gz .bz2
+    Tracking: keep
+    SignWith: yes
+    NotAutomatic: yes # ➋
+    Log: packages.dm-precise-staging.log
+     --type=dsc email-changes
+    
+    # Dailymotion Precise packages (prod)
+    Origin: Dailymotion # ➌
+    Label: dm-prod      # ➌
+    Suite: precise-prod
+    Codename: precise-prod
+    Architectures: i386 amd64 source
+    Components: main role/dns role/database role/web # ➊
+    Description: Dailymotion Precise prod repository
+    Contents: .gz .bz2
+    Tracking: keep
+    SignWith: yes
+    Log: packages.dm-precise-prod.log
+
+Notez d'abord l'utilisation de plusieurs composants (en ➊) :
+
+ * `main` contiendra les paquets génériques. Un paquet placé dans
+   `main` doit pouvoir être utilisé sur n'importe quel serveur.
+ * `role/*` sont des composants dédiés à un sous-ensemble de la
+   plateforme. Par exemple, dans `role/dns`, on trouvera des versions
+   modifiées de _BIND_.
+
+La distribution de test utilise le drapeau `NotAutomatic` (en ➋) qui
+indique au gestionnaire de paquets de ne pas installer ces paquets à
+moins d'une requête expresse de l'utilisateur. Juste au-dessous, quand
+un nouveau fichier `dsc` est reçu, le script
+[`email-changes`][email-changes] est exécuté. Il doit se trouver dans
+le répertoire `conf/`.
+
+Les lignes `Origin` et `Label` (en ➌) sont particulièrement importants
+car elles seront utilisées pour déterminer la politique d'installation
+des paquets. Prenons ce fichier `/etc/apt/sources.list` :
+
+    ::sources.list
+    # Ubuntu packages
+    deb http://packages.dm.gg/dailymotion precise main restricted universe multiverse
+    
+    # Dailymotion packages
+    deb http://packages.dm.gg/dailymotion precise-prod    main role/dns
+    deb http://packages.dm.gg/dailymotion precise-staging main role/dns
+
+Tous les serveurs peuvent utiliser la distribution
+`precise-staging`. Il est essentiel de ne pas installer par erreur des
+paquets de cette distribution. Le drapeau `NotAutomatic` est une
+première sécurité. Nous y ajoutons ce fichier `/etc/apt/preferences` :
+
+    ::text
+    Explanation: Dailymotion packages of a specific component should be more preferred
+    Package: *
+    Pin: release o=Dailymotion, l=dm-prod, c=role/*
+    Pin-Priority: 950
+    
+    Explanation: Dailymotion packages should be preferred
+    Package: *
+    Pin: release o=Dailymotion, l=dm-prod
+    Pin-Priority: 900
+    
+    Explanation: staging should never be preferred
+    Package: *
+    Pin: release o=Dailymotion, l=dm-staging
+    Pin-Priority: -100
+
+Par défaut, les paquets ont une priorité de 500. En utilisant une
+priorité de -100 pour les paquets en provenance de la distribution de
+test, nous nous assurons qu'ils ne peuvent pas être installés du
+tout. C'est une contrainte plus forte que l'utilisation de
+`NotAutomatic` qui place la priorité à 1. Nous favorisons les paquets
+se trouvant dans le dépôt maison par rapport aux paquets officiels en
+leur affectant une priorité de 900 (voire 950 pour les paquets qui se
+trouvent dans un composant type rôle).
+
+La section "_How APT Interprets Priorities_" de la page de manuel
+[`apt_preferences(5)`][apt_preferences] donne plus de détails. Il faut
+garder en tête que les versions ne sont utilisées qu'à priorité
+égale. La commande `apt-cache policy` permet de vérifier que tout
+fonctionne comme attendu :
+
+    ::console
+    $ apt-cache policy php5-memcache
+      Installed: 3.0.8-1~precise2~dm1
+      Candidate: 3.0.8-1~precise2~dm1
+      Version table:
+     *** 3.0.8-1~precise2~dm1 0
+            950 http://packages.dm.gg/dailymotion/ precise-prod/role/web amd64 Packages
+            100 /var/lib/dpkg/status
+         3.0.8-1~precise1~dm4 0
+            900 http://packages.dm.gg/dailymotion/ precise-prod/main amd64 Packages
+           -100 http://packages.dm.gg/dailymotion/ precise-staging/main amd64 Packages
+         3.0.6-1 0
+            500 http://packages.dm.gg/dailymotion/ precise/universe amd64 Packages
+
+Pour installer un paquet en provenance de la distribution de test, il
+suffit d'invoquer `apt-get` avec l'option `-t precise-staging` qui
+augmente la priorité de cette distribution à 990.
+
+Une fois le paquet testé sur quelques serveurs, il est possible de le
+copier vers la distribution de production :
+
+    ::console
+    $ reprepro -C main copysrc precise-prod precise-staging wackadoodle
+
+## Miroir local de dépôts tiers.
+
+Parfois, plutôt que de reconstruire un paquet, il est préférable de le
+prendre directement sur un dépôt tiers. Un exemple courant est les
+dépôts mis en place par les constructeurs. Comme pour la mise en place
+d'un miroir d'une distribution officielle, il y a deux étapes :
+définition de la distribution et déclaration des sources.
+
+Chaque miroir va se trouver dans les mêmes distributions que nos
+paquets maisons mais ils iront dans un composant dédié. Cela nous
+permet d'utiliser la même organisation que pour les paquets locaux :
+ils apparaîtront dans la distribution de test avant d'être
+manuellement copiés, après validation, dans la distribution de
+production.
+
+La première étape consiste à àjouter le composant et la ligne `Update`
+appropriée dans le fichier `conf/distributions` :
+
+    ::ini
+    Origin: Dailymotion
+    Label: dm-staging
+    Suite: precise-staging
+    Components: main role/dns role/database role/web vendor/hp
+    Update: hp
+    # [...]
+    
+    Origin: Dailymotion
+    Label: dm-prod
+    Suite: precise-prod
+    Components: main role/dns role/database role/web vendor/hp
+    # [...]
+
+Le composant `vendor/hp` a été ajouté aux deux distributions mais
+seule la distribution de test a une ligne `Update`. La distribution de
+production obtiendra les paquets par copie manuelle.
+
+La source des paquets est déclarée dans le fichier `conf/updates` :
+
+    ::ini
+    # HP repository
+    Name: hp
+    Method: http://downloads.linux.hp.com/SDR/downloads/ManagementComponentPack/
+    Suite: precise/current
+    Components: non-free>vendor/hp
+    Architectures: i386 amd64
+    VerifyRelease: 2689B887
+    GetInRelease: no
+
+N'oubliez pas de rajouter la clef GPG correspondante dans l'anneau
+local. À noter une fonctionnalité particulièrement intéressante de
+_reprepro_ qui permet de copier le composant `non-free` dans le
+composant `vendor/hp`.
+
+# Construction des paquets Debian
+
+La configuration de _reprepro_ est désormais terminée. Comment
+construire les paquets à placer dans la distribution de test ?
+
+Selon le temps que vous souhaitez accorder à cette activité, il y a
+plusieurs possibilités :
+
+ 1. Construire un **paquet source** en ajoutant un répertoire
+    `debian/`. C'est la façon classique. Il est possible de partir de
+    zéro ou de prendre un paquet existant dans une distribution plus
+    récente ou un rétroportage d'un dépôt non officiel.
+
+ 2. Utiliser un **outil qui va créer un paquet binaire à partir d'un
+    répertoire**, tel que [fpm][]. Un tel outil va minimiser le boulot
+    à effectuer pour construire un paquet et peut même empaqueter
+    automatiquement certains types de logiciels.
+
+Il n'y a pas de solution universelle. La première approche est plus
+chronophage mais dispose des avantages suivants :
+
+ * Les **sources restent disponibles dans le dépôt**. Si vous avez
+   besoin de reconstruire un paquet en urgence pour corriger un
+   problème, il n'est pas nécessaire de partir a la recherche des
+   sources qui peuvent être temporairement indisponibles. Bien sûr,
+   cela n'est valable que pour les paquets qui ne téléchargent pas les
+   dépendances depuis Internet.
+
+ * La **recette de construction est conservée**[^recipe] dans le
+   dépôt. Si quelqu'un active telle option et reconstruit le paquet,
+   cette option ne sera perdue lorsqu'un autre personne reconstruira
+   le paquet. Ces changements sont documentés dans le fichier
+   `debian/changelog`. De plus, un système de gestion des versions
+   peut être utilisé pour garder une trace précise des changements
+   liés à l'empaquetage.
+
+ * Le paquet obtenu peut ensuite être proposé à l'**inclusion dans
+   Debian**. Cela rendra service à de nombreuses autres personnes.
+
+[^recipe]: [fpm-cookery][] est un outil particulièrement pratique
+           pour [fpm][], dans la même veine que [Homebrew][] ou que
+           l'arbre de ports des BSD. Il peut être utilisé dans une
+           optique similaire.
+
+## Compilation
+
+[pbuilder][] est utilisé pour la compilation automatique des
+paquets[^vssbuild]. Sa mise en place est relativement simple. Voici le
+fichier `pbuilderrc` utilisé :
+
+    ::bash
+    DISTRIBUTION=$DIST
+    NAME="$DIST-$ARCH"
+    MIRRORSITE=http://packages.dm.gg/dailymotion
+    COMPONENTS=("main" "restricted" "universe" "multiverse")
+    OTHERMIRROR="deb http://packages.dm.gg/dailymotion ${DIST}-staging main"
+    HOOKDIR=/etc/pbuilder/hooks.d
+    BASE=/var/cache/pbuilder/dailymotion
+    BASETGZ=$BASE/$NAME/base.tgz
+    BUILDRESULT=$BASE/$NAME/results/
+    APTCACHE=$BASE/$NAME/aptcache/
+    DEBBUILDOPTS="-sa"
+    KEYRING="/usr/share/keyrings/dailymotion-archive.keyring.gpg"
+    DEBOOTSTRAPOPTS=("--arch" "$ARCH" "--variant=buildd" "${DEBOOTSTRAPOPTS[@]}" "--keyring=$KEYRING")
+    APTKEYRINGS=("$KEYRING")
+    EXTRAPACKAGES=("dailymotion-archive-keyring")
+
+[^vssbuild]: [sbuild][] est une alternative qui est aussi l'outil
+             utilisé officiellement par Ubuntu et
+             Debian. Historiquement, _pbuilder_ était plus orienté
+             vers les besoins des développeurs.
+
+`pbuilder` doit être invoqué avec les variables d'environnement
+`DIST`, `ARCH` et (optionnellement) `ROLE`. La mise en place de chaque
+environnement s'effectue ainsi :
+
+    ::bash
+    for ARCH in i386 amd64; do
+      for DIST in precise; do
+        export ARCH
+        export DIST
+        pbuilder --create
+      done
+    done
+
+Concernant les rôles, un crochet de type `D` permet d'ajouter les
+sources appropriées avant la compilation :
+
+    ::bash
+    #!/bin/bash
+    [ -z "$ROLE" ] || {
+      cat >> /etc/apt/sources.list <<EOF
+    deb http://packages.dm.gg/dailymotion ${DIST}-staging role/${ROLE}
+    EOF
+    }
+    
+    apt-get update
+
+Un crochet de type `E` permet de s'assurer que les paquets de la
+distribution de test sont prioritairement utilisés pour la
+construction :
+
+    ::bash
+    #!/bin/bash
+    
+    cat > /etc/apt/preferences <<EOF
+    Explanation: Dailymotion packages are of higher priority
+    Package: *
+    Pin: release o=Dailymotion
+    Pin-Priority: 900
+    EOF
+
+Enfin, un crochet de type `C` permet d'obtenir un shell en cas
+d'erreur, ce qui est pratique pour corriger un problème :
+
+    ::bash
+    #!/bin/bash
+    apt-get install -y --force-yes vim less
+    cd /tmp/buildd/*/debian/..
+    /bin/bash < /dev/tty > /dev/tty 2> /dev/tty
+
+Une compilation peut ensuite être lancée avec la commande :
+
+    ::console
+    $ ARCH=amd64 DIST=precise ROLE=web pbuilder \
+    >         --build somepackage.dsc
+
+## Numérotation des versions
+
+Afin d'éviter des règles trop complexes pour les versions, tout paquet
+est traité comme étant un rétroportage. Le schéma utilisé est le
+suivant : `X-Y~preciseZ+dmW`.
+
+ * `X` est la version amont[^snapshot].
+
+ * `Y` est la version Debian. S'il n'y a pas de version Debian, mettre 0.
+
+ * `Z` est la version du backport dans Ubuntu. S'il n'existe pas, mettre 0.
+
+ * `W` est notre version du paquet. Il est incrémenté à chaque
+   changement dans le paquet. C'est le seul numéro que nous
+   contrôlons. Tous les autres dépendent d'une entité en amont.
+
+[^snapshot]: Pour un extrait de dépôt Git, le numéro de version amont
+             utilisé ressemble à `1.4-git20130905+1-ae42dc1` ce qui
+             correspond à un extrait situé après la version 1.4
+             (utiliser 0.0 s'il n'y a jamais eu de publication) à la
+             date donnée. Le chiffre qui suit la date peut être
+             incrémenté si plusieurs extraits sont utilisés dans la
+             même journée. Enfin, le condensat à la fin permet de
+             récupérer l'extrait exact.
+
+Supposons que l'on désire rétroporter le paquet `wackadoodle`. Il est
+disponible dans une Ubuntu plus récente en version `1.4-3`. La
+première version du paquet aura pour version
+`1.4-3~precise0+dm1`. Après un changement dans le fichier
+`debian/rules`, nous obtenons la version `1.4-3~precise0+dm2`. En
+amont, une version `1.5` devient disponible. Elle n'est disponible ni
+dans Ubuntu, ni dans Debian. Le numéro de version du paquet sera alors
+`1.5-0~precise0+dm1`.
+
+Quelques semaines plus tard, le paquet arrive chez Ubuntu dans la
+version `1.5-3ubuntu1`. Vous y appliquez des changements pour obtenir
+la version `1.5-3ubunut1~precise0+dm1`.
+
+Une convention compatible avec les pratiques de Debian concernant les
+rétroportages est : `X-Y~bpo70+Z~dm+W`.
+
+## Envoi
+
+Pour intégrer un paquet dans le dépôt, les étapes classiques sont les
+suivantes :
+
+ 1. Le paquet source est placé dans un répertoire `incoming/`.
+ 2. _reprepro_ remarque le paquet _source_, vérifie sa validité
+    (signature, distribution) et le place dans l'archive.
+ 3. Le système de compilation remarque un nouveau paquet source à
+    construire et lance la compilation de celui-ci.
+ 4. Une fois les paquets binaires construits, ils sont également
+    placés dans le répertoire `incoming/`.
+ 5. _reprepro_ détecte les paquets _binaires_ et les intègre dans
+    l'archive.
+
+Cette façon de faire a le désavantage d'être difficile à suivre. Une
+alternative est de concevoir un script exécutant chaque tâche de
+manière synchrone et permettant ainsi à l'utilisateur de suivre son
+terminal le bon déroulement des opérations.
+
+Une fois le fichier `.changes` obtenu, le script de compilation
+utilise la commande suivante pour intégrer les nouveaux paquets dans
+l'archive :
+
+    ::console
+    $ reprepro -C main include precise-staging \
+    >      wackadoodle_1.4-3~precise0+dm4_amd64.changes
+
+Voilà !
+
+*[APT]: Advanced Packaging Tool
+*[DFSG]: Debian Free Software Guidelines
+
+[fpm]: https://github.com/jordansissel/fpm "fpm: Effing package managers"
+[fpm-cookery]: https://github.com/bernd/fpm-cookery "A tool for building software packages with fpm"
+[Homebrew]: http://mxcl.github.io/homebrew/ "Homebrew: the missing package manager for OS X"
+[Dailymotion]: http://www.dailymotion.com "Watch, publish, share videos"
+[Deezer]: http://www.deezer.com "Web-based music streaming service"
+[Debian]: http://www.debian.org/ "Debian, the universal operating system"
+[reprepro]: http://mirrorer.alioth.debian.org/ "reprepro: local repositories for Debian packages"
+[Ubuntu PPA]: https://help.launchpad.net/Packaging/PPA "Personal Package Archives for Ubuntu"
+[apt_preferences]: http://manpages.ubuntu.com/manpages/precise/man5/apt_preferences.5.html "Page de manuel de apt_preferences(5)"
+[email-changes]: https://gist.github.com/7404733 "Crochet email-changes pour reprepro"
+[pbuilder]: http://pbuilder.alioth.debian.org "pbuilder users's manual"
+[sbuild]: https://wiki.debian.org/sbuild "sbuild"
+[sub]: https://github.com/37signals/sub "sub: a delicious way to organize programs"
+[preseed]: https://gist.github.com/7412457 "Fichier de preseed pour l'installeur Debian"
+[Raphaël Pinson]: http://www.raphink.info/ "Blog de Raphaël Pinson"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
