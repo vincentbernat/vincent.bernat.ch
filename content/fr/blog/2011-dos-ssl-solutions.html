@@ -126,7 +126,18 @@ attaquant peut utiliser diverses techniques de fragmentation pour
 
 Une solution quasiment équivalente consiste à utiliser `CONNMARK` pour
 suivre le déroulement de la première poignée de mains et d'interdire
-toutes celles qui pourraient survenir ensuite.
+toutes celles qui pourraient survenir ensuite[^noo].
+
+[^noo]: Décoder l'état d'une connexion TLS dans Netfilter est
+        complexe. La première solution repose globalement sur le fait
+        qu'une rénégociation est empaquetée dans un segment TCP avec
+        drapeau « _push_ ». Ce n'est pas forcément le cas. Avec la
+        seconde solution, on part du principe que le premier
+        enregistrement TLS chiffré est dans le même segment TCP que le
+        message _Client Key Exchange_. S'il est dans son propre
+        segment TCP, il sera vu comme une renégociation. La machine à
+        état doit être améliorée pour pouvoir détecter cet
+        enregistrement à n'importe quelle position.
 
 Si les renégociations SSL sont désactivées, il est possible de
 simplement limiter le nombre de poignées de mains en limitant le

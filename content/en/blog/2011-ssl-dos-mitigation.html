@@ -110,7 +110,18 @@ There is a risk of false positives but since we use `hashlimit`, we
 should be safe. This is not a bullet proof solution: TCP fragmentation
 would allow an attacker to evade detection. Another equivalent
 solution would be to use `CONNMARK` to record the fact the initial
-handshake has been done and forbid any subsequent handshakes.
+handshake has been done and forbid any subsequent handshakes[^noo].
+
+[^noo]: Handling TLS state in Netfilter is quite hard. The first
+        solution is using the fact that renegotiation requests are
+        encapsulated in a TCP segment flagged with "push". This is not
+        always the case and it is trivial to workaround. With the
+        second solution, we assume that the first encrypted handshake
+        record is packed in the same TCP segment than the client key
+        exchange. If it comes in its own TCP segment, it would be seen
+        as a renegociation while it is not. The state machine needs to
+        be improved to detect the first encrypted handshake at the
+        beginning of a TLS record or in the middle of it.
 
 If you happen to disable SSL renegociation, you can still use some
 Netfilter rule to limit the number of SSL handshakes by limiting the
