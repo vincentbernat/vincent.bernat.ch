@@ -1,0 +1,142 @@
+---
+title: "Intel Wireless 7260 as an access point"
+keywords: "intel, wireless, 7260, iwlwifi, ap, 802.11n, 802.11a"
+uuid: f0527441-2ef7-4822-ac7c-e213b62d41e7
+---
+
+My [home router][] acts as an access point with an
+[Intel Dual-Band Wireless-AC 7260 wireless card][].  This card
+supports [802.11ac][] (on the 5 GHz band) and [802.11n][] (on both the
+5 GHz and 2.4 GHz band). While this seems a very decent card to use in
+managed mode, this is not really a great choice for an access point.
+
+    ::console
+    $ lspci -k -nn -d 8086:08b1
+    03:00.0 Network controller [0280]: Intel Corporation Wireless 7260 [8086:08b1] (rev 73)
+            Subsystem: Intel Corporation Dual Band Wireless-AC 7260 [8086:4070]
+            Kernel driver in use: iwlwifi
+
+**TL;DR**: Use an Atheros card instead.
+
+# Limitations
+
+First, the card is said "dual-band" but you can only uses **one band**
+at a time because there is only **one radio**. Almost all wireless
+cards have this limitation. If you want to use both the 2.4 GHz band
+and the less crowded 5 GHz band, two cards are usually needed.
+
+## 5 GHz band
+
+There is **no support to set an access point on the 5 GHz band**. The
+firmware doesn't allow it. This can be checked with `iw`:
+
+    ::console
+    $ iw reg get
+    country CH: DFS-ETSI
+            (2402 - 2482 @ 40), (N/A, 20), (N/A)
+            (5170 - 5250 @ 80), (N/A, 20), (N/A)
+            (5250 - 5330 @ 80), (N/A, 20), (0 ms), DFS
+            (5490 - 5710 @ 80), (N/A, 27), (0 ms), DFS
+            (57240 - 65880 @ 2160), (N/A, 40), (N/A), NO-OUTDOOR
+    $ iw list
+    Wiphy phy0
+    [...]
+            Band 2:
+                    Capabilities: 0x11e2
+                            HT20/HT40
+                            Static SM Power Save
+                            RX HT20 SGI
+                            RX HT40 SGI
+                            TX STBC
+                            RX STBC 1-stream
+                            Max AMSDU length: 3839 bytes
+                            DSSS/CCK HT40
+                    Frequencies:
+                            * 5180 MHz [36] (20.0 dBm) (no IR)
+                            * 5200 MHz [40] (20.0 dBm) (no IR)
+                            * 5220 MHz [44] (20.0 dBm) (no IR)
+                            * 5240 MHz [48] (20.0 dBm) (no IR)
+                            * 5260 MHz [52] (20.0 dBm) (no IR, radar detection)
+                              DFS state: usable (for 192 sec)
+                              DFS CAC time: 60000 ms
+                            * 5280 MHz [56] (20.0 dBm) (no IR, radar detection)
+                              DFS state: usable (for 192 sec)
+                              DFS CAC time: 60000 ms
+    [...]
+
+While the 5 GHz band is allowed by the [CRDA][], all frequencies are
+marked with `no IR`. Here is the [explanation for this flag][no-ir]:
+
+> The `no-ir` flag exists to allow regulatory domain definitions to
+> disallow a device from initiating radiation of any kind and that
+> includes using beacons, so for example AP/IBSS/Mesh/GO interfaces
+> would not be able to initiate communication on these channels unless
+> the channel does not have this flag.
+
+## Multiple SSID
+
+This card can **only advertise one SSID**. Managing several of them is
+useful to setup distinct wireless networks, like a public access
+(routed to [Tor][]), a guest access and a private access. `iw` can
+confirm this:
+
+    ::console
+    $ iw list
+            valid interface combinations:
+                     * #{ managed } <= 1, #{ AP, P2P-client, P2P-GO } <= 1, #{ P2P-device } <= 1,
+                       total <= 3, #channels <= 1
+
+Here is the output of an Atheros card able to manage 8 SSID:
+
+    ::console
+    $ iw list
+            valid interface combinations:
+                     * #{ managed, WDS, P2P-client } <= 2048, #{ IBSS, AP, mesg point, P2P-GO } <= 8,
+                       total <= 2048, #channels <= 1
+
+# Configuration as an access point
+
+Except for those two limitations, the card works fine as an access
+point. Here is the configuration that I use for `hostapd`:
+
+    ::ini
+    interface=wlan-guest
+    driver=nl80211
+    
+    # Radio
+    ssid=XXXXXXXXX
+    hw_mode=g
+    channel=11
+    
+    # 802.11n
+    wmm_enabled=1
+    ieee80211n=1
+    ht_capab=[HT40-][SHORT-GI-20][SHORT-GI-40][DSSS_CCK-40][DSSS_CCK-40][DSSS_CCK-40]
+    
+    # WPA
+    auth_algs=1
+    wpa=2
+    wpa_passphrase=XXXXXXXXXXXXXXX
+    wpa_key_mgmt=WPA-PSK
+    wpa_pairwise=TKIP
+    rsn_pairwise=CCMP
+
+Because of the use of channel 11, only *802.11n* *HT40-* rate can be
+enabled. Look at the [Wikipedia page for 802.11n][] to check if you
+can use either *HT40-*, *HT40+* or both.
+
+*[CRDA]: Central Regulatory Domain Agent
+
+[Wikipedia page for 802.11n]: http://en.wikipedia.org/wiki/IEEE_802.11n-2009#40.C2.A0MHz_in_2.4.C2.A0GHz "Deployment strategies for 802.11n"
+[802.11ac]: http://en.wikipedia.org/wiki/IEEE_802.11ac "IEEE 802.11ac on Wikipedia"
+[802.11n]: http://en.wikipedia.org/wiki/IEEE_802.11n "IEEE 802.11n on Wikipedia"
+[home router]: [[en/blog/2014-swisscom-router.html]] "Replacing Swisscom router by a Linux box"
+[Intel Dual-Band Wireless-AC 7260 wireless card]: http://www.intel.com/content/www/us/en/wireless-products/dual-band-wireless-ac-7260-bluetooth.html "Intel Dual Band Wireless-AC 7260 Plus Bluetooth"
+[CRDA]: http://wireless.kernel.org/en/developers/Regulatory/CRDA "Central Regulatory Domain Agent for Linux"
+[no-ir]: http://wireless.kernel.org/en/developers/Regulatory/processing_rules#Beacon_hints "Regulatory rules processing for Linux"
+[Tor]: https://www.torproject.org/ "Tor Project"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
