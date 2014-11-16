@@ -155,24 +155,24 @@ problem you may run into with a MTU less than 1500:
 
 # QoS
 
-**UPDATED:** Unfortunately, this section is incorrect. I will amend it
-later. Meanwhile, have a look at [Dave Taht comment][].
+**UPDATED:** Unfortunately, this section is incorrect, including its
+premise. Have a look at [Dave Taht comment][] for more details.
 
-Once upon a time, QoS was a tacky subject. The [Wonder Shaper][] was a
+ <del>Once upon a time, QoS was a tacky subject. The [Wonder Shaper][] was a
 common way to get a somewhat working setup. Nowadays, thanks to the
 work of the [Bufferbloat project][], there are two simple steps to get
-something quite good:
+something quite good:</del>
 
- 1. **Reduce the queue** of your devices to something like 32
+ 1. <del>**Reduce the queue** of your devices to something like 32
     packets. This helps TCP to detect congestion and act accordingly
-    while still being able to saturate a gigabit link.
+    while still being able to saturate a gigabit link.</del>
 
         ::raw
         ip link set txqueuelen 32 dev lan
         ip link set txqueuelen 32 dev internet
         ip link set txqueuelen 32 dev wlan
 
- 2. **Change the root *qdisc* to `fq_codel`**. A *qdisc* receives packets
+ 2. <del>**Change the root *qdisc* to `fq_codel`**. A *qdisc* receives packets
     to be sent from the kernel and decide how packets are handled to
     the network card. Packets can be dropped, reordered or
     rate-limited. [`fq_codel`][fq_codel] is a queuing discipline
@@ -181,7 +181,7 @@ something quite good:
     to tell it is that a high-bandwidth flow won't starve the
     queue. **Controlled delay** means that the queue size will be
     limited to ensure the latency stays low. This is achieved by
-    dropping packets more aggressively when the queue grows.
+    dropping packets more aggressively when the queue grows.</del>
 
         ::raw
         tc qdisc replace dev lan root fq_codel
