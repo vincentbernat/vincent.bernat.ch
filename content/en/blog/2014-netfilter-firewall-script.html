@@ -1,0 +1,239 @@
+---
+title: "Staging a Netfilter ruleset in a network namespace"
+keywords: "firewall, linux, namespace, netfilter"
+uuid: dbd083fc-a6f4-44ff-a405-c7fd156f1a63
+---
+
+A common way to build a firewall ruleset is to run a shell script
+calling `iptables` and `ip6tables`. This is convenient since you get
+access to variables and loops. There are three major drawbacks with this
+method:
+
+ 1. While the script is running, the **firewall is temporarily
+    incomplete**. Even if existing connections can be arranged to be
+    left untouched, the new ones may not be allowed to be established
+    (or unauthorized flows may be allowed). Also, essential NAT rules
+    or mangling rules may be absent.
+ 
+ 2. If an error occurs, you are **left with an half-working
+    firewall**. Therefore, you should ensure that some rules
+    authorizing remote access are set very early. Or implement some
+    kind of automatic rollback system.
+
+ 3. Building a **large firewall can be slow**. Each `ip{,6}tables`
+    command will download the ruleset from the kernel, add the rule
+    and upload the whole modified ruleset to the kernel.
+
+# Using `iptables-restore`
+
+A way to solve these problems is to build a rule file that will be
+read by `iptables-restore` and
+`ip6tables-restore`[^iptables-apply]. Those tools send the ruleset to
+the kernel in one pass. The kernel applies it atomically. Usually,
+such a file is built with `ip{,6}tables-save` but a script can fit the
+task.
+
+[^iptables-apply]: Another nifty tool is `iptables-apply` which will
+                   apply a rule file and rollback after a given
+                   timeout unless the change is confirmed by the user.
+
+The ruleset syntax understood by `ip{,6}tables-restore` is similar to
+the syntax of `ip{,6}tables` but each table has its own block and
+chain declaration is different. See the following example:
+
+    ::console
+    $ iptables -P FORWARD DROP
+    $ iptables -t nat -A POSTROUTING -s 192.168.0.0/24 -j MASQUERADE
+    $ iptables -N SSH
+    $ iptables -A SSH -p tcp --dport ssh -j ACCEPT
+    $ iptables -A INPUT -i lo -j ACCEPT
+    $ iptables -A OUTPUT -o lo -j ACCEPT
+    $ iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+    $ iptables -A FORWARD -j SSH
+    $ iptables-save
+    *nat
+    :PREROUTING ACCEPT [0:0]
+    :INPUT ACCEPT [0:0]
+    :OUTPUT ACCEPT [0:0]
+    :POSTROUTING ACCEPT [0:0]
+    -A POSTROUTING -s 192.168.0.0/24 -j MASQUERADE
+    COMMIT
+
+    *filter
+    :INPUT ACCEPT [0:0]
+    :FORWARD DROP [0:0]
+    :OUTPUT ACCEPT [0:0]
+    :SSH - [0:0]
+    -A INPUT -i lo -j ACCEPT
+    -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    -A FORWARD -j SSH
+    -A OUTPUT -o lo -j ACCEPT
+    -A SSH -p tcp -m tcp --dport 22 -j ACCEPT
+    COMMIT
+
+As you see, we have one block for the `nat` table and one
+block for the `filter` table. The user-defined chain `SSH` is
+declared at the top of the `filter` block with other builtin
+chains.
+
+Here is a script diverting `ip{,6}tables` commands to build such a
+file (heavily relying on some [Zsh][]-fu[^zsh]):
+
+    ::sh
+    #!/bin/zsh
+    set -e
+    
+    work=$(mktemp -d)
+    trap "rm -rf $work" EXIT
+
+    # ➊ Redefine ip{,6}tables
+    iptables() {
+        # Intercept -t
+        local table="filter"
+        [[ -n ${@[(r)-t]} ]] && {
+            # Which table?
+            local index=${(k)@[(r)-t]}
+            table=${@[(( index + 1 ))]}
+            argv=( $argv[1,(( $index - 1 ))] $argv[(( $index + 2 )),$#] )
+        }
+        [[ -n ${@[(r)-N]} ]] && {
+            # New user chain
+            local index=${(k)@[(r)-N]}
+            local chain=${@[(( index + 1 ))]}
+            print ":${chain} -" >> ${work}/${0}-${table}-userchains
+            return
+        }
+        [[ -n ${@[(r)-P]} ]] && {
+            # Policy for a builtin chain
+            local index=${(k)@[(r)-P]}
+            local chain=${@[(( index + 1 ))]}
+            local policy=${@[(( index + 2 ))]}
+            print ":${chain} ${policy}" >> ${work}/${0}-${table}-policy
+            return
+        }
+        # iptables-restore only handle double quotes
+        echo ${${(q-)@}//\'/\"} >> ${work}/${0}-${table}-rules #'
+    }
+    functions[ip6tables]=${functions[iptables]}
+    
+    # ➋ Build the final ruleset that can be parsed by ip{,6}tables-restore
+    save() {
+        for table (${work}/${1}-*-rules(:t:s/-rules//)) {
+            print "*${${table}#${1}-}"
+            [ ! -f ${work}/${table}-policy ] || cat ${work}/${table}-policy
+            [ ! -f ${work}/${table}-userchains || cat ${work}/${table}-userchains
+            cat ${work}/${table}-rules
+            print "COMMIT"
+        }
+    }
+
+    # ➌ Execute rule files
+    for rule in $(run-parts --list --regex '^[.a-zA-Z0-9_-]+$' ${0%/*}/rules); do
+        . $rule
+    done
+
+    # ➍ Execute rule files
+    ret=0
+    save iptables  | iptables-restore  || ret=$?
+    save ip6tables | ip6tables-restore || ret=$?
+    exit $ret
+
+[^zsh]: As you can see in the snippet, *Zsh* comes with some powerful
+        features to handle arrays. Another big advantage of *Zsh* is
+        it does not require quoting every variable to avoid field
+        splitting. Hence, the script can handle values with spaces
+        without a problem, making it far more robust.
+
+In ➊, a new `iptables()` function is defined and will shadow the
+`iptables` command. It will try to locate the `-t` parameter to know
+which table should be used. If such a parameter exists, the table is
+remembered in the `$table` variable and removed from the list of
+arguments. Defining a new chain (with `-N`) is also handled as well as
+setting the policy (with `-P`).
+
+In ➋, the `save()` function will output a ruleset that should be
+parseable by `ip{,6}tables-restore`. In ➌, user rules are
+executed. Each `ip{,6}tables` command will call the previously defined
+function. When no error has occurred, in ➍, `ip{,6}tables-restore` is
+invoked. The command will either succeed or fail.
+
+This method works just fine[^nitpick]. However, the second method is
+more elegant.
+
+[^nitpick]: If I were nitpicking, there are three small flaws with
+            it. First, when an error occurs, it can be difficult to
+            match the appropriate location in your script since you
+            get the position in the ruleset instead.  Second, a table
+            can be used before it is defined. So, it may be difficult
+            to spot some copy/paste errors. Third, the IPv4 firewall
+            may fail while the IPv6 firewall is applied, and
+            vice-versa. Those flaws are not present in the next
+            method.
+
+# Using a network namespace
+
+An hybrid approach is to build the firewall rules with `ip{,6}tables`
+in a newly created network namespace, save it with `ip{,6}tables-save`
+and apply it in the main namespace with `ip{,6}tables-restore`. Here
+is the gist (still using [Zsh][] syntax):
+
+    ::sh
+    #!/bin/zsh
+    set -e
+    
+    alias main='/bin/true ||'
+    [ -n $iptables ] || {
+        # ➊ Execute ourself in a dedicated network namespace
+        iptables=1 unshare --net -- \
+            $0 4> >(iptables-restore) 6> >(ip6tables-restore)
+        # ➋ In main namespace, disable iptables/ip6tables commands
+        alias iptables=/bin/true
+        alias ip6tables=/bin/true
+        alias main='/bin/false ||'
+    }
+    
+    # ➌ In both namespaces, execute rule files
+    for rule in $(run-parts --list --regex '^[.a-zA-Z0-9_-]+$' ${0%/*}/rules); do
+        . $rule
+    done
+    
+    # ➍ In test namespace, save the rules
+    [ -z $iptables ] || {
+        iptables-save >&4
+        ip6tables-save >&6
+    }
+
+In ➊, the current script is executed in a **new network
+namespace**. Such a namespace has its own ruleset that can be modified
+without altering the one in the main namespace. The `$iptables`
+environment variable tell in which namespace we are. In the new
+namespace, we execute all the rule files (➌). They contain classic
+`ip{,6}tables` commands. If an error occurs, we stop here and nothing
+happens, thanks to the use of `set -e`. Otherwise, in ➍, the ruleset
+of the new namespace are saved using `ip{,6}tables-save` and sent to
+dedicated file descriptors.
+
+Now, the execution in the main namespace resumes in ➊. The results of
+`ip{,6}tables-save` are feeded to `ip{,6}tables-restore`. At this
+point, the firewall is mostly operational. However, we will play again
+the rule files (➌) but the `ip{,6}tables` commands will be disabled
+(➋). Additional commands in the rule files, like enabling IP
+forwarding, will be executed.
+
+The new namespace does not provide the same environment as the main
+namespace. For example, there is no network interface in it, so we
+cannot get or set IP addresses. A command that must not be executed in
+the new namespace should be prefixed by `main`:
+
+    ::sh
+    main ip addr add 192.168.15.1/24 dev lan-guest
+
+You can look at a [complete example on GitHub][].
+
+[Zsh]: http://www.zsh.org/ "Zsh website"
+[complete example on GitHub]: https://github.com/vincentbernat/puppet-eizo/blob/master/local-modules/eizo/files/firewall/rules/ "Complete firewall example"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

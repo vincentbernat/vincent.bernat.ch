@@ -1,0 +1,255 @@
+---
+title: "Préparer des règles Netfilter dans un espace de nommage réseau"
+keywords: "firewall, linux, namespace, netfilter"
+uuid: dbd083fc-a6f4-44ff-a405-c7fd156f1a63
+---
+
+Souvent, les règles d'un pare-feu sont mises en place à l'aide d'un
+script faisant appel aux commandes `iptables` et `ip6tables`. Cela
+permet notamment d'utiliser des variables et des boucles. Il y a
+cependant trois inconvénients majeurs à cette méthode :
+
+ 1. Pendant toute la durée du script, le **pare-feu est temporairement
+    incomplet** : les nouvelles connexions peuvent ne pas être
+    autorisées à s'établir ou, inversement, le pare-feu peut autoriser
+    des flux qui ne devraient pas l'être. Les règles de NAT
+    nécessaires au bon fonctionnement du routeur peuvent également
+    être absentes.
+
+ 1. Si une erreur survient, le **pare-feu reste dans un état
+    intermédiaire**. Il est alors nécessaire de s'assurer que les
+    règles autorisant l'accès à distance soient placées très tôt pour
+    garder la main. Un système de retour automatique à la précédente
+    version est également nécessaire pour corriger la situation
+    rapidement.
+
+ 2. Construire de **nombreuses règles peut être très
+    lent**. Chaque appel à `ip{,6}tables` va rapatrier l'ensemble des
+    règles du noyau, ajouter la règle voulue et renvoyer le tout au
+    noyau.
+
+# Avec `iptables-restore`
+
+Une façon de résoudre ces trois aspects et de construire un fichier de
+règles qui sera lu par `iptables-restore` et
+`ip6tables-restore`[^iptables-apply]. Ces outils envoient en une seule
+passe les règles au noyau qui les applique de manière
+atomique. Habituellement, un tel fichier est construit par
+`ip{,6}tables-save` mais un script peut également faire l'affaire.
+
+[^iptables-apply]: `iptables-apply` est un autre outil pratique. Il
+                   applique un fichier de règles et revient
+                   automatiquement en arrière si l'utilisateur ne
+                   confirme pas le changement dans un laps de temps
+                   donné.
+
+La syntaxe comprise par `ip{,6}tables-restore` est similaire à celle
+de `ip{,6}tables`. Cependant, chaque table dispose de son propre bloc
+et les chaînes doivent être déclarées différemment. Voyons un
+exemple :
+
+    ::console
+    $ iptables -P FORWARD DROP
+    $ iptables -t nat -A POSTROUTING -s 192.168.0.0/24 -j MASQUERADE
+    $ iptables -N SSH
+    $ iptables -A SSH -p tcp --dport ssh -j ACCEPT
+    $ iptables -A INPUT -i lo -j ACCEPT
+    $ iptables -A OUTPUT -o lo -j ACCEPT
+    $ iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+    $ iptables -A FORWARD -j SSH
+    $ iptables-save
+    *nat
+    :PREROUTING ACCEPT [0:0]
+    :INPUT ACCEPT [0:0]
+    :OUTPUT ACCEPT [0:0]
+    :POSTROUTING ACCEPT [0:0]
+    -A POSTROUTING -s 192.168.0.0/24 -j MASQUERADE
+    COMMIT
+
+    *filter
+    :INPUT ACCEPT [0:0]
+    :FORWARD DROP [0:0]
+    :OUTPUT ACCEPT [0:0]
+    :SSH - [0:0]
+    -A INPUT -i lo -j ACCEPT
+    -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+    -A FORWARD -j SSH
+    -A OUTPUT -o lo -j ACCEPT
+    -A SSH -p tcp -m tcp --dport 22 -j ACCEPT
+    COMMIT
+
+La table `nat` et la table `filter` disposent chacune de leur bloc. La
+chaîne `SSH` est déclarée en haut du bloc de la table `filter` avec
+les autres chaînes par défaut.
+
+Voici un script qui détourne les commandes `ip{,6}tables` afin de
+construire un tel fichier (en s'appuyant massivement sur
+[Zsh][][^zsh]) :
+
+    ::sh
+    #!/bin/zsh
+    set -e
+    
+    work=$(mktemp -d)
+    trap "rm -rf $work" EXIT
+
+    # ➊ Redefine ip{,6}tables
+    iptables() {
+        # Intercept -t
+        local table="filter"
+        [[ -n ${@[(r)-t]} ]] && {
+            # Which table?
+            local index=${(k)@[(r)-t]}
+            table=${@[(( index + 1 ))]}
+            argv=( $argv[1,(( $index - 1 ))] $argv[(( $index + 2 )),$#] )
+        }
+        [[ -n ${@[(r)-N]} ]] && {
+            # New user chain
+            local index=${(k)@[(r)-N]}
+            local chain=${@[(( index + 1 ))]}
+            print ":${chain} -" >> ${work}/${0}-${table}-userchains
+            return
+        }
+        [[ -n ${@[(r)-P]} ]] && {
+            # Policy for a builtin chain
+            local index=${(k)@[(r)-P]}
+            local chain=${@[(( index + 1 ))]}
+            local policy=${@[(( index + 2 ))]}
+            print ":${chain} ${policy}" >> ${work}/${0}-${table}-policy
+            return
+        }
+        # iptables-restore only handle double quotes
+        echo ${${(q-)@}//\'/\"} >> ${work}/${0}-${table}-rules #'
+    }
+    functions[ip6tables]=${functions[iptables]}
+    
+    # ➋ Build the final ruleset that can be parsed by ip{,6}tables-restore
+    save() {
+        for table (${work}/${1}-*-rules(:t:s/-rules//)) {
+            print "*${${table}#${1}-}"
+            [ ! -f ${work}/${table}-policy ] || cat ${work}/${table}-policy
+            [ ! -f ${work}/${table}-userchains || cat ${work}/${table}-userchains
+            cat ${work}/${table}-rules
+            print "COMMIT"
+        }
+    }
+
+    # ➌ Execute rule files
+    for rule in $(run-parts --list --regex '^[.a-zA-Z0-9_-]+$' ${0%/*}/rules); do
+        . $rule
+    done
+
+    # ➍ Execute rule files
+    ret=0
+    save iptables  | iptables-restore  || ret=$?
+    save ip6tables | ip6tables-restore || ret=$?
+    exit $ret
+
+[^zsh]: *Zsh* contient des primitives assez puissantes pour manipuler
+        les tableaux. De plus, il ne nécessite pas d'utiliser les
+        guillemets autour de chaque variable pour éviter leur
+        découpage lorsqu'elles contiennent des espaces. Cela rend le
+        script bien plus robuste.
+
+En ➊, une nouvelle fonction `iptables()` est définie et masque la
+commande du même nom. Elle tente de localiser le paramètre `-t` pour
+savoir quelle table est concernée par la règle. Si le paramètre est
+présent, la table est mémorisée dans la variable `$iptables` et le
+paramètre est retiré de la liste des arguments. La défintion d'une
+nouvelle chaîne avec `-N` ou la mise en place d'une politique par
+défaut avec `-P` sont également gérés.
+
+En ➋, la fonction `save()` va émettre les règles qui seront lues par
+`ip{,6}tables-restore`. En ➌, les règles de l'utilisateur sont
+exécutées. Chaque commande `ip{,6}tables` appelle en réalité la
+fonction précédemment définie. Si aucune erreur n'est survenue, en ➍,
+les commandes `ip{,6}tables-restore` sont invoquées.
+
+Cette méthode est parfaitement fonctionnelle[^nitpick]. Toutefois, la
+méthode suivante est bien plus élégante.
+
+[^nitpick]: S'il fallait pinailler, il y a trois petits
+            problèmes. Primo, lorsqu'une erreur survient, il
+            peut être difficile de savoir quelle partie du script l'a
+            provoquée car on ne dispose que de la ligne dans le
+            fichier de règles qui a été généré. Deuzio, une table peut
+            être utilisée avant d'être définie ce qui peut faire
+            passer inaperçu certaines erreurs dues à un
+            copier/coller. Tertio, l'application de la partie IPv4 peut
+            réussir alors que la partie IPv6 a échoué ou
+            vice-versa. Ces problèmes n'existent pas avec la deuxième
+            méthode.
+
+# Avec un espace de nommage
+
+Une approche hybride est de construire les règles avec `ip{,6}tables`
+dans un espace de nommage réseau (*network namespace*) puis de les
+sauver avec `ip{,6}tables-save` et enfin de les appliquer dans
+l'espace de nommage principal avec `ip{,6}tables-restore`.
+
+    ::sh
+    #!/bin/zsh
+    set -e
+    
+    alias main='/bin/true ||'
+    [ -n $iptables ] || {
+        # ➊ Execute ourself in a dedicated network namespace
+        iptables=1 unshare --net -- \
+            $0 4> >(iptables-restore) 6> >(ip6tables-restore)
+        # ➋ In main namespace, disable iptables/ip6tables commands
+        alias iptables=/bin/true
+        alias ip6tables=/bin/true
+        alias main='/bin/false ||'
+    }
+    
+    # ➌ In both namespaces, execute rule files
+    for rule in $(run-parts --list --regex '^[.a-zA-Z0-9_-]+$' ${0%/*}/rules); do
+        . $rule
+    done
+    
+    # ➍ In test namespace, save the rules
+    [ -z $iptables ] || {
+        iptables-save >&4
+        ip6tables-save >&6
+    }
+
+En ➊, le script est réexécuté dans un **nouvel espace de nommage
+réseau**. Celui-ci dispose de ces propres règles de pare-feu qui
+peuvent être modifiées sans altérer celles de l'espace de nommage
+principal. La variable `$ipatbles` est utilisée pour déterminer quel
+est l'espace de nommage courant. Dans le nouvel espace de nommage, les
+fichiers de règles sont exécutés (➌). Ceux-ci contiennent l'appel aux
+commandes `ip{,6}tables`. Si une erreur survient, nous n'allons pas
+plus loin grâce à l'utilisation de `set -e`. Sinon, en ➍, les règles
+sont sauvegardées avec `ip{,6}tables-save` et envoyées dans l'espace
+de nommage principal en utilisant les descripteurs de fichier dédiés à
+cet effet.
+
+L'exécution dans l'espace de nommage principal continue en ➊. Les
+résultats de `ip{,6}tables-save` sont envoyées à
+`ip{,6}tables-restore`. À ce point, le pare-feu est presque
+fonctionnel. Les fichiers de règles sont toutefois rejoués (➌) mais
+les commandes `ip{,6}tables` sont neutralisées (➋) de façon à ce que
+les éventuelles autres commandes, comme par exemple l'activation du
+routage IP, soient exécutées.
+
+Le nouvel espace de nommage ne dispose pas du même environnement que
+l'espace de nommage principal. Notamment, il ne contient pas
+d'interfaces réseau. Il n'est donc pas possible de consulter ou de
+configurer des adresses IP. Lorsque des commandes ne peuvent être
+exécutées que dans l'espace de nommage principal, il est nécessaire de
+les préfixer par `main` :
+
+    ::sh
+    main ip addr add 192.168.15.1/24 dev lan-guest
+
+Jetez un coup d'œil à
+[un exemple complet sur GitHub][complete example on GitHub].
+
+[Zsh]: http://www.zsh.org/ "Zsh website"
+[complete example on GitHub]: https://github.com/vincentbernat/puppet-eizo/blob/master/local-modules/eizo/files/firewall/rules/ "Complete firewall example"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
