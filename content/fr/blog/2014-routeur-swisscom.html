@@ -95,13 +95,14 @@ l'avance son préfixe IPv6. Le script suivant, à placer dans
 `/etc/dhcp/dhclient-exit-hooks.d/6rd`, met en place le tunnel :
 
     ::sh
+    sixrd_iface=internet6
     sixrd_mtu=1472                  # This is 1500 - 20 - 8 (PPPoE header)
     sixrd_ttl=64
     sixrd_prefix=2a02:1200::/28     # No way to guess, just have to know it.
     sixrd_br=193.5.29.1             # That's "6rd.swisscom.com"
     
     sixrd_down() {
-        ip tunnel del internet6 || true
+        ip tunnel del ${sixrd_iface} || true
     }
     
     sixrd_up() {
@@ -118,12 +119,12 @@ l'avance son préfixe IPv6. Le script suivant, à placer dans
     )
     
         # Let's configure the tunnel
-        ip tunnel add internet6 mode sit local $ipv4 ttl $sixrd_ttl
-        ip tunnel 6rd dev internet6 6rd-prefix ${sixrd_prefix}
-        ip addr add ${sixrd_subnet}1/64 dev internet6
-        ip link set mtu ${sixrd_mtu} dev internet6
-        ip link set internet6 up
-        ip route add default via ::${sixrd_br} dev internet6
+        ip tunnel add ${sixrd_iface} mode sit local $ipv4 ttl $sixrd_ttl
+        ip tunnel 6rd dev ${sixrd_iface} 6rd-prefix ${sixrd_prefix}
+        ip addr add ${sixrd_subnet}1/64 dev ${sixrd_iface}
+        ip link set mtu ${sixrd_mtu} dev ${sixrd_iface}
+        ip link set ${sixrd_iface} up
+        ip route add default via ::${sixrd_br} dev ${sixrd_iface}
     }
     
     case $reason in
