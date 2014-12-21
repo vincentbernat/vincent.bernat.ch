@@ -36,7 +36,7 @@ class TextlinksPlugin(Plugin):
                 return """
 <div class="lf-video-container"><div class="lf-video">
 <iframe frameborder="0" width="480" height="270" allowfullscreen
-        src="//www.youtube.com/embed/%s?rel=0"></iframe>
+        src="//www.youtube-nocookie.com/embed/%s?rel=0"></iframe>
 </div></div>
 """ % (id,)
 
