@@ -1,0 +1,82 @@
+---
+title: "Eudyptula Challenge : démarrage rapide d'un noyau Linux"
+keywords: "eudyptula, linux, kvm, développement, boot"
+uuid: cc697407-4a1d-476f-b684-8292367aa212
+attachments:
+  "https://github.com/vincentbernat/eudyptula-boot": "Dépôt GitHub"
+---
+
+> Le [challenge Eudyptula][Eudyptula Challenge] est une série
+> d'exercices de programmation pour le noyau Linux. Il commence avec
+> le très basique module « *Hello world* » puis progresse en
+> complexité jusqu'à faire pousser des modifications dans l'arbre du
+> noyau Linux.
+
+Une des premières tâches de ce challenge est de compiler puis démarrer
+son propre noyau. [`eudyptula-boot`][eudyptula-boot] est un script
+autonome permettant de démarrer une image noyau jusqu'à obtenir un
+shell. Il est livré avec les fonctionnalités suivantes :
+
+ - Il permet de booter quasiment **n'importe quel noyau Linux**, du
+   noyau fourni par votre distribution favorite jusqu'au noyau
+   personnalisé[^9p] pour travailler sur une fonctionnalité
+   quelconque.
+
+ - Il utilise le **système de fichiers de l'hôte** comme racine pour
+   le système invité. Aucune image disque n'est donc nécessaire. Ces
+   dernières prennent beaucoup de place, doivent être maintenues à
+   jour, se retrouvent encombrées au fil du temps et les outils dont
+   vous avez besoin ne sont jamais installés. Pour éviter toute
+   modification accidentelle, le système de fichiers est par défaut
+   monté en lecture seule. S'ils sont disponibles, [OverlayFS][] ou
+   [aufs][] sont utilisés pour ajouter une couche accessible en
+   écriture. Il est de plus possible d'utiliser n'importe quel
+   répertoire comme racine.
+
+ - Le **répertoire utilisateur** est également accessible. Il est
+   ainsi simple de partager des scripts et des programmes avec le
+   système hôte.
+
+ - Il démarre un **système minimal** avec le strict
+   nécessaire[^minimal] pour démarrer un shell dans de bonnes
+   conditions. Le système est opérationnel en moins de cinq secondes.
+ 
+[^9p]: Il est toutefois nécessaire d'activer le support
+       de [9p virtio][]. Il suffit pour cela d'utiliser `make kvmconfig`.
+
+[^minimal]: Seul `udev` est démarré.
+
+Dans la vidéo ci-dessous, `eudyptula-boot` est utilisé pour démarrer
+le noyau de l'hôte et exécuter quelques commandes :
+
+[[youtube:aiE_Nd_vxQE]]
+
+Dans la vidéo suivante, nous démarrons un noyau personnalisé contenant
+un appel système supplémentaire. Il s'agit de la tâche n°15 du
+[challenge Eudyptula][Eudyptula Challenge]. Un programme de test
+permet de vérifier le bon fonctionnement de l'appel système. Vers la
+fin, la vidéo contient également une rapide
+[démonstration de *gdb*][debugging].
+
+[[youtube:AEEAmnQ6Q6E]]
+
+Bien que ce hack permette également de lancer des
+conteneurs[^conteneurs] avec une isolation accrue, les performances de
+*9p* sont malheureusement peu convaincantes pour un tel usage.
+
+[^conteneurs]: Un point de départ pour une telle utilisation est de
+               combiner les options `--root`, `--force` et `--exec`.
+               Ajoutez également `--readwrite` pour conserver les
+               modifications.
+
+[Eudyptula Challenge]: http://eudyptula-challenge.org/ "The Eudyptula Challenge"
+[debugging]: [[fr/blog/2012-lab-reseau-kvm.html]]#debugging "Labo virtuel avec KVM"
+[eudyptula-boot]: https://github.com/vincentbernat/eudyptula-boot "Boot a Linux kernel in a VM without a dedicated root filesystem"
+[9p virtio]: http://www.linux-kvm.org/page/9p_virtio "9p virtio"
+[aufs]: http://aufs.sourceforge.net/ "aufs, a union filesystem"
+[OverlayFS]: https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/overlayfs.txt "Overlay Filesystem"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

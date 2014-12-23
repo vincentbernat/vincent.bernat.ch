@@ -1,0 +1,74 @@
+---
+title: "Eudyptula Challenge: superfast Linux kernel booting"
+keywords: "eudyptula, linux, kvm, development, boot"
+uuid: cc697407-4a1d-476f-b684-8292367aa212
+attachments:
+  "https://github.com/vincentbernat/eudyptula-boot": "GitHub repository"
+---
+
+> The [Eudyptula Challenge][] is a series of programming exercises for
+> the Linux kernel, that start from a very basic "*Hello world*"
+> kernel module, moving on up in complexity to getting patches
+> accepted into the main Linux kernel source tree.
+
+One of the first tasks of this quite interesting challenge is to
+compile and boot your own kernel. [`eudyptula-boot`][eudyptula-boot]
+is a self-contained shell script to boot any kernel image to a
+shell. It is packed with the following features:
+
+ - It boots almost **any Linux kernel**, from distribution-provided
+   kernels to custom kernels[^9p] built to hack on some feature.
+
+ - It uses the **host root filesystem** as the guest root
+   filesystem. No disk images are needed as they take a lot of space,
+   need to be maintained, become cluttered and the tools you need the
+   most are never installed. To avoid any alteration, by default, the
+   host filesystem is mounted read-only. If available, [OverlayFS][]
+   or [aufs][] are used to build a writable overlay on top of it. It
+   is also possible to use any directory as the root filesystem.
+
+ - Your **home directory** is also available. This gives hassle-free
+   sharing of scripts and results with the host system.
+
+ - It starts a **minimal system**. Only the bits needed to start a
+   shell will be involved[^minimal]. The whole system is able to boot
+   in less than 5 seconds.
+
+[^9p]: The only requirement is to have [9p virtio][] support
+       enabled. This can easily be enabled with `make kvmconfig`.
+
+[^minimal]: Only `udev` is started.
+
+In the following video, `eudyptula-boot` is used to boot the host
+kernel and execute a few commands:
+
+[[youtube:aiE_Nd_vxQE]]
+
+In the next one, we use it to boot a custom kernel with an additional
+system call. This is the fifteenth task of the
+[Eudyptula Challenge][]. A test program is used to check that the
+system call is working as expected. Additionaly, we demonstrate how to
+[attach a debugger][debugging] to the running kernel.
+
+[[youtube:AEEAmnQ6Q6E]]
+
+While this hack could be used to run containers[^containers] with an
+increased isolation, the performance of the *9p* filesystem is
+unfortunately quite poor.
+
+[^containers]: A good way to start a container is to combine `--root`, `--force`
+               and `--exec` parameters. Add `--readwrite` to the mix if you want
+               to keep the modifications.
+
+[Eudyptula Challenge]: http://eudyptula-challenge.org/ "The Eudyptula Challenge"
+[image-less network labs with KVM]: [[en/blog/2012-network-lab-kvm.html]] "Network lab with KVM"
+[debugging]: [[en/blog/2012-network-lab-kvm.html]]#debugging "Network lab with KVM"
+[eudyptula-boot]: https://github.com/vincentbernat/eudyptula-boot "Boot a Linux kernel in a VM without a dedicated root filesystem"
+[9p virtio]: http://www.linux-kvm.org/page/9p_virtio "9p virtio"
+[aufs]: http://aufs.sourceforge.net/ "aufs, a union filesystem"
+[OverlayFS]: https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/overlayfs.txt "Overlay Filesystem"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
