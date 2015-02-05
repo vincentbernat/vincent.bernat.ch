@@ -11,7 +11,7 @@ from urllib import quote
 
 from hyde.plugin import Plugin
 from hyde.site import Site
-from hyde.fs import FS, File, Folder
+from fswrap import FS, File, Folder
 
 # Serve everything from CDN except content of files/ and videos/
 NOCDN="//media.luffy.cx/"

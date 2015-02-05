@@ -16,7 +16,7 @@ conf = "site-production.yaml"
 media = yaml.load(file(conf))['media_url']
 
 def _hyde(args):
-    return local('python ../hyde/h %s' % args)
+    return local('hyde -x %s' % args)
 
 @task
 def regen():

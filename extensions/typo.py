@@ -16,7 +16,6 @@ def replacer(m):
     return "%s&nbsp;%s%s" % (m.group(1), m.group(2), m.group(4))
 
 # Monkey patch Typogrify.Widont method
-@staticmethod
 def widont(text):
     # The main modification is that we require a dot at the end of the last word.
     widont_finder = re.compile(r"""((?:</?(?:a|em|span|strong|i|b)[^>]*>)|[^<>\s])
@@ -29,8 +28,8 @@ def widont(text):
     output = widont_finder.sub(replacer, text)
     return output
 
-from typogrify import Typogrify
-Typogrify.widont = widont
+from typogrify import filters
+filters.widont = widont
 
 from hyde.plugin import Plugin
 

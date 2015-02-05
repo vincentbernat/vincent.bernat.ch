@@ -3,12 +3,12 @@
 # This will be processed later by MathJax
 
 import markdown
-etree = markdown.etree_loader.importETree()
+from markdown.util import etree
 
 class MathJaxPattern(markdown.inlinepatterns.Pattern):
 
     def __init__(self):
-        markdown.inlinepatterns.Pattern.__init__(self, r'(?<!\\)(··?)(.+?)\2')
+        markdown.inlinepatterns.Pattern.__init__(self, ur'(?<!\\)(··?)(.+?)\2')
 
     def handleMatch(self, m):
         node = etree.Element("latex")
