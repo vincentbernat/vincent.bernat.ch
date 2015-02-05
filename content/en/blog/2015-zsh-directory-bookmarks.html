@@ -13,11 +13,100 @@ cannot use a bookmark in an arbitrary command.
 [2]: http://www.huyng.com/projects/bashmarks/ "Bashmarks - directory bookmarks for the shell"
 [3]: http://micans.org/apparix/man/apparix.html "Apparix: augmenting the command-line with directory bookmarks, distant listing, and distant editing"
 
-[Zsh][] comes with a not well-known feature called **dynamic named
-directories**. During file name expansion, a `~` followed by a string
-in square brackets is provided to the `zsh_directory_name()` function
-which will eventually reply with a directory name. This feature can
-be used to implement directory bookmarks:
+**UPDATED:** My initial implementation with *Zsh* was using *dynamic
+named directories*. I have been pointed [on][4] [Twitter][5] that
+there is a simpler way to implement bookmarks. The article has been
+updated to reflect that.
+
+[Zsh][] comes with a not well-known feature called **static named
+directories**. They are declared with the `hash` builtin and can be
+refered by prepending `~` to them:
+
+    ::console
+    $ hash -d -- -lldpd=/home/bernat/code/deezer/lldpd
+    $ echo ~-lldpd/README.md
+    /home/bernat/code/deezer/lldpd/README.md
+    $ head -n1 ~-lldpd/README.md
+    lldpd: implementation of IEEE 802.1ab (LLDP)
+
+Because `~-lldpd` is substituted during file name expansion, it is
+possible to use it in any command like a regular directory, like shown
+above. The `-` prefix is only here to avoid collision with home
+directories.
+
+Bookmarks are kept into a dedicated directory, `$MARKPATH`. Each
+bookmark is a symbolic link to the target directory: for example,
+`~-lldpd` should be expanded to `$MARKPATH/lldpd` which points to the
+appropriate directory. Assuming that you have populated `$MARKPATH`
+with some links, here is how bookmarks are registered:
+
+    ::sh
+    for link ($MARKPATH/*(N@)) {
+        hash -d -- -${link:t}=${link:A}
+    }
+
+You also automatically get completion and prompt expansion:
+
+    ::console
+    $ pwd
+    /home/bernat/code/deezer/lldpd/src/lib
+    $ echo ${(%):-%~}
+    ~-lldpd/src/lib
+
+The last step is to manage bookmarks without adding or removing
+symbolic links manually. The following `bookmark()` function will display the
+existing bookmarks when called without arguments, will remove a
+bookmark when called with `-d` or add the current directory as a
+bookmark otherwise.
+
+    ::sh
+    bookmark() {
+        if (( $# == 0 )); then
+            # When no arguments are provided, just display existing
+            # bookmarks
+            for link in $MARKPATH/*(N@); do
+                local markname="$fg[green]${link:t}$reset_color"
+                local markpath="$fg[blue]${link:A}$reset_color"
+                printf "%-30s -> %s\n" $markname $markpath
+            done
+        else
+            # Otherwise, we may want to add a bookmark or delete an
+            # existing one.
+            local -a delete
+            zparseopts -D d=delete
+            if (( $+delete[1] )); then
+                # With `-d`, we delete an existing bookmark
+                command rm $MARKPATH/$1
+            else
+                # Otherwise, add a bookmark to the current
+                # directory. The first argument is the bookmark
+                # name. `.` is special and means the bookmark should
+                # be named after the current directory.
+                local name=$1
+                [ $name == "." ] && name=${PWD:t}
+                ln -s $PWD $MARKPATH/$name
+            fi
+        fi
+    }
+
+Find the [complete version][] on *GitHub*.
+
+[complete version]: https://github.com/vincentbernat/zshrc/blob/master/rc/bookmarks.zsh
+[4]: https://twitter.com/vinc17/status/563131744761937922
+[5]: https://twitter.com/martinkrafft/status/563224385952428032
+
+# Dynamic named directories
+
+Another (more complex) way to achieve the same thing is using
+**dynamic named directories**. I was initially using this solution but
+it is far more complex. This section is only here for historical
+reason. You can find the complete implementation in my
+[GitHub repository][].
+
+During file name expansion, a `~` followed by a string in square
+brackets is provided to the `zsh_directory_name()` function which will
+eventually reply with a directory name. This feature can be used to
+implement directory bookmarks:
 
     ::console
     $ cd ~[@lldpd]
@@ -28,47 +117,14 @@ be used to implement directory bookmarks:
     $ head -n1 ~[@lldpd]/README.md
     lldpd: implementation of IEEE 802.1ab (LLDP)
 
-As shown above, because `~[@lldpd]` is substituted during file name
-expansion, it is possible to use it in any command like a regular
-directory. You can find the complete implementation in my
-[GitHub repository][]. The remaining of this post only sheds light on
-the concrete implementation.
+Like for *static named directories*, because `~[@lldpd]` is
+substituted during file name expansion, it is possible to use it in
+any command like a regular directory. 
 
-**UPDATED:** I have been pointed [on][4] [Twitter][5] that *Zsh* also
-supports **static named directories**:
+## Basic implementation
 
-    ::console
-    $ hash -d -- -lldpd=/home/bernat/code/deezer/lldpd
-    $ echo ~-lldpd/README.md
-    /home/bernat/code/deezer/lldpd/README.md
-    $ head -n1 ~-lldpd/README.md
-    lldpd: implementation of IEEE 802.1ab (LLDP)
-
-Completion and prompt expansion work out of the box. This makes most
-of the following implementation moot since the next three paragraphs
-can be handled with just this snippet:
-
-    ::sh
-    # Populate the hash
-    for link ($MARKPATH/*(N@)) {
-        hash -d -- -${link:t}=${link:A}
-    }
-
-Bookmarks are namespaced with `-` since `@` is not accepted as a valid
-character. Find the [updated version][] on *GitHub*.
-
-[updated version]: https://github.com/vincentbernat/zshrc/blob/master/rc/bookmarks.zsh
-[4]: https://twitter.com/vinc17/status/563131744761937922
-[5]: https://twitter.com/martinkrafft/status/563224385952428032
-
-# Basic implementation
-
-Bookmarks are kept into a dedicated directory, `$MARKPATH`. Each
-bookmark is a symbolic link to the target directory: for example,
-`~[@lldpd]` should be expanded to `$MARKPATH/lldpd` which points to
-the appropriate directory. Assuming that you have populated
-`$MARKPATH` with some links, here is how the core feature is
-implemented:
+Bookmarks are still kept into a dedicated directory, `$MARKPATH` and
+are still symbolic links. Here is how the core feature is implemented:
 
     ::sh
     _bookmark_directory_name() {
@@ -120,7 +176,7 @@ to use modifiers and flags on anything. `${:-$MARKPATH/$match[1]}` is
 a common trick to turn `$MARKPATH/$match[1]` into a parameter
 substitution and be able to apply the `A` modifier on it.
 
-# Completion
+## Completion
 
 *Zsh* is also able to ask for **completion of a dynamic directory
 name**. In this case, the completion system calls the hook function with
@@ -158,7 +214,7 @@ therefore `"@"${^dirs}` expands to the `(@b1 @b2 @b3)` array.
 
 The result is then feeded into the completion system.
 
-# Prompt expansion
+## Prompt expansion
 
 Many people put the name of the current directory in their prompt. It
 would be nice to have the bookmark name instead of the full name when
@@ -233,7 +289,7 @@ somewhere deeper, we create the reply which is an array whose first
 member is the bookmark name and the second member is the untranslated
 part of the file name.
 
-# Easy typing
+## Easy typing
 
 Typing `~[@` is cumbersome. Hopefully, *Zsh* line editor can be extended
 with additional bindings. The following snippet will substitute `@@`
@@ -248,48 +304,6 @@ with additional bindings. The following snippet will substitute `@@`
     bindkey '@@' vbe-insert-bookmark
 
 In combination with the `autocd` option and completion, it is quite easy to jump to a bookmarked directory.
-
-# Managing bookmarks
-
-The last step is to manage bookmarks without adding or removing
-symbolic links manually. The following `bookmark()` function will display the
-existing bookmarks when called without arguments, will remove a
-bookmark when called with `-d` or add the current directory as a
-bookmark otherwise.
-
-    ::sh
-    bookmark() {
-        if (( $# == 0 )); then
-            # When no arguments are provided, just display existing
-            # bookmarks
-            for link in $MARKPATH/*(N@); do
-                local markname="$fg[green]${link:t}$reset_color"
-                local markpath="$fg[blue]${link:A}$reset_color"
-                printf "%-30s -> %s\n" $markname $markpath
-            done
-        else
-            # Otherwise, we may want to add a bookmark or delete an
-            # existing one.
-            local -a delete
-            zparseopts -D d=delete
-            if (( $+delete[1] )); then
-                # With `-d`, we delete an existing bookmark
-                command rm $MARKPATH/$1
-            else
-                # Otherwise, add a bookmark to the current
-                # directory. The first argument is the bookmark
-                # name. `.` is special and means the bookmark should
-                # be named after the current directory.
-                local name=$1
-                [ $name == "." ] && name=${PWD:t}
-                ln -s $PWD $MARKPATH/$name
-            fi
-        fi
-    }
-
-You can find the whole result in my [GitHub repository][]. It also
-adds some caching since prompt expansion can be costly when resolving
-many symbolic links.
 
 [Zsh]: http://www.zsh.org/ "Zsh: a shell with a lot of features"
 [GitHub repository]: https://github.com/vincentbernat/zshrc/blob/495702a581e3833e7a8cc08baa3e397033e879d2/rc/bookmarks.zsh
