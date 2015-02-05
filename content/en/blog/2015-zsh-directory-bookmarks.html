@@ -34,10 +34,25 @@ directory. You can find the complete implementation in my
 [GitHub repository][]. The remaining of this post only sheds light on
 the concrete implementation.
 
-**UPDATED:** *Zsh* also supports static named directories. You define
-them with `hash -d -- -lldpd=/home/bernat/code/deezer/lldpd` and you can
-refer to them with `~-lldpd`. Completion and prompt expansion work
-out of the box.
+**UPDATED:** I have been pointed [on][4] [Twitter][5] that *Zsh* also
+supports **static named directories**. You define them with `hash -d
+-- -lldpd=/home/bernat/code/deezer/lldpd` and you can refer to them
+with `~-lldpd`. Completion and prompt expansion work out of the
+box. This makes most of the following implementation moot since the
+next three paragraphs can be handled with just this snippet:
+
+    ::sh
+    # Populate the hash
+    for link ($MARKPATH/*(N@)) {
+        hash -d -- -${link:t}=${link:A}
+    }
+
+Bookmarks are namespaced with `-` since `@` is not accepted as a valid
+character. Find the [updated version][] on *GitHub*.
+
+[updated version]: https://github.com/vincentbernat/zshrc/blob/master/rc/bookmarks.zsh
+[4]: https://twitter.com/vinc17/status/563131744761937922
+[5]: https://twitter.com/martinkrafft/status/563224385952428032
 
 # Basic implementation
 
@@ -270,7 +285,7 @@ adds some caching since prompt expansion can be costly when resolving
 many symbolic links.
 
 [Zsh]: http://www.zsh.org/ "Zsh: a shell with a lot of features"
-[GitHub repository]: https://github.com/vincentbernat/zshrc/blob/master/rc/bookmarks.zsh
+[GitHub repository]: https://github.com/vincentbernat/zshrc/blob/495702a581e3833e7a8cc08baa3e397033e879d2/rc/bookmarks.zsh
 
 
 {# Local Variables:      #}
