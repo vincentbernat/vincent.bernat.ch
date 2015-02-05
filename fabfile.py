@@ -113,9 +113,9 @@ def build():
 
         local("git add *")
         local("git diff --stat HEAD")
-        if confirm("More diff?"):
+        if confirm("More diff?", default=True):
             local("git diff --word-diff HEAD")
-        if confirm("Keep?"):
+        if confirm("Keep?", default=True):
             local('git commit -a -m "Autocommit"')
         else:
             local("git reset --hard")
