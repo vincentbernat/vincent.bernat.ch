@@ -120,6 +120,7 @@ def build():
         else:
             local("git reset --hard")
             local("git clean -d -f")
+            abort("Build rollbacked")
 
 @task
 def push():
