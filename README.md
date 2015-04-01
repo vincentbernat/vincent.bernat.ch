@@ -10,6 +10,6 @@ files) is licensed as [CC BY-NC-SA 3.0][cc1] while the remaining (CSS,
 JS, layout) is licensed as [CC BY 3.0][cc2], unless I am not the
 author of the work (for example, jQuery, ModernizR, fonts).
 
-[hyde]: http://ringce.com/hyde
+[hyde]: https://github.com/hyde/hyde
 [cc1]: http://creativecommons.org/licenses/by-nc-sa/3.0/
 [cc2]: http://creativecommons.org/licenses/by/3.0/
