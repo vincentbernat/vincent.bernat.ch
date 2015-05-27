@@ -1,0 +1,517 @@
+---
+title: "Correction sans redémarrage de la faille VENOM de QEMU"
+keywords: "venom, cve-2015-3456, live patching, hotfix, hot patching, qemu, vulnerabilité"
+uuid: 1ca74ee4-6ef4-412f-9304-b868455bbf30
+attachments:
+  "https://github.com/vincentbernat/cve-2015-3456": "Dépôt GitHub"
+---
+
+La faille [CVE-2015-3456][], aussi connue sous le nom [VENOM][], exploite une faiblesse dans l'implémentation du contrôleur de disquettes de [QEMU][]:
+
+> Le contrôleur de disquettes (FDC) de *QEMU*, tel qu'utilisé dans
+> *Xen* [...] et dans *KVM* permet aux systèmes invités de provoquer
+> un déni de service (écriture hors limite suivie du crash du
+> processus invité) ou éventuellement d'exécuter du code arbitraire à
+> travers les commandes `FD_CMD_READ_ID`,
+> `FD_​CMD_​DRIVE_​SPECIFICATION_​COMMAND` ou d'autres commandes non
+> spécifiées.
+
+Même lorsque *QEMU* a été configuré pour ne pas exposer de lecteur de
+disquettes, le contrôleur est toujours actif. La vulnérabilité est
+facile à tester[^exploit] :
+
+    ::c
+    #define FDC_IOPORT 0x3f5
+    #define FD_CMD_READ_ID 0x0a
+    
+    int main() {
+        ioperm(FDC_IOPORT, 1, 1);
+        outb(FD_CMD_READ_ID, FDC_IOPORT);
+        for (size_t i = 0;; i++)
+            outb(0x42, FDC_IOPORT);
+        return 0;
+    }
+
+[^exploit]: Le code complet pour ce test est disponible sur [GitHub][exploit].
+
+Une fois le correctif installé, tous les processus doivent être
+redémarrés pour que la mise à jour prenne effet. Il est possible de
+minimiser le temps de coupure en [utilisant `virsh save`][virsh-save].
+
+Une alternative serait de modifier le processus en cours
+d'exécution. Le noyau Linux a suscité beaucoup d'intérêt dans ce
+domaine avec des solutions telles que [Ksplice][], [kGraft][] et
+[kpatch][], ainsi que par l'inclusion d'une
+[structure commune][common framework] dans le noyau. L'espace
+utilisateur ne dispose cependant pas de solutions aussi
+élaborées[^userspace].
+
+[^userspace]: Un projet qui semble intéressant est [Katana][]. Mais il
+              existe aussi un [quelques][1] [papiers][2] perspicaces
+              sur le sujet.
+
+Je présente ici une solution simple et sans dépendance pour corriger
+une instance de *QEMU* en cours d'exécution. Voici une courte
+démonstration :
+
+[[youtube:gTcWNIQwnV8]]
+
+# Prototype
+
+Essayons d'abord de trouver une modification simple à implémenter :
+bien qu'il soit possible de modifier du code en cours d'exécution, il
+est bien plus simple de modifier une variable.
+
+## Concept
+
+En examinant le [code du contrôleur de disquettes][code] et le
+[correctif][patch], une façon d'éviter la vulnérabilité est de
+n'accepter aucune commande sur le port FIFO. Chaque requête aura comme
+réponse « *Invalid command* » (`0x80`). L'utilisateur ne pourra plus
+pousser aucun octet avant de lire la réponse, ce qui provoquera une
+remise à zéro de la queue FIFO. Bien sûr, le contrôleur de disquette
+deviendra alors inopérant.
+
+La liste des commandes acceptées par le contrôleur sur le port FIFO se
+trouve dans le tableau `handlers[]` :
+
+    ::c
+    static const struct {
+        uint8_t value;
+        uint8_t mask;
+        const char* name;
+        int parameters;
+        void (*handler)(FDCtrl *fdctrl, int direction);
+        int direction;
+    } handlers[] = {
+        { FD_CMD_READ, 0x1f, "READ", 8, fdctrl_start_transfer, FD_DIR_READ },
+        { FD_CMD_WRITE, 0x3f, "WRITE", 8, fdctrl_start_transfer, FD_DIR_WRITE },
+        /* [...] */
+        { 0, 0, "unknown", 0, fdctrl_unimplemented }, /* default handler */
+    };
+
+Pour éviter de parcourir ce tableau pour chaque commande reçue, un
+autre tableau associe une commande à la fonction adéquate :
+
+    ::c
+    /* Associate command to an index in the 'handlers' array */
+    static uint8_t command_to_handler[256];
+    
+    static void fdctrl_realize_common(FDCtrl *fdctrl, Error **errp)
+    {
+        int i, j;
+        static int command_tables_inited = 0;
+    
+        /* Fill 'command_to_handler' lookup table */
+        if (!command_tables_inited) {
+            command_tables_inited = 1;
+            for (i = ARRAY_SIZE(handlers) - 1; i >= 0; i--) {
+                for (j = 0; j < sizeof(command_to_handler); j++) {
+                    if ((j & handlers[i].mask) == handlers[i].value) {
+                        command_to_handler[j] = i;
+                    }
+                }
+            }
+        }
+        /* [...] */
+    }
+
+Notre modification consiste à changer le tableau
+`command_to_handler[]` pour associer toutes les commandes à la
+fonction `fdctrl_unimplemented()` (celle en dernière position dans le
+tableau `handlers[]`).
+
+## Test avec gdb
+
+Pour vérifier que cette modification fonctionne correctement, nous la
+testons avec `gdb`. À moins d'avoir compilé *QEMU* manuellement, il
+est nécessaire d'installer le paquet contenant les symboles de
+débogage. Malheureusement, chez Debian, ils ne sont pas
+encore[^debugsymbols] disponibles. Chez Ubuntu, il suffit d'installer
+le paquet `qemu-system-x86-dbgsym` après
+[avoir activé les dépôts appropriés][enabling the appropriate repositories].
+
+[^debugsymbols]: Certains paquets fournissent également un paquet
+                 `-dbg` contenant les symboles de débogage. D'autres
+                 non. Une initiative
+                 pour [produire automatiquement des paquets de débogage][automatically produce debugging symbols]
+                 est actuellement en cours.
+
+La fonction suivante pour `gdb` implémente le correctif :
+
+    ::raw
+    define patch
+      set $handler = sizeof(handlers)/sizeof(*handlers)-1
+      set $i = 0
+      while ($i < 256)
+       set variable command_to_handler[$i++] = $handler
+      end
+      printf "Done!\n"
+    end
+
+Il suffit alors de s'attacher au processus vulnérable (avec `attach`),
+d'appeler cette fonction (avec `patch`) et de se détacher (avec
+`detach`). Cette procédure est
+[simple à automatiser][easily automated].
+
+## Limitations
+
+L'usage de *gdb* comporte principalement deux limitations :
+
+ 1. `gdb` doit être installé sur toutes les machines à corriger.
+ 2. Les paquets de débogage doivent également être présents. Il est de
+    plus difficile de récupérer d'anciennes versions de ceux-ci.
+
+# Industrialisation
+
+Pour contourner ces limitations, nous allons écrire un programme
+utilisant [l'appel système `ptrace()`][ptrace] et qui ne nécessite pas
+les symboles de débogage pour fonctionner.
+
+## Trouver l'emplacement mémoire
+
+La première étape est de localiser le tableau `command_to_handler[]`
+en mémoire. Le premier indice se trouve dans la table des symboles que
+l'on peut interroger avec `readelf -s` :
+
+    ::console
+    $ readelf -s /usr/lib/debug/.build-id/09/95121eb46e2a4c13747ac2bad982829365c694.debug | \
+    >   sed -n -e 1,3p -e /command_to_handler/p
+    
+    Symbol table '.symtab' contains 27066 entries:
+       Num:    Value          Size Type    Bind   Vis      Ndx Name
+      8485: 00000000009f9d00   256 OBJECT  LOCAL  DEFAULT   26 command_to_handler
+
+Habituellement, cette table a été retirée pour économiser de l'espace
+disque, comme on peut le voir ci-dessous :
+
+    ::console
+    $ file -b /usr/bin/qemu-system-x86_64 | tr , \\n
+    ELF 64-bit LSB shared object
+     x86-64
+     version 1 (SYSV)
+     dynamically linked
+     interpreter /lib64/ld-linux-x86-64.so.2
+     for GNU/Linux 2.6.32
+     BuildID[sha1]=0995121eb46e2a4c13747ac2bad982829365c694
+     stripped
+
+Si votre distribution fournit un paquet de débogage, les symboles sont
+alors installés dans le répertoire `/usr/lib/debug`. La plupart des
+distributions modernes utilisent désormais le *build ID*[^buildid]
+pour lier un exécutable à ses symboles de débogage, comme c'est le cas
+dans l'exemple ci-dessus. Sans paquet de débogage, il est nécessaire
+de recompiler le paquet dans un environnement minimal[^reproducible]
+sans supprimer les symboles. Sur Debian, cela peut se faire en
+affectant `nostrip` à la variable d'environnement `DEB_BUILD_OPTIONS`.
+
+[^buildid]: Le wiki de Fedora explique les [raisons derrière cette décision][rationale behind the build ID].
+
+[^reproducible]: Si la construction ne se fait pas à l'identique du
+                 paquet original, les *build ID* seront
+                 différents. L'information fournie par les symboles de
+                 débogage peut alors être ou non correcte. Une
+                 initiative pour s'assurer de
+                 la [reproductabilité de la construction de tous les paquets][reproducible builds]
+                 est en cours.
+
+Il y a ensuite deux cas possibles :
+
+ - le cas facile,
+ - le cas difficile.
+
+### Le cas facile
+
+Sur x86, la mémoire d'un processus Linux *normal* est organisée comme
+ceci[^more] :
+
+![Organisation mémoire d'un processus normal sur x86][x86-layout-regular]
+[x86-layout-regular]: [[!!images/memory-layout-regular.png]] "Organisation mémoire d'un processus normal sur x86 avec ASLR"
+
+[^more]: « [*Anatomy of a program in memory*][Anatomy of a program in memory] »
+         explique plus en détail cette organisation.
+
+L'espace aléatoire introduit entre les différentes zones (ASLR)
+permettent de rendre la tâche d'un attaquant plus difficile quand il
+veut référencer une fonction particulière. Sur x86-64, l'organisation
+est similaire. Le point important est que **l'adresse de base de
+l'exécutable est fixe**.
+
+L'organisation mémoire d'un processus peut être consultée à travers le
+fichier `/proc/PID/maps`. Voici une version raccourcie et annotée sur
+x86-64 :
+
+    ::console
+    $ cat /proc/3609/maps
+    00400000-00401000         r-xp 00000000 fd:04 483  not-qemu [text segment]
+    00601000-00602000         r--p 00001000 fd:04 483  not-qemu [data segment]
+    00602000-00603000         rw-p 00002000 fd:04 483  not-qemu [BSS segment]
+    [random gap]
+    02419000-0293d000         rw-p 00000000 00:00 0    [heap]
+    [random gap]
+    7f0835543000-7f08356e2000 r-xp 00000000 fd:01 9319 /lib/x86_64-linux-gnu/libc-2.19.so
+    7f08356e2000-7f08358e2000 ---p 0019f000 fd:01 9319 /lib/x86_64-linux-gnu/libc-2.19.so
+    7f08358e2000-7f08358e6000 r--p 0019f000 fd:01 9319 /lib/x86_64-linux-gnu/libc-2.19.so
+    7f08358e6000-7f08358e8000 rw-p 001a3000 fd:01 9319 /lib/x86_64-linux-gnu/libc-2.19.so
+    7f08358e8000-7f08358ec000 rw-p 00000000 00:00 0
+    7f08358ec000-7f083590c000 r-xp 00000000 fd:01 5138 /lib/x86_64-linux-gnu/ld-2.19.so
+    7f0835aca000-7f0835acd000 rw-p 00000000 00:00 0
+    7f0835b08000-7f0835b0c000 rw-p 00000000 00:00 0
+    7f0835b0c000-7f0835b0d000 r--p 00020000 fd:01 5138 /lib/x86_64-linux-gnu/ld-2.19.so
+    7f0835b0d000-7f0835b0e000 rw-p 00021000 fd:01 5138 /lib/x86_64-linux-gnu/ld-2.19.so
+    7f0835b0e000-7f0835b0f000 rw-p 00000000 00:00 0
+    [random gap]
+    7ffdb0f85000-7ffdb0fa6000 rw-p 00000000 00:00 0    [stack]
+
+Dans le cas d'un exécutable normal, le nombre fourni dans la table des
+symboles est une adresse absolue :
+
+    ::console
+    $ readelf -s not-qemu | \
+    >   sed -n -e 1,3p -e /command_to_handler/p
+    
+    Symbol table '.dynsym' contains 9 entries:
+       Num:    Value          Size Type    Bind   Vis      Ndx Name
+        47: 0000000000602080   256 OBJECT  LOCAL  DEFAULT   25 command_to_handler
+
+Ainsi, dans l'exemple ci-dessus, l'adresse du tableau
+`command_to_​handler[]`, est simplement `0x602080`.
+
+### Le cas difficile
+
+Pour améliorer la sécurité, il est possible de placer certains
+exécutables à un emplacement aléatoire en mémoire, comme c'est le cas
+pour une bibliothèque. Un tel exécutable est appelé un *Position
+Independent Executable* (PIE). Un attaquant ne pourra pas se baser sur
+une adresse fixe pour rebondir sur une fonction particulière. Voici à
+quoi ressemble l'organisation mémoire d'un processus dans ce cas :
+
+![Organisation mémoire d'un processus PIE sur x86][x86-layout-pie]
+[x86-layout-pie]: [[!!images/memory-layout-pie.png]] "Organisation mémoire d'un processus PIE sur x86 avec ASLR."
+
+Dans le cas d'un processus PIE, le nombre indiqué dans la table des
+symboles est relatif à l'adresse de base du processus.
+
+    ::console
+    $ readelf -s not-qemu-pie | sed -n -e 1,3p -e /command_to_handler/p
+    
+    Symbol table '.dynsym' contains 17 entries:
+       Num:    Value          Size Type    Bind   Vis      Ndx Name
+        47: 0000000000202080   256 OBJECT  LOCAL  DEFAULT   25 command_to_handler
+
+En regardant le contenu de `/proc/PID/maps`, il est possible de
+calculer l'emplacement mémoire du tableau :
+
+    ::console
+    $ cat /proc/12593/maps
+    7f6c13565000-7f6c13704000 r-xp 00000000 fd:01 9319  /lib/x86_64-linux-gnu/libc-2.19.so
+    7f6c13704000-7f6c13904000 ---p 0019f000 fd:01 9319  /lib/x86_64-linux-gnu/libc-2.19.so
+    7f6c13904000-7f6c13908000 r--p 0019f000 fd:01 9319  /lib/x86_64-linux-gnu/libc-2.19.so
+    7f6c13908000-7f6c1390a000 rw-p 001a3000 fd:01 9319  /lib/x86_64-linux-gnu/libc-2.19.so
+    7f6c1390a000-7f6c1390e000 rw-p 00000000 00:00 0
+    7f6c1390e000-7f6c1392e000 r-xp 00000000 fd:01 5138  /lib/x86_64-linux-gnu/ld-2.19.so
+    7f6c13b2e000-7f6c13b2f000 r--p 00020000 fd:01 5138  /lib/x86_64-linux-gnu/ld-2.19.so
+    7f6c13b2f000-7f6c13b30000 rw-p 00021000 fd:01 5138  /lib/x86_64-linux-gnu/ld-2.19.so
+    7f6c13b30000-7f6c13b31000 rw-p 00000000 00:00 0
+    7f6c13b31000-7f6c13b33000 r-xp 00000000 fd:04 4594  not-qemu-pie [text segment]
+    7f6c13cf0000-7f6c13cf3000 rw-p 00000000 00:00 0
+    7f6c13d2e000-7f6c13d32000 rw-p 00000000 00:00 0
+    7f6c13d32000-7f6c13d33000 r--p 00001000 fd:04 4594  not-qemu-pie [data segment]
+    7f6c13d33000-7f6c13d34000 rw-p 00002000 fd:04 4594  not-qemu-pie [BSS segment]
+    [random gap]
+    7f6c15c46000-7f6c15c67000 rw-p 00000000 00:00 0     [heap]
+    [random gap]
+    7ffe823b0000-7ffe823d1000 rw-p 00000000 00:00 0     [stack]
+
+L'adresse de base est `0x7f6c13b31000`, le décalage relatif est
+`0x202080` et donc le tableau se trouve à l'adresse mémoire
+`0x7f6c13d33080`. Il est possible de vérifier cette valeur avec
+`gdb` : with `gdb`:
+
+    ::console
+    $ print &command_to_handler
+    $1 = (uint8_t (*)[256]) 0x7f6c13d33080 <command_to_handler>
+
+## Modifier un emplacement mémoire
+
+Une fois l'emplacement du tableau `command_to_handler[]` connu, le
+modifier est relativement simple. Il convient d'abord de s'attacher au
+processus cible :
+
+    ::c
+    /* Attach to the running process */
+    static int
+    patch_attach(pid_t pid)
+    {
+        int status;
+    
+        printf("[.] Attaching to PID %d...\n", pid);
+        if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
+            fprintf(stderr, "[!] Unable to attach to PID %d: %m\n", pid);
+            return -1;
+        }
+    
+        if (waitpid(pid, &status, 0) == -1) {
+            fprintf(stderr, "[!] Error while attaching to PID %d: %m\n", pid);
+            return -1;
+        }
+        assert(WIFSTOPPED(status)); /* Tracee may have died */
+    
+        if (ptrace(PTRACE_GETSIGINFO, pid, NULL, &si) == -1) {
+            fprintf(stderr, "[!] Unable to read siginfo for PID %d: %m\n", pid);
+            return -1;
+        }
+        assert(si.si_signo == SIGSTOP); /* Other signals may have been received */
+    
+        printf("[*] Successfully attached to PID %d\n", pid);
+        return 0;
+    }
+
+Ensuite, récupérons le tableau `command_to_handler[]`, modifions le et
+réécrivons le en mémoire[^write].
+
+    ::c
+    static int
+    patch_doit(pid_t pid, unsigned char *target)
+    {
+        int ret = -1;
+        unsigned char *command_to_handler = NULL;
+        size_t i;
+    
+        /* Get the table */
+        printf("[.] Retrieving command_to_handler table...\n");
+        command_to_handler = ptrace_read(pid,
+                                         target,
+                                         QEMU_COMMAND_TO_HANDLER_SIZE);
+        if (command_to_handler == NULL) {
+            fprintf(stderr, "[!] Unable to read command_to_handler table: %m\n");
+            goto out;
+        }
+    
+        /* Check if the table has already been patched. */
+        /* [...] */
+    
+        /* Patch it */
+        printf("[.] Patching QEMU...\n");
+        for (i = 0; i < QEMU_COMMAND_TO_HANDLER_SIZE; i++) {
+            command_to_handler[i] = QEMU_NOT_IMPLEMENTED_HANDLER;
+        }
+        if (ptrace_write(pid, target, command_to_handler,
+               QEMU_COMMAND_TO_HANDLER_SIZE) == -1) {
+            fprintf(stderr, "[!] Unable to patch command_to_handler table: %m\n");
+            goto out;
+        }
+        printf("[*] QEMU successfully patched!\n");
+        ret = 0;
+    
+    out:
+        free(command_to_handler);
+        return ret;
+    }
+
+[^write]: En étant une variable statique non initialisée, la variable
+          se situe dans la section BSS qui se retrouve accessible en
+          écriture en mémoire. Si ce n'était pas le cas, sous Linux,
+          l'appel système `ptrace()` permet tout de même d'écrire
+          dessus. Linux va copier la page correspondante et la marquer
+          comme privée.
+
+Comme `ptrace()` ne permet de lire et d'écrire qu'un mot à la fois,
+`ptrace_read()` et `ptrace_write()` sont des enrobages pour lire et
+écrire une quantité arbitraire de mémoire. Voici par exemple le code
+de `ptrace_read()` :
+
+    ::c
+    /* Read memory of the given process */
+    static void *
+    ptrace_read(pid_t pid, void *address, size_t size)
+    {
+        /* Allocate the buffer */
+        uword_t *buffer = malloc((size/sizeof(uword_t) + 1)*sizeof(uword_t));
+        if (!buffer) return NULL;
+    
+        /* Read word by word */
+        size_t readsz = 0;
+        do {
+            errno = 0;
+            if ((buffer[readsz/sizeof(uword_t)] =
+                    ptrace(PTRACE_PEEKTEXT, pid,
+                           (unsigned char*)address + readsz,
+                           0)) && errno) {
+                fprintf(stderr, "[!] Unable to peek one word at address %p: %m\n",
+                        (unsigned char *)address + readsz);
+                free(buffer);
+                return NULL;
+            }
+            readsz += sizeof(uword_t);
+        } while (readsz < size);
+        return (unsigned char *)buffer;
+    }
+
+## Assembler les morceaux
+
+Le programme prend en paramètre :
+
+ - le PID du processus à modifier,
+ - le décalage issu de la table des symboles pour le tableau `command_to_handler[]`,
+ - le *build ID* de l'exécutable utilisé pour obtenir ce décalage (à des fins de sécurité).
+
+Les principales étapes sont alors les suivantes :
+
+ 1. **S'Attacher au processus** avec `ptrace()`.
+ 2. **Obtenir le nom de l'exécutable** depuis `/proc/PID/exe`.
+ 3. Lire le fichier `/proc/PID/maps` afin de **trouver l'adresse de base**.
+ 4. Effectuer certaines **vérifications supplémentaires**:
+      - vérifier qu'il y a bien un entête ELF à l'adresse de base (via quatre octets magiques),
+      - vérifier le type de l'exécutable (`ET_EXEC` pour les exécutables normaux, `ET_DYN` pour les PIE),
+      - récupérer et comparer le *build ID* avec celui attendu.
+ 5. À partir de l'adresse de base et du décalage fourni, **calculer l'emplacement du tableau `command_to_handler[]`**.
+ 6. **Modifier** le tableau.
+
+Les sources du programme sont disponibles sur [GitHub][patcher].
+
+    ::console
+    $ ./patch --build-id 0995121eb46e2a4c13747ac2bad982829365c694 \
+    >         --offset 9f9d00 \
+    >         --pid 16833
+    [.] Attaching to PID 16833...
+    [*] Successfully attached to PID 16833
+    [*] Executable name is /usr/bin/qemu-system-x86_64
+    [*] Base address is 0x7f7eea912000
+    [*] Both build IDs match
+    [.] Retrieving command_to_handler table...
+    [.] Patching QEMU...
+    [*] QEMU successfully patched!
+
+*[CVE]: Common Vulnerabilities and Exposures
+*[VENOM]: Virtualized Environment Neglected Operations Manipulation
+*[ASLR]: Address space layout randomization
+*[PIE]: Position Independent Executable
+
+[CVE-2015-3456]: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2015-3456 "CVE-2015-3456"
+[VENOM]: http://venom.crowdstrike.com/ "Virtualized Environment Neglected Operations Manipulation"
+[QEMU]: http://wiki.qemu.org/Main_Page "QEMU is a generic and open source machine emulator and virtualizer"
+[exploit]: https://github.com/vincentbernat/cve-2015-3456/blob/master/exploit/exploit.c
+[patcher]: https://github.com/vincentbernat/cve-2015-3456/blob/master/patch/patch.c
+[virsh-save]: http://www.venomfix.com/ "Venom fix using virsh save"
+[Ksplice]: http://www.ksplice.com/ "Ksplice"
+[kGraft]: http://en.wikipedia.org/wiki/KGraft "Wikipedia page on kGraft"
+[kpatch]: https://github.com/dynup/kpatch "kpatch: dynamic kernel patching"
+[common framework]: https://lwn.net/Articles/634649/ "LWN: https://lwn.net/Articles/634649/"
+[patch]: http://git.qemu.org/?p=qemu.git;a=commitdiff;h=e907746266721f305d67bc0718795fedee2e824c "CVE-2015-3456 source code patch"
+[code]: http://git.qemu.org/?p=qemu.git;a=blob;f=hw/block/fdc.c;h=d8a8edd936f42d4b1d801c996932668e456b5896;hb=e907746266721f305d67bc0718795fedee2e824c "Fixed version of hw/block/fdc.c"
+[Katana]: http://katana.nongnu.org/ "Katana"
+[1]: http://phrack.org/issues/59/8.html "Phrack, issue 59"
+[2]: http://www.hick.org/code/skape/papers/needle.txt
+[automatically produce debugging symbols]: https://wiki.debian.org/AutomaticDebugPackages "Automatic debug packages for Debian"
+[enabling the appropriate repositories]: https://wiki.ubuntu.com/DebuggingProgramCrash#Non-built-in_debug_symbol_packages_.28.2A-dbgsym.29 "Enabling non-built-in debug symbol package repositories on Ubuntu"
+[easily automated]: https://github.com/vincentbernat/cve-2015-3456/blob/master/patch/gdb-fix "Fixing CVE-2015-3456 through gdb"
+[ptrace]: http://linux.die.net/man/2/ptrace "ptrace(2) manual page"
+[rationale behind the build ID]: https://fedoraproject.org/wiki/Releases/FeatureBuildId
+[Anatomy of a program in memory]: http://duartes.org/gustavo/blog/post/anatomy-of-a-program-in-memory/ "Anatomy of a Program in Memory"
+[reproducible builds]: https://wiki.debian.org/ReproducibleBuilds "Reproducible builds for Debian"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
