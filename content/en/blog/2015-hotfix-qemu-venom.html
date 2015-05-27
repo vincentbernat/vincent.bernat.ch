@@ -405,7 +405,7 @@ back in memory[^write].
 
 Since `ptrace()` only allows to read or write a word at a time,
 `ptrace_read()` and `ptrace_write()` are wrappers to read or write
-arbitrary large chunks of memory. Here is the code for
+arbitrary large chunks of memory[^vmreadv]. Here is the code for
 `ptrace_read()`:
 
     ::c
@@ -434,6 +434,12 @@ arbitrary large chunks of memory. Here is the code for
         } while (readsz < size);
         return (unsigned char *)buffer;
     }
+
+[^vmreadv]: With Linux 3.2 or later, `process_vm_readv()`
+            and `process_vm_writev()` can be used to transfer data from/to
+            a remote process without using `ptrace()` at all. However,
+            `ptrace()` would still be needed to reliably stop the main
+            thread.
 
 ## Putting the pieces together
 
