@@ -1,12 +1,12 @@
 ---
-title: "Intégration de NetSNMP dans une boucle d'événements"
+title: "Intégration de Net-SNMP dans une boucle d'événements"
 keywords: "snmp, libevent, event loop, boucle, asynchrone, netsnmp, twisted, python"
 uuid: 48576890-3afb-4b5b-91b9-c168ccd23a80
 tags:
   - snmp
 ---
 
-_NetSNMP_ utilise sa propre [boucle d'événements][event loop] basée
+_Net-SNMP_ utilise sa propre [boucle d'événements][event loop] basée
 sur l'appel système `select()`. Bien qu'il soit possible de l'utiliser
 dans un programme tiers, on lui préfère généralement sa propre boucle
 ou des bibliothèques telles que [libevent][], [libev][] ou
@@ -56,7 +56,7 @@ La fonction `thread_process_fd (fds)` va exécuter l'action associée à
 chaque descripetur `fd` si la condition `FD_ISSET (fds, fd)` est
 vérifiée.
 
-Intégrer _NetSNMP_ dans une telle boucle est relativement simple : on
+Intégrer _Net-SNMP_ dans une telle boucle est relativement simple : on
 dispose de la fonction `snmp_select_info()` qui permet d'intégrer les
 descripteurs de fichiers liés à SNMP dans un ensemble existant. Voici
 le code adapté :
@@ -222,12 +222,12 @@ mis en place:
 
 ## Twisted reactor
 
-Comme second exemple, nous allons voir comment intégrer _NetSNMP_ dans
+Comme second exemple, nous allons voir comment intégrer _Net-SNMP_ dans
 le réacteur de [Twisted][]. _Twisted_ est un ensemble de composants
 pour la programmation réseau basé sur le paradigme
 événementiel. Fourni avec le support de nombreux protocoles, il n'y a
 cependant rien pour SNMP[^twistedsnmp]. _Twisted_ étant écrit en
-Python, l'interface avec _NetSNMP_ doit se faire à l'aide d'une
+Python, l'interface avec _Net-SNMP_ doit se faire à l'aide d'une
 extension en C ou en utilisant le module `ctypes`.
 
 [^twistedsnmp]: [TwistedSNMP][] est un implémentation de SNMP pour _Twisted_
@@ -239,7 +239,7 @@ La boucle d'événements de _Twisted_ est appelée le réacteur. Comme
 pour _libevent_, chaque événement doit etre y être enregistré. Il est
 possible d'y inscrire des descripteurs de fichiers en implémentant une
 classe respectant une certaine interface. Voici un exemple
-d'implémentation tiré de _PyNetSNMP_, un sous-projet de [Zenoss][],
+d'implémentation tiré de _PyNet-SNMP_, un sous-projet de [Zenoss][],
 utilisant le module `ctypes` :
 
     ::python
@@ -300,11 +300,11 @@ Pour un autre exemple, le lecteur intéressé pourra consulter
 
 ## Asynchronicité défaillante
 
-Intégrer _NetSNMP_ dans un programme reposant sur les événements n'est
+Intégrer _Net-SNMP_ dans un programme reposant sur les événements n'est
 pas sans risque. Le lecteur souhaitant intégrer la fonctionnalité
 d'agent SNMP dans un programme existant est invité à lire de toute
 urgence mon article sur le
-[manque d'asynchronicité dans l'implémentation de _NetSNMP_ du protocole AgentX][lack].
+[manque d'asynchronicité dans l'implémentation de _Net-SNMP_ du protocole AgentX][lack].
 
 Côté _manager_, il y a des limitations similaires en SNMPv3. Pour
 interroger un agent en SNMPv3, il est nécessaire de connaître
@@ -312,10 +312,10 @@ l'identifiant de l'agent distant. Celui-ci est habituellement
 découvert en interrogeant `SNMP-FRAMEWORK-MIB::‌snmpEngineID`, comme
 décrit dans la [RFC 5343][].
 
-Malheureusement, avec _NetSNMP_, cette découverte se fait de manière
+Malheureusement, avec _Net-SNMP_, cette découverte se fait de manière
 synchrone. Il existe un [rapport de bug][3446148] pour ce problème
 mais le correctif n'existe pas. Sur la liste de diffusion de
-_NetSNMP_, j'ai décrit une [méthode de contournement][workaround]
+_Net-SNMP_, j'ai décrit une [méthode de contournement][workaround]
 autour de la fonction `snmp_sess_async_send()`.
 
 Un tel problème n'existe pas avec SNMPv2.
@@ -332,13 +332,13 @@ est habituellement de 1024). Il n'est donc pas possible d'utiliser
 `snmp_select_info()` avec des descripteurs de fichiers supérieurs à
 1024.
 
-À partir de _NetSNMP_ 5.5, il est possible d'utiliser
+À partir de _Net-SNMP_ 5.5, il est possible d'utiliser
 `snmp_select_info2()` et `snmp_read2()` au lieu de
 `snmp_select_info()` et `snmp_read()`. Ils utilisent le type
 `netsnmp_large_fd_set` qui doit être manipulé avec des macros comme
 `NETSNMP_LARGE_FD_SET()`.
 
-Afin de garder la compatibilité avec _NetSNMP_ 5.4, il existe une
+Afin de garder la compatibilité avec _Net-SNMP_ 5.4, il existe une
 autre possibilité. Le type `fd_set` est souvent un tableau d'entiers
 longs de taille fixe. Les macros `FD_CLR()`, `FD_ISSET()` et
 `FD_SET()` sont indépendantes de la taille de celui-ci à la différence
@@ -370,7 +370,7 @@ redéfinir `FD_ZERO()`:
 
 ## Threads
 
-_NetSNMP_ dispose de deux API :
+_Net-SNMP_ dispose de deux API :
 
  - l'API _traditionnelle_ et
  - l'API « _single session_ ».
@@ -383,7 +383,7 @@ API. `snmp_select_info()` doit par exemple être renplacé par
 `snmp_sess_select_info()`, ce qui oblige à garder une liste des
 sessions SNMP utilisées.
 
-La partie agent de _NetSNMP_ n'est disponible que via la première API.
+La partie agent de _Net-SNMP_ n'est disponible que via la première API.
 
 [RFC 5343]: http://tools.ietf.org/html/rfc5343 "RFC 5343: SNMP Context EngineID Discovery"
 [event loop]: http://fr.wikipedia.org/wiki/Programmation_%C3%A9v%C3%A9nementielle "Programmation événementielle sur Wikipedia"

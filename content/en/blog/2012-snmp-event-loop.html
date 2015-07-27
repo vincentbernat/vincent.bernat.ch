@@ -1,12 +1,12 @@
 ---
-title: "Integration of NetSNMP into an event loop"
+title: "Integration of Net-SNMP into an event loop"
 keywords: "snmp, libevent, loop, event loop, async, netsnmp, twisted, python"
 uuid: 48576890-3afb-4b5b-91b9-c168ccd23a80
 tags:
   - snmp
 ---
 
-_NetSNMP_ comes with its own [event loop][] based on the `select()`
+_Net-SNMP_ comes with its own [event loop][] based on the `select()`
 system call. While you can build your program around it, you may
 prefer to use an existing event loop, either a custom one or something
 like [libevent][], [libev][] or [Twisted][].
@@ -54,7 +54,7 @@ Here is a typical use of `select()` (adapted from [Quagga][])
 `fd` and executes the appropriate action if `FD_ISSET (fds, fd)` is
 true.
 
-Integrating _NetSNMP_ into such an event loop is easy: _NetSNMP_
+Integrating _Net-SNMP_ into such an event loop is easy: _Net-SNMP_
 provides the `snmp_select_info()` function which alters a set of file
 descriptors to insert its own.  Here is the new code:
 
@@ -214,11 +214,11 @@ Here is how are defined the two callbacks:
 
 ## Twisted reactor
 
-As a second example, here is how to integrate _NetSNMP_ into
+As a second example, here is how to integrate _Net-SNMP_ into
 [Twisted][] reactor. _Twisted_ is an event-driven network programming
 framework written in Python. It does not come with support for
 SNMP[^twistedsnmp]. Because of the language mismatch, the integration
-of _NetSNMP_ in _Twisted_ needs to be done using a C extension or the
+of _Net-SNMP_ in _Twisted_ needs to be done using a C extension or the
 `ctypes` module.
 
 [^twistedsnmp]: [TwistedSNMP][] is an SNMP protocol implementation
@@ -229,7 +229,7 @@ of _NetSNMP_ in _Twisted_ needs to be done using a C extension or the
 _Twisted_ event loop is called a reactor. Like for _libevent_, events
 need to be registered. It is possible to register file descriptor-like
 objects using a class implementing a handful of methods. Here is the
-implementation of such a class (adapted from _PyNetSNMP_, a subproject
+implementation of such a class (adapted from _PyNet-SNMP_, a subproject
 of [Zenoss][] using the `ctypes` module):
 
     ::python
@@ -288,9 +288,9 @@ For another example, have a look at
 
 ## Lack of asynchronicity
 
-Integrating _NetSNMP_ into an event-based program is not risk-free. I
+Integrating _Net-SNMP_ into an event-based program is not risk-free. I
 have written a fairly comprehensive article on the
-[lack of asynchronicity in _NetSNMP_ AgentX protocol implementation][lack]. I
+[lack of asynchronicity in _Net-SNMP_ AgentX protocol implementation][lack]. I
 urge you to read it if you want to integrate a SNMP subagent into an
 existing program.
 
@@ -302,7 +302,7 @@ it is usually discovered by querying
 `SNMP-FRAMEWORK-MIB::‌snmpEngineID`, as described in [RFC 5343][].
 
 Unfortunately, this discovery is done **synchronously** by
-_NetSNMP_. There is a [bug report][3446148] for this issue but it
+_Net-SNMP_. There is a [bug report][3446148] for this issue but it
 seems difficult to fix. I have not been able to come up with a proper
 patch but I have described a [workaround][] around
 `snmp_sess_async_send()`.
@@ -320,11 +320,11 @@ can be handled with the `fd_set` type. This means that if you have a
 file descriptor greater than 1024, you won't be able to use
 `snmp_select_info()` with it.
 
-Starting from _NetSNMP_ 5.5, you can use `snmp_select_info2()` and
+Starting from _Net-SNMP_ 5.5, you can use `snmp_select_info2()` and
 `snmp_read2()` instead of `snmp_select_info()` and `snmp_read()`. They
 use the `netsnmp_large_fd_set`.
 
-If you want to keep compatibility with _NetSNMP_ 5.4, here is another
+If you want to keep compatibility with _Net-SNMP_ 5.4, here is another
 twist. The `fd_set` type is usually a fixed-size array of long
 integers. `FD_CLR()`, `FD_ISSET()` and `FD_SET()` are
 size-independant. The size only matters for `FD_ZERO()` which is not
@@ -354,7 +354,7 @@ way is to allocate your own array of long integers and cast it to
 
 ## Threads
 
-_NetSNMP_ provides two API:
+_Net-SNMP_ provides two API:
 
  - the traditional session API which is not thread-safe and
  - the single session API.
@@ -366,7 +366,7 @@ use the single session API. `snmp_select_info()` is part of the
 traditional session API. You should replace it with
 `snmp_sess_select_info()` and keep a list of SNMP sessions.
 
-This API is not available for the agent side of _NetSNMP_.
+This API is not available for the agent side of _Net-SNMP_.
 
 [RFC 5343]: http://tools.ietf.org/html/rfc5343 "RFC 5343: SNMP Context EngineID Discovery"
 [event loop]: http://en.wikipedia.org/wiki/Event_loop "Event loop on Wikipedia"
