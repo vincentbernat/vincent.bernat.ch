@@ -155,13 +155,6 @@ def push_s3():
         # Compress HTML, CSS and JS
         for t in "css js html".split():
             local(r"find .final/* -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % t)
-        # In js/libs, never change, compress
-        _s3cmd(" --add-header=Expires:'Thu, 31 Dec 2037 23:55:55 GMT'"
-               " --add-header=Cache-Control:'max-age=315360000'"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/x-javascript"
-               " --encoding=UTF-8"
-               "   sync .final/media/js/libs/ s3://vincent.bernat.im/media/js/libs/")
         # JS and CSS in media, 30 days, compress
         _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
                " --add-header=Content-Encoding:'gzip'"
