@@ -14,51 +14,6 @@ luffy.effects = function() {
 	    .show();
     }();
 
-    /* -- Effect 3:
-          Scrolly headers (stolen from Steve Losh)
-	  https://github.com/sjl/stevelosh/blob/master/media/js/sjl.js
-       -- */
-    e = function() {
-	if (!Modernizr.csstransforms || !Modernizr.rgba || !Modernizr.textshadow)
-	    return;
-	var header = $("<div>").addClass("lf-scrolling-header");
-	var base = $("article div[role='main']")
-	$("#lf-page").prepend(header);
-	$(window).scroll(function() {
-	    // Locate the appropriate title to display
-	    var h1s = base.find("h1");
-	    var y = $(window).scrollTop();
-	    var title = h1s.filter(function() {
-		return ($(this).offset().top < y);
-	    }).last().text();
-	    if (!(title != null) || y > base.offset().top + base.height()) {
-		header.hide();
-	    } else {
-		header.html(title);
-		// Compute opacity before displaying
-		var distances = h1s.map(function() {
-		    var d1, d2;
-		    d1 = $(this).offset().top - y;
-		    d2 = $(this).offset().top - y - header.width();
-		    if (d1*d2 < 0) {
-			// Our scrolling header is between two sections
-			return 0;
-		    } else {
-			if (d1 < 0) d1 = -d1;
-			if (d2 < 0) d2 = -d2;
-			return Math.min(d1,d2);
-		    }
-		});
-		var opacity = Math.min.apply(Math, distances)/100;
-		if (opacity > 1) opacity = 1;
-		header.css({
-		    top: y - $("#lf-page").offset().top,
-		    opacity: opacity
-		}).show();
-	    }
-	});
-    }();
-
     /* -- Effect 4:
           Add captions to images
        -- */
