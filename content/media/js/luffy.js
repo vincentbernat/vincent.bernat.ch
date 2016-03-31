@@ -10,7 +10,6 @@ combine:
 $(function() {
     luffy.mathjax();
     luffy.effects();
-    luffy.search();
     luffy.timeago();
     luffy.comments();
     luffy.gallery();
