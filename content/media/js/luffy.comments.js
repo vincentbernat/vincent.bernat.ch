@@ -23,13 +23,6 @@ luffy.comments = function() {
 	.show()			// Show because JS is enabled
 	.click(load);		// Load on click
 
-    /* Load on scroll to bottom */
-    $(window).scroll(function() {
-	var bottom = $(window).scrollTop() + $(window).height();
-	var top = el.offset().top - 300;
-	if (bottom >= top) load();
-    });
-
     /* Load if we have an anchor */
     if (location.hash.match("^#comment-[0-9]+")) {
         load();
