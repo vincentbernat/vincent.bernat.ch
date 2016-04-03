@@ -7,9 +7,7 @@ combine:
     remove: yes
 ---
 
-$(function() {
-    luffy.mathjax();
-    luffy.effects();
-    luffy.comments();
-    luffy.gallery();
-});
+luffy.mathjax();
+luffy.effects();
+luffy.comments();
+luffy.gallery();
