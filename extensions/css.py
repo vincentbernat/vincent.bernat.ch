@@ -14,6 +14,8 @@ class CSSPrefixerPlugin(Plugin):
             return
         p = subprocess.Popen(['nodejs', '-e', """
 var autoprefixer = require('autoprefixer');
+var mqpacker = require('css-mqpacker');
+var cssnano = require('cssnano');
 var postcss = require('postcss');
 var input = '';
 
@@ -25,9 +27,13 @@ process.stdin.on('readable', function() {
   }
 });
 process.stdin.on('end', function() {
-  var output = postcss([autoprefixer]).process(input).css.toString();
-  process.stdout.write(output);
+  postcss([autoprefixer, mqpacker, cssnano])
+        .process(input)
+        .then(function(result) {
+          process.stdout.write(result.css.toString());
+        });
 });
         """], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         stdout, _ = p.communicate(text.encode('utf-8'))
+        assert p.returncode == 0
         return stdout.decode('utf-8')
