@@ -5,11 +5,6 @@
 
 var luffy = luffy || {};
 luffy.gallery = function() {
-    /* Don't run on small viewport if background-size attribute is not supported */
-    if (!Modernizr.backgroundsize && $(window).width() < 900) {
-	return;
-    }
-
     var win = $(window);
     var lang = $("html").attr("lang") || "en";
     var images = $(".lf-gallery a");
