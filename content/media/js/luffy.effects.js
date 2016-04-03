@@ -3,16 +3,6 @@
 var luffy = luffy || {};
 luffy.effects = function() {
     var e;
-    /* -- Effect 1:
-          Resize #lf-page-{1,2} to match size of main page
-       -- */
-    e = function() {
-	/* Set appropriate height for rotated pages */
-	$(".mod-csstransforms #lf-page-1, .mod-csstransforms #lf-page-2")
-	    .css("height",$("#lf-page").innerHeight())
-	    .css("width", $("#lf-page").innerWidth())
-	    .show();
-    }();
 
     /* -- Effect 4:
           Add captions to images
