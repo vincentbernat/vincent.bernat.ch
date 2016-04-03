@@ -1,204 +1,592 @@
 /* Handle image gallery */
-/* Stripped from slimbox. http://code.google.com/p/slimbox/
-   Also released under MIT license.
+/* From: https://github.com/feimosi/baguetteBox.js/blob/master/src/baguetteBox.js
+   MIT licensed. Copyright (c) 2016 feimosi
  */
 
 var luffy = luffy || {};
 luffy.gallery = function() {
-    var win = $(window);
-    var lang = $("html").attr("lang") || "en";
-    var images = $(".lf-gallery a");
+    'use strict';
 
-    /* Options */
-    var options = {
-	loop: false,
-	overlayOpacity: 0.8,
-	overlayFadeDuration: 400,
-	resizeDuration: 400,
-	resizeEasing: "swing",
-	initialWidth: 250,
-	initialHeight: 250,
-	imageFadeDuration: 400,
-	captionAnimationDuration: 400,
-	closeKeys: [27, 88, 67],
-	previousKeys: [37, 80],
-	nextKeys: [39, 78]
+    // SVG shapes used on the buttons
+    var leftArrow = '<svg width="44" height="60">' +
+            '<polyline points="30 10 10 30 30 50" stroke="rgba(255,255,255,0.5)" stroke-width="4"' +
+            'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
+            '</svg>',
+        rightArrow = '<svg width="44" height="60">' +
+            '<polyline points="14 10 34 30 14 50" stroke="rgba(255,255,255,0.5)" stroke-width="4"' +
+            'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
+            '</svg>',
+        closeX = '<svg width="30" height="30">' +
+            '<g stroke="rgb(160, 160, 160)" stroke-width="4">' +
+            '<line x1="5" y1="5" x2="25" y2="25"/>' +
+            '<line x1="5" y1="25" x2="25" y2="5"/>' +
+            '</g></svg>';
+    // Global options and their defaults
+    var options = {},
+        defaults = {
+            captions: true,
+            fullScreen: false,
+            noScrollbars: false,
+            titleTag: false,
+            buttons: 'auto',
+            async: false,
+            preload: 2,
+            animation: 'slideIn',
+            afterShow: null,
+            afterHide: null,
+            // callback when image changes with `currentIndex` and `imagesElements.length` as parameters
+            onChange: null,
+            overlayBackgroundColor: 'rgba(0, 0, 0, .8)'
+        };
+    // Object containing information about features compatibility
+    var supports = {};
+    // DOM Elements references
+    var overlay, slider, previousButton, nextButton, closeButton;
+    // Current image index inside the slider and displayed gallery index
+    var currentIndex = 0, currentGallery = -1;
+    // Touch event start position (for slide gesture)
+    var touchStartX;
+    var touchStartY;
+    // If set to true ignore touch events because animation was already fired
+    var touchFlag = false;
+    // Regex pattern to match image files
+    var regex = /.+\.(gif|jpe?g|png|webp)/i;
+    // Array of all used galleries (Array od NodeList elements)
+    var galleries = [];
+    // 2D array of galleries and images inside them
+    var imagesMap = [];
+    // Array containing temporary images DOM elements
+    var imagesElements = [];
+    // Event handlers
+    var imagedEventHandlers = {};
+    var overlayClickHandler = function(event) {
+        // When clicked on the overlay (outside displayed image) close it
+        if (event.target && event.target.nodeName !== 'IMG' && event.target.nodeName !== 'FIGCAPTION') {
+            hideOverlay();
+        }
+    };
+    var previousButtonClickHandler = function(event) {
+        /* jshint -W030 */
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        showPreviousImage();
+    };
+    var nextButtonClickHandler = function(event) {
+        /* jshint -W030 */
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        showNextImage();
+    };
+    var closeButtonClickHandler = function(event) {
+        /* jshint -W030 */
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        hideOverlay();
+    };
+    var touchstartHandler = function(event) {
+        // Save x and y axis position
+        touchStartX = event.changedTouches[0].pageX;
+        touchStartY = event.changedTouches[0].pageY;
+    };
+    var touchmoveHandler = function(event) {
+        // If action was already triggered return
+        if (touchFlag) {
+            return;
+        }
+        /* jshint -W030 */
+        event.preventDefault ? event.preventDefault() : event.returnValue = false;
+        var touch = event.touches[0] || event.changedTouches[0];
+        // Move at least 40 pixels to trigger the action
+        if (touch.pageX - touchStartX > 40) {
+            touchFlag = true;
+            showPreviousImage();
+        } else if (touch.pageX - touchStartX < -40) {
+            touchFlag = true;
+            showNextImage();
+            // Move 100 pixels up to close the overlay
+        } else if (touchStartY - touch.pageY > 100) {
+            hideOverlay();
+        }
+    };
+    var touchendHandler = function() {
+        touchFlag = false;
     };
 
-    // Other variables
-    var activeImage = -1, activeURL, prevImage, nextImage, documentElement = document.documentElement;
-    var preload = {}, preloadPrev = new Image(), preloadNext = new Image();
-    var overlay, center, image, sizer, prevlink, nextlink;
-    var number, middle, centerWidth, centerHeight;
-
-    /* Initialization */
-    var init = function() {
-	// Append the Slimbox HTML code at the bottom of the document
-	$("body").append(
-	    $([
-		overlay = $('<div id="lfb-overlay" />')[0],
-		center = $('<div id="lfb-center" />')[0],
-	    ]).css("display", "none")
-	);
-	$('<div id="lfb-close" class="lf-sprite-slimbox-close"/>')
-	    .appendTo(center).add(overlay).click(close);
-	image = $('<div id="lfb-image" />').appendTo(center).append(
-	    sizer = $('<div style="position: relative;" />').append([
-		prevLink = $('<a id="lfb-prevlink" href="#"></a>')
-		    .append($('<span id="lfb-prevlink-ico" class="lf-sprite-slimbox-left" />'))
-		    .click(previous)[0],
-		nextLink = $('<a id="lfb-nextlink" href="#"></a>')
-		    .append($('<span id="lfb-nextlink-ico" class="lf-sprite-slimbox-right" />'))
-		    .click(next)[0]
-	    ])[0]
-	)[0];
-    };
-
-    /* Display the indexed image */
-    var slimbox = function(startImage) {
-	middle = win.scrollTop() + (win.height() / 2);
-	centerWidth = options.initialWidth;
-	centerHeight = options.initialHeight;
-	$(center).css({ top: Math.max(0, middle - (centerHeight / 2)),
-			width: centerWidth,
-			height: centerHeight,
-			marginLeft: -centerWidth/2}).show();
-	$(overlay).css("opacity", options.overlayOpacity)
-	    .fadeIn(options.overlayFadeDuration);
-	position();
-	setup(1);
-	return changeImage(startImage);
-    };
-
-    /* Bind to all images of the gallery */
-    init();
-    images.unbind("click").click(function() {
-	var length, link = this, startImage, i = 0;
-	for (length = images.length; i < length; ++i) {
-	    if (images[i] == this) startImage = i;
-	}
-	return slimbox(startImage);
-    });
-
-    function position() {
-	var l = win.scrollLeft(), w = win.width();
-	$(center).css("left", l + (w / 2));
+    // forEach polyfill for IE8
+    // http://stackoverflow.com/a/14827443/1077846
+    if (![].forEach) {
+        Array.prototype.forEach = function(callback, thisArg) {
+            for (var i = 0; i < this.length; i++) {
+                callback.call(thisArg, this[i], i, this);
+            }
+        };
     }
 
-    function setup(open) {
-	var fn = open ? "bind" : "unbind";
-	win[fn]("scroll resize", position);
-	$(document)[fn]("keydown", keyDown);
-	$(center)[fn]("touchstart touchmove touchend", touch);
+    // filter polyfill for IE8
+    // https://gist.github.com/eliperelman/1031656
+    if (![].filter) {
+        Array.prototype.filter = function(a, b, c, d, e) {
+            /* jshint -W030 */
+            c = this;
+            d = [];
+            for (e = 0; e < c.length; e++)
+                a.call(b, c[e], e, c) && d.push(c[e]);
+            return d;
+        };
     }
 
-    function keyDown(event) {
-	var code = event.keyCode, fn = $.inArray;
-	// Prevent default keyboard action (like navigating inside the page)
-	return (fn(code, options.closeKeys) >= 0) ? close()
-	    : (fn(code, options.nextKeys) >= 0) ? next()
-	    : (fn(code, options.previousKeys) >= 0) ? previous()
-	    : false;
+    // Script entry point
+    function run(selector, userOptions) {
+        // Fill supports object
+        supports.transforms = testTransformsSupport();
+        supports.svg = testSVGSupport();
+
+        buildOverlay();
+        bindImageClickListeners(selector, userOptions);
     }
 
-    var touch = function () {
-	var down_x = null, up_x = null;
-	return function(event) {
-	    if (event.type == "touchstart") {
-		down_x = event.originalEvent.touches[0].pageX;
-	    } else if (event.type == "touchmove") {
-		event.preventDefault();
-		up_x = event.originalEvent.touches[0].pageX;
-	    } else {
-		if (down_x - up_x > $(center).width()/3) {
-		    next();
-		} else if (up_x - down_x > $(center).width()/3) {
-		    previous();
-		}
-		down_x = up_x = null;
-	    }
-	}
-    }();
+    function bindImageClickListeners(selector, userOptions) {
+        // For each gallery bind a click event to every image inside it
+        var gallery = document.querySelectorAll(selector);
+        galleries.push(gallery);
+        [].forEach.call(gallery, function(galleryElement) {
+            if (userOptions && userOptions.filter) {
+                regex = userOptions.filter;
+            }
+            // Filter 'a' elements from those not linking to images
+            var tags = galleryElement.getElementsByTagName('a');
+            tags = [].filter.call(tags, function(element) {
+                return regex.test(element.href);
+            });
 
-    function previous() {
-	return changeImage(prevImage);
+            // Get all gallery images and save them in imagesMap with custom options
+            var galleryID = imagesMap.length;
+            imagesMap.push(tags);
+            imagesMap[galleryID].options = userOptions;
+
+            [].forEach.call(imagesMap[galleryID], function(imageElement, imageIndex) {
+                var imageElementClickHandler = function(event) {
+                    /* jshint -W030 */
+                    event.preventDefault ? event.preventDefault() : event.returnValue = false;
+                    prepareOverlay(galleryID);
+                    showOverlay(imageIndex);
+                };
+                imagedEventHandlers[galleryID + '_' + imageElement] = imageElementClickHandler;
+                bind(imageElement, 'click', imageElementClickHandler);
+            });
+        });
     }
 
-    function next() {
-	return changeImage(nextImage);
+    function unbindImageClickListeners() {
+        galleries.forEach(function(gallery) {
+            [].forEach.call(gallery, function() {
+                var galleryID = imagesMap.length - 1;
+                [].forEach.call(imagesMap[galleryID], function(imageElement) {
+                    unbind(imageElement, 'click', imagedEventHandlers[galleryID + '_' + imageElement]);
+                });
+                imagesMap.pop();
+            });
+        });
     }
 
-    function changeImage(imageIndex) {
-	if (imageIndex >= 0) {
-	    activeImage = imageIndex;
-	    activeURL = images[activeImage].href;
-	    prevImage = (activeImage || (options.loop ? images.length : 0)) - 1;
-	    nextImage = ((activeImage + 1) % images.length) || (options.loop ? 0 : -1);
-	    stop();
-	    center.className = "lfb-loading";
+    function buildOverlay() {
+        overlay = getByID('baguetteBox-overlay');
+        // Check if the overlay already exists
+        if (overlay) {
+            slider = getByID('baguetteBox-slider');
+            previousButton = getByID('previous-button');
+            nextButton = getByID('next-button');
+            closeButton = getByID('close-button');
+            return;
+        }
+        // Create overlay element
+        overlay = create('div');
+        overlay.id = 'baguetteBox-overlay';
+        document.getElementsByTagName('body')[0].appendChild(overlay);
+        // Create gallery slider element
+        slider = create('div');
+        slider.id = 'baguetteBox-slider';
+        overlay.appendChild(slider);
+        // Create all necessary buttons
+        previousButton = create('button');
+        previousButton.id = 'previous-button';
+        previousButton.innerHTML = supports.svg ? leftArrow : '&lt;';
+        overlay.appendChild(previousButton);
 
-	    preload = new Image();
-	    preload.onload = animateBox;
-	    preload.src = activeURL;
-	}
-	return false;
+        nextButton = create('button');
+        nextButton.id = 'next-button';
+        nextButton.innerHTML = supports.svg ? rightArrow : '&gt;';
+        overlay.appendChild(nextButton);
+
+        closeButton = create('button');
+        closeButton.id = 'close-button';
+        closeButton.innerHTML = supports.svg ? closeX : 'X';
+        overlay.appendChild(closeButton);
+
+        previousButton.className = nextButton.className = closeButton.className = 'baguetteBox-button';
+
+        bindEvents();
     }
 
-    function animateBox() {
-	var targetWidth = preload.width, targetHeight = preload.height;
-	var maxWidth = win.width() * 0.9, maxHeight = win.height() * 0.9;
-	center.className = "";
-	$(image).css({backgroundImage: "url(" + activeURL + ")", visibility: "hidden", display: ""});
-	/* Resize the image if needed */
-	if (targetWidth > maxWidth) {
-	    targetHeight = targetHeight * maxWidth / targetWidth;
-	    targetWidth = maxWidth;
-	}
-	if (targetHeight > maxHeight) {
-	    targetWidth = targetWidth * maxHeight / targetHeight;
-	    targetHeight = maxHeight;
-	}
-	$(sizer).width(targetWidth);
-	$([sizer, prevLink, nextLink]).height(targetHeight);
-
-	$(number).html((((images.length > 1) && options.counterText) || "")
-		       .replace(/{x}/, activeImage + 1).replace(/{y}/, images.length));
-
-	if (prevImage >= 0) preloadPrev.src = images[prevImage].href;
-	if (nextImage >= 0) preloadNext.src = images[nextImage].href;
-
-	centerWidth = image.offsetWidth;
-	centerHeight = image.offsetHeight;
-	var top = Math.max(0, middle - (centerHeight / 2));
-	$(center).css({ height: centerHeight,
-			width: centerWidth,
-			top: top,
-			marginLeft: -centerWidth/2 });
-	$(image).css({ display: "none",
-		       visibility: "",
-		       opacity: ""}).fadeIn(options.imageFadeDuration, animateCaption);
+    function keyDownHandler(event) {
+        switch (event.keyCode) {
+        case 37: // Left arrow
+            showPreviousImage();
+            break;
+        case 39: // Right arrow
+            showNextImage();
+            break;
+        case 27: // Esc
+            hideOverlay();
+            break;
+        }
     }
 
-    function animateCaption() {
-	if (prevImage >= 0) $(prevLink).show();
-	if (nextImage >= 0) $(nextLink).show();
+    function bindEvents() {
+        bind(overlay, 'click', overlayClickHandler);
+        bind(previousButton, 'click', previousButtonClickHandler);
+        bind(nextButton, 'click', nextButtonClickHandler);
+        bind(closeButton, 'click', closeButtonClickHandler);
+        bind(overlay, 'touchstart', touchstartHandler);
+        bind(overlay, 'touchmove', touchmoveHandler);
+        bind(overlay, 'touchend', touchendHandler);
     }
 
-    function stop() {
-	preload.onload = null;
-	preload.src = preloadPrev.src = preloadNext.src = activeURL;
-	$([center, image]).stop(true);
-	$([prevLink, nextLink, image]).hide();
+    function unbindEvents() {
+        unbind(overlay, 'click', overlayClickHandler);
+        unbind(previousButton, 'click', previousButtonClickHandler);
+        unbind(nextButton, 'click', nextButtonClickHandler);
+        unbind(closeButton, 'click', closeButtonClickHandler);
+        unbind(overlay, 'touchstart', touchstartHandler);
+        unbind(overlay, 'touchmove', touchmoveHandler);
+        unbind(overlay, 'touchend', touchendHandler);
     }
 
-    function close() {
-	if (activeImage >= 0) {
-	    stop();
-	    activeImage = prevImage = nextImage = -1;
-	    $(center).hide();
-	    $(overlay).stop().fadeOut(options.overlayFadeDuration, setup);
-	}
-	return false;
+    function prepareOverlay(galleryIndex) {
+        // If the same gallery is being opened prevent from loading it once again
+        if (currentGallery === galleryIndex) {
+            return;
+        }
+        currentGallery = galleryIndex;
+        // Update gallery specific options
+        setOptions(imagesMap[galleryIndex].options);
+        // Empty slider of previous contents (more effective than .innerHTML = "")
+        while (slider.firstChild) {
+            slider.removeChild(slider.firstChild);
+        }
+        imagesElements.length = 0;
+        // Prepare and append images containers
+        for (var i = 0, fullImage; i < imagesMap[galleryIndex].length; i++) {
+            fullImage = create('div');
+            fullImage.className = 'full-image';
+            fullImage.id = 'baguette-img-' + i;
+            imagesElements.push(fullImage);
+            slider.appendChild(imagesElements[i]);
+        }
     }
-    
+
+    function setOptions(newOptions) {
+        if (!newOptions) {
+            newOptions = {};
+        }
+        // Fill options object
+        for (var item in defaults) {
+            options[item] = defaults[item];
+            if (typeof newOptions[item] !== 'undefined') {
+                options[item] = newOptions[item];
+            }
+        }
+        /* Apply new options */
+        // Change transition for proper animation
+        slider.style.transition = slider.style.webkitTransition = (options.animation === 'fadeIn' ? 'opacity .4s ease' :
+                                                                   options.animation === 'slideIn' ? '' : 'none');
+        // Hide buttons if necessary
+        if (options.buttons === 'auto' && ('ontouchstart' in window || imagesMap[currentGallery].length === 1)) {
+            options.buttons = false;
+        }
+        // Set buttons style to hide or display them
+        previousButton.style.display = nextButton.style.display = (options.buttons ? '' : 'none');
+        // Set overlay color
+        overlay.style.backgroundColor = options.overlayBackgroundColor;
+    }
+
+    function showOverlay(chosenImageIndex) {
+        if (options.noScrollbars) {
+            document.body.style.overflow = 'hidden';
+        }
+        if (overlay.style.display === 'block') {
+            return;
+        }
+
+        bind(document, 'keydown', keyDownHandler);
+        currentIndex = chosenImageIndex;
+        loadImage(currentIndex, function() {
+            preloadNext(currentIndex);
+            preloadPrev(currentIndex);
+        });
+
+        updateOffset();
+        overlay.style.display = 'block';
+        if (options.fullScreen) {
+            enterFullScreen();
+        }
+        // Fade in overlay
+        setTimeout(function() {
+            overlay.className = 'visible';
+            if (options.afterShow) {
+                options.afterShow();
+            }
+        }, 50);
+        if (options.onChange) {
+            options.onChange(currentIndex, imagesElements.length);
+        }
+    }
+
+    function enterFullScreen() {
+        if (overlay.requestFullscreen) {
+            overlay.requestFullscreen();
+        } else if (overlay.webkitRequestFullscreen) {
+            overlay.webkitRequestFullscreen();
+        } else if (overlay.mozRequestFullScreen) {
+            overlay.mozRequestFullScreen();
+        }
+    }
+
+    function exitFullscreen() {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        }
+    }
+
+    function hideOverlay() {
+        if (options.noScrollbars) {
+            document.body.style.overflow = 'auto';
+        }
+        if (overlay.style.display === 'none') {
+            return;
+        }
+
+        unbind(document, 'keydown', keyDownHandler);
+        // Fade out and hide the overlay
+        overlay.className = '';
+        setTimeout(function() {
+            overlay.style.display = 'none';
+            exitFullscreen();
+            if (options.afterHide) {
+                options.afterHide();
+            }
+        }, 500);
+    }
+
+    function loadImage(index, callback) {
+        var imageContainer = imagesElements[index];
+        if (typeof imageContainer === 'undefined') {
+            return;
+        }
+
+        // If image is already loaded run callback and return
+        if (imageContainer.getElementsByTagName('img')[0]) {
+            if (callback) {
+                callback();
+            }
+            return;
+        }
+        // Get element reference, optional caption and source path
+        var imageElement = imagesMap[currentGallery][index];
+        var imageCaption = typeof options.captions === 'function' ?
+                options.captions.call(imagesMap[currentGallery], imageElement) :
+                imageElement.getAttribute('data-caption') || imageElement.title;
+        var imageSrc = getImageSrc(imageElement);
+        // Prepare image container elements
+        var figure = create('figure');
+        var image = create('img');
+        var figcaption = create('figcaption');
+        imageContainer.appendChild(figure);
+        // Add loader element
+        figure.innerHTML = '<div class="baguetteBox-spinner">' +
+            '<div class="baguetteBox-double-bounce1"></div>' +
+            '<div class="baguetteBox-double-bounce2"></div>' +
+            '</div>';
+        // Set callback function when image loads
+        image.onload = function() {
+            // Remove loader element
+            var spinner = document.querySelector('#baguette-img-' + index + ' .baguetteBox-spinner');
+            figure.removeChild(spinner);
+            if (!options.async && callback) {
+                callback();
+            }
+        };
+        image.setAttribute('src', imageSrc);
+        if (options.titleTag && imageCaption) {
+            image.title = imageCaption;
+        }
+        figure.appendChild(image);
+        // Insert caption if available
+        if (options.captions && imageCaption) {
+            figcaption.innerHTML = imageCaption;
+            figure.appendChild(figcaption);
+        }
+        // Run callback
+        if (options.async && callback) {
+            callback();
+        }
+    }
+
+    // Get image source location, mostly used for responsive images
+    function getImageSrc(image) {
+        // Set default image path from href
+        var result = image.href;
+        // If dataset is supported find the most suitable image
+        if (image.dataset) {
+            var srcs = [];
+            // Get all possible image versions depending on the resolution
+            for (var item in image.dataset) {
+                if (item.substring(0, 3) === 'at-' && !isNaN(item.substring(3))) {
+                    srcs[item.replace('at-', '')] = image.dataset[item];
+                }
+            }
+            // Sort resolutions ascending
+            var keys = Object.keys(srcs).sort(function(a, b) {
+                return parseInt(a, 10) < parseInt(b, 10) ? -1 : 1;
+            });
+            // Get real screen resolution
+            var width = window.innerWidth * window.devicePixelRatio;
+            // Find the first image bigger than or equal to the current width
+            var i = 0;
+            while (i < keys.length - 1 && keys[i] < width) {
+                i++;
+            }
+            result = srcs[keys[i]] || result;
+        }
+        return result;
+    }
+
+    // Return false at the right end of the gallery
+    function showNextImage() {
+        var returnValue;
+        // Check if next image exists
+        if (currentIndex <= imagesElements.length - 2) {
+            currentIndex++;
+            updateOffset();
+            preloadNext(currentIndex);
+            returnValue = true;
+        } else if (options.animation) {
+            slider.className = 'bounce-from-right';
+            setTimeout(function() {
+                slider.className = '';
+            }, 400);
+            returnValue = false;
+        }
+        if (options.onChange) {
+            options.onChange(currentIndex, imagesElements.length);
+        }
+        return returnValue;
+    }
+
+    // Return false at the left end of the gallery
+    function showPreviousImage() {
+        var returnValue;
+        // Check if previous image exists
+        if (currentIndex >= 1) {
+            currentIndex--;
+            updateOffset();
+            preloadPrev(currentIndex);
+            returnValue = true;
+        } else if (options.animation) {
+            slider.className = 'bounce-from-left';
+            setTimeout(function() {
+                slider.className = '';
+            }, 400);
+            returnValue = false;
+        }
+        if (options.onChange) {
+            options.onChange(currentIndex, imagesElements.length);
+        }
+        return returnValue;
+    }
+
+    function updateOffset() {
+        var offset = -currentIndex * 100 + '%';
+        if (options.animation === 'fadeIn') {
+            slider.style.opacity = 0;
+            setTimeout(function() {
+                /* jshint -W030 */
+                supports.transforms ?
+                    slider.style.transform = slider.style.webkitTransform = 'translate3d(' + offset + ',0,0)'
+                    : slider.style.left = offset;
+                slider.style.opacity = 1;
+            }, 400);
+        } else {
+            /* jshint -W030 */
+            supports.transforms ?
+                slider.style.transform = slider.style.webkitTransform = 'translate3d(' + offset + ',0,0)'
+                : slider.style.left = offset;
+        }
+    }
+
+    // CSS 3D Transforms test
+    function testTransformsSupport() {
+        var div = create('div');
+        return typeof div.style.perspective !== 'undefined' || typeof div.style.webkitPerspective !== 'undefined';
+    }
+
+    // Inline SVG test
+    function testSVGSupport() {
+        var div = create('div');
+        div.innerHTML = '<svg/>';
+        return (div.firstChild && div.firstChild.namespaceURI) === 'http://www.w3.org/2000/svg';
+    }
+
+    function preloadNext(index) {
+        if (index - currentIndex >= options.preload) {
+            return;
+        }
+        loadImage(index + 1, function() { preloadNext(index + 1); });
+    }
+
+    function preloadPrev(index) {
+        if (currentIndex - index >= options.preload) {
+            return;
+        }
+        loadImage(index - 1, function() { preloadPrev(index - 1); });
+    }
+
+    function bind(element, event, callback) {
+        if (element.addEventListener) {
+            element.addEventListener(event, callback, false);
+        } else {    // IE8 fallback
+            element.attachEvent('on' + event, callback);
+        }
+    }
+
+    function unbind(element, event, callback) {
+        if (element.removeEventListener) {
+            element.removeEventListener(event, callback, false);
+        } else {    // IE8 fallback
+            element.detachEvent('on' + event, callback);
+        }
+    }
+
+    function getByID(id) {
+        return document.getElementById(id);
+    }
+
+    function create(element) {
+        return document.createElement(element);
+    }
+
+    function destroyPlugin() {
+        unbindEvents();
+        unbindImageClickListeners();
+        unbind(document, 'keydown', keyDownHandler);
+        document.getElementsByTagName('body')[0].removeChild(document.getElementById('baguetteBox-overlay'));
+        currentIndex = 0;
+        currentGallery = -1;
+        galleries.length = 0;
+        imagesMap.length = 0;
+    }
+
+    run('.lf-gallery');
+
 };
