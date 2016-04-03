@@ -2,8 +2,8 @@
 
 var luffy = luffy || {};
 luffy.comments = function() {
-    var el = $("#lf-disqus");	// Don't do anything if there is no comment
-    if (!el.length) return;
+    var el = document.getElementById("lf-disqus");	// Don't do anything if there is no comment
+    if (el === null || el === undefined) return;
 
     /* Function to load Disqus */
     var load = function() {
@@ -11,17 +11,16 @@ luffy.comments = function() {
 	return function() {
 	    if (done) return;
 	    done = true;	// Don't want to load twice.
-	    var loading = el.text('Loading/Chargement...');
+	    el.innerHTML = 'Loading/Chargement...';
             var src = 'https://' + disqus_shortname + '.disqus.com/embed.js';
 	    $script(src, function() {
-		loading.hide();
+		el.style.display = 'none';
 	    });
 	}
     }();
 
-    el
-	.show()			// Show because JS is enabled
-	.click(load);		// Load on click
+    el.style.display = 'block';
+    el.addEventListener('click', load, false);
 
     /* Load if we have an anchor */
     if (location.hash.match("^#comment-[0-9]+")) {
