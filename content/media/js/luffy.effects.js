@@ -8,24 +8,26 @@ luffy.effects = function() {
           Add captions to images
        -- */
     e = function() {
-	/* IE 7 is not able to render properly, just don't modify
-	 * anything for it */
-	if ($.browser.msie && parseInt($.browser.version, 10) < 8)
-	    return;
-	$("article img[title]").each(function() {
-	    var img = $(this), title = img.attr("title");
-	    if (img.parent().is("a")) img = img.parent();
-	    $("<div>")
-		.addClass("lf-caption")
-		.text(title)
-		.appendTo(img.parent());
-	    img.parent().addClass("lf-captioned");
-	    img.hover(function() {
-		img.next().hide();
-	    }, function() {
-		img.next().show();
-	    });
-	});
+        var els = document.querySelectorAll("article img[title]"), i;
+        for (i = 0; i < els.length; i++) {
+            var el = els[i], title = el.getAttribute("title");
+            if (el.parentNode.tagName.toLowerCase() === "a") {
+                el = el.parentNode;
+            }
+            (function() {
+                var caption = document.createElement("div");
+                caption.className = "lf-caption";
+                caption.innerText = caption.textContent = title;
+                el.parentNode.appendChild(caption);
+                el.parentNode.className += " lf-captioned";
+                el.addEventListener("mouseover", function() {
+                    caption.style.display = 'none';
+                });
+                el.addEventListener("mouseout", function() {
+                    caption.style.display = 'block';
+                });
+            })();
+	}
     }();
 
     /* -- Effect 5:
@@ -33,9 +35,13 @@ luffy.effects = function() {
        -- */
     e = function() {
 	if (location.hash.match("^#tag-")) {
-	    $(".lf-list-tags .lf-tag").filter(function() {
-		return $(this).prop("id") == location.hash.substr(1);
-	    }).addClass("lf-tag-selected");
+            var els = document.querySelectorAll(".lf-list-tags .lf-tag"), i;
+            for (i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (el.id == location.hash.substr(1)) {
+                    el.className += " lf-tag-selected";
+                }
+            }
 	}
     }();
 
