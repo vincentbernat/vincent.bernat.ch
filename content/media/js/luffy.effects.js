@@ -8,6 +8,7 @@ luffy.effects = function() {
           Add captions to images
        -- */
     e = function() {
+        if (typeof document.querySelectorAll !== "function") return;
         var els = document.querySelectorAll("article img[title]"), i;
         for (i = 0; i < els.length; i++) {
             var el = els[i], title = el.getAttribute("title");
@@ -34,6 +35,7 @@ luffy.effects = function() {
           Highlight appropriate tag block
        -- */
     e = function() {
+        if (typeof document.querySelectorAll !== "function") return;
 	if (location.hash.match("^#tag-")) {
             var els = document.querySelectorAll(".lf-list-tags .lf-tag"), i;
             for (i = 0; i < els.length; i++) {
