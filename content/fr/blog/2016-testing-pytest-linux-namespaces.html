@@ -1,0 +1,259 @@
+---
+title: "Test d'un applicatif réseau avec pytest et les espaces de noms Linux"
+keywords: "test, lldpd, network, linux, namespaces, pytest"
+uuid: 708cc401-f09b-492b-a5b6-6fe3003f21a6
+attachments:
+  "https://github.com/vincentbernat/lldpd/tree/master/tests/integration": "Dépôt GitHub"
+---
+
+Initié en 2008, [lldpd][] est une implémentation en C du standard
+[IEEE 802.1AB-2005][] (aussi connu comme LLDP). Bien qu'il soit
+accompagné de quelques tests unitaires, comme beaucoup d'autres
+applicatifs réseaux, la couverture de ceux-ci est assez restreinte :
+il sont plutôt difficile à écrire en raison de l'aspect impératif du
+code et du couplage fort avec le système. Une réécriture (itérative ou
+complète) aiderait à rendre le code plus simple à tester, mais cela
+nécessiterait un effort important et introduirait de nouveaux bugs
+opérationnels.
+
+Afin d'obtenir une meilleure couverture des tests, les fonctionnalités
+les plus importantes de *lldpd* sont désormais vérifiées à travers des
+**tests d'intégration**. Ceux-ci se reposent sur l'utilisation des
+**espaces de noms Linux** pour mettre en place des environnements
+isolés légers pour chaque test. **pytest** est utilisé comme outil de
+test.
+
+# pytest en bref
+
+[pytest][] est un outil de tests pour Python dont la versatilité
+permet son usage dans de nombreuses situations. Il dispose de trois
+fonctionnalités remarquables :
+
+ - l'utilisation du mot-clef `assert`
+ - l'**injection des fixtures** dans les fonctions de test
+ - la **paramétrisation** des tests.
+
+## Les assertions
+
+Avec [unittest][], l'outil de tests unitaires fourni avec Python, les
+tests sont encapsulés dans une classe et doivent faire appel à des
+méthodes dédiées pour les assertions. Par exemple :
+
+    ::python
+    class testArithmetics(unittest.TestCase):
+        def test_addition(self):
+            self.assertEqual(1 + 3, 4)
+
+Avec *pytest*, il est possible d'exprimer ceci plus naturellement :
+
+    ::python
+    def test_addition():
+        assert 1 + 3 == 4
+
+*pytest* va analyser l'AST et afficher des messages d'erreur
+appropriés en cas d'échec. Pour plus d'informations, référez-vous à
+l'[article de Benjamin Peterson's][Benjamin Peterson's article].
+
+## Les fixtures
+
+
+Une *fixture* est un ensemble d'actions à effectuer afin de préparer
+le système à exécuter une série de tests. Avec les outils classiques,
+il n'est souvent possible de définir qu'une seule fixture pour une
+ensemble de tests :
+
+    ::python
+    class testInVM(unittest.TestCase):
+
+        def setUp(self):
+            self.vm = VM('Test-VM')
+            self.vm.start()
+            self.ssh = SSHClient()
+            self.ssh.connect(self.vm.public_ip)
+
+        def tearDown(self):
+            self.ssh.close()
+            self.vm.destroy()
+
+        def test_hello(self):
+            stdin, stdout, stderr = self.ssh.exec_command("echo hello")
+            stdin.close()
+            self.assertEqual(stderr.read(), b"")
+            self.assertEqual(stdout.read(), b"hello\n")
+
+Dans l'exemple ci-dessus, nous voulons tester quelques commandes sur
+une machine virtuelle. La fixture démarre la VM et initie la connexion
+SSH. Toutefois, en cas d'échec de cette dernière, la méthode
+`tearDown()` ne sera pas appelée et la VM continuera de tourner.
+
+Avec *pytest*, il est possible de faire les choses différemment :
+
+    ::python
+    @pytest.yield_fixture
+    def vm():
+        r = VM('Test-VM')
+        r.start()
+        yield r
+        r.destroy()
+
+    @pytest.yield_fixture
+    def ssh(vm):
+        ssh = SSHClient()
+        ssh.connect(vm.public_ip)
+        yield ssh
+        ssh.close()
+
+    def test_hello(ssh):
+        stdin, stdout, stderr = ssh.exec_command("echo hello")
+        stdin.close()
+        stderr.read() == b""
+        stdout.read() == b"hello\n"
+
+La première fixture démarre une VM. La seconde va fournir une
+connexion SSH vers la VM fournie en argument. Les fixtures sont
+utilisées à travers un système d'**injection des dépendences** : la
+seule présence de leur nom dans la signature d'une fonction de test ou
+d'une autre fixture suffit à l'utiliser. Chaque fixture ne gère le
+cycle de vie que d'une seule entité. Peu importe si une autre fixture
+ou une fonction de tests dépendant de celle-ci réussit ou non, la VM
+sera démantelée en fin de test.
+
+## La paramétrisation
+
+Si un test doit être exécuté plusieurs fois avec des paramètres
+différents, la solution classique est d'utiliser une boucle ou de
+définir dynamiquement les fonctions de test. Avec *pytest*, vous
+pouvez **paramétriser** une fonction de test ou une fixture :
+
+    ::python
+    @pytest.mark.parametrize("n1, n2, expected", [
+        (1, 3, 4),
+        (8, 20, 28),
+        (-4, 0, -4)])
+    def test_addition(n1, n2, expected):
+        assert n1 + n2 == expected
+
+# Tester lldpd
+
+Tester une fonctionnalité de *lldpd* se fait en cinq étapes :
+
+ 1. Mettre en place **deux espaces de noms**.
+ 2. Créer un **lien virtuel** entre ceux-ci.
+ 3. Démarrer un **processus `lldpd`** dans chaque espace.
+ 4. **Tester** la fonctionnalité dans un des espaces.
+ 5. Vérifier avec `lldpcli` le **résultat attendu** dans l'autre espace.
+
+Voici un test typique utilisant les fonctionnalités les plus
+intéressantes de *pytest* :
+
+    ::python
+    @pytest.mark.skipif('LLDP-MED' not in pytest.config.lldpd.features,
+                        reason="LLDP-MED not supported")
+    @pytest.mark.parametrize("classe, expected", [
+        (1, "Generic Endpoint (Class I)"),
+        (2, "Media Endpoint (Class II)"),
+        (3, "Communication Device Endpoint (Class III)"),
+        (4, "Network Connectivity Device")])
+    def test_med_devicetype(lldpd, lldpcli, namespaces, links,
+                            classe, expected):
+        links(namespaces(1), namespaces(2))
+        with namespaces(1):
+            lldpd("-r")
+        with namespaces(2):
+            lldpd("-M", str(classe))
+        with namespaces(1):
+            out = lldpcli("-f", "keyvalue", "show", "neighbors", "details")
+            assert out['lldp.eth0.lldp-med.device-type'] == expected
+
+Tout d'abord, ce test ne sera exécuté que si le support de LLDP-MED a
+été inclu dans `lldpd`. De plus, le test est paramétré : quatre tests
+distincts seront effectués, un pour chaque rôle que `lldpd` doit être
+capable d'assumer en tant que terminaison LLDP-MED.
+
+La signature du test comporte quatre paramètres non couverts par le
+décorateur `parametrize()` : `lldpd`, `lldpcli`, `namespaces` et
+`links`. Il s'agit des *fixtures*.
+
+ - `lldpd` est une fabrique qui permet de lancer des instances de
+   `lldpd`. Elle assure la configuration de l'espace de noms (mise en
+   place de la séparation de privilèges, unformisation de certains
+   fichiers, ...) puis appelle `lldpd` avec les paramètres
+   additionnels fournis. Les messages émis par le démon sont
+   enregisrés dans le rapport en cas d'erreur. Le module se charge
+   aussi de fournir un objet `pytest.config.lldpd` qui contient les
+   fonctionnalités supportées par `lldpd` afin de sauter les tests qui
+   nécessitent une fonctionnalité non disponible. Le fichier
+   [`fixtures/programs.py`][programs.py] contient davantage de
+   détails.
+
+ - `lldpcli` est également une fabrique, mais pour lancer des
+   instances de `lldpcli`, le client pour interroger `lldpd`. De plus,
+   la sortie produite est traitée pour obtenir un dictionnaire et
+   faciliter l'écriture des tests.
+
+ - `namespaces` est la fixture la plus intéressante. Il s'agit d'une
+   **fabrique pour les espaces de noms Linux**. Elle va créer un
+   nouvel espace de nom ou référencer un espace existant. Il est
+   possible d'entrer dans un espace donné avec le mot-clef `with`. La
+   fabrique maintient pour chaque espace une liste de descripteurs de
+   fichiers sur lesquels exécuter `setns()`. Une fois le test fini,
+   les espaces de noms sont détruits naturellement du fait de la
+   fermeture de tous les descripteurs de fichiers. Le fichier
+   [`fixtures/namespaces.py`][namespaces.py] contient davantage de
+   détails. Cette fixture est réutilisable par d'autres
+   projets[^limitations].
+
+ - `links` contient des fonctions pour gérer les interfaces réseau :
+   création d'une paire d'interfaces Ethernet entre deux espaces de
+   noms, création de ponts, d'aggrégats et de VLAN, etc. Il se repose
+   sur le module [pyroute2][]. Le fichier
+   [`fixtures/network.py`][network.py] contient davantage de détails.
+
+[^limitations]: Il y a trois principales limitations concernant
+                l'usage des espaces de noms avec cette fixture. Tout
+                d'abord, lors de la création d'un *user namespace*,
+                seul *root* est lié avec l'utilisateur actuel. `lldpd`
+                nécessite deux utilisateurs (`root` et
+                `_lldpd`). Aussi, il n'est pas possible de se reposer
+                sur cette fonctionnalité pour faire tourner les tests
+                sans être root. La seconde limitation concerne les
+                *PID namespace*. Il n'est pas possible pour un process
+                de changer de *PID namespace*. L'appel de `setns()` ne
+                sera effectif que pour les descendants du process. Il
+                est donc important de ne monter `/proc` que dans les
+                descendants. La dernière limitation concerne les fils
+                d'exécution : ils doivent tous être dans le même *user
+                namespace* et *PID namespace*. Le module `threading`
+                doit donc être remplacé par l'utilisation du module
+                `multiprocessing`.
+
+Vous pouvez découvrir un exemple d'exécution de ces tests en regardant
+le résultat obtenu avec [Travis pour la version 0.9.2][]. Chaque test
+étant isolé, il est possible de les lancer en parallèle avec `pytest
+-n 10 --boxed`. Afin de dépister encore plus de bugs, à la
+compilation, l'**address sanitizer** (ASAN) et le **undefined behavior
+sanitizer** (UBSAN) sont activés. En cas de problème détecté, comme
+par exemple une fuite mémoire, le programme s'arrêtera avec un code de
+sortie non nul et le test associé échouera.
+
+*[LLDP]: Link Layer Discovery Protocol
+*[AST]: Abstract Syntax Tree
+*[VM]: Virtual Machine
+
+[lldpd]: http://vincentbernat.github.io/lldpd/ "lldpd: implementation of 802.1ab"
+[IEEE 802.1AB-2005]: https://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol "LLDP on Wikipedia"
+[Rust]: https://www.rust-lang.org/ "The Rust Programming Language"
+[cwrap]: https://cwrap.org/ "Testing your full software stack on a single machine"
+[pytest]: http://pytest.org/latest/
+[unittest]: https://docs.python.org/3/library/unittest.html "Unit testing framework for Python"
+[Benjamin Peterson's article]: http://pybites.blogspot.com/2011/07/behind-scenes-of-pytests-new-assertion.html "Behind the scenes of pytest’s new assertion rewriting."
+[namespaces.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/namespaces.py
+[programs.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/programs.py
+[network.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/network.py
+[Travis pour la version 0.9.2]: https://travis-ci.org/vincentbernat/lldpd/jobs/117100100#L2690
+[pyroute2]: http://docs.pyroute2.org/ "pyroute2 netlink library"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

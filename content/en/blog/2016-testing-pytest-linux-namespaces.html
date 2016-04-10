@@ -1,0 +1,254 @@
+---
+title: "Testing network software with pytest and Linux namespaces"
+keywords: "testing, lldpd, network, linux, namespaces, pytest"
+uuid: 708cc401-f09b-492b-a5b6-6fe3003f21a6
+attachments:
+  "https://github.com/vincentbernat/lldpd/tree/master/tests/integration": "GitHub repository"
+---
+
+Started in 2008, [lldpd][] is an implementation of
+[IEEE 802.1AB-2005][] (aka LLDP) written in C. While it contains some
+unit tests, like many other network-related software at the time, the
+coverage of those is pretty poor: they are hard to write because the
+code is written in an imperative style and tighly coupled with the
+system. It would require extensive mocking[^cwrap]. While a rewrite
+(complete or iterative) would help to make the code more
+test-friendly, it would be quite an effort and it will likely
+introduce operational bugs along the way.
+
+[^cwrap]: A project like [cwrap][] would definitely help. However, it
+          lacks support for Netlink and raw sockets that are essential
+          in *lldpd* operations.
+
+To get better test coverage, the major features of *lldpd* are now
+verified through **integration tests**. Those tests leverage Linux
+**network namespaces** to setup a lightweight and isolated environment
+for each test. They run through **pytest**, a powerful testing tool.
+
+# pytest in a nutshell
+
+[pytest][] is a Python testing tool whose primary use is to write
+tests for Python applications but is versatile enough for other
+creative usages. It is bundled with three killer features:
+
+ - you can directly use the `assert` keyword,
+ - you can **inject fixtures** in any test function, and
+ - you can **parametrize** tests.
+
+## Assertions
+
+With [unittest][], the unit testing framework included with Python,
+and many similar frameworks, unit tests have to be encapsulated into a
+class and use the provided assertion methods. For example:
+
+    ::python
+    class testArithmetics(unittest.TestCase):
+        def test_addition(self):
+            self.assertEqual(1 + 3, 4)
+
+The equivalent with *pytest* is simpler and more readable:
+
+    ::python
+    def test_addition():
+        assert 1 + 3 == 4
+
+*pytest* will analyze the AST and display useful error messages in
+case of failure. For further information, see
+[Benjamin Peterson's article][].
+
+## Fixtures
+
+A *fixture* is the set of actions performed in order to prepare the
+system to run some tests. With classic frameworks, you can only
+define one fixture for a set of tests:
+
+    ::python
+    class testInVM(unittest.TestCase):
+
+        def setUp(self):
+            self.vm = VM('Test-VM')
+            self.vm.start()
+            self.ssh = SSHClient()
+            self.ssh.connect(self.vm.public_ip)
+
+        def tearDown(self):
+            self.ssh.close()
+            self.vm.destroy()
+
+        def test_hello(self):
+            stdin, stdout, stderr = self.ssh.exec_command("echo hello")
+            stdin.close()
+            self.assertEqual(stderr.read(), b"")
+            self.assertEqual(stdout.read(), b"hello\n")
+
+In the example above, we want to test various commands on a remote
+VM. The fixture launches a new VM and configure an SSH
+connection. However, if the SSH connection cannot be established, the
+fixture will fail and the `tearDown()` method won't be invoked. The VM
+will be left running.
+
+Instead, with *pytest*, we could do this:
+
+    ::python
+    @pytest.yield_fixture
+    def vm():
+        r = VM('Test-VM')
+        r.start()
+        yield r
+        r.destroy()
+
+    @pytest.yield_fixture
+    def ssh(vm):
+        ssh = SSHClient()
+        ssh.connect(vm.public_ip)
+        yield ssh
+        ssh.close()
+
+    def test_hello(ssh):
+        stdin, stdout, stderr = ssh.exec_command("echo hello")
+        stdin.close()
+        stderr.read() == b""
+        stdout.read() == b"hello\n"
+
+The first fixture will provide a freshly booted VM. The second one
+will setup an SSH connection to the VM provided as an
+argument. Fixtures are used through **dependency injection**: just
+give their names in the signature of the test functions and fixtures
+that need them. Each fixture only handle the lifetime of one
+entity. Whatever a dependent test function or fixture succeeds or
+fails, the VM will always be finally destroyed.
+
+## Parameters
+
+If you want to run the same test several times with a varying
+parameter, you can dynamically create test functions or use one test
+function with a loop. With *pytest*, you can **parametrize** test
+functions and fixtures:
+
+    ::python
+    @pytest.mark.parametrize("n1, n2, expected", [
+        (1, 3, 4),
+        (8, 20, 28),
+        (-4, 0, -4)])
+    def test_addition(n1, n2, expected):
+        assert n1 + n2 == expected
+
+# Testing lldpd
+
+The general plan for to test a feature in *lldpd* is the following:
+
+ 1. Setup **two namespaces**.
+ 2. Create a **virtual link** between them.
+ 3. Spawn a **`lldpd` process** in each namespace.
+ 4. **Test** the feature in one namespace.
+ 5. Check with `lldpcli` we get the **expected result** in the other.
+
+Here is a typical test using the most interesting features of *pytest*:
+
+    ::python
+    @pytest.mark.skipif('LLDP-MED' not in pytest.config.lldpd.features,
+                        reason="LLDP-MED not supported")
+    @pytest.mark.parametrize("classe, expected", [
+        (1, "Generic Endpoint (Class I)"),
+        (2, "Media Endpoint (Class II)"),
+        (3, "Communication Device Endpoint (Class III)"),
+        (4, "Network Connectivity Device")])
+    def test_med_devicetype(lldpd, lldpcli, namespaces, links,
+                            classe, expected):
+        links(namespaces(1), namespaces(2))
+        with namespaces(1):
+            lldpd("-r")
+        with namespaces(2):
+            lldpd("-M", str(classe))
+        with namespaces(1):
+            out = lldpcli("-f", "keyvalue", "show", "neighbors", "details")
+            assert out['lldp.eth0.lldp-med.device-type'] == expected
+
+First, the test will be executed only if `lldpd` was compiled with
+LLDP-MED support. Second, the test is parametrized. We will execute
+four distinct tests, one for each role that `lldpd` should be able to
+take as an LLDP-MED-enabled endpoint.
+
+The signature of the test has four parameters that are not covered by
+the `parametrize()` decorator: `lldpd`, `lldpcli`, `namespaces` and
+`links`. They are *fixtures*. A lot of magic happen in those to keep
+the actual tests short:
+
+ - `lldpd` is a factory to spawn an instance of `lldpd`. When called,
+   it will setup the current namespace (setting up the chroot,
+   creating the user and group for privilege separation, replacing
+   some files to be distribution-agnostic, ...), then call `lldpd`
+   with the additional parameters provided. The output is recorded and
+   added to the test report in case of failure. The module also
+   contains the creation of the `pytest.config.lldpd` object that is
+   used to record the features supported by `lldpd` and skip
+   non-matching tests. You can read
+   [`fixtures/programs.py`][programs.py] for more details.
+
+ - `lldpcli` is also a factory, but it spawns instances of `lldpcli`,
+   the client to query `lldpd`. Moreover, it will parse the output in
+   a dictionary to reduce boilerplate.
+
+ - `namespaces` is one of the most interesting pieces. It is a
+   **factory for Linux namespaces**. It will spawn a new namespace or
+   refer to an existing one. It is possible to switch from one namespace
+   to another (with `with`) as they are contexts. Behind the scene,
+   the factory maintains the appropriate file descriptors for each
+   namespace and switch to them with `setns()`. Once the test is done,
+   everything is wipped out as the file descriptors are garbage
+   collected. You can read [`fixtures/namespaces.py`][namespaces.py]
+   for more details. It is quite reusable in other
+   projects[^limitations].
+
+ - `links` contains helpers to handle network interfaces: creation of
+   virtual ethernet link between namespaces, creation of bridges,
+   bonds and VLAN, etc. It relies on the [pyroute2][] module. You can
+   read [`fixtures/network.py`][network.py] for more details.
+
+[^limitations]: There are three main limitations in the use of
+                namespaces with this fixture. First, when creating a
+                user namespace, only root is mapped to the current
+                user. With *lldpd*, we have two users (`root` and
+                `_lldpd`). Therefore, the tests have to run as root.
+                The second limitation is with the PID namespace. It's
+                not possible for a process to switch from one PID
+                namespace to another. When you call `setns()` on a PID
+                namespace, only children of the current process will
+                be in the new PID namespace. The PID namespace is
+                convenient to ensure everyone gets killed once the
+                tests are terminated but you must keep in mind that
+                `/proc` must be mounted in children only. The third
+                limitation is that, for some namespaces (PID and
+                user), all threads of a process must be part of the
+                same namespace. Therefore, don't use threads in
+                tests. Use `multiprocessing` module instead.
+
+You can see an example of a test run on the
+[Travis build for 0.9.2][]. Since each test is correctly isolated,
+it's possible to run parallel tests with `pytest -n 10 --boxed`. To
+catch even more bugs, both the **address sanitizer** (ASAN) and the
+**undefined behavior sanitizer** (UBSAN) are enabled. In case of a
+problem, notably a memory leak, the faulty program will exit with a
+non-zero exit code and the associated test will fail.
+
+*[LLDP]: Link Layer Discovery Protocol
+*[AST]: Abstract Syntax Tree
+*[VM]: Virtual Machine
+
+[lldpd]: http://vincentbernat.github.io/lldpd/ "lldpd: implementation of 802.1ab"
+[IEEE 802.1AB-2005]: https://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol "LLDP on Wikipedia"
+[Rust]: https://www.rust-lang.org/ "The Rust Programming Language"
+[cwrap]: https://cwrap.org/ "Testing your full software stack on a single machine"
+[pytest]: http://pytest.org/latest/
+[unittest]: https://docs.python.org/3/library/unittest.html "Unit testing framework for Python"
+[Benjamin Peterson's article]: http://pybites.blogspot.com/2011/07/behind-scenes-of-pytests-new-assertion.html "Behind the scenes of pytest’s new assertion rewriting."
+[namespaces.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/namespaces.py
+[programs.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/programs.py
+[network.py]: https://github.com/vincentbernat/lldpd/blob/0.9.2/tests/integration/fixtures/network.py
+[Travis build for 0.9.2]: https://travis-ci.org/vincentbernat/lldpd/jobs/117100100#L2690
+[pyroute2]: http://docs.pyroute2.org/ "pyroute2 netlink library"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
