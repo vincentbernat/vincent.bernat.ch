@@ -10,7 +10,7 @@ luffy.comments = function() {
     var load = function() {
 	var done = false;
 	return function(e) {
-            e.preventDefault();
+            if (e) e.preventDefault();
 	    if (done) return;
 	    done = true;	// Don't want to load twice.
             var src = 'https://' + disqus_shortname + '.disqus.com/embed.js';
