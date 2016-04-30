@@ -52,7 +52,7 @@ def sprite():
 #  https://code.google.com/p/wkhtmltopdf/issues/detail?id=783
 #
 # Google Fonts can be downloaded from:
-#   http://www.google.com/fonts#UsePlace:use/Collection:Source+Sans+Pro:700|Inconsolata|Merriweather:400,400italic
+#   http://www.google.com/fonts#UsePlace:use/Collection:Lato:700|Inconsolata|Merriweather:400,400italic
 
 @task
 def screenshots():
