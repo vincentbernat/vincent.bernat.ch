@@ -28,14 +28,14 @@ class TextlinksPlugin(Plugin):
             if what == "dailymotion":
                 return """
 <div class="lf-video-container"><div class="lf-video">
-<iframe frameborder="0" width="480" height="270"
+<iframe width="480" height="270"
         src="//www.dailymotion.com/embed/video/%s"></iframe>
 </div></div>
 """ % (id,)
             if what == "youtube":
                 return """
 <div class="lf-video-container"><div class="lf-video">
-<iframe frameborder="0" width="480" height="270" allowfullscreen
+<iframe width="480" height="270" allowfullscreen
         src="//www.youtube-nocookie.com/embed/%s?rel=0"></iframe>
 </div></div>
 """ % (id,)
