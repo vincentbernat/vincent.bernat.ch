@@ -65,15 +65,18 @@ def screenshots():
                 "en/blog/2011-ssl-perfect-forward-secrecy.html",
                 "en/blog/2011-thinkpad-edge-11.html"]:
         for width in [320, 600, 1024, 1280]:
-            local("cutycapt "
-                  "--url=http://localhost:8080/{url} "
-                  "--out=screenshots/{now}/{width}px-{slug}.png "
-                  "--delay=1000 "
-                  "--max-wait=5000 "
-                  "--min-width={width}".format(width=width,
-                                               now=now,
-                                               url=url,
-                                               slug=url.replace("/", "-").replace(".", "-")))
+            for js in ['on', 'off']:
+                local("cutycapt "
+                      "--url=http://localhost:8080/{url} "
+                      "--out=screenshots/{now}/{width}px-js{js}-{slug}.png "
+                      "--delay=1000 "
+                      "--javascript={js} "
+                      "--max-wait=5000 "
+                      "--min-width={width}".format(width=width,
+                                                   now=now,
+                                                   url=url,
+                                                   js=js,
+                                                   slug=url.replace("/", "-").replace(".", "-")))
 
 @task
 def build():
