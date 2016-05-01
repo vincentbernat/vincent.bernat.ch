@@ -38,9 +38,9 @@ def serve():
 def sprite():
     """Regenerate sprites"""
     with lcd("content/media/css"):
-        local("glue --namespace=lf --simple --less ../images/l/sprite "
-              "--css=. --img=../images/l")
-        local("sed 's/ /display: inline-block; /' sprite.less > luffy.sprite.less")
+        local("glue --source=../images/l/sprite --output=../images/l --namespace=lf --less=."
+              " --img=../images/l")
+        local("sed '3i\    display: inline-block;' sprite.less > luffy.sprite.less")
         local("rm sprite.less")
 
 # For the following task, please check that the appropriate
