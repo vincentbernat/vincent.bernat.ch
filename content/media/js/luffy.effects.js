@@ -31,20 +31,4 @@ luffy.effects = function() {
 	}
     }();
 
-    /* -- Effect 5:
-          Highlight appropriate tag block
-       -- */
-    e = function() {
-        if (typeof document.querySelectorAll !== "function") return;
-	if (location.hash.match("^#tag-")) {
-            var els = document.querySelectorAll(".lf-list-tags .lf-tag"), i;
-            for (i = 0; i < els.length; i++) {
-                var el = els[i];
-                if (el.id == location.hash.substr(1)) {
-                    el.className += " lf-tag-selected";
-                }
-            }
-	}
-    }();
-
 };
