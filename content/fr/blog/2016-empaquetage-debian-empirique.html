@@ -1,0 +1,630 @@
+---
+title: "Petit traité empirique de l'empaquetage Debian"
+keywords: "debian, empaquetage, paquets, fpm, checkinstall, empaquetage, debhelper"
+uuid: b44f31f4-f329-46f7-b1c6-0989d77f6fba
+attachments:
+  "https://github.com/vincentbernat/pragmatic-debian-packages": "Dépôt GitHub"
+tags:
+  - debian
+---
+
+Bien que la création de paquets Debian soit [abondamment][newmaint]
+[documentée][newmaint], la plupart des [tutoriaux][tutorial] ciblent
+les paquets respectueux de la [charte Debian][policy]. De plus, leur
+création a longtemps eu la **réputation d'être particulièrement
+difficile**[^difficulty] et beaucoup se sont tournés vers des outils
+moins contraignants[^fpm] tels que [fpm][] ou [CheckInstall][].
+
+[^difficulty]: La mémoire collective est toujours marquée par la
+               glorieuse époque précédant l'introduction de
+               *debhelper* 7.0.50 (circa 2009). La création du fichier
+               `debian/rules` était alors particulièrement
+               laborieuse. Toutefois, de nos jours, le squelette est
+               devenu minimal.
+
+[^fpm]: La complexité n'est pas la seule raison de ce choix : les
+        outils alternatifs proposent également la création de paquets
+        RPM, ce que les outils Debian ne permettent pas.
+
+Toutefois, je vais montrer que la construction de paquets Debian en
+utilisant les outils officiels est plutôt simple en appliquant ces
+quelques concessions :
+
+ 1. **Aucun paquet source ne sera généré**. Les paquets seront
+    construits directement depuis une copie propre issue du système de
+    versions.
+
+ 2. **Des dépendances supplémentaires peuvent être téléchargées
+    pendant la construction**. Empaqueter individuellement chaque
+    dépendance est un travail ingrat, notamment avec certains
+    environnements tels que Java, Javascript et Go.
+
+ 3. Les paquets produits peuvent **combiner et inclure des dépendances
+    tierces**. Cela peut lever certaines objections liées à la
+    sécurité et à la maintenance à long terme, mais c'est une
+    concession courante dans certains écosystèmes tels que Java,
+    Javascript et Go.
+ 
+[TOC]
+
+# Ceinture blanche
+
+Deux types de paquets coexistent dans l'archive Debian : les **paquets
+sources** et les **paquets binaires**. Un paquet source produit un ou
+plusieurs paquets binaires. Chaque paquet doit porter un nom.
+
+Comme indiqué lors de l'introduction, aucun paquet source ne sera
+construit. Nous allons travailler directement sur sa représentation
+décompressée : une arborescence de fichiers incluant le répertoire
+`debian/`. Les exemples qui suivent utilisent une arborescence
+composée uniquement du répertoire `debian/`, mais ce dernier peut être
+inclus dans n'importe quel project existant.
+
+Comme point de départ, nous allons empaqueter [memcached][], un
+gestionnaire de mémoire distribué. Il nous faut créer quatre
+fichiers :
+
+ - `debian/compat`,
+ - `debian/changelog`,
+ - `debian/control` et
+ - `debian/rules`.
+
+Le premier contient uniquement `9` :
+
+    ::sh
+    echo 9 > debian/compat
+
+Le second contient ceci :
+
+    ::raw
+    memcached (0-0) UNRELEASED; urgency=medium
+    
+      * Fake entry
+    
+     -- Happy Packager <happy@example.com>  Tue, 19 Apr 2016 22:27:05 +0200
+
+La seule information d'importance est le nom du paquet source,
+`memcached`, sur la première ligne. Toutes les autres informations
+sont sans influence sur les paquets créés.
+
+## Le fichier de contrôle
+
+`debian/control` décrit les méta-données à propos du paquet source et
+des paquets binaires. Un bloc est dédié à chacun d'eux.
+
+    ::control
+    Source: memcached
+    Maintainer: Vincent Bernat <bernat@debian.org>
+    
+    Package: memcached
+    Architecture: any
+    Description: high-performance memory object caching system
+
+Le paquet source est `memcached`. Il faut utiliser le même nom que
+dans le fichier `debian/changelog`.
+
+Un seul paquet binaire est créé : `memcached`. Par la suite, si vous
+voyez `memcached`, il s'agit du nom du paquet binaire. The champ
+`Architecture` doit être soit `any`, soit `all`. Ce dernier est
+utilisé exclusivement si tous les fichiers sont indépendants de
+l'architecture matérielle. Dans le doute, il suffit de mettre `any`.
+
+Le champ `Description` contient une courte description du paquet
+binaire.
+
+## La recette
+
+Le dernier fichier à rédiger est `debian/rules`. Il s'agit de la
+recette du paquet. Nous avons besoin de télécharger *memcached*, le
+construire et installer son arborescence dans `debian/memcached/` :
+
+    ::make
+    #!/usr/bin/make -f
+    
+    DISTRIBUTION = $(shell lsb_release -sr)
+    VERSION = 1.4.25
+    PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
+    TARBALL = memcached-$(VERSION).tar.gz
+    URL = http://www.memcached.org/files/$(TARBALL)
+    
+    %:
+    	dh $@
+    
+    override_dh_auto_clean:
+    override_dh_auto_test:
+    override_dh_auto_build:
+    override_dh_auto_install:
+    	wget -N --progress=dot:mega $(URL)
+    	tar --strip-components=1 -xf $(TARBALL)
+    	./configure --prefix=/usr
+    	make
+    	make install DESTDIR=debian/memcached
+    
+    override_dh_gencontrol:
+    	dh_gencontrol -- -v$(PACKAGEVERSION)
+    
+
+Les cibles vides `override_dh_auto_clean`, `override_dh_auto_test` et
+`override_dh_auto_build` permettent de s'assurer que *debhelper* ne
+fera rien de « magique ». La cible `override_dh_gencontrol` permet de
+spécifier la version[^version] sans avoir à tenir à jour
+`debian/changelog`. Cette recette est très similaire à ce qui aurait
+été écrit pour `fpm` :
+
+    ::sh
+    DISTRIBUTION=$(lsb_release -sr)
+    VERSION=1.4.25
+    PACKAGEVERSION=${VERSION}-0~${DISTRIBUTION}0
+    TARBALL=memcached-${VERSION}.tar.gz
+    URL=http://www.memcached.org/files/${TARBALL}
+    
+    wget -N --progress=dot:mega ${URL}
+    tar --strip-components=1 -xf ${TARBALL}
+    ./configure --prefix=/usr
+    make
+    make install DESTDIR=/tmp/installdir
+    
+    # Build the final package
+    fpm -s dir -t deb \
+        -n memcached \
+        -v ${PACKAGEVERSION} \
+        -C /tmp/installdir \
+        --description "high-performance memory object caching system"
+
+[^version]: Il y a différentes façons de numéroter les versions d'un
+            paquet. La façon proposée ici n'est pas plus mauvaise
+            qu'une autre pour Ubuntu. Pour Debian, elle ne couvre pas
+            les mises à jour entre deux versions de la
+            distribution. De nos jours, il est cependant plutôt
+            courant de réinstaller un système plutôt que de le mettre
+            à jour.
+
+Vous pouvez lire le résultat final sur [GitHub][memcached-basic-gh] et
+le construire avec la commande `dpkg-buildpackage -us -uc -b`.
+
+# Ceinture jaune
+
+À partir de là, il est possible d'inclure quelques
+améliorations. **Aucune n'est essentielle** mais le gain est
+suffisamment intéressant pour justifier l'effort.
+
+## Les dépendances sources
+
+Notre recette initiale ne fonctionne que si nous disposons déjà de
+`wget` et de `libevent-dev`. Ces paquets ne sont pas présents sur tous
+les systèmes. Il est assez aisé de spécifier ces dépendances en
+ajoutant un champ `Build-Depends` dans `debian/control` :
+
+    ::control
+    Source: memcached
+    Build-Depends: debhelper (>= 9),
+                   wget, ca-certificates, lsb-release,
+                   libevent-dev
+
+Il faut toujours spécifier `debhelper (>= 9)` car son utilisation est
+centrale dans `debian/rules`. Il n'y a pas besoin de dépendre de
+`make` ou d'un compilateur C car le paquet `build-essential` est
+considéré comme toujours présent et il les fournit
+indirectement. `dpkg-buildpackage` se plaindra si une des dépendances
+est manquante. Pour installer sans peine ces paquets, vous pouvez
+utiliser la commande suivante[^devscripts] :
+
+    ::sh
+    mk-build-deps \
+        -t 'apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -qqy' \
+        -i -r debian/control
+
+[^devscripts]: Les paquets `devscripts` et `equivs` sont alors nécessaires.
+
+Il est aussi intéressant de se pencher sur des outils tels que
+[pbuilder][] et [sbuild][] qui permettent de construire des paquets
+dans un environnment minimal et isolé.
+
+## Les dépendances binaires
+
+Si le paquet ainsi construit est installé sur une machine vierge,
+*memcached* refusera de démarrer en raison de l'absence de
+*libevent*. Il est possible d'exprimer cette dépendance en ajoutant un
+champ `Depends` dans le fichier `debian/control`. De plus, dans le cas
+des bibliothèques dynamiques, ces dépendances peuvent être générées
+automatiquement en utilisant des variables de substitution :
+
+    ::control
+    Package: memcached
+    Depends: ${misc:Depends}, ${shlibs:Depends}
+
+Le paquet construit contiendra les informations suivantes :
+
+    ::console
+    $ dpkg -I ../memcached_1.4.25-0\~unstable0_amd64.deb | grep Depends
+     Depends: libc6 (>= 2.17), libevent-2.0-5 (>= 2.0.10-stable)
+
+## Intérgration avec un système de démarrage
+
+La plupart des paquets fournissant un démon incluent une intégration
+avec le système de démarrage afin de démarrer le démon au boot ou de
+le redémarrer après une mise à jour. Pour les distributions basées sur
+Debian, il existe plusieurs systèmes de démarrage. Voici les trois
+plus courants.
+
+ - **System-V** est le système historique. Ces scripts de démarrage
+   peuvent être réutilisés par les autres systèmes. Il s'agit donc du
+   plus petit dénominateur commun.
+ - **Upstart** est le système popularisé par Ubuntu. Il est utilisé
+   jusqu'à la version 14.10, incluse.
+ - **systemd** est le système par défaut pour Debian depuis Jessie et
+   pour Ubuntu depuis la version 15.04.
+
+Écrire un script de démarrage pour *System-V* est une tâche
+ardue. Habituellement, je préfère donc simplement fournir un script
+pour le système de démarrage par défaut de la distribution visée
+(*Upstart* et *systemd*).
+
+### System-V
+
+Si vous voulez écrire un script de démarrage pour *System-V*,
+adaptez[^provided] le script `/etc/init.d/skeleton` de la distribution
+la plus ancienne que vous souhaitez supporter. Mettez le résultat dans
+le fichier `debian/memcached.init`. Il sera installé au bon endroit et
+invoqué lors de l'installation, mise à jour ou retrait du
+paquet. Habituellement, l'utilisateur peut personnaliser les options
+du démon en modifiant le fichier `/etc/default/memcached`. Pour en
+fournir un, placez son contenu dans le fichier `debian/memcached.default`.
+
+[^provided]: Il est également possible d'utiliser le script fourni en
+             amont. Toutefois, il n'existe pas de script universel
+             fonctionnant sur toutes les distributions. Il est donc
+             important de vérifier que ce script est adapté à Debian
+             en le comparant au squelette et en vérifiant qu'il utilise
+             bien `start-stop-daemon` et le fichier
+             `/lib/lsb/init-functions`. Si c'est le cas, vous pouvez
+             le copier vous-même dans
+             `debian/memcached/etc/init.d`. *debhelper* ajoutera les
+             scripts nécessaires à son intégration.
+
+### Upstart
+
+Fournir un script pour *Upstart* est similaire : son contenu doit être
+placé dans `debian/memcached.upstart`. Par exemple :
+
+    ::raw
+    description "memcached daemon"
+    
+    start on runlevel [2345]
+    stop on runlevel [!2345]
+    respawn
+    respawn limit 5 60
+    expect daemon
+    
+    script
+      . /etc/default/memcached
+      exec memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
+    end script
+
+La directive la plus importante à surveiller est [expect][]. Ici, nous
+utilisons `expect daemon` et *memcached* est démarré avec l'option
+`-d`.
+
+### systemd
+
+Fournir un script pour *systemd* est un tout petit peu plus
+compliqué. Le contenu doit se placer dans
+`debian/memcached.service`. Par exemple :
+
+    ::ini
+    [Unit]
+    Description=memcached daemon
+    After=network.target
+    
+    [Service]
+    Type=forking
+    EnvironmentFile=/etc/default/memcached
+    ExecStart=/usr/bin/memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
+    Restart=on-failure
+    
+    [Install]
+    WantedBy=multi-user.target
+
+Bien que cela ne soit pas considéré comme une bonne
+pratique[^default], nous réutilisons `/etc/default/memcached`. Comme
+pour *Upstart*, la directive `Type` est particulièrement
+importante. Nous utilisons `forking` car *memcached* est démarré avec
+l'option `-d`.
+
+[^default]: Un utilisateur désireux de modifier certaines options doit
+            plutôt utiliser `systemctl edit`.
+
+Il est également nécessaire d'ajouter une dépendance source sur
+`dh-systemd` dans `debian/control` :
+
+    ::control
+    Source: memcached
+    Build-Depends: debhelper (>= 9),
+                   wget, ca-certificates, lsb-release,
+                   libevent-dev,
+                   dh-systemd
+
+Il faut également modifier la règle par défaut dans `debian/rules` :
+
+    ::make
+    %:
+    	dh $@ --with systemd
+
+Cette complexité supplémetaire est regrettable et est dû au fait que
+l'intégration de *systemd* ne fait pas partie de *debhelper*. Sans ces
+modifications, le script sera installé mais l'intégration n'aura pas
+lieu et il ne sera pas lancé au démarrage de la machine.
+
+## Utilisateur dédié
+
+De nombreux démons n'ont pas besoin de s'exécuter en tant que *root*
+et c'est souvent une bonne idée de fournir un utilisateur dédié. Dans
+le cas de *memcached*, nous allons fournir l'utilisateur
+`_memcached`[^naming].
+
+[^naming]: La charte Debian ne se prononce pas sur la convention à
+           utiliser. Il est courant de préfixer le nom du démon avec
+           un tiret bas (comme dans les BSD). Un autre usage courant
+           est d'utiliser `Debian-` comme préfixe. Cette dernière
+           méthode a l'inconvénient de produire un nom d'utilisateur
+           trop long pour être visible dans les utilitaires comme
+           `top` et `ps`.
+
+Ajoutez un fichier `debian/memcached.postinst` avec le contenu
+suivant :
+
+    ::shell
+    #!/bin/sh
+    
+    set -e
+    
+    case "$1" in
+        configure)
+            adduser --system --disabled-password --disabled-login --home /var/empty \
+                    --no-create-home --quiet --force-badname --group _memcached
+            ;;
+    esac
+    
+    #DEBHELPER#
+    
+    exit 0
+
+Lorsque le paquet est désinstallé, aucun ménage n'est effectué :
+
+ - moins de code à écrire, moins de bugs,
+ - l'utilisateur peut toujours posséder quelques fichiers sur le système.
+
+L'utilitaire `adduser` effectuera toujours la bonne action que
+l'utilisateur demandé existe déjà ou non. Il faut penser à l'ajouter
+comme dépendance binaire dans `debian/control` :
+
+    ::control
+    Package: memcached
+    Depends: ${misc:Depends}, ${shlibs:Depends}, adduser
+
+Le marqueur `#DEBHELPER#` indique le point d'insertion pour des
+scripts d'intégration supplémentaires.
+
+Le résultat final est disponible sur
+[GitHub][memcached-intermediate-gh] et peut être testé avec la
+commande `dpkg-buildpackage -us -uc -b`.
+
+# Ceinture verte
+
+Il est possible d'exploiter certaines capacités de *debhelper* pour
+**réduire la taille** du fichier `debian/rules` et pour le rendre
+**plus déclaratif**. Cette section est totalement optionnelle : vous
+pouvez la sauter si besoin.
+
+## Banalités
+
+Il y a **quatre étapes** dans la construction d'un paquet Debian :
+
+ 1. `debian/rules clean` va **nettoyer** l'arborescence pour revenir
+    dans son état initial.
+
+ 2. `debian/rules build` doit **construire** le logiciel. Pour quelque
+    chose de basé sur *autoconf*, comme *memcached*, il s'agit
+    essentiellement d'exécuter `./configure && make`.
+
+ 3. `debian/rules install` doit **installer** l'arborescence de chaque
+    paquet binaire dans le répertoire approprié. Pour des logiciels
+    basés sur *autoconf*, il s'agit d'exécuter `make install
+    DESTDIR=debian/memcached`.
+
+ 4. `debian/rules binary` doit **empaqueter** les différentes
+    arborescences en paquets binaires.
+
+Il ne faut pas écrire directement chacune de ces cibles. L'utilitaire
+`dh`, un composant de *debhelper*, va faire la majeure partie du
+boulot. Le fichier `debian/rules` minimaliste suivant suffit pour accomplir
+cette tâche pour de nombreux paquets sources :
+
+    ::make
+    #!/usr/bin/make -f
+    %:
+    	dh $@
+
+Pour chacune des quatre cibles décrites ci-dessus, vous pouvez
+exécuter `dh --no-act` pour voir les utilitaires invoqués. Par
+exemple :
+
+    ::console
+    $ dh build --no-act
+       dh_testdir
+       dh_update_autotools_config
+       dh_auto_configure
+       dh_auto_build
+       dh_auto_test
+
+Chacun de ces utilitaires dispose d'une page de manuel. Ceux
+commençant par `dh_auto` sont un peu « magiques ». Par exemple,
+`dh_auto_configure` va tenter de configurer automatiquement le
+logiciel avant l'étape de construction. Selon les cas, il peut
+invoquer `./configure`, `cmake` ou `Makefile.PL`.
+
+Si un des utilitaires `dh_` ne fait pas ce qu'il faut, il est possible
+de le remplacer en déclarant une cible nommée de manière adéquate :
+
+    ::make
+    override_dh_auto_configure:
+    	./configure --with-some-grog
+
+Chaque utilitaire est également configurable via des options. Ainsi,
+il est possible de modifier leurs comportements en définissant la cible
+correspondante et en invoquant l'utilitaire manuellement :
+
+    ::make
+    override_dh_auto_configure:
+    	dh_auto_configure -- --with-some-grog
+
+Ainsi, `./configure` sera appelé avec l'option `--with-some-grog` mais
+aussi avec des options par défaut telles que `--prefix=/usr`.
+
+Dans l'exemple initial de *memcached*, ces cibles « magiques » sont
+surchargées. `dh_auto_clean`, `dh_auto_configure` et `dh_auto_build`
+ont été neutralisées pour éviter tout comportement
+inattendu. `dh_auto_install` a été détournée pour exécuter l'intégralité
+de la construction de l'arborescence cible. De plus, le comportement
+de `dh_gencontrol` a été modifié en lui fournissant le numéro de version
+désiré plutôt que de le laisser regarder dans `debian/changelog`.
+
+## Construction automatique
+
+*memcached* utilisant *autoconf*, `dh` **sait comment le construire** :
+`./configure && make && make install`. Il est donc possible de laisser
+`dh` faire la majeure partie du boulot avec le fichier debian/rules
+suivant :
+
+    ::make
+    #!/usr/bin/make -f
+    
+    DISTRIBUTION = $(shell lsb_release -sr)
+    VERSION = 1.4.25
+    PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
+    TARBALL = memcached-$(VERSION).tar.gz
+    URL = http://www.memcached.org/files/$(TARBALL)
+    
+    %:
+    	dh $@ --with systemd
+    
+    override_dh_auto_clean:
+    	wget -N --progress=dot:mega $(URL)
+    	tar --strip-components=1 -xf $(TARBALL)
+    
+    override_dh_auto_test:
+    	# Don't run the whitespace test
+    	rm t/whitespace.t
+    	dh_auto_test
+    
+    override_dh_gencontrol:
+    	dh_gencontrol -- -v$(PACKAGEVERSION)
+
+La cible `dh_auto_clean` est détournée pour effectuer le
+téléchargement et la mise en place de l'arborescence[^clean]. Ni
+`dh_auto_configure`, ni `dh_auto_build` ne sont modifiés. `dh`
+appellera `./configure` avec les options appropriées puis
+`make`. `dh_auto_test` doit exécuter la suite de tests de
+*memcached*. Toutefois, un des tests échoue en raison d'un
+fichier dans le répertoire `debian/`. Nous supprimons ce test
+récalcitrant et invoquons manuellement
+`dh_auto_test`. `dh_auto_install` n'est pas surchargé et `dh`
+exécutera alors une variante de `make install`.
+
+[^clean]: Il aurait été possible d'appeler `dh_auto_clean` à la fin de
+          la cible. Toutefois, nous nous plaçons dans l'hypothèse que
+          chaque construction est faite sur une nouvelle copie issue
+          du système de version.
+
+Afin de mieux apprécier la différence, la voici sous forme de patch :
+
+    ::diff
+    --- memcached-intermediate/debian/rules	2016-04-30 14:02:37.425593362 +0200
+    +++ memcached/debian/rules	2016-05-01 14:55:15.815063835 +0200
+    @@ -12,10 +12,9 @@
+     override_dh_auto_clean:
+    -override_dh_auto_test:
+    -override_dh_auto_build:
+    -override_dh_auto_install:
+     	wget -N --progress=dot:mega $(URL)
+     	tar --strip-components=1 -xf $(TARBALL)
+    -	./configure --prefix=/usr
+    -	make
+    -	make install DESTDIR=debian/memcached
+    +
+    +override_dh_auto_test:
+    +	# Don't run the whitespace test
+    +	rm t/whitespace.t
+    +	dh_auto_test
+
+Vous avez le choix de laisser `dh` faire une partie du travail ou
+non. Il est généralement possible de partir d'un `debian/rules`
+minimal et de surcharger uniquement quelques cibles.
+
+## Fichiers supplémentaires
+
+Bien que `make install` ait installé les fichiers essentiels pour
+*memcached*, il est parfois nécessaire de copier quelques fichiers
+supplémentaires dans le paquet binaire. Pour se faire, il est possible
+d'utiliser `cp` ou encore de déclarer les fichiers à copier :
+
+ - les fichiers listés dans `debian/memcached.docs` seront copiés dans
+   `/usr/share/doc/memcached` par `dh_installdocs`,
+ - les fichiers listés dans `debian/memcached.examples` seront copiés dans
+   `/usr/share/doc/memcached/examples` par `dh_installexamples`,
+ - les fichiers listés dans `debian/memcached.manpages` seront copiés
+   dans le sous-répertoire approprié de `/usr/share/man` par
+   `dh_installman`,
+
+Voici un exemple pour `debian/memcached.docs` :
+
+    ::raw
+    doc/*.txt
+
+Si vous avez besoin de copier des fichiers à un endroit arbitraire, il
+est possible de lister ceux-ci ainsi que leur répertoire cible dans le
+fichier `debian/memcached.install`. `dh_install` se chargera de la
+copie. Par exemple :
+
+    ::raw
+    scripts/memcached-tool usr/bin
+
+L'utilisation de ces fichiers permet une description **plus
+déclarative** de la recette. Il s'agit d'une histoire de goût et vous
+pouvez tout à fait utiliser `cp` à la place. Le résultat final est
+visible sur [GitHub][memcached-gh].
+
+# Autres exemples
+
+Le [dépôt GitHub][GitHub] comprend d'autres exemples. Ils suivent tous
+le même schéma et mettent en œuvre les techniques décrites dans les
+sections précédentes.
+
+Il y a notamment des exemples de démons en [Java][], [Go][],
+[Python][] et [Node.js][]. Le but de ces exemples est de démontrer que
+l'utilisation des outils Debian est relativement simple. Mission accomplie ?
+
+[policy]: http://www.debian.org/doc/debian-policy/ "La charte Debian"
+[newmaint]: http://www.debian.org/doc/manuals/maint-guide/index.fr.html "Guide des nouveaux responsables Debian"
+[devref]: http://www.debian.org/doc/manuals/developers-reference/index.fr.html "Référence du dévelopeur Debian"
+[tutorial]: http://www.debian.org/doc/manuals/packaging-tutorial/packaging-tutorial "Lucas Nussbaum's packaging tutorial"
+[Debian archive]: https://www.debian.org/distrib/packages "Debian archive"
+[fpm]: https://github.com/jordansissel/fpm "Effing package management"
+[CheckInstall]: http://asic-linux.com.mx/~izto/checkinstall/ "CheckInstall"
+[GitHub]: https://github.com/vincentbernat/pragmatic-debian-packages "Dépôt GitHub rempli de paquets Debian simples à comprendre"
+[memcached]: https://memcached.org/ "memcached - a distributed memory object caching system"
+[memcached-basic-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached-basic/debian
+[memcached-intermediate-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached-intermediate/debian
+[memcached-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached/debian
+[pbuilder]: https://pbuilder.alioth.debian.org/ "pbuilder user's manual"
+[sbuild]: https://wiki.debian.org/sbuild "sbuild page on Debian Wiki"
+[expect]: http://upstart.ubuntu.com/cookbook/#expect "Upstart cookbook: expect stanza"
+[Java]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/riemann/debian
+[Go]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/etcd/debian
+[Python]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/puppetboard/debian
+[Node.js]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/kiwiirc/debian
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
