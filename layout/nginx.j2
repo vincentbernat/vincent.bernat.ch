@@ -31,3 +31,13 @@ location = /favicon.ico {
   expires     60d;
   rewrite ^  /media/favicon.ico break;
 }
+
+{# do not log #}
+{% for res in resource.node.walk_resources() %}
+{% if res.meta.nolog %}
+location = {{ content_url(res.url) }} {
+  access_log off;
+  log_not_found off;
+}
+{% endif %}
+{% endfor %}
