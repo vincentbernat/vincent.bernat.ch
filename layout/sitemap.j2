@@ -1,11 +1,17 @@
 {# -*- web -*- #}
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
 {% for res in site.content.node_from_relative_path(resource.meta.language).walk_resources_sorted_by_name()
    if res.source.kind == "html"
 %}
 <url>
   <loc>{{base}}{{ content_url(res.url) }}</loc>
+{% if res.translations %}
+{% for translation in res.translations %}
+  <xhtml:link rel="alternate" hreflang="{{ translation.meta.language }}" href="{{base}}{{ content_url(translation.url) }}" />
+{% endfor %}
+{% endif %}
   <lastmod>{{ res.meta.modified|xmldatetime }}</lastmod>
   <changefreq>{% if res.url.endswith("index.html") %}daily{% else %}weekly{% endif %}</changefreq>
   <priority>
