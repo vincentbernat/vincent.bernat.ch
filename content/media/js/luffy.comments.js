@@ -4,7 +4,7 @@ var luffy = luffy || {};
 luffy.comments = function() {
     // Don't do anything if there is no comment
     var el = document.getElementById("disqus_thread");
-    if (el === null || el === undefined) return;
+    if (el === null || el === undefined || el.addEventListener === undefined) return;
 
     // Load Disqus on click
     var load = function() {

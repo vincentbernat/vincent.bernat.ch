@@ -21,12 +21,14 @@ luffy.effects = function() {
                 caption.innerText = caption.textContent = title;
                 el.parentNode.appendChild(caption);
                 el.parentNode.className += " lf-captioned";
-                el.addEventListener("mouseover", function() {
-                    caption.style.display = 'none';
-                });
-                el.addEventListener("mouseout", function() {
-                    caption.style.display = 'block';
-                });
+                if (el.addEventListener) {
+                    el.addEventListener("mouseover", function() {
+                        caption.style.display = 'none';
+                    });
+                    el.addEventListener("mouseout", function() {
+                        caption.style.display = 'block';
+                    });
+                }
             })();
 	}
     }();
