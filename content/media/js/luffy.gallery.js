@@ -1,5 +1,5 @@
 /* Handle image gallery */
-/* From: https://github.com/feimosi/baguetteBox.js/blob/master/src/baguetteBox.js
+/* From: https://github.com/feimosi/baguetteBox.js/blob/v1.6.3/src/baguetteBox.js
    MIT licensed. Copyright (c) 2016 feimosi
  */
 
@@ -10,14 +10,14 @@ luffy.gallery = function() {
     // SVG shapes used on the buttons
     var leftArrow = '<svg width="44" height="60">' +
             '<polyline points="30 10 10 30 30 50" stroke="rgba(255,255,255,0.5)" stroke-width="4"' +
-            'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
+              'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
             '</svg>',
         rightArrow = '<svg width="44" height="60">' +
             '<polyline points="14 10 34 30 14 50" stroke="rgba(255,255,255,0.5)" stroke-width="4"' +
-            'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
+              'stroke-linecap="butt" fill="none" stroke-linejoin="round"/>' +
             '</svg>',
         closeX = '<svg width="30" height="30">' +
-            '<g stroke="rgb(160, 160, 160)" stroke-width="4">' +
+            '<g stroke="rgb(160,160,160)" stroke-width="4">' +
             '<line x1="5" y1="5" x2="25" y2="25"/>' +
             '<line x1="5" y1="25" x2="25" y2="5"/>' +
             '</g></svg>';
@@ -36,7 +36,7 @@ luffy.gallery = function() {
             afterHide: null,
             // callback when image changes with `currentIndex` and `imagesElements.length` as parameters
             onChange: null,
-            overlayBackgroundColor: 'rgba(0, 0, 0, .8)'
+            overlayBackgroundColor: 'rgba(0,0,0,.8)'
         };
     // Object containing information about features compatibility
     var supports = {};
@@ -60,24 +60,21 @@ luffy.gallery = function() {
     // Event handlers
     var imagedEventHandlers = {};
     var overlayClickHandler = function(event) {
-        // When clicked on the overlay (outside displayed image) close it
-        if (event.target && event.target.nodeName !== 'IMG' && event.target.nodeName !== 'FIGCAPTION') {
+        // Close the overlay when user clicks directly on the background
+        if (event.target.id.indexOf('baguette-img') !== -1) {
             hideOverlay();
         }
     };
     var previousButtonClickHandler = function(event) {
-        /* jshint -W030 */
-        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true; // jshint ignore:line
         showPreviousImage();
     };
     var nextButtonClickHandler = function(event) {
-        /* jshint -W030 */
-        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true; // jshint ignore:line
         showNextImage();
     };
     var closeButtonClickHandler = function(event) {
-        /* jshint -W030 */
-        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true;
+        event.stopPropagation ? event.stopPropagation() : event.cancelBubble = true; // jshint ignore:line
         hideOverlay();
     };
     var touchstartHandler = function(event) {
@@ -90,8 +87,7 @@ luffy.gallery = function() {
         if (touchFlag) {
             return;
         }
-        /* jshint -W030 */
-        event.preventDefault ? event.preventDefault() : event.returnValue = false;
+        event.preventDefault ? event.preventDefault() : event.returnValue = false; // jshint ignore:line
         var touch = event.touches[0] || event.changedTouches[0];
         // Move at least 40 pixels to trigger the action
         if (touch.pageX - touchStartX > 40) {
@@ -100,7 +96,7 @@ luffy.gallery = function() {
         } else if (touch.pageX - touchStartX < -40) {
             touchFlag = true;
             showNextImage();
-            // Move 100 pixels up to close the overlay
+        // Move 100 pixels up to close the overlay
         } else if (touchStartY - touch.pageY > 100) {
             hideOverlay();
         }
@@ -111,6 +107,7 @@ luffy.gallery = function() {
 
     // forEach polyfill for IE8
     // http://stackoverflow.com/a/14827443/1077846
+    /* jshint ignore:start */
     if (![].forEach) {
         Array.prototype.forEach = function(callback, thisArg) {
             for (var i = 0; i < this.length; i++) {
@@ -123,7 +120,6 @@ luffy.gallery = function() {
     // https://gist.github.com/eliperelman/1031656
     if (![].filter) {
         Array.prototype.filter = function(a, b, c, d, e) {
-            /* jshint -W030 */
             c = this;
             d = [];
             for (e = 0; e < c.length; e++)
@@ -131,6 +127,7 @@ luffy.gallery = function() {
             return d;
         };
     }
+    /* jshint ignore:end */
 
     // Script entry point
     function run(selector, userOptions) {
@@ -163,8 +160,7 @@ luffy.gallery = function() {
 
             [].forEach.call(imagesMap[galleryID], function(imageElement, imageIndex) {
                 var imageElementClickHandler = function(event) {
-                    /* jshint -W030 */
-                    event.preventDefault ? event.preventDefault() : event.returnValue = false;
+                    event.preventDefault ? event.preventDefault() : event.returnValue = false; // jshint ignore:line
                     prepareOverlay(galleryID);
                     showOverlay(imageIndex);
                 };
@@ -206,18 +202,24 @@ luffy.gallery = function() {
         overlay.appendChild(slider);
         // Create all necessary buttons
         previousButton = create('button');
+        previousButton.setAttribute('type', 'button');
         previousButton.id = 'previous-button';
+        previousButton.setAttribute('aria-label', 'Previous');
         previousButton.innerHTML = supports.svg ? leftArrow : '&lt;';
         overlay.appendChild(previousButton);
 
         nextButton = create('button');
+        nextButton.setAttribute('type', 'button');
         nextButton.id = 'next-button';
+        nextButton.setAttribute('aria-label', 'Next');
         nextButton.innerHTML = supports.svg ? rightArrow : '&gt;';
         overlay.appendChild(nextButton);
 
         closeButton = create('button');
+        closeButton.setAttribute('type', 'button');
         closeButton.id = 'close-button';
-        closeButton.innerHTML = supports.svg ? closeX : 'X';
+        closeButton.setAttribute('aria-label', 'Close');
+        closeButton.innerHTML = supports.svg ? closeX : '&times';
         overlay.appendChild(closeButton);
 
         previousButton.className = nextButton.className = closeButton.className = 'baguetteBox-button';
@@ -227,15 +229,15 @@ luffy.gallery = function() {
 
     function keyDownHandler(event) {
         switch (event.keyCode) {
-        case 37: // Left arrow
-            showPreviousImage();
-            break;
-        case 39: // Right arrow
-            showNextImage();
-            break;
-        case 27: // Esc
-            hideOverlay();
-            break;
+            case 37: // Left arrow
+                showPreviousImage();
+                break;
+            case 39: // Right arrow
+                showNextImage();
+                break;
+            case 27: // Esc
+                hideOverlay();
+                break;
         }
     }
 
@@ -296,7 +298,7 @@ luffy.gallery = function() {
         /* Apply new options */
         // Change transition for proper animation
         slider.style.transition = slider.style.webkitTransition = (options.animation === 'fadeIn' ? 'opacity .4s ease' :
-                                                                   options.animation === 'slideIn' ? '' : 'none');
+            options.animation === 'slideIn' ? '' : 'none');
         // Hide buttons if necessary
         if (options.buttons === 'auto' && ('ontouchstart' in window || imagesMap[currentGallery].length === 1)) {
             options.buttons = false;
@@ -397,8 +399,8 @@ luffy.gallery = function() {
         // Get element reference, optional caption and source path
         var imageElement = imagesMap[currentGallery][index];
         var imageCaption = typeof options.captions === 'function' ?
-                options.captions.call(imagesMap[currentGallery], imageElement) :
-                imageElement.getAttribute('data-caption') || imageElement.title;
+                           options.captions.call(imagesMap[currentGallery], imageElement) :
+                           imageElement.getAttribute('data-caption') || imageElement.title;
         var imageSrc = getImageSrc(imageElement);
         // Prepare image container elements
         var figure = create('figure');
@@ -544,20 +546,25 @@ luffy.gallery = function() {
         if (index - currentIndex >= options.preload) {
             return;
         }
-        loadImage(index + 1, function() { preloadNext(index + 1); });
+        loadImage(index + 1, function() {
+            preloadNext(index + 1);
+        });
     }
 
     function preloadPrev(index) {
         if (currentIndex - index >= options.preload) {
             return;
         }
-        loadImage(index - 1, function() { preloadPrev(index - 1); });
+        loadImage(index - 1, function() {
+            preloadPrev(index - 1);
+        });
     }
 
     function bind(element, event, callback) {
         if (element.addEventListener) {
             element.addEventListener(event, callback, false);
-        } else {    // IE8 fallback
+        } else {
+            // IE8 fallback
             element.attachEvent('on' + event, callback);
         }
     }
@@ -565,7 +572,8 @@ luffy.gallery = function() {
     function unbind(element, event, callback) {
         if (element.removeEventListener) {
             element.removeEventListener(event, callback, false);
-        } else {    // IE8 fallback
+        } else {
+            // IE8 fallback
             element.detachEvent('on' + event, callback);
         }
     }
