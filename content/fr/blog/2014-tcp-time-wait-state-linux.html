@@ -277,7 +277,7 @@ différents :
     
     Ces connexions utilisent le même espace mémoire que pour les
     entrées dans la table de hachage décrite au point précédent. Il
-    s'agit du membre `struct hlist_node tw_death_node`.
+    s'agit du membre `struct hlist_node tw_death_node`[^deathrow].
 
  3. Une **table de hachage des ports locaux utilisés** permet de
     déterminer ou de trouver rapidement un port local pour une
@@ -298,6 +298,11 @@ différents :
 [^tcptimewaitsock]: L'utilisation d'une structure dédiée pour les
                     connexions dans l'état `TIME-WAIT` remonte au
                     noyau Linux 2.6.14.
+
+[^deathrow]: Depuis [Linux 4.1][dr], la liste des connexions dans
+             l'état `TIME-WAIT` est stockée dans une table hachage
+             classique afin d'augmenter les performances et le
+             parallélisme.
 
 Chaque connexion (entrante ou sortante) a donc besoin d'un `struct
 tcp_timewait_sock` De plus, chaque connexion sortante est attachée à
@@ -546,6 +551,7 @@ Pour terminer, voici une citation de [W. Richard Stevens][] issue de [Unix Netwo
 [Nginx]: http://nginx.org "Nginx"
 [W. Richard Stevens]: http://www.kohala.com/start/ "W. Richard Stevens' Home Page"
 [Unix Network Programming]: http://www.amazon.com/Unix-Network-Programming-Volume-Networking/dp/0131411551 "Unix Network Programming, Volume 1: The Sockets Networking API"
+[dr]: https://github.com/torvalds/linux/commit/789f558cfb3680aeb52de137418637f6b04b7d22
 
 {# Local Variables:      #}
 {# mode: markdown        #}

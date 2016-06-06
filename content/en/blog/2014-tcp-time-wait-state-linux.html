@@ -281,7 +281,7 @@ purposes):
     
     It uses the same memory space as for the entries in the hash table
     of connections. This is the `struct hlist_node tw_death_node`
-    member of `struct inet_timewait_sock`.
+    member of `struct inet_timewait_sock`[^deathrow].
 
  3. A **hash table of bound ports**, holding the locally bound ports
     and the associated parameters, is used to determine if it is safe
@@ -304,6 +304,10 @@ purposes):
                     in the `TIME-WAIT` is here since Linux 2.6.14.
                     The [`struct sock_common` structure][sock_common] is a
                     bit more verbose and I won't copy it here.
+
+[^deathrow]: Since [Linux 4.1][dr], the way `TIME-WAIT` sockets are
+             tracked has been modified to increase performance and
+             parallelism. The death row is now just a hash table.
 
 So, we are only concerned by the space occupied by `struct
 tcp_timewait_sock` and `struct inet_bind_socket`. There is one `struct
@@ -562,6 +566,7 @@ And a final quote by [W. Richard Stevens][], in [Unix Network Programming][]:
 [Nginx]: http://nginx.org "Nginx"
 [W. Richard Stevens]: http://www.kohala.com/start/ "W. Richard Stevens' Home Page"
 [Unix Network Programming]: http://www.amazon.com/Unix-Network-Programming-Volume-Networking/dp/0131411551 "Unix Network Programming, Volume 1: The Sockets Networking API"
+[dr]: https://github.com/torvalds/linux/commit/789f558cfb3680aeb52de137418637f6b04b7d22 "Commit modifying tracking of timewait sockets"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
