@@ -1,6 +1,6 @@
 ---
-title: "Network lab with KVM"
-keywords: "network lab, network, kvm, 9p, gdb, kgdb, virtualization"
+title: "Network lab with QEMU"
+keywords: "network lab, network, kvm, qemu, 9p, gdb, kgdb, virtualization"
 uuid: aac3ecda-175b-11e2-99e8-0018f3034e06
 attachments:
  "https://github.com/vincentbernat/network-lab/tree/master/lab-ecmp-ipv6": "GitHub repository"
@@ -38,7 +38,7 @@ part of the host filesystem. This is the killer feature which allows
 me to not use any virtual disk image and to get access to my home
 directory right from the guest.
 
-I discovered recently that KVM provided [9P][], a similar filesystem
+I discovered recently that QEMU provided [9P][], a similar filesystem
 on top of VirtIO, the paravirtualized IO framework.
 
 [TOC]
@@ -50,7 +50,7 @@ The setup of the lab is done with a
 [what I have done with UML][uml-lab]. I will only highlight here the
 most interesting steps.
 
-## Booting KVM with a minimal kernel
+## Booting QEMU with a minimal kernel
 
 My initial goal was to experiment with
 [Nicolas Dichtel's IPv6 ECMP patch][ecmp-ipv6]. Therefore, I needed to
@@ -93,7 +93,7 @@ From here, you can start your kernel with the following command
       -append "init=/bin/sh console=ttyS0"
 
 Of course, since there is no disk to boot from, the kernel will panic
-when trying to mount the root filesystem. KVM is configured to not
+when trying to mount the root filesystem. QEMU is configured to not
 display video output (`-display none`). A serial port is defined and
 uses `stdio` as a backend[^signal]. The kernel is configured to use
 this serial port as a console (`console=ttyS0`). A VirtIO console
@@ -101,10 +101,10 @@ could have been used instead but it seems this is not possible to make
 it work early in the boot process.
 
 [^signal]: `stdio` is configured such that signals are not
-           enabled. KVM won't stop when receiving `SIGINT`. This is
+           enabled. QEMU won't stop when receiving `SIGINT`. This is
            important for the usage we want to have.
 
-The KVM monitor is setup to listen on an Unix socket. It is possible
+The QEMU monitor is setup to listen on an Unix socket. It is possible
 to connect to it with `socat UNIX:$TMP/vm-$name-console.pipe -`.
 
 ## Initial ramdisk
@@ -148,12 +148,12 @@ detect it has been invoked as such. If it was omitted, a shell would
 be spawned instead. Remove the `cp` call if you want to experiment
 manually.
 
-The flag `-initrd` allows KVM to use this initial ramdisk.
+The flag `-initrd` allows QEMU to use this initial ramdisk.
 
 ## Root filesystem
 
 Let's mount our root filesystem using _9P_. This is quite easy. First
-KVM needs to be configured to export the host filesystem to
+QEMU needs to be configured to export the host filesystem to
 the guest:
 
     ::sh
@@ -283,7 +283,7 @@ them can be debugged remotely.
 
 While the kernel features [KGDB][], its own debugger, compatible with
 [GDB][], it is easier to use the _remote GDB server_ built inside
-KVM.
+QEMU.
 
     ::sh
     kvm \
@@ -317,10 +317,10 @@ for some files. For example, to debug `net/ipv6/route.c`, just add
 
 ## Userland debugging
 
-To debug a program inside KVM, you can just use `gdb` as usual. Your
+To debug a program inside QEMU, you can just use `gdb` as usual. Your
 `$HOME` directory is available and it should be therefore
 straightforward. However, if you want to perform some remote
-debugging, that's quite easy. Add a new serial port to KVM:
+debugging, that's quite easy. Add a new serial port to QEMU:
 
     ::sh
     kvm \
@@ -369,7 +369,7 @@ as an [Ogg Theora video][ogv]).
 
 [HostFS]: http://user-mode-linux.sourceforge.net/hostfs.html "UML: Host File Access"
 [gdbserver inside UML]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=676184 "Bug #676184: gdbserver not usable inside UML"
-[9P]: http://wiki.qemu.org/Documentation/9psetup "Setting up 9P in KVM"
+[9P]: http://wiki.qemu.org/Documentation/9psetup "Setting up 9P in QEMU"
 [ecmp-ipv6]: http://patchwork.ozlabs.org/patch/188562/ "ipv6: add support of ECMP"
 [setup]: https://github.com/vincentbernat/network-lab/blob/master/lab-ecmp-ipv6/setup
 [AUFS]: http://aufs.sourceforge.net/ "AUFS: advanced multi-layered unification filesystem"

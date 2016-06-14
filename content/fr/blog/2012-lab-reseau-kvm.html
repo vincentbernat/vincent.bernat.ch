@@ -1,5 +1,5 @@
 ---
-title: "Labo virtuel avec KVM"
+title: "Labo virtuel avec QEMU"
 keywords: "réseau, kvm, 9p, gdb, virtualisation, overlayfs"
 uuid: aac3ecda-175b-11e2-99e8-0018f3034e06
 attachments:
@@ -40,7 +40,7 @@ fichiers de l'hôte. C'est une fonctionnalité clef pour mon usage qui
 me permet de me passer d'images disques et d'accéder à mon `/home`
 depuis chaque machine invitée.
 
-J'ai découvert que KVM fournissait [9P][], un système de fichiers
+J'ai découvert que QEMU fournissait [9P][], un système de fichiers
 similaire se basant sur _VirtIO_, un système d'IO paravirtualisé.
 
 [TOC]
@@ -52,7 +52,7 @@ La mise en palce du labo est effectuée à travers un
 ce que [je faisais avec UML][uml-lab]. Je décris ici les étapes les
 plus intéressantes.
 
-## Démarrer KVM avec un noyau minimal
+## Démarrer QEMU avec un noyau minimal
 
 Mon principal objectif était de tester le
 [patch de Nicolas Dichtel concernant le support IPv6 d'ECMP][ecmp-ipv6]. J'ai
@@ -103,11 +103,11 @@ noyau est configuré pour utiliser ce dernier comme console
 pas fonctionnelles au moment du démarrage du noyau.
 
 [^signal]: `stdio` est configuré de façon à ne pas gérer les
-           signaux. Ainsi, KVM ne s'arrêtera pas s'il reçoit
+           signaux. Ainsi, QEMU ne s'arrêtera pas s'il reçoit
            `SIGINT`. Comme on l'utilise comme console série, c'est un
            aspect important.
 
-Le moniteur de KVM est configuré pour écouter sur une socket Unix. On
+Le moniteur de QEMU est configuré pour écouter sur une socket Unix. On
 s'y connecte avec la commande `socat UNIX:$TMP/vm-$name-console.pipe -`.
 
 ## Disque mémoire (_ramdisk_)
@@ -153,12 +153,12 @@ Le script de configuration du labo est copié dans le _ramdisk_ sous le
 nom `/init`. Il détectera qu'il est invoqué ainsi. Si ce script est
 omis, le noyau démarrera un shell à la place.
 
-L'option `-initrd` indique à KVM de charger ce _ramdisk_ en mémoire.
+L'option `-initrd` indique à QEMU de charger ce _ramdisk_ en mémoire.
 
 ## Système de fichiers racine
 
 Mettons maintenant en place le système de fichiers racine à l'aide de
-_9P_. Indiquons d'abord à KVM d'exporter le système de fichiers de
+_9P_. Indiquons d'abord à QEMU d'exporter le système de fichiers de
 l'hôte au système invité :
 
     ::sh
@@ -231,7 +231,7 @@ Ne pas oublier d'activer `CONFIG_OVERLAYFS_FS` dans le
     cp "$PROGNAME" /target/overlay
     exec chroot /target/overlay "$PROGNAME"
 
-Il faut configurer KVM pour exporter `${HOME}` et le répertoire
+Il faut configurer QEMU pour exporter `${HOME}` et le répertoire
 contenant le labo :
 
     ::sh
@@ -284,7 +284,7 @@ Quagga, ce qui peut se faire « à distance » dans les deux cas.
 ## Debug noyau
 
 [KGDB][] est le débuggueur, compatible avec [GDB][], inclus dans le
-noyau. Cependant, KVM embarque un _serveur GDB_ qui est plus simple
+noyau. Cependant, QEMU embarque un _serveur GDB_ qui est plus simple
 d'utilisation.
 
     ::sh
@@ -324,7 +324,7 @@ Pour débugguer un programme classique, le plus simple est de
 simplement utiliser `gdb` dans le système invité. La présence des
 sources dans le `/home` rend cette approche tout à fait
 supportable. Nonobstant, il est assez simple de débugguer à
-distance. Ajoutons un port série à KVM :
+distance. Ajoutons un port série à QEMU :
 
     ::sh
     kvm \
@@ -365,7 +365,7 @@ Voici une courte démonstration du labo ainsi obtenu (cette vidéo est
 *[KVM]: Kernel-based Virtual Machine
 *[VM]: Virtual Machine
 
-[uml-lab]: [[fr/blog/2011-lab-reseau-uml.html]] "Labo virtuel avec KVM"
+[uml-lab]: [[fr/blog/2011-lab-reseau-uml.html]] "Labo virtuel avec UML"
 [Cloonix]: http://clownix.net/ "Cloonix: dynamical topology virtual networks"
 [Marionnet]: http://www.marionnet.org/ "Marionnet: a virtual network laboratory"
 [Netkit]: http://www.netkit.org "Netkit: the poor man's system to experiment computer networking"
@@ -373,7 +373,7 @@ Voici une courte démonstration du labo ainsi obtenu (cette vidéo est
 
 [HostFS]: http://user-mode-linux.sourceforge.net/hostfs.html "UML: Host File Access"
 [gdbserver inside UML]: http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=676184 "Bug #676184: gdbserver not usable inside UML"
-[9P]: http://wiki.qemu.org/Documentation/9psetup "Setting up 9P in KVM"
+[9P]: http://wiki.qemu.org/Documentation/9psetup "Setting up 9P in QEMU"
 [ecmp-ipv6]: http://patchwork.ozlabs.org/patch/188562/ "ipv6: add support of ECMP"
 [setup]: https://github.com/vincentbernat/network-lab/blob/master/lab-ecmp-ipv6/setup
 [AUFS]: http://aufs.sourceforge.net/ "AUFS: advanced multi-layered unification filesystem"
