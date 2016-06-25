@@ -78,7 +78,7 @@ From here, you can start your kernel with the following command
 (`$LINUX` is the appropriate `bzImage`):
 
     ::sh
-    kvm \
+    qemu-system-x86_64 \
       -m 256m \
       -display none \
       -nodefconfig -no-user-config -nodefaults \
@@ -157,7 +157,7 @@ QEMU needs to be configured to export the host filesystem to
 the guest:
 
     ::sh
-    kvm \
+    qemu-system-x86_64 \
       ${PREVIOUS_ARGS} \
       -fsdev local,security_model=passthrough,id=fsdev-root,path=${ROOT},readonly \
       -device virtio-9p-pci,id=fs-root,fsdev=fsdev-root,mount_tag=rootshare
@@ -233,7 +233,7 @@ I configured the whole root filesystem:
 You have to export your `${HOME}` and the lab directory from host:
 
     ::sh
-    kvm \
+    qemu-system-x86_64 \
       ${PREVIOUS_ARGS} \
       -fsdev local,security_model=passthrough,id=fsdev-root,path=${ROOT},readonly \
       -device virtio-9p-pci,id=fs-root,fsdev=fsdev-root,mount_tag=rootshare \
@@ -263,7 +263,7 @@ To attach an interface to the newly created LAN, I use:
     ::sh
     mac=$(echo $name-$net | sha1sum | \
                 awk '{print "52:54:" substr($1,0,2) ":" substr($1, 2, 2) ":" substr($1, 4, 2) ":" substr($1, 6, 2)}')
-    kvm \
+    qemu-system-x86_64 \
       ${PREVIOUS_ARGS} \
       -net nic,model=virtio,macaddr=$mac,vlan=$net \
       -net vde,sock=$TMP/switch-$net.sock,vlan=$net
@@ -286,7 +286,7 @@ While the kernel features [KGDB][], its own debugger, compatible with
 QEMU.
 
     ::sh
-    kvm \
+    qemu-system-x86_64 \
       ${PREVIOUS_ARGS} \
       -gdb unix:$TMP/vm-$name-gdb.pipe,server,nowait
 
@@ -323,7 +323,7 @@ straightforward. However, if you want to perform some remote
 debugging, that's quite easy. Add a new serial port to QEMU:
 
     ::sh
-    kvm \
+    qemu-system-x86_64 \
       ${PREVIOUS_ARGS} \
       -chardev socket,id=charserial1,path=$TMP/vm-$name-serial.pipe,server,nowait \
       -device isa-serial,chardev=charserial1,id=serial1
