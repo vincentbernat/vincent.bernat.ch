@@ -40,7 +40,7 @@ def sprite():
     with lcd("content/media/css"):
         local("glue --source=../images/l/sprite --output=../images/l --namespace=lf --less=."
               " --img=../images/l --ratios=2,1.5,1")
-        local("sed '3i\    display: inline-block;' sprite.less > luffy.sprite.less")
+        local("sed -e '3i\    .sprite;' sprite.less > luffy.sprite.less")
         local("rm sprite.less")
 
 # For the following task, please check that the appropriate
