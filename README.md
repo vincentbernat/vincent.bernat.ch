@@ -1,5 +1,5 @@
-www.luffy.cx/vincent.bernat.im
-==============================
+vincent.bernat.im
+=================
 
 This is the source code of my website. You can find the result at
 <http://vincent.bernat.im>. I am using [Hyde][hyde], a static website
