@@ -50,9 +50,6 @@ def sprite():
 # name. Here are the two relevant bugs:
 #  https://code.google.com/p/wkhtmltopdf/issues/detail?id=145
 #  https://code.google.com/p/wkhtmltopdf/issues/detail?id=783
-#
-# Google Fonts can be downloaded from:
-#   http://www.google.com/fonts#UsePlace:use/Collection:Lato:700|Inconsolata|Merriweather:400,400italic
 
 @task
 def screenshots():
@@ -170,6 +167,36 @@ def push_s3():
                " --mime-type=text/css"
                " --encoding=UTF-8"
                " --exclude=* --include=*.css"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        # Fonts in media, WOFF, not compressed
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
+               " --mime-type=font/woff2"
+               " --exclude=* --include=*.woff2"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
+               " --mime-type=application/font-woff"
+               " --exclude=* --include=*.woff"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        # Fonts in media, others, compressed
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=application/x-font-truetype"
+               " --exclude=* --include=*.ttf"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=application/x-font-opentype"
+               " --exclude=* --include=*.otf"
+               "   sync .final/media/ s3://vincent.bernat.im/media/")
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
+               " --add-header=Content-Encoding:'gzip'"
+               " --mime-type=application/vnd.ms-fontobject eot"
+               " --exclude=* --include=*.eot"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         # Other files in media, 30 days, don't compress
         _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
