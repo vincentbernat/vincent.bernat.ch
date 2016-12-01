@@ -195,7 +195,7 @@ def push_s3():
         _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/vnd.ms-fontobject eot"
+               " --mime-type=application/vnd.ms-fontobject"
                " --exclude=* --include=*.eot"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         # Other files in media, 30 days, don't compress
