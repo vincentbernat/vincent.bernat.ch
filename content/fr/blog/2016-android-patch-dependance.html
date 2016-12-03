@@ -1,0 +1,406 @@
+---
+title: "Modification d'une dépendance à la compilation d'un projet Android"
+description: |
+  Altération du comportement d'une dépendance d'une application
+  Android en la modifiant lors de la compilation.
+keywords: "android, gradle, patch, dépendances, compilation, javassist, CVE 2016-5672, crosswalk, webview, transform api"
+uuid: ac27aaf6-332d-42e1-8614-54cef177423d
+---
+
+Dans cet article, je présente une méthode pour **modifier une
+dépendance externe** dans un projet **Android** lors de la
+**compilation** avec [Gradle][]. Cette méthode met en œuvre
+l'[API « Transform »][Transform API] et [Javassist][], un utilitaire
+de manipulation du *bytecode* Java.
+
+    ::groovy
+    buildscript {
+        dependencies {
+            classpath 'com.android.tools.build:gradle:2.2.+'
+            classpath 'com.android.tools.build:transform-api:1.5.+'
+            classpath 'org.javassist:javassist:3.21.+'
+            classpath 'commons-io:commons-io:2.4'
+        }
+    }
+
+À noter que je ne suis pas un programmeur expérimenté avec Android. Il
+est donc possible que cet article contienne des erreurs plus ou moins
+grossières.
+
+# Contexte
+
+Cette section contextualise l'exemple qui va servir de support. Sa
+lecture n'est pas essentielle.
+
+[Dashkiosk][] est une application qui permet de gérer des tableaux de
+bords sur divers écrans. Elle dispose d'une application Android
+compagnon que l'on peut installer sur
+les [clefs Android bon marché][cheap Android sticks]. En coulisses,
+l'application embarque une *webview* gérée par
+le [projet Crosswalk][Crosswalk Project web runtime]. Cela permet
+d'avoir un moteur de rendu web à jour, quelle que soit la version
+d'Android[^webview].
+
+[^webview]: Avant Android 4.4, la *webview* était largement
+    obsolète. Depuis Android 5, elle se trouve sous forme d'un
+    composant séparé maintenu à jour comme une
+    application. L'utilisation de *Crosswalk* reste pratique pour
+    s'assurer de la version utilisée.
+
+Récemment, une [vulnérabilité][security vulnerability] a été
+découverte dans la mémorisation des certificats invalides. Quand un
+certificat ne peut être vérifié, la *webview* délègue la décision à
+l'application en invoquant la
+méthode [`onReceivedSslError()`][onReceivedSslError] :
+
+> Indique à l'application qu'une erreur SSL a eu lieu en chargeant une
+> ressource. L'application doit appeler `callback.onReceiveValue(true)`
+> ou `callback.onReceiveValue(false)`. La décision peut être
+> réutilisée pour d'autres erreurs SSL. Le comportement par défaut est
+> d'afficher une boîte de dialogue.
+
+Le comportement par défaut est spécifique à *Crosswalk* : la *webview*
+d'Android se contente d'annuler le chargement de la
+resssource. Malheureusement,
+le [correctif appliqué dans Crosswalk][fix applied by Crosswalk] est
+différent et a pour effet de bord de ne plus tenir compte de la
+méthode `onReceivedSslError()`.
+
+*Dashkiosk* propose une option pour ignorer les erreurs
+TLS[^ignore]. Le correctif casse cette fonctionnalité. L'exemple qui
+suit montre comment **modifier *Crosswalk* pour restaurer l'ancien
+comportement**[^alternatives].
+
+[^ignore]: Cela peut sembler dangereux et c'est le cas. Toutefois, si
+    l'on utilise une CA interne, il n'est pas possible de demander à
+    la *webview* de l'utiliser. Le magasin de certificats système
+    n'est pas utilisé non plus. Il est également possible d'utiliser
+    TLS uniquement pour l'authentification avec des certificats
+    clients, ce qui est une possibilité supportée par *Dashkiosk*.
+    
+[^alternatives]: *Crosswalk* étant un projet libre, une alternative
+    aurait été d'en modifier le source et de le recompiler. Toutefois,
+    le projet embarque *Chromium* et nécessite énormément de ressources
+    pour venir au bout de la compilation.
+    
+# Remplacement d'une méthode
+
+Nous allons remplacer la
+méthode [`shouldDenyRequest()`][shouldDenyRequest] de la classe
+`org.xwalk.core.internal.SslUtil` avec cette version :
+
+    ::java
+    // Dans la classe SslUtil
+    public static boolean shouldDenyRequest(int error) {
+        return false;
+    }
+    
+## Squelette de la transformation
+
+L'[API de transformation][Transform API] de *Gradle* permet de
+manipuler les fichiers de classes avant que ceux-ci ne soient convertis
+au format DEX. Pour déclarer une transformation, nous ajoutons le code
+suivant au fichier `build.gradle`:
+
+    ::groovy
+    import com.android.build.api.transform.Context
+    import com.android.build.api.transform.QualifiedContent
+    import com.android.build.api.transform.Transform
+    import com.android.build.api.transform.TransformException
+    import com.android.build.api.transform.TransformInput
+    import com.android.build.api.transform.TransformOutputProvider
+    import org.gradle.api.logging.Logger
+    
+    class PatchXWalkTransform extends Transform {
+        Logger logger = null;
+    
+        public PatchXWalkTransform(Logger logger) {
+            this.logger = logger
+        }
+    
+        @Override
+        String getName() {
+            return "PatchXWalk"
+        }
+    
+        @Override
+        Set<QualifiedContent.ContentType> getInputTypes() {
+            return Collections.singleton(QualifiedContent.DefaultContentType.CLASSES)
+        }
+    
+        @Override
+        Set<QualifiedContent.Scope> getScopes() {
+            return Collections.singleton(QualifiedContent.Scope.EXTERNAL_LIBRARIES)
+        }
+    
+        @Override
+        boolean isIncremental() {
+            return true
+        }
+    
+        @Override
+        void transform(Context context,
+                       Collection<TransformInput> inputs,
+                       Collection<TransformInput> referencedInputs,
+                       TransformOutputProvider outputProvider,
+                       boolean isIncremental) throws IOException, TransformException, InterruptedException {
+            // Il faudrait faire quelque chose ici...
+        }
+    }
+    
+    // Enregistrement de la transformation
+    android.registerTransform(new PatchXWalkTransform(logger))
+    
+La méthode `getInputTypes()` retourne un ensemble de types de données
+gérés par la transformation. Dans notre cas, nous allons transformer
+des classes. Une autre possibilité est de transformer des ressources.
+
+La méthode `getScopes()` indique la portée de la transformation. Dans
+notre cas, nous ne voulons transformer que les dépendances
+externes. Il est aussi possible de transformer ses propres classes.
+
+Telle qu'implémentée, la méthode `isIncremental()` indique que l'on
+sait gérer la construction incrémentale. Ce n'est pas très compliqué à
+faire.
+
+La méthode `transform()` prend un ensemble de fichiers en entrée et
+doit les copier (avec ou sans modifications) à l'endroit que lui
+indique son quatrième argument. Nous n'avons pas encore implémenté
+cette fonction. Du coup, actuellement, la transformation retire juste
+toutes les dépendances externes de l'application.
+
+## Transformation à vide
+
+Pour garder toutes les dépendances externes sans apporter de
+modifications, nous devons copier les fichiers fournis :
+
+    ::groovy
+    @Override
+    void transform(Context context,
+                   Collection<TransformInput> inputs,
+                   Collection<TransformInput> referencedInputs,
+                   TransformOutputProvider outputProvider,
+                   boolean isIncremental) throws IOException, TransformException, InterruptedException {
+        inputs.each {
+            it.jarInputs.each {
+                def jarName = it.name
+                def src = it.getFile()
+                def dest = outputProvider.getContentLocation(jarName, 
+                                                             it.contentTypes, it.scopes,
+                                                             Format.JAR);
+                def status = it.getStatus()
+                if (status == Status.REMOVED) { // ❶
+                    logger.info("Remove ${src}")
+                    FileUtils.delete(dest)
+                } else if (!isIncremental || status != Status.NOTCHANGED) { // ❷
+                    logger.info("Copy ${src}")
+                    FileUtils.copyFile(src, dest)
+                }
+            }
+        }
+    }
+    
+Le code ci-dessus nécessite deux imports additionnels :
+
+    ::groovy
+    import com.android.build.api.transform.Status
+    import org.apache.commons.io.FileUtils
+
+Comme nous ne gérons que des dépendances externes, nous n'avons qu'à
+nous occuper de fichiers JAR. Ainsi, l'itération a lieu uniquement sur
+`jarInputs` et non sur `directoryInputs`. Lors d'une construction
+incrémentale, il y a deux cas à gérer : soit le fichier a été retiré
+(❶), soit il a été modifié (❷). Dans les autres cas, nous considérons
+que le fichier est déjà à sa place.
+
+## Modification d'un JAR
+
+Lors du traitement du fichier JAR de *Crosswalk*, nous devons aussi le
+modifier. Voici la première partie du code (en replacement du code en
+❷) :
+
+    ::groovy
+    if ("${src}" ==~ ".*/org.xwalk/xwalk_core.*/classes.jar") {
+        def pool = new ClassPool()
+        pool.insertClassPath("${src}")
+        def ctc = pool.get('org.xwalk.core.internal.SslUtil') // ❸
+
+        def ctm = ctc.getDeclaredMethod('shouldDenyRequest')
+        ctc.removeMethod(ctm) // ❹
+
+        ctc.addMethod(CtNewMethod.make("""
+    public static boolean shouldDenyRequest(int error) {
+        return false;
+    }
+    """, ctc)) // ❺
+
+        def sslUtilBytecode = ctc.toBytecode() // ❻
+    
+        // Écriture du nouveau fichier JAR
+        // …
+    } else {
+        logger.info("Copy ${src}")
+        FileUtils.copyFile(src, dest)
+    }
+    
+Il est nécessaire d'ajouter les imports suivant pour utiliser
+*Javassist* :
+
+    ::groovy
+    import javassist.ClassPath
+    import javassist.ClassPool
+    import javassist.CtNewMethod
+
+Lorsque le fichier en cours est celui que nous voulons modifier,
+nous l'ajoutons à notre *classpath* et récupérons la classe qui nous
+intéresse (❸). Cela nous permet d'effacer la méthode
+`shouldDenyRequest()` (❹). Ensuite, nous pouvons ajouter notre propre
+version (❺). La dernière étape consiste à récupérer le *bytecode*
+correspondant à la classe modifiée (❻).
+
+Il reste enfin à reconstruire le fichier JAR :
+
+    ::groovy
+    def input = new JarFile(src)
+    def output = new JarOutputStream(new FileOutputStream(dest))
+
+    // ❼
+    input.entries().each {
+        if (!it.getName().equals("org/xwalk/core/internal/SslUtil.class")) {
+            def s = input.getInputStream(it)
+            output.putNextEntry(new JarEntry(it.getName()))
+            IOUtils.copy(s, output)
+            s.close()
+        }
+    }
+    
+    // ❽
+    output.putNextEntry(new JarEntry("org/xwalk/core/internal/SslUtil.class"))
+    output.write(sslUtilBytecode)
+
+    output.close()
+
+Il convient d'importer les classes suivantes :
+    
+    ::groovy
+    import java.util.jar.JarEntry
+    import java.util.jar.JarFile
+    import java.util.jar.JarOutputStream
+    import org.apache.commons.io.IOUtils
+
+Il y a deux étapes. En ❼, toutes les classes, à l'exception de
+`SslUtil` sont copiées dans le nouveau fichier JAR. En ❽, le
+*bytecode* précédemment modifié pour `SslUtil` est ajouté.
+
+C'est tout ! L'exemple complet est disponible sur [GitHub][example1].
+
+# Fonctions avec dépendances
+
+Dans l'exemple précédent, la nouvelle méthode n'utilisait aucune
+dépendance externe. Supposons maintenant que nous voulons remplacer la
+méthode [`sslErrorFromNetErrorCode()`][sslErrorFromNetErrorCode] de la
+même classe avec celle-ci :
+
+    ::java
+    import org.chromium.net.NetError;
+    import android.net.http.SslCertificate;
+    import android.net.http.SslError;
+
+    // Dans la classe SslUtil
+    public static SslError sslErrorFromNetErrorCode(int error,
+                                                    SslCertificate cert,
+                                                    String url) {
+        switch(error) {
+            case NetError.ERR_CERT_COMMON_NAME_INVALID:
+                return new SslError(SslError.SSL_IDMISMATCH, cert, url);
+            case NetError.ERR_CERT_DATE_INVALID:
+                return new SslError(SslError.SSL_DATE_INVALID, cert, url);
+            case NetError.ERR_CERT_AUTHORITY_INVALID:
+                return new SslError(SslError.SSL_UNTRUSTED, cert, url);
+            default:
+                break;
+        }
+        return new SslError(SslError.SSL_INVALID, cert, url);
+    }
+
+La principale différence est l'importation de classes supplémentaires.
+
+## Import du SDK Android
+
+Le SDK Android ne fait pas partie des dépendances externes. Il
+convient de l'importer manuellement. Le chemin complet vers le fichier
+JAR est :
+
+    ::groovy
+    androidJar = "${android.getSdkDirectory().getAbsolutePath()}/platforms/" +
+                 "${android.getCompileSdkVersion()}/android.jar"
+
+Il faut l'ajouter au *classpath* avant d'ajouter la nouvelle méthode
+dans la classe `SslUtil` :
+
+    ::groovy
+    def pool = new ClassPool()
+    pool.insertClassPath(androidJar)
+    pool.insertClassPath("${src}")
+    def ctc = pool.get('org.xwalk.core.internal.SslUtil')
+    def ctm = ctc.getDeclaredMethod('sslErrorFromNetErrorCode')
+    ctc.removeMethod(ctm)
+    pool.importPackage('android.net.http.SslCertificate');
+    pool.importPackage('android.net.http.SslError');
+    // …
+
+## Import d'une autre dépendance externe
+
+Nous devons aussi importer `org.chromium.net.NetError` et donc mettre
+le fichier JAR approprié dans le *classpath*. La façon la plus simple
+de faire ceci est d'itérer de nouveau sur toutes les dépendances
+externes et de les ajouter au *classpath* :
+
+    ::groovy
+    def pool = new ClassPool()
+    pool.insertClassPath(androidJar)
+    inputs.each {
+        it.jarInputs.each {
+            def jarName = it.name
+            def src = it.getFile()
+            def status = it.getStatus()
+            if (status != Status.REMOVED) {
+                pool.insertClassPath("${src}")
+            }
+        }
+    }
+    def ctc = pool.get('org.xwalk.core.internal.SslUtil')
+    def ctm = ctc.getDeclaredMethod('sslErrorFromNetErrorCode')
+    ctc.removeMethod(ctm)
+    pool.importPackage('android.net.http.SslCertificate');
+    pool.importPackage('android.net.http.SslError');
+    pool.importPackage('org.chromium.net.NetError');
+    ctc.addMethod(CtNewMethod.make("…"))
+    // Puis reconstruction du fichier JAR...
+    
+Happy hacking !
+
+*[DEX]: Dalvik Executable Format
+*[JAR]: Java Archive
+*[CA]: Autorité de certification
+
+[Transform API]: http://tools.android.com/tech-docs/new-build-system/transform-api "Quick presentation of the Transform API"
+[Gradle]: https://gradle.org/ "Gradle Build Tool"
+[Javassist]: http://jboss-javassist.github.io/javassist/ "Javassist, Java Programming Assistant"
+[Dashkiosk]: https://dashkiosk.readthedocs.io/en/latest/ "Dashkiosk's documentation"
+[cheap Android sticks]: https://dashkiosk.readthedocs.io/en/latest/android.html#supported-devices "Supported devices for Dashkiosk for Android"
+[Crosswalk Project web runtime]: https://crosswalk-project.org/ "Crosswalk Project"
+[security vulnerability]: https://wwws.nightwatchcybersecurity.com/2016/07/29/advisory-intel-crosswalk-ssl-prompt-issue/ "Advisory: Intel Crosswalk SSL Prompt Issue [CVE 2016-5672]"
+[onReceivedSslError]: https://crosswalk-project.org/apis/embeddingapidocs_v7/org/xwalk/core/XWalkResourceClient.html#onReceivedSslError-org.xwalk.core.XWalkView-android.webkit.ValueCallback-android.net.http.SslError-
+[fix applied by Crosswalk]: https://github.com/crosswalk-project/crosswalk/pull/3777
+[shouldDenyRequest]: https://github.com/crosswalk-project/crosswalk/blob/crosswalk-19/runtime/android/core_internal/src/org/xwalk/core/internal/SslUtil.java#L53-L78
+[sslErrorFromNetErrorCode]: https://github.com/crosswalk-project/crosswalk/blob/crosswalk-19/runtime/android/core_internal/src/org/xwalk/core/internal/SslUtil.java#L25-L29
+[scopes]: http://google.github.io/android-gradle-dsl/javadoc/2.2/com/android/build/api/transform/QualifiedContent.Scope.html#enum.constant.detail
+[example1]: https://github.com/vincentbernat/dashkiosk-android/blob/eaa36bf540f2e436e9ac9f7d257083470b7dd831/build.gradle#L93
+[separate component]: https://play.google.com/store/apps/details?id=com.google.android.webview&hl=en "Android System WebView"
+[rejection]: http://stackoverflow.com/questions/36050741/webview-avoid-security-alert-from-google-play-upon-implementation-of-onreceiveds
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
