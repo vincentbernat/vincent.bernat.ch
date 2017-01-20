@@ -13,7 +13,18 @@ luffy.comments = function() {
             if (e) e.preventDefault();
 	    if (done) return;
 	    done = true;	// Don't want to load twice.
-            var src = 'https://' + disqus_shortname + '.disqus.com/embed.js';
+
+            // Set some variables for Disqus
+            var l = window.location, lang = document.documentElement.lang;
+            window.disqus_shortname = el.dataset.disqusShortname;
+            window.disqus_identifier = l.pathname;
+            window.disqus_url = l.protocol + "//" + l.hostname + (l.port ? ':' + l.port: '') + l.pathname;
+            window.disqus_title = document.title.split(" | ")[0];
+            window.disqus_config = function () {
+                this.language = lang;
+            };
+
+            var src = 'https://' + window.disqus_shortname + '.disqus.com/embed.js';
 	    $script(src, function() {});
             return;
 	}
