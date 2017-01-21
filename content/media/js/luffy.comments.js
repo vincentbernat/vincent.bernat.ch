@@ -41,6 +41,6 @@ luffy.comments = function() {
     }
 
     // Display introduction text
-    el.children[1].style.display = 'none';
-    el.children[2].style.display = 'block';
+    el.children[1].className = el.children[2].className;
+    el.children[2].className = '';
 };
