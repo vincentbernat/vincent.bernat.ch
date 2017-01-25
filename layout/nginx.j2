@@ -2,7 +2,6 @@
 index         index.html;
 error_page    404 {{content_url('/en/404.html')}};
 add_header    "X-UA-Compatible" "IE=Edge";
-add_header    "Strict-Transport-Security" "max-age=31557600; includeSubDomains";
 add_header    "X-Frame-Options" "DENY";
 add_header    "X-Content-Type-Options" "nosniff";
 add_header    "Content-Security-Policy" "default-src 'self'; script-src 'self' {{ media_url('js/') }} https://cdn.mathjax.org https://a.disquscdn.com https://luffycx.disqus.com; img-src 'self' data: {{ media_url('images/') }} https://cdn.mathjax.org https://a.disquscdn.com https://referrer.disqus.com; frame-src https://www.youtube-nocookie.com https://disqus.com; style-src 'self' 'unsafe-inline' {{ media_url('css/') }} https://cdn.mathjax.org https://a.disquscdn.com; font-src 'self' https://cdn.mathjax.org about: {{ media_url('fonts/') }};";
@@ -22,13 +21,11 @@ location = / {
 {% for code, lang in languages %}
   if ($http_accept_language ~* ^{{code}}) {
     add_header Vary Accept-Language;
-    add_header Strict-Transport-Security "max-age=31557600; includeSubDomains";
     rewrite ^ /{{code}}/ permanent;
   }
 {% endfor %}
 {# If not found in the first language, redirect to english #}
   add_header  Vary Accept-Language;
-  add_header Strict-Transport-Security "max-age=31557600; includeSubDomains";
   rewrite ^   /en/ permanent;
 }
 
