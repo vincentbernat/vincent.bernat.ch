@@ -157,12 +157,14 @@ def push_s3():
             local(r"find .final/* -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % t)
         # JS and CSS in media, 1 year, compress
         _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=application/x-javascript"
                " --encoding=UTF-8"
                " --exclude=* --include=*.js"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
+               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=text/css"
                " --encoding=UTF-8"
