@@ -107,7 +107,7 @@ def build():
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha384-%s\1_g"
+                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha384-%s\1 crossorigin=\1anonymous\1_g"
                           '"' % (media, f, media, newname, sha))
 
         # Fix permissions
