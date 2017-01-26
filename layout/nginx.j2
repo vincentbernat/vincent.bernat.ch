@@ -14,7 +14,8 @@ location = /nginx.conf {
 {# language selection #}
 {% for code, lang in languages %}
 location /{{code}} {
-  error_page  404 {{content_url('/' + code + '/404.html')}};
+  error_page 404 {{content_url('/' + code + '/404.html')}};
+  try_files $uri.html $uri $uri/index.html =404;
 }
 {% endfor %}
 location = / {
@@ -41,6 +42,10 @@ location = /favicon.ico {
 {% for res in resource.node.walk_resources() %}
 {% if res.meta.nolog %}
 location = {{ content_url(res.url) }} {
+  access_log off;
+  log_not_found off;
+}
+location = {{ content_url(res.url) }}.html {
   access_log off;
   log_not_found off;
 }
