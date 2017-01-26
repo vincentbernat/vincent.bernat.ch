@@ -127,7 +127,6 @@ def build():
 def push():
     """Push built site to production"""
     push_main()
-    push_s3()
 
 @task
 def push_main():
