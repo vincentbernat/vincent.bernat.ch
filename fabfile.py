@@ -82,16 +82,14 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
-        for p in ['media/images/l/sprite*.png',
-                  'media/js/*.js',
-                  'media/css/*.css']:
+        for p in [ 'media/images/l/sprite*.png',
+                   'media/js/*.js',
+                   'media/css/*.css' ]:
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
                 # Compute hash
                 md5 = local("md5sum %s" % f, capture=True).split(" ")[0][:8]
-                sha = local("openssl dgst -sha384 -binary %s | openssl enc -base64 -A" % f,
-                            capture=True)
-                print "[+] MD5/SHA hash for %s is %s and %s" % (f, md5, sha)
+                print "[+] MD5 hash for %s is %s" % (f, md5)
                 # New name
                 root, ext = os.path.splitext(f)
                 newname = "%s.%s%s" % (root, md5, ext)
@@ -107,8 +105,8 @@ def build():
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha384-%s\1 crossorigin=\1anonymous\1_g"
-                          '"' % (media, f, media, newname, sha))
+                          r"s+\([\"']\)%s%s\1+\1%s%s\1+g"
+                          '"' % (media, f, media, newname))
 
         # Fix permissions
         local(r"find * -type f -print0 | xargs -r0 chmod a+r")
