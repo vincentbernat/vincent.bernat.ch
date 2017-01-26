@@ -155,44 +155,44 @@ def push_s3():
         # Compress HTML, CSS and JS
         for t in "css js html".split():
             local(r"find .final/* -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % t)
-        # JS and CSS in media, 30 days, compress
-        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
+        # JS and CSS in media, 1 year, compress
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=application/x-javascript"
                " --encoding=UTF-8"
                " --exclude=* --include=*.js"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=text/css"
                " --encoding=UTF-8"
                " --exclude=* --include=*.css"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         # Fonts in media, WOFF, not compressed
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --mime-type=font/woff2"
                " --exclude=* --include=*.woff2"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --mime-type=application/font-woff"
                " --exclude=* --include=*.woff"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
         # Fonts in media, others, compressed
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=application/x-font-truetype"
                " --exclude=* --include=*.ttf"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=application/x-font-opentype"
                " --exclude=* --include=*.otf"
                "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000'"  # 1 year
+        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
                " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
                " --add-header=Content-Encoding:'gzip'"
                " --mime-type=application/vnd.ms-fontobject"
