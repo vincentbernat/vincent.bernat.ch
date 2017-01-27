@@ -115,9 +115,9 @@ def build():
         local(r"find * -type d -print0 | xargs -r0 chmod a+rx")
 
         local("git add *")
-        local("git diff --stat HEAD")
+        local("git diff --stat HEAD || true")
         if confirm("More diff?", default=True):
-            local("git diff --word-diff HEAD")
+            local("git diff --word-diff HEAD || true")
         if confirm("Keep?", default=True):
             local('git commit -a -m "Autocommit"')
         else:
