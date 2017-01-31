@@ -94,6 +94,7 @@ def build():
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
         for p in ['media/images/l/sprite*.png',
+                  'media/images/l/sprite*.svg',
                   'media/js/*.js',
                   'media/css/*.css']:
             files = local("echo %s" % p, capture=True).split(" ")
@@ -111,7 +112,7 @@ def build():
                 # Remove deploy/media
                 f = f[len('media/'):]
                 newname = newname[len('media/'):]
-                if ext == ".png":
+                if ext in [".png", ".svg"]:
                     # Fix CSS
                     local("sed -i 's+%s+%s+g' media/css/*.css" % (f, newname))
                 else:
