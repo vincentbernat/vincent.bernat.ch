@@ -38,6 +38,7 @@ def serve():
 def sprite():
     """Regenerate sprites"""
     local(" ".join(["./node_modules/svg-sprite/bin/svg-sprite.js",
+                    "--shape-spacing-padding=2px",
                     "--css",                         # CSS mode
                     "--css-bust=false",              # No cache busting
                     "--css-dest=content/media/css",  # Destination
@@ -46,6 +47,7 @@ def sprite():
                     "--css-mixin=sprite",
                     "--css-render-less",             # LESS mode
                     "--css-render-less-dest=luffy.sprite.less",
+                    "--css-render-less-template=content/media/css/sprite.tmpl",
                     "--css-sprite=../images/l/sprite.svg",
                     "content/media/images/l/sprite/*.svg"]))
     # Convert to PNG
