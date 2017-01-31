@@ -37,11 +37,17 @@ def serve():
 @task
 def sprite():
     """Regenerate sprites"""
-    with lcd("content/media/css"):
-        local("glue --source=../images/l/sprite --output=../images/l --namespace=lf --less=."
-              " --img=../images/l --ratios=2,1.5,1")
-        local("sed -e '3i\    .sprite;' sprite.less > luffy.sprite.less")
-        local("rm sprite.less")
+    local(" ".join(["./node_modules/svg-sprite/bin/svg-sprite.js",
+                    "--css",                         # CSS mode
+                    "--css-bust=false",              # No cache busting
+                    "--css-dest=content/media/css",  # Destination
+                    "--css-prefix=.lf-sprite-",
+                    "--css-dimensions=",             # Inline dimensions
+                    "--css-mixin=sprite",
+                    "--css-render-less",             # LESS mode
+                    "--css-render-less-dest=luffy.sprite.less",
+                    "--css-sprite=../images/l/sprite.svg",
+                    "content/media/images/l/sprite/*.svg"]))
 
 # For the following task, please check that the appropriate
 # fonts are installed on the system. The rendering engine of both
