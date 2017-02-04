@@ -16,6 +16,6 @@ for (var i = 0; i < scripts.length; i++) {
   try {
     scripts[i]();
   } catch (e) {
-    (console.error || console.log).call(console, e.message || e, e.stack || e);
+    (console.error || console.log).call(console, e);
   }
 }

@@ -44,11 +44,13 @@ luffy.effects = function() {
             var footnoteReference = footnoteReferences[i],
                 footnoteName = footnoteReference.id.replace(/^fnref-/, ''),
                 footnote = footnotes.querySelector("li[id=fn-" + footnoteName + "]");
-            if (footnote === null) continue;
             /* Search for suitable parent and attach the side-note to it */
             var sidenote = document.createElement("aside"),
                 parent = footnoteReference.parentNode;
-            while (parent.tagName !== "P" && parent.tagName !== "UL") parent = parent.parentNode;
+            while (parent && parent.tagName !== "P" && parent.tagName !== "UL") parent = parent.parentNode;
+            if (!parent || !footnote) {
+                throw new Error("footnote `" + footnoteName + "' not found");
+            }
             sidenote.className = "lf-sidenote";
             sidenote.innerHTML =
                 "<sup class=\"lf-refmark\">" + footnoteReference.innerText + "</sup>"
