@@ -1,0 +1,77 @@
+#lf-page {
+    sup {
+	font-size: 0.7em;
+	vertical-align: baseline;
+	position: relative;
+	top: -0.7em;
+    }
+
+    .footnote, .lf-sidenote {
+        pre {
+            font-size: .875em;
+        }
+        p {
+            .font-size(0.875);
+	    margin: (@line-height/0.875em) 0 0 0;
+        }
+    }
+
+    .lf-sidenote {
+	.shadow(1px);
+        z-index: -5;
+        position: relative;
+        float: left;
+        clear: left;
+        right: @sidenote-width + 2em;
+        width: @sidenote-width;
+        margin: 0 (-@sidenote-width - 2em) .3em 0;
+        padding: 1em;
+        background: white;
+        .lf-refmark {
+            float: left;
+            margin-right: -1em;
+            right: 1em;
+        }
+        & > p {
+            margin-top: 0;
+            text-align: left;
+        }
+    }
+    ul, ol, dl {
+        .lf-sidenote {
+            right: @sidenote-width + 2em + 2*@normal-margin-width;
+        }
+    }
+}
+
+/* Footnotes require a minimal width */
+@media only screen and (max-width: (@page-width + @sidenote-width + 4em)) {
+    #lf-page {
+        .lf-sidenote {
+            display: none;
+        }
+    }
+}
+
+@media not screen and (max-width: (@page-width + @sidenote-width + 4em)) {
+    .lf-has-sidenotes {
+        #lf-pages {
+            padding-left: @sidenote-width + 2em;
+        }
+        #lf-page {
+            .footnote {
+                display: none;
+            }
+            .footnote-ref {
+                pointer-events: none;
+                cursor: default;
+                color: inherit;
+            }
+            .footnote-ref, .lf-refmark {
+                background-color: #eee;
+                border-radius: 50%;
+                border: 1px solid #ccc;
+            }
+        }
+    }
+}

@@ -2,13 +2,13 @@
 
 var luffy = luffy || {};
 luffy.effects = function() {
+    if (typeof document.querySelectorAll !== "function") return;
     var e;
 
-    /* -- Effect 4:
+    /* -- Effect 1:
           Add captions to images
        -- */
     e = function() {
-        if (typeof document.querySelectorAll !== "function") return;
         var els = document.querySelectorAll("article img[title]"), i;
         for (i = 0; i < els.length; i++) {
             var el = els[i], title = el.getAttribute("title");
@@ -31,6 +31,31 @@ luffy.effects = function() {
                 }
             })();
 	}
+    }();
+
+    /* -- Effect 2:
+          Turn footnotes to sidenotes
+          -- */
+    e = function() {
+        var footnotes = document.querySelector("#lf-main .footnote ol"),
+            footnoteReferences = document.querySelectorAll("#lf-main sup[id^=fnref-]"),
+            i;
+        for (i = 0; i < footnoteReferences.length; i++) {
+            var footnoteReference = footnoteReferences[i],
+                footnoteName = footnoteReference.id.replace(/^fnref-/, ''),
+                footnote = footnotes.querySelector("li[id=fn-" + footnoteName + "]");
+            if (footnote === null) continue;
+            /* Search for suitable parent and attach the side-note to it */
+            var sidenote = document.createElement("aside"),
+                parent = footnoteReference.parentNode;
+            while (parent.tagName !== "P" && parent.tagName !== "UL") parent = parent.parentNode;
+            sidenote.className = "lf-sidenote";
+            sidenote.innerHTML =
+                "<sup class=\"lf-refmark\">" + footnoteReference.innerText + "</sup>"
+                + footnote.innerHTML; // No ID, we don't want to shadow the original one
+            parent.parentNode.insertBefore(sidenote, parent);
+        }
+        document.body.className += ' lf-has-sidenotes';
     }();
 
 };
