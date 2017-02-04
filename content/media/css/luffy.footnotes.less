@@ -25,7 +25,7 @@
         clear: left;
         right: @sidenote-width + 2em;
         width: @sidenote-width;
-        margin: (@line-height*1em-1em) (-@sidenote-width - 2em) .3em 0;
+        margin: -1em (-@sidenote-width - 2em) 1.3em 0;
         padding: 1em;
         background: white;
         .lf-refmark {
@@ -38,10 +38,26 @@
             text-align: left;
         }
     }
+
+    /* There is some minor adjustments needed for positioning in certain
+       cases. */
     ul, ol, dl {
+        /* If the note is inside a list, we need to move the sidenote more to
+           the left. We don't handle nested cases as they don't exist currently. */
         .lf-sidenote {
             right: @sidenote-width + 2em + 2*@normal-margin-width;
         }
+    }
+    p + .lf-sidenote,
+    .codehilite + .lf-sidenote,
+    ul + .lf-sidenote,
+    ol + .lf-sidenote,
+    dl + .lf-sidenote {
+        /* If the note is inserted after a paragraph, the bottom margin is not
+           present (because we may want to put a list). Therefore, we need to
+           add it as top margin of the side note. */
+        margin-top: (@line-height*1em-1em);
+        margin-bottom: .3em;
     }
 }
 
