@@ -9,7 +9,8 @@ combine:
 
 var scripts = [luffy.mathjax,
                luffy.url,
-               luffy.effects,
+               luffy.captions,
+               luffy.footnotes,
                luffy.comments,
                luffy.gallery];
 for (var i = 0; i < scripts.length; i++) {
