@@ -7,10 +7,10 @@ combine:
     remove: yes
 ---
 
-var scripts = [luffy.mathjax,
-               luffy.url,
+var scripts = [luffy.url,
                luffy.captions,
                luffy.footnotes,
+               luffy.mathjax,
                luffy.comments,
                luffy.gallery];
 for (var i = 0; i < scripts.length; i++) {
