@@ -1,0 +1,303 @@
+---
+title: "Makefile pour un projet Go"
+description: |
+  Compiler un programme Go sans utiliser le GOPATH présente quelques
+  difficultés. Voici un Makefile pour automatiser cela.
+keywords: "golang, gopath, vendoring, make, makefile, test, couverture"
+uuid: 91904cde-3dda-411a-8016-c20e43890d2b
+attachments:
+  "https://github.com/vincentbernat/hellogopher": "Dépôt GitHub"
+---
+
+Très tôt, j'ai pris en grippe le principe du `GOPATH` mis avant
+par [Go][] : **je ne veux en aucun cas mélanger mon propre code avec
+celui des dépendances**. Heureusement, ce problème commence à
+être [accepté][accepted] par les principaux auteurs. Entre temps, il
+est toujours possible de travailler de manière plus classique en
+utilisant des outils tels que [gb][] ou en écrivant son propre
+`Makefile`.
+
+Pour cette dernière solution, vous pouvez étudier
+l'[exemple de Filippo Valsorda][Filippo Valsorda's example] ou
+ma [propre réalisation][own take] que je décris plus en détail dans
+cet article.
+
+# Structure du projet
+
+Pour une application (par opposition à une bibliothèque),
+le [*vendoring*][vendoring] est essentiel[^vendoring]: il n'est
+actuellement pas possible de supposer que les dépendances ne vont pas
+introduire dans le futur
+des
+[changements incompatibles][backward-incompatible changes]. Certains
+paquets utilisent des [URL versionnées][versioned URLs] mais la
+plupart ne le font pas. Il n'existe pas encore
+d'[outil standard pour gérer les dépendances][no standard tool to handle vendoring]. Mon
+choix personnel est d'opter pour **le *vendoring* de toutes les
+dépendances** avec [Glide][].
+
+[^vendoring]: Avec Go, le *vendoring* désigne à la fois le *bundling*
+    (inclure un instantané de chaque dépendance) et la *gestion des
+    dépendances* (télécharger la dernière version d'une dépendance en
+    respectant un ensemble de contraintes). Au fur et à mesure que
+    l'écosystème autour de Go devient plus mature, la partie
+    *bundling* va sans doute disparaître mais le terme *vendoring*
+    pourrait rester.
+
+Il est de bon usage de découper son application en différents paquets
+et de ne laisser que le minimum dans le paquet principal. Dans
+l'exemple `hellogopher`, fourni à titre d'illustration avec le
+`Makefile`, la ligne de commande est gérée dans le paquet `cmd` tandis
+que la « logique » de l'application se trouve dans le paquet `hello` :
+
+    ::text
+    .
+    ├── cmd/
+    │   ├── hello.go
+    │   ├── root.go
+    │   └── version.go
+    ├── glide.lock (generaté)
+    ├── glide.yaml
+    ├── vendor/ (vide, contiendra les dépendances)
+    ├── hello/
+    │   ├── root.go
+    │   └── root_test.go
+    ├── main.go
+    ├── Makefile
+    └── README.md
+    
+# Fonctionnalités
+
+Explorons les différentes fonctionnalités proposées par le `Makefile`.
+
+## Gestion du `GOPATH`
+
+Comme toutes les dépendances se trouvent dans le répertoire `vendor/`,
+seul notre propre code doit être placé dans le `GOPATH` :
+
+    ::make
+    PACKAGE  = hellogopher
+    GOPATH   = $(CURDIR)/.gopath
+    BASE     = $(GOPATH)/src/$(PACKAGE)
+    
+    $(BASE):
+    	@mkdir -p $(dir $@)
+    	@ln -sf $(CURDIR) $@
+
+Le chemin d'import de base est `hellogopher` et non
+`github.com/vincentbernat/hellogopher` : cela réduit la verbosité des
+imports et permet de distinguer plus facilement nos propres paquets
+des dépendances. Toutefois, cela rend l'application incompatible avec
+`go get`. C'est un choix personnel qui peut être modifié en
+ajustant la variable `$(PACKAGE)`.
+
+Nous créons simplement un lien symbolique de `.gopath/src/hellogopher`
+vers la racine de notre dépôt. La variable d'environnement `GOPATH`
+est automatiquement exportée pour les commandes invoquées par les
+recettes du `Makefile`. La plupart des outils fonctionnent alors
+correctement une fois le répertoire courant changé pour `$(BASE)`. Par
+exemple, le code suivant s'occupe de la construction de l'exécutable :
+
+    ::make
+    .PHONY: all
+    all: | $(BASE)
+    	cd $(BASE) && $(GO) build -o bin/$(PACKAGE) main.go
+
+## Vendoring
+
+*Glide* fonctionne à la manière de l'outil [Bundler][] pour Ruby. Les
+**paquets nécessaires** ainsi qu'un **ensemble de contraintes** sont
+spécifiés dans le fichier `glide.yaml`. *Glide* construit un fichier
+`glide.lock` contenant les versions exactes de chaque dépendance (y
+compris les dépendances de dépendances) et les télécharge dans le
+répertoire `vendor/`. Il est possible de ne placer que `glide.yaml`
+dans le système de gestion de sources, mais aussi `glide.lock`, voire
+le répertoire
+`vendor/`. L'[outil standard de gestion des dépendances][standard dependency management tool] de
+Go, en cours de conception, utilise une méthodologie similaire.
+
+Nous définissons deux règles[^auto] :
+
+    ::make
+    GLIDE = glide
+
+    glide.lock: glide.yaml | $(BASE)
+    	cd $(BASE) && $(GLIDE) update
+    	@touch $@
+    vendor: glide.lock | $(BASE)
+    	cd $(BASE) && $(GLIDE) --quiet install
+    	@ln -sf . vendor/src
+    	@touch $@
+
+Une variable est utilisée pour invoquer `glide`. Cela permet à
+l'utilisateur de fournir un emplacement alternatif (par exemple, avec
+`make GLIDE=$GOPATH/bin/glide`).
+
+[^auto]: Si vous ne voulez pas automatiquement mettre à jour
+    `glide.lock` quand un changement est détecté dans `glide.yaml`,
+    renommez simplement la cible `glide.lock` en `deps-update`.
+
+## Outils tierces
+
+Lorsqu'un projet a besoin d'outils tierces, nous pouvons soit nous
+attendre à ce qu'ils soient déjà installés ou bien les **compiler**
+dans notre `GOPATH` privé. Par exemple, voici une règle pour exécuter
+`golint` :
+
+    ::make
+    BIN    = $(GOPATH)/bin
+    GOLINT = $(BIN)/golint
+    
+    $(BIN)/golint: | $(BASE) # ❶
+    	go get github.com/golang/lint/golint
+    
+    .PHONY: lint
+    lint: vendor | $(BASE) $(GOLINT) # ❷
+    	@cd $(BASE) && ret=0 && for pkg in $(PKGS); do \
+    		test -z "$$($(GOLINT) $$pkg | tee /dev/stderr)" || ret=1 ; \
+    	 done ; exit $$ret
+
+Comme pour `glide`, l'utilisateur a possibilité de changer le chemin à
+utiliser pour `golint`. Par défaut, nous utilisons une copie privée
+mais un autre chemin peut être fourni avec `make
+GOLINT=/usr/bin/golint`.
+
+En ❶, la recette de construction de `golint` utilise `go get`[^irony]
+pour télécharger et construire l'exécutable. En ❷, la règle pour
+`lint` exécute `golint` sur chaque paquet spécifié dans la variable
+`$(PKGS)`. Nous détaillons cette dernière dans la section suivante.
+
+[^irony]: Il y a une certaine ironie de dire du mal de `go get` puis
+    de l'utiliser à la première occasion en raison de sa praticité.
+
+## Restreindre la liste des paquets à utiliser
+
+Certaines commandes nécessitent une liste de paquets. Parce que nous
+utilisons un répertoire `vendor/`, nous ne pouvons pas utiliser
+`./...` comme raccourci pour tous les paquets. Cela conduirait par
+exemple à dérouler les tests sur les dépendances[^recursive]. Nous
+devons donc **composer une liste des paquets à utiliser** :
+
+
+    ::make
+    PKGS = $(or $(PKG), $(shell cd $(BASE) && \
+        env GOPATH=$(GOPATH) $(GO) list ./... | grep -v "^$(PACKAGE)/vendor/"))
+
+[^recursive]: Je pense que `./...` ne devrait pas inclure le
+    répertoire `vendor/` par défaut. Toutefois, il
+    est [improbable que cela change][unlikely to change].
+
+Si l'utilisateur a fourni une variable `$(PKG)`, celle-ci est utilisée
+directement. Par exemple, `make lint PKG=hellogopher/cmd` permet
+d'exécuter la commande `golint` sur le paquet `cmd`. Dans ce cas,
+l'utilisation de `PKG` est plus intuitive que `PKGS`.
+
+Dans le cas contraire, `go list ./...` permet d'obtenir une liste de
+tous les paquets. Les paquets issus du répertoire `vendor/` sont
+retirés de celle-ci.
+
+## Tests
+
+Voici les règles permettant d'exécuter les tests :
+
+    ::make
+    TIMEOUT = 20
+    TEST_TARGETS := test-default test-bench test-short test-verbose test-race
+    .PHONY: $(TEST_TARGETS) check test tests
+    test-bench:   ARGS=-run=__absolutelynothing__ -bench=.
+    test-short:   ARGS=-short
+    test-verbose: ARGS=-v
+    test-race:    ARGS=-race
+    $(TEST_TARGETS): test
+    
+    check test tests: fmt lint vendor | $(BASE)
+    	@cd $(BASE) && $(GO) test -timeout $(TIMEOUT)s $(ARGS) $(PKGS)
+
+L'utilisateur peut invoquer les tests de différente façon :
+
+ - `make test` lance tous les tests ;
+ - `make test TIMEOUT=10` implique une durée limite de 10 secondes par test ;
+ - `make test PKG=hellogopher/cmd` exécute les tests pour le paquet `cmd` ;
+ - `make test ARGS="-v -short"` utilise les arguments fournis ;
+ - `make test-race` exécute les tests en activant la détection des problèmes d'accès concurrents.
+
+## Couverture des tests
+
+`go test` permet également de déterminer la couverture des
+tests. Malheureusement, l'outil est très rudimentaire et ne permet de
+gérer qu'**un seul paquet à la fois**. Il faut également explicitement
+**lister tous les paquets à instrumenter**. Dans le cas contraire,
+seul le paquet testé est instrumenté. De plus, les temps de
+compilation sont prohibitifs si trop de paquets sont
+instrumentés. Enfin, afin d'obtenir un rapport compatible avec
+*Jenkins*, quelques outils additionnels sont nécessaires.
+
+    ::make
+    COVERAGE_MODE    = atomic
+    COVERAGE_PROFILE = $(COVERAGE_DIR)/profile.out
+    COVERAGE_XML     = $(COVERAGE_DIR)/coverage.xml
+    COVERAGE_HTML    = $(COVERAGE_DIR)/index.html
+    
+    .PHONY: test-coverage test-coverage-tools
+    test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) # ❸
+    test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -Iseconds)
+    test-coverage: fmt lint vendor test-coverage-tools | $(BASE)
+    	@mkdir -p $(COVERAGE_DIR)/coverage
+    	@cd $(BASE) && for pkg in $(PKGS); do \ # ❹
+    		$(GO) test \
+    			-coverpkg=$$($(GO) list -f {% raw %}'{{ join .Deps "\n" }}'{% endraw %} $$pkg | \
+    					grep '^$(PACKAGE)/' | grep -v '^$(PACKAGE)/vendor/' | \
+    					tr '\n' ',')$$pkg \
+    			-covermode=$(COVERAGE_MODE) \
+    			-coverprofile="$(COVERAGE_DIR)/coverage/`echo $$pkg | tr "/" "-"`.cover" $$pkg ;\
+    	 done
+    	@$(GOCOVMERGE) $(COVERAGE_DIR)/coverage/*.cover > $(COVERAGE_PROFILE)
+    	@$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
+    	@$(GOCOV) convert $(COVERAGE_PROFILE) | $(GOCOVXML) > $(COVERAGE_XML)
+
+En ❸, un certain nombre d'outils sont requis :
+
+ - `gocovmerge` permet de combiner plusieurs profils en un seul,
+ - `gocov-xml` convertit le rapport au format [Cobertura][],
+ - `gocov` convertit le rapport en un format utilisable par `gocov-xml`.
+
+Les règles pour construire ces outils sont similaires à celle pour
+`golint`.
+
+En ❹, pour chaque paquet à tester, nous exécutons `go test` avec
+l'argument `-coverprofile`. La liste des paquets à instrumenter est
+donnée à l'argument `-coverpkg` en utilisant `go list` pour extraire
+les dépendances du paquet en cours de test et en ne conservant que nos
+propres paquets.
+
+# Conclusion
+
+Bien que l'intérêt principal de ce `Makefile` est de travailler sans
+`GOPATH`, c'est aussi un bon moyen de cacher la complexité de
+certaines opérations.
+
+Les extraits fournis ici ont été simplifiés. Jetez un œil
+au [résultat final][own take] pour plus de détails !
+
+*[CLI]: Command-line Interface
+*[VCS]: Version Control System
+
+[Go]: https://golang.org/ "The Go Programming Language"
+[accepted]: https://github.com/golang/go/issues/17271 "Incrementally modify the Go toolchain to work without GOPATH"
+[gb]: https://getgb.io/ "gb — A project based build tool for Go"
+[Filippo Valsorda's example]: https://github.com/cloudflare/hellogopher "Hellogopher: just clone and make your conventional Go project"
+[own take]: https://github.com/vincentbernat/hellogopher "Hellogopher: Makefile to build a Go project"
+[Glide]: https://glide.sh "Glide: package management for Go"
+[vendoring]: https://blog.gopheracademy.com/advent-2015/vendor-folder/ "Understanding and using the vendor folder"
+[backward-incompatible changes]: http://blog.merovius.de/2015/07/29/backwards-compatibility-in-go.html "Backwards compatibility in go"
+[versioned URLs]: http://labix.org/gopkg.in "gopkg.in — Stable APIs for the Go language"
+[no standard tool to handle vendoring]: https://github.com/golang/go/wiki/PackageManagementTools "Package management tools for Go"
+[Bundler]: http://bundler.io/ "Bundler: the best way to manage a Ruby application's gems"
+[Cobertura]: http://cobertura.github.io/cobertura/ "A code coverage utility for Java"
+[standard dependency management tool]: https://github.com/golang/dep "Go dependency tool"
+[unlikely to change]: https://github.com/golang/go/issues/11659 "cmd/go: exclude vendor directories from wildcard matches?"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
