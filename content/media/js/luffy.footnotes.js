@@ -17,6 +17,7 @@ luffy.footnotes = function() {
     if (!parent || !footnote) {
       throw new Error("footnote `" + footnoteName + "' not found");
     }
+    sidenote.setAttribute("role", "note");
     sidenote.className = "lf-sidenote";
     sidenote.innerHTML =
       "<sup class=\"lf-refmark\">" + footnoteReference.innerText + "</sup>"
