@@ -13,7 +13,11 @@ luffy.footnotes = function() {
     /* Search for suitable parent and attach the side-note to it */
     var sidenote = document.createElement("aside"),
     parent = footnoteReference.parentNode;
-    while (parent && parent.tagName !== "P" && parent.tagName !== "UL") parent = parent.parentNode;
+    while (parent && parent.tagName !== "P" &&
+           parent.tagName !== "UL" &&
+           parent.tagName !== "OL" &&
+           parent.tagName !== "DL")
+      parent = parent.parentNode;
     if (!parent || !footnote) {
       throw new Error("footnote `" + footnoteName + "' not found");
     }
