@@ -1,0 +1,216 @@
+---
+title: "Écrire son propre émulateur de terminal"
+description: |
+  Les émulateurs de terminaux se trouvent à la pelle mais parfois,
+  aucun d'eux ne convient. En écrire un est très simple !
+keywords: "terminal, libvte, émulateur"
+uuid: 186aa60a-e683-4495-b16c-899f820c74ce
+attachments:
+  "https://github.com/vincentbernat/vbeterm": "Code source"
+---
+
+J'étais un utilisateur heureux de [rxvt-unicode][] jusqu'au jour où
+j'ai eu un portable avec un écran « haute définition ». Passer d'un
+écran externe classique à l'écran intégré était alors assez pénible :
+il fallait soit ajuster la fonte sur chaque terminal, soit redémarrer
+l'ensemble des terminaux.
+
+[VTE][] est une **bibliothèque pour construire un émulateur de
+terminal** utilisant GTK+ qui sait gérer le changement de
+définition. Elle est utilisée par de nombreux émulateurs tels
+que [GNOME Terminal][], [evilvte][], [sakura][], [termit][]
+et [ROXTerm][]. Elle est plutôt simple d'emploi si on se limite aux
+fonctionnalités prévues.
+
+# Un simple émulateur de terminal
+
+Commençons en se contentant des fonctionnalités par défaut. Nous
+utiliserons le C. Une autre option bien supportée est le
+langage [Vala][].
+
+    ::c
+    #include <vte/vte.h>
+    
+    int
+    main(int argc, char *argv[])
+    {
+        GtkWidget *window, *terminal;
+    
+        /* Initialise GTK, the window and the terminal */
+        gtk_init(&argc, &argv);
+        terminal = vte_terminal_new();
+        window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+        gtk_window_set_title(GTK_WINDOW(window), "myterm");
+    
+        /* Start a new shell */
+        gchar **envp = g_get_environ();
+        gchar **command = (gchar *[]){g_strdup(g_environ_getenv(envp, "SHELL")), NULL };
+        g_strfreev(envp);
+        vte_terminal_spawn_sync(VTE_TERMINAL(terminal),
+            VTE_PTY_DEFAULT,
+            NULL,       /* working directory  */
+            command,    /* command */
+            NULL,       /* environment */
+            0,          /* spawn flags */
+            NULL, NULL, /* child setup */
+            NULL,       /* child pid */
+            NULL, NULL);
+    
+        /* Connect some signals */
+        g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
+        g_signal_connect(terminal, "child-exited", gtk_main_quit, NULL);
+    
+        /* Put widgets together and run the main loop */
+        gtk_container_add(GTK_CONTAINER(window), terminal);
+        gtk_widget_show_all(window);
+        gtk_main();
+    }
+
+Ce programme se compile avec la commande suivante :
+
+    ::shell
+    gcc -O2 -Wall $(pkg-config --cflags --libs vte-2.91) term.c -o term
+
+En lançant `./term`, nous obtenons ceci :
+
+![Terminal simple basé sur VTE][1]
+[1]: [[!!images/vte-term.jpg]] "Terminal simple basé sur VTE"
+
+# Fonctionnalités supplémentaires
+
+L'étape suivante est de regarder la [documentation][] afin d'ajouter
+quelques fonctionnalités ou de modifier le comportement. Voici trois
+exemples.
+
+## Couleurs
+
+Il est possible de redéfinir les 16 couleurs de base avec le code
+suivant :
+
+    ::c
+    #define CLR_R(x)   (((x) & 0xff0000) >> 16)
+    #define CLR_G(x)   (((x) & 0x00ff00) >>  8)
+    #define CLR_B(x)   (((x) & 0x0000ff) >>  0)
+    #define CLR_16(x)  ((double)(x) / 0xff)
+    #define CLR_GDK(x) (const GdkRGBA){ .red = CLR_16(CLR_R(x)), \
+                                        .green = CLR_16(CLR_G(x)), \
+                                        .blue = CLR_16(CLR_B(x)), \
+                                        .alpha = 0 }
+    vte_terminal_set_colors(VTE_TERMINAL(terminal),
+        &CLR_GDK(0xffffff),
+        &(GdkRGBA){ .alpha = 0.85 },
+        (const GdkRGBA[]){
+            CLR_GDK(0x111111),
+            CLR_GDK(0xd36265),
+            CLR_GDK(0xaece91),
+            CLR_GDK(0xe7e18c),
+            CLR_GDK(0x5297cf),
+            CLR_GDK(0x963c59),
+            CLR_GDK(0x5E7175),
+            CLR_GDK(0xbebebe),
+            CLR_GDK(0x666666),
+            CLR_GDK(0xef8171),
+            CLR_GDK(0xcfefb3),
+            CLR_GDK(0xfff796),
+            CLR_GDK(0x74b8ef),
+            CLR_GDK(0xb85e7b),
+            CLR_GDK(0xA3BABF),
+            CLR_GDK(0xffffff)
+    }, 16);
+
+Bien que cela ne soit pas visible sur la capture d'écran
+suivante[^compositing], le fond est légèrement transparent :
+
+![Rendu des couleurs][2]
+[2]: [[!!images/vte-term-2.jpg]] "Rendu des couleurs"
+
+[^compositing]: La transparence est prise en charge par le
+    « *composite manager* » ([Compton][] dans mon cas).
+
+## Paramètres divers
+
+*VTE* dispose de nombreux réglages. Voici quelques exemples :
+
+    ::c
+    vte_terminal_set_scrollback_lines(VTE_TERMINAL(terminal), 0);
+    vte_terminal_set_scroll_on_output(VTE_TERMINAL(terminal), FALSE);
+    vte_terminal_set_scroll_on_keystroke(VTE_TERMINAL(terminal), TRUE);
+    vte_terminal_set_rewrap_on_resize(VTE_TERMINAL(terminal), TRUE);
+    vte_terminal_set_mouse_autohide(VTE_TERMINAL(terminal), TRUE);
+
+Respectivement :
+
+ - désactivation de l'historisation des lignes,
+ - pas de défilement en cas de nouvelle sortie,
+ - défilement en bas s'il y a interaction de l'utilisateur,
+ - reformatage du texte en cas de changement de taille de la fenêtre,
+ - cacher le curseur de la souris quand le clavier est utilisé.
+
+## Titre de la fenêtre
+
+Une application peut modifier le titre de la fenêtre en utilisant
+les [séquences de contrôle XTerm][XTerm control sequences] (par
+exemple, avec `printf "\e]2;${title}\a"`). Pour que ce changement
+impacte la fenêtre GTK, il faut définir cette fonction :
+
+    ::c
+    static gboolean
+    on_title_changed(GtkWidget *terminal, gpointer user_data)
+    {
+        GtkWindow *window = user_data;
+        gtk_window_set_title(window,
+            vte_terminal_get_window_title(VTE_TERMINAL(terminal))?:"Terminal");
+        return TRUE;
+    }
+
+Il convient ensuite de la connecter au signal approprié depuis la
+fonction `main()` :
+
+    ::c
+    g_signal_connect(terminal, "window-title-changed", 
+        G_CALLBACK(on_title_changed), GTK_WINDOW(window));
+
+
+# Conclusion
+
+Je n'ai guère besoin de plus étant donné que j'utilise [tmux][] à
+l'intérieur de chaque terminal. J'ai également implémenté
+une [complétion dynamique][dynamic abbrev expansion] permettant de
+compléter le mot sous le curseur à partir des mots présents dans le
+terminal courant ou un autre. Cela a nécessité de gérer toutes les
+fenêtres depuis un processus unique, comme avec `urxvtcd`.
+
+Il est donc très simple de construire un émulateur de terminal de
+« zéro »[^scratch]. Cependant, ce n'est pas forcément une bonne
+idée. Il est facile de compiler [evilvte][] avec les fonctionnalités
+que l'on désire et d'arriver à un résultat similaire. Considérez
+d'abord une telle solution. Honnêtement, je ne sais même plus pourquoi
+je ne l'ai pas fait.
+
+Un autre élément crucial est que *VTE* est une librairie de support
+pour *GNOME Terminal* uniquement. Une fonctionnalité qui n'est pas
+utilisée dans *GNOME Terminal* ne sera pas implémentée. Elle sera même
+retirée si elle existe déjà.
+
+[^scratch]: Pour une définition assez flexible de zéro : le gros du
+    travail est effectué par la librairie *VTE*.
+
+[VTE]: https://wiki.gnome.org/Apps/Terminal/VTE "VTE Terminal Widget Library"
+[GNOME Terminal]: https://help.gnome.org/users/gnome-terminal/stable/introduction.html.en "GNOME Terminal"
+[evilvte]: http://www.calno.com/evilvte/ "VTE based, highly customizable terminal emulator"
+[sakura]: http://www.pleyades.net/david/projects/sakura "sakura terminal emulator"
+[termit]: https://github.com/nonstop/termit/wiki "Simple terminal emulator based on vte library, extensible via Lua"
+[ROXTerm]: https://sourceforge.net/projects/roxterm/ "A tabbed, vte- (GTK+) based terminal emulator"
+[Vala]: https://wiki.gnome.org/Projects/Vala "Vala - Compiler for the GObject type system"
+[documentation]: https://developer.gnome.org/vte/unstable/VteTerminal.html "VteTerminal API reference"
+[own copy]: https://github.com/vincentbernat/vbeterm
+[dynamic abbrev expansion]: https://www.gnu.org/software/emacs/manual/html_node/emacs/Dynamic-Abbrevs.html
+[Compton]: https://github.com/chjj/compton "Compton: a compositor for X11"
+[tmux]: https://tmux.github.io/ "tmux is a terminal multiplexer"
+[XTerm control sequences]: http://invisible-island.net/xterm/ctlseqs/ctlseqs.html "XTerm Control Sequences"
+[rxvt-unicode]: http://software.schmorp.de/pkg/rxvt-unicode.html "xvt-unicode is a fork of the well known terminal emulator rxvt"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

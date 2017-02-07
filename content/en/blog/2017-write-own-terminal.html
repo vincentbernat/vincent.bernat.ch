@@ -1,0 +1,213 @@
+---
+title: "Write your own terminal emulator"
+description: |
+  There are so many terminal emulators. None of them may suit you.
+  It's super easy to write your own!
+keywords: "terminal, libvte, emulator"
+uuid: 186aa60a-e683-4495-b16c-899f820c74ce
+attachments:
+  "https://github.com/vincentbernat/vbeterm": "Source code"
+---
+
+I was an happy user of [rxvt-unicode][] until I got a laptop with an
+HiDPI display. Switching from a LoDPI to a HiDPI screen and back was a
+pain: I had to manually adjust the font size on all terminals or
+restart them.
+
+[VTE][] is a **library to build a terminal emulator** using the GTK+
+toolkit, which handles DPI changes. It is used by many terminal
+emulators,
+like [GNOME Terminal][], [evilvte][], [sakura][], [termit][]
+and [ROXTerm][]. The library is quite straightforward and writing a
+terminal doesn't take much time if you don't need many features.
+
+Let's see how to write a simple one.
+
+# A simple terminal
+
+Let's start small with a terminal with the default settings. We'll write
+that in C. Another supported option is [Vala][].
+
+    ::c
+    #include <vte/vte.h>
+    
+    int
+    main(int argc, char *argv[])
+    {
+        GtkWidget *window, *terminal;
+    
+        /* Initialise GTK, the window and the terminal */
+        gtk_init(&argc, &argv);
+        terminal = vte_terminal_new();
+        window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+        gtk_window_set_title(GTK_WINDOW(window), "myterm");
+    
+        /* Start a new shell */
+        gchar **envp = g_get_environ();
+        gchar **command = (gchar *[]){g_strdup(g_environ_getenv(envp, "SHELL")), NULL };
+        g_strfreev(envp);
+        vte_terminal_spawn_sync(VTE_TERMINAL(terminal),
+            VTE_PTY_DEFAULT,
+            NULL,       /* working directory  */
+            command,    /* command */
+            NULL,       /* environment */
+            0,          /* spawn flags */
+            NULL, NULL, /* child setup */
+            NULL,       /* child pid */
+            NULL, NULL);
+    
+        /* Connect some signals */
+        g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
+        g_signal_connect(terminal, "child-exited", gtk_main_quit, NULL);
+    
+        /* Put widgets together and run the main loop */
+        gtk_container_add(GTK_CONTAINER(window), terminal);
+        gtk_widget_show_all(window);
+        gtk_main();
+    }
+
+You can compile it with the following command:
+
+    ::shell
+    gcc -O2 -Wall $(pkg-config --cflags --libs vte-2.91) term.c -o term
+
+And run it with `./term`:
+
+![Simple VTE-based terminal][1]
+[1]: [[!!images/vte-term.jpg]] "Simple VTE-based terminal"
+
+# More features
+
+From here, you can have a look at the [documentation][] to alter
+behavior or add more features. Here are three examples.
+
+## Colors
+
+You can define the 16 basic colors with the following code:
+
+    ::c
+    #define CLR_R(x)   (((x) & 0xff0000) >> 16)
+    #define CLR_G(x)   (((x) & 0x00ff00) >>  8)
+    #define CLR_B(x)   (((x) & 0x0000ff) >>  0)
+    #define CLR_16(x)  ((double)(x) / 0xff)
+    #define CLR_GDK(x) (const GdkRGBA){ .red = CLR_16(CLR_R(x)), \
+                                        .green = CLR_16(CLR_G(x)), \
+                                        .blue = CLR_16(CLR_B(x)), \
+                                        .alpha = 0 }
+    vte_terminal_set_colors(VTE_TERMINAL(terminal),
+        &CLR_GDK(0xffffff),
+        &(GdkRGBA){ .alpha = 0.85 },
+        (const GdkRGBA[]){
+            CLR_GDK(0x111111),
+            CLR_GDK(0xd36265),
+            CLR_GDK(0xaece91),
+            CLR_GDK(0xe7e18c),
+            CLR_GDK(0x5297cf),
+            CLR_GDK(0x963c59),
+            CLR_GDK(0x5E7175),
+            CLR_GDK(0xbebebe),
+            CLR_GDK(0x666666),
+            CLR_GDK(0xef8171),
+            CLR_GDK(0xcfefb3),
+            CLR_GDK(0xfff796),
+            CLR_GDK(0x74b8ef),
+            CLR_GDK(0xb85e7b),
+            CLR_GDK(0xA3BABF),
+            CLR_GDK(0xffffff)
+    }, 16);
+        
+While you can't see it on the screenshot[^compositing], this also
+enables background transparency.
+
+![Color rendering][2]
+[2]: [[!!images/vte-term-2.jpg]] "Color rendering"
+
+[^compositing]: Transparency is handled by the *composite manager*
+    ([Compton][], in my case).
+
+## Miscellaneous settings
+
+*VTE* comes with many settings to change the behavior of the
+terminal. Consider the following code:
+
+    ::c
+    vte_terminal_set_scrollback_lines(VTE_TERMINAL(terminal), 0);
+    vte_terminal_set_scroll_on_output(VTE_TERMINAL(terminal), FALSE);
+    vte_terminal_set_scroll_on_keystroke(VTE_TERMINAL(terminal), TRUE);
+    vte_terminal_set_rewrap_on_resize(VTE_TERMINAL(terminal), TRUE);
+    vte_terminal_set_mouse_autohide(VTE_TERMINAL(terminal), TRUE);
+
+This will:
+
+ - disable the scrollback buffer,
+ - not scroll to the bottom on new output,
+ - scroll to the bottom on keystroke,
+ - rewrap content when terminal size change, and
+ - hide the mouse cursor when typing.
+ 
+## Update the window title
+
+An application can change the window title
+using [XTerm control sequences][] (for example, with `printf
+"\e]2;${title}\a"`). If you want the actual window title to reflect
+this, you need to define this function:
+
+    ::c
+    static gboolean
+    on_title_changed(GtkWidget *terminal, gpointer user_data)
+    {
+        GtkWindow *window = user_data;
+        gtk_window_set_title(window,
+            vte_terminal_get_window_title(VTE_TERMINAL(terminal))?:"Terminal");
+        return TRUE;
+    }
+
+Then, connect it to the appropriate signal, in `main()`:
+
+    ::c
+    g_signal_connect(terminal, "window-title-changed", 
+        G_CALLBACK(on_title_changed), GTK_WINDOW(window));
+
+# Final words
+
+I don't need much more as I am using [tmux][] inside each terminal. In
+my [own copy][], I have also added the ability to complete a word
+using ones from the current window or other windows (also known
+as [dynamic abbrev expansion][]). This requires to implement a
+**terminal daemon** to handle all terminal windows with one process,
+similar to `urxvtcd`.
+
+While writing a terminal "from scratch"[^scratch] suits my need, it may not be
+worth it. [evilvte][] is quite customizable and can be
+lightweight. Consider it as a first alternative. Honestly, I don't
+remember why I didn't pick it. You should also note that the primary
+goal of *VTE* is to be a library to support *GNOME Terminal*. Notably,
+if a feature is not needed for *GNOME Terminal*, it won't be added to
+*VTE*. If it already exists, it will likely to be deprecated and
+removed.
+
+[^scratch]: For some definition of "scratch" since the hard work is
+    handled by *VTE*.
+
+*[HiDPI]: High Dots Per Inch
+*[LoDPI]: Low Dots Per Inch
+
+[VTE]: https://wiki.gnome.org/Apps/Terminal/VTE "VTE Terminal Widget Library"
+[GNOME Terminal]: https://help.gnome.org/users/gnome-terminal/stable/introduction.html.en "GNOME Terminal"
+[evilvte]: http://www.calno.com/evilvte/ "VTE based, highly customizable terminal emulator"
+[sakura]: http://www.pleyades.net/david/projects/sakura "sakura terminal emulator"
+[termit]: https://github.com/nonstop/termit/wiki "Simple terminal emulator based on vte library, extensible via Lua"
+[ROXTerm]: https://sourceforge.net/projects/roxterm/ "A tabbed, vte- (GTK+) based terminal emulator"
+[Vala]: https://wiki.gnome.org/Projects/Vala "Vala - Compiler for the GObject type system"
+[documentation]: https://developer.gnome.org/vte/unstable/VteTerminal.html "VteTerminal API reference"
+[own copy]: https://github.com/vincentbernat/vbeterm
+[dynamic abbrev expansion]: https://www.gnu.org/software/emacs/manual/html_node/emacs/Dynamic-Abbrevs.html
+[Compton]: https://github.com/chjj/compton "Compton: a compositor for X11"
+[tmux]: https://tmux.github.io/ "tmux is a terminal multiplexer"
+[XTerm control sequences]: http://invisible-island.net/xterm/ctlseqs/ctlseqs.html "XTerm Control Sequences"
+[rxvt-unicode]: http://software.schmorp.de/pkg/rxvt-unicode.html "xvt-unicode is a fork of the well known terminal emulator rxvt"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
