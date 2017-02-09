@@ -1,0 +1,219 @@
+---
+title: "Intégration d'un service en Go avec systemd"
+description: |
+  Un service en Go peut bénéficier d'une intégration avec systemd
+  sur deux aspects : signaler qu'il est prêt et donner des preuves
+  de vie.
+keywords: "golang, systemd, watchdog, prêt"
+uuid: 13851651-8cbe-40ee-911a-eacce173a919
+---
+
+Contrairement à d'autres langages, Go ne fournit pas un environnement
+d'exécution permettant de [passer un service en arrière-plan][]. Cette
+action doit être déléguée à un autre composant. La plupart des
+distributions fournissent désormais [systemd][] qui convient à cet
+usage. Il y a deux aspects intéressants à étudier : indiquer si le
+service est **prêt** et indiquer s'il est **vivant**.
+
+À titre d'exemple, prenons ce service dont le but est de répondre à
+toutes les requêtes avec d'élégantes erreurs 404 :
+
+    ::go
+    package main
+    
+    import (
+    	"log"
+    	"net"
+    	"net/http"
+    )
+    
+    func main() {
+    	l, err := net.Listen("tcp", ":8081")
+    	if err != nil {
+    		log.Panicf("cannot listen: %s", err)
+    	}
+    	http.Serve(l, nil)
+    }
+
+Il peut être construit avec `go build 404.go`.
+
+Voici le fichier de service, `404.service`[^path], associé :
+
+    ::ini
+    [Unit]
+    Description=404 micro-service
+    
+    [Service]
+    Type=notify
+    ExecStart=/usr/bin/404
+    WatchdogSec=30s
+    Restart=on-failure
+    
+    [Install]
+    WantedBy=multi-user.target
+    
+[^path]: Selon la distribution, celui-ci doit être installé dans
+    `/lib/systemd/system` ou `/usr/lib/systemd/system`. La commande
+    `pkg-config systemd --variable=systemdsystemunitdir` indique le
+    chemin à choisir.
+
+
+# Être prêt
+
+Historiquement, un service Unix signale qu'il est prêt en se
+transformant en **démon**. Pour cela, il appelle deux fois [fork(2)][]
+(ce qui a également d'autres usages). C'est une tâche très courante,
+au point que les BSD, et certaines autres librairies C, fournissent
+une fonction [daemon(3)][] à cet effet. Un service se transforme en
+démon **uniquement quand il est prêt** (après avoir lu son fichier de
+configuration et mis en place une chausette d'écoute par
+exemple). Cela permet à un système d'initialiser les services avec un
+simple script linéaire :
+
+    ::sh
+    syslogd
+    unbound
+    ntpd -s
+
+Chaque service peut s'appuyer sur le précédent pour les
+fonctionnalités dont il a besoin. La séquence des actions est la
+suivante :
+
+ 1. `syslogd` lit son fichier de configuration, active `/dev/log` et
+    passe en tâche de fond.
+ 2. `unbound` lit son fichier de configuration, écoute sur
+    `127.0.0.1:53` et passe en tâche de fond.
+ 3. `ntpd` lit son fichier de configuration, se connecte à d'autres
+    serveurs NTP, attend que l'horloge système soit
+    synchronisée[^inexact] et passe en tâche de fond.
+
+[^inexact]: Cela dépend du démon NTP utilisé. [OpenNTPD][] n'attend
+    que si l'option `-s` est fournie. [ISC NTP][] n'attend qu'avec
+    l'option `--wait-sync`.
+
+Avec *systemd*, ce type de service nécessite d'utiliser la directive
+`Type=fork`. Toutefois, Go ne permettant d'effectuer cette
+manipulation, nous nous rabattons sur la directive `Type=notify`. Dans
+ce cas, *systemd* s'attend à ce que le service lui indique qu'il est
+prêt en envoyant un message particulier sur une *socket* Unix. Le
+paquet [go-systemd][] s'occupe des détails pour nous :
+
+    ::go
+    package main
+    
+    import (
+    	"log"
+    	"net"
+    	"net/http"
+    
+    	"github.com/coreos/go-systemd/daemon"
+    )
+    
+    func main() {
+    	l, err := net.Listen("tcp", ":8081")
+    	if err != nil {
+    		log.Panicf("cannot listen: %s", err)
+    	}
+    	daemon.SdNotify(false, "READY=1") // ❶
+    	http.Serve(l, nil)                // ❷
+    }
+
+Il est important de placer la notification après `net.Listen()` (en
+❶) : si celle-ci était placée plus tôt, un client obtiendrait une
+« connexion refusée » lors d'une tentative d'accès. Une fois que le
+service écoute, les connexions sont mise en queue par le noyau jusqu'à
+ce que le service les accepte (en ❷).
+
+Si le service n'est pas démarré via *systemd*, la ligne ❶ n'a pas
+d'effet.
+
+# Vivacité
+
+Une autre fonctionnalité intéressante de *systemd* est de surveiller
+un service et de le redémarrer s'il termine anormalement (grâce à la
+directive `Restart=on-failure`). De plus, il existe un mécanisme de
+« chien de garde » (*watchdog*) : le service **envoie à intervalles
+réguliers des messages de vivacité** (*keep-alive*). En cas de
+défaillance, *systemd* le redémarre.
+
+Nous pourrions inclure le code suivant juste avant `http.Serve()` :
+
+    ::go
+    go func() {
+        interval, err := daemon.SdWatchdogEnabled(false)
+        if err != nil || interval == 0 {
+            return
+        }
+        for {
+            daemon.SdNotify(false, "WATCHDOG=1")
+            time.Sleep(interval / 3)
+        }
+    }()
+
+Toutefois, ce n'est pas très utile : la *goroutine* est sans rapport
+avec l'objet du service. Si la partie HTTP se bloque, la goroutine
+continuera d'envoyer des messages à *systemd*.
+
+Pour corriger ce problème, nous pouvons simplement ajouter une requête
+HTTP avant d'envoyer le message. La boucle interne peut être remplacée
+par ce code :
+
+    ::go
+    for {
+        _, err := http.Get("http://127.0.0.1:8081") // ❸
+        if err == nil {
+            daemon.SdNotify(false, "WATCHDOG=1")
+        }
+        time.Sleep(interval / 3)
+    }
+
+En ❸, nous nous connectons au service pour vérifier qu'il fonctionne
+toujours. Si c'est le cas, le message de vivacité est envoyé. Par
+contre, si le service refuse la connexion ou si `http.Get()` se
+bloque, *systemd* initiera un redémarrage de l'applicatif.
+
+Il n'y a pas de recette universelle. Toutefois, les approches à
+adopter pour implémenter cette fonctionnalité se divisent en deux
+groupes :
+
+ - Avant d'envoyer le message de vivacité, une **vérification active**
+   des principaux composants du service est effectuée. Le message
+   n'est envoyé que si tous les indicateurs sont positifs. Les
+   vérifications peuvent être internes (comme ci-dessus) ou externes
+   (par exemple, en vérifiant que l'on peut lancer une requête vers la
+   base de données).
+   
+ - Chaque composant rapporte son état de santé. Le message de vivacité
+   n'est envoyé que si tous les composants ont bien émis un rapport
+   récemment et que ceux-ci sont positifs (**vérification passive**).
+   
+Il convient de privilégier la **correction des erreurs** (par exemple,
+en réessayant l'opération) ou l'**autoguérison** (par exemple, en
+établissant une nouvelle connexion réseau), mais le chien de garde est
+utile pour gérer le pire des cas sans implémenter une logique trop
+compliquée.
+
+Par exemple, au lieu d'utiliser `panic()`, un composant qui ne sait
+pas gérer une condition *exceptionnelle*[^exception] peut remonter son
+état avant de s'arrêter. Un autre composant peut alors tenter de
+résoudre le problème en redémarrant le composant fautif. Si ce dernier
+ne parvient pas dans un état sain en un temps raisonnable, le minuteur
+du chien de garde va se déclencher et le service entier sera
+redémarré.
+
+[^exception]: Un exemple de condition exceptionnelle est d'atteindre
+    la limite sur le nombre de descripteurs de fichiers. Une tentative
+    de guérison peut rapidement finir dans une boucle sans fin.
+
+[passer un service en arrière-plan]: https://github.com/golang/go/issues/227 "Issue #227: runtime: support for daemonize"
+[systemd]: https://www.freedesktop.org/wiki/Software/systemd/ "systemd System and Service Manager"
+[daemon(3)]: https://manpages.debian.org/jessie/manpages-dev/daemon.3.fr.html "daemon - exécuter en arrière-plan"
+[fork(2)]: https://manpages.debian.org/jessie/manpages-dev/fork.2.fr.html "fork - créer un processus fils"
+[OpenNTPD]: http://www.openntpd.org/ "OpenNTPD"
+[ISC NTP]: http://www.ntp.org/ "ISC NTP"
+[go-systemd]: https://github.com/coreos/go-systemd/ "Go bindings for systemd"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

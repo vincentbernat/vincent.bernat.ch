@@ -1,0 +1,210 @@
+---
+title: "Integration of a Go service with systemd"
+description: |
+  systemd can bring two features to a Go service: a readiness signal
+  for other services and a watchdog timer.
+keywords: "golang, systemd, watchdog, ready, readiness"
+uuid: 13851651-8cbe-40ee-911a-eacce173a919
+---
+
+Unlike other programming languages, Go's runtime doesn't provide
+a [way to reliably daemonize a service][]. A system daemon has to
+supply this functionality. Most distributions ship [systemd][] which
+would fit the bill. A correct integration with *systemd* is quite
+straightforward. There are two interesting aspects: **readiness** &
+**liveness**.
+
+As an example, we will daemonize this service whose goal is to answer
+requests with nifty 404 errors:
+
+    ::go
+    package main
+    
+    import (
+    	"log"
+    	"net"
+    	"net/http"
+    )
+    
+    func main() {
+    	l, err := net.Listen("tcp", ":8081")
+    	if err != nil {
+    		log.Panicf("cannot listen: %s", err)
+    	}
+    	http.Serve(l, nil)
+    }
+
+You can build it with `go build 404.go`.
+
+Here is the service file, `404.service`[^path]:
+
+    ::ini
+    [Unit]
+    Description=404 micro-service
+    
+    [Service]
+    Type=notify
+    ExecStart=/usr/bin/404
+    WatchdogSec=30s
+    Restart=on-failure
+    
+    [Install]
+    WantedBy=multi-user.target
+    
+[^path]: Depending on the distribution, this should be installed in
+    `/lib/systemd/system` or `/usr/lib/systemd/system`. Check with the
+    output of the command `pkg-config systemd
+    --variable=systemdsystemunitdir`.
+
+
+# Readiness
+
+The classic way for an Unix daemon to signal its readiness is to
+**daemonize**. Technically, this is done by calling [fork(2)][] twice
+(which also serves other intents). This is a very common task and the
+BSD systems, as well as some other C libraries, supply a [daemon(3)][]
+function for this purpose. Services are expected to daemonize **only
+when they are ready** (after reading configuration files and setting
+up a listening socket, for example). Then, a system can reliably
+initialize its services with a simple linear script:
+
+    ::sh
+    syslogd
+    unbound
+    ntpd -s
+
+Each daemon can rely on the previous one being ready to do its
+work. The sequence of actions is the following:
+
+ 1. `syslogd` reads its configuration, activates `/dev/log`,
+    *daemonizes*.
+ 2. `unbound` reads its configuration, listens on `127.0.0.1:53`,
+    *daemonizes*.
+ 3. `ntpd` reads its configuration, connects to NTP peers, waits for
+    clock to be synchronized[^inexact], *daemonizes*.
+
+[^inexact]: This highly depends on the NTP daemon used. [OpenNTPD][]
+    doesn't wait unless you use the `-s` option. [ISC NTP][] doesn't
+    either unless you use the `--wait-sync` option.
+
+With *systemd*, we would use `Type=fork` in the service file. However,
+Go's runtime does not support that. Instead, we use `Type=notify`. In
+this case, *systemd* expects the daemon to signal its readiness with a
+message to an Unix socket. [go-systemd][] package handles the details
+for us:
+
+    ::go
+    package main
+    
+    import (
+    	"log"
+    	"net"
+    	"net/http"
+    
+    	"github.com/coreos/go-systemd/daemon"
+    )
+    
+    func main() {
+    	l, err := net.Listen("tcp", ":8081")
+    	if err != nil {
+    		log.Panicf("cannot listen: %s", err)
+    	}
+    	daemon.SdNotify(false, "READY=1") // ❶
+    	http.Serve(l, nil)                // ❷
+    }
+
+It's important to place the notification after `net.Listen()` (in ❶):
+if the notification was sent earlier, a client would get "connection
+refused" when trying to use the service. When a daemon listens to a
+socket, connections are queued by the kernel until the daemon is able
+to accept them (in ❷).
+
+If the service is not run through *systemd*, the added line is a
+no-op.
+
+# Liveness
+
+Another interesting feature of *systemd* is to watch the service and
+restart it if it happens to crash (thanks to the `Restart=on-failure`
+directive). It's also possible to use a watchdog: the service **sends
+watchdog keep-alives at regular interval**. If it fails to do so,
+*systemd* will restart it.
+
+We could insert the following code just before `http.Serve()` call:
+
+    ::go
+    go func() {
+        interval, err := daemon.SdWatchdogEnabled(false)
+        if err != nil || interval == 0 {
+            return
+        }
+        for {
+            daemon.SdNotify(false, "WATCHDOG=1")
+            time.Sleep(interval / 3)
+        }
+    }()
+
+However, this doesn't add much value: the goroutine is unrelated to
+the core business of the service. If for some reason, the HTTP part
+gets stuck, the goroutine will happily continue to send keep-alives to
+*systemd*.
+
+In our example, we can just do a HTTP query before sending the
+keep-alive. The internal loop can be replaced with this code:
+
+    ::go
+    for {
+        _, err := http.Get("http://127.0.0.1:8081") // ❸
+        if err == nil {
+            daemon.SdNotify(false, "WATCHDOG=1")
+        }
+        time.Sleep(interval / 3)
+    }
+
+In ❸, we connect to the service to check if it's still working. If we
+get some kind of answer, we send a watchdog keep-alive. If the service
+is unavailable or if `http.Get()` gets stuck, *systemd* will trigger a
+restart.
+
+There is no universal recipe. However, checks can be split into two
+groups:
+
+ - Before sending a keep-alive, you execute an **active check** on the
+   components of your service. The keep-alive is sent only if all
+   checks are successful. The checks can be internal (like in the
+   above example) or external (for example, check with a query to the
+   database).
+   
+ - Each component reports its status, telling if it's alive or
+   not. Before sending a keep-alive, you check the reported status of
+   all components (**passive check**). If some components are late or
+   reported fatal errors, don't send the keep-alive.
+
+If possible, **recovery from errors** (for example, with a backoff
+retry) and **self-healing** (for example, by reestablishing a network
+connection) is always better, but the watchdog is a good tool to
+handle the worst cases and avoid too complex recovery logic.
+   
+For example, if a component doesn't know how to recover from an
+*exceptional* condition[^exception], instead of using `panic()`, it
+could signal its situation before dying. Another dedicated component
+could try to resolve the situation by restarting the faulty
+component. If it fails to reach an healthy state in time, the watchdog
+timer will trigger and the whole service will be restarted.
+
+[^exception]: An example of an exceptional condition is to reach the
+    limit on the number of file descriptors. Self-healing from this
+    situation is difficult and it's easy to get stuck in a loop.
+
+[way to reliably daemonize a service]: https://github.com/golang/go/issues/227 "Issue #227: runtime: support for daemonize"
+[systemd]: https://www.freedesktop.org/wiki/Software/systemd/ "systemd System and Service Manager"
+[daemon(3)]: https://manpages.debian.org/jessie/manpages-dev/daemon.3.en.html "daemon - run in the background"
+[fork(2)]: https://manpages.debian.org/jessie/manpages-dev/fork.2.en.html "fork - create a child process"
+[OpenNTPD]: http://www.openntpd.org/ "OpenNTPD"
+[ISC NTP]: http://www.ntp.org/ "ISC NTP"
+[go-systemd]: https://github.com/coreos/go-systemd/ "Go bindings for systemd"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
