@@ -8,6 +8,7 @@ combine:
 ---
 
 var scripts = [luffy.captions,
+               luffy.videos,
                luffy.footnotes,
                luffy.mathjax,
                luffy.comments,
