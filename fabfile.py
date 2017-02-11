@@ -9,8 +9,7 @@ import hashlib
 import yaml
 
 env.shell = "/bin/sh -c"
-env.command_prefixes = [ 'export PATH=$HOME/.virtualenvs/hyde/bin:$PATH',
-                         'export VIRTUAL_ENV=$HOME/.virtualenvs/hyde' ]
+env.command_prefixes = ['export PATH=$HOME/.virtualenvs/hyde/bin:$PATH']
 
 conf = "site-production.yaml"
 media = yaml.load(file(conf))['media_url']
