@@ -118,20 +118,10 @@ class JPEGTranPlugin(CLTransformer):
 
     def binary_resource_complete(self, resource):
         """
-        If the site is in development mode, just return.
-        Otherwise, run jpegtran to compress the jpg file.
+        Run jpegtran to compress the jpg file.
         """
 
-        try:
-            mode = self.site.config.mode
-        except AttributeError:
-            mode = "production"
-
         if not resource.source_file.kind == 'jpg':
-            return
-
-        if mode.startswith('dev'):
-            self.logger.debug("Skipping jpegtran in development mode.")
             return
 
         supported = [
