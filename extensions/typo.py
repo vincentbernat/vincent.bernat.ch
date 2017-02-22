@@ -23,8 +23,8 @@ class FrenchPunctuationPlugin(Plugin):
         tag_pattern = '</?\w+((\s+\w+(\s*=\s*(?:".*?"|\'.*?\'|[^\'">\s]+))?)+\s*|\s*)/?>'
         space_before_punct_finder = re.compile(r"""(\s|&nbsp;)([:;!\?%»])""", re.UNICODE)
         space_after_punct_finder = re.compile(r"""([«])(\s|&nbsp;)""", re.UNICODE)
-        space_between_figures_finder = re.compile(r"""([0-9]|^)(\s|&nbsp;)([0-9]+\W)""", re.UNICODE)
-        version_number_finder = re.compile(r"""(\b[A-Z][a-zA-Z]+)(\s|&nbsp;)([0-9]+\W)""", re.UNICODE)
+        space_between_figures_finder = re.compile(r"""([0-9]|^)(\s|&nbsp;)([0-9]+(?:\W|$))""", re.UNICODE)
+        version_number_finder = re.compile(r"""(\b[A-Z][a-zA-Z]+)(\s|&nbsp;)([0-9]+(?:\W|$))""", re.UNICODE)
         si_unit_finder = re.compile(ur"""(\b[0-9,.]+)( |&nbsp;)(\w)""", re.UNICODE)  # Cheating, nbsp already here...
         intra_tag_finder = re.compile(r'(?P<prefix>(%s)?)(?P<text>([^<]*))(?P<suffix>(%s)?)' % (tag_pattern, tag_pattern))
 
