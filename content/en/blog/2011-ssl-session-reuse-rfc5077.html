@@ -206,12 +206,12 @@ when a server initializes its SSL stack, it will randomly generate
 some keys that will be used to protect and encrypt tickets. In
 OpenSSL, from `ssl/ssl_lib.c`:
 
-        ::c
-        /* Setup RFC4507 ticket keys */
-        if ((RAND_pseudo_bytes(ret->tlsext_tick_key_name, 16) <= 0)
-                || (RAND_bytes(ret->tlsext_tick_hmac_key, 16) <= 0)
-                || (RAND_bytes(ret->tlsext_tick_aes_key, 16) <= 0))
-                ret->options |= SSL_OP_NO_TICKET;
+    ::c
+    /* Setup RFC4507 ticket keys */
+    if ((RAND_pseudo_bytes(ret->tlsext_tick_key_name, 16) <= 0)
+            || (RAND_bytes(ret->tlsext_tick_hmac_key, 16) <= 0)
+            || (RAND_bytes(ret->tlsext_tick_aes_key, 16) <= 0))
+            ret->options |= SSL_OP_NO_TICKET;
 
 Therefore, with a round-robin load-balanced pool of servers, tickets
 have to be disabled because servers would not accept tickets from
@@ -220,24 +220,24 @@ by hashing some common secret with the private key. I have implemented
 this approach for *stud*. Here is a simplified version (no error
 handling, no allocation) of the [pull request for this feature][pr2]:
 
-        ::c
-        unsigned char keys[48];
-        EVP_PKEY *pkey = grab_private_key();
+    ::c
+    unsigned char keys[48];
+    EVP_PKEY *pkey = grab_private_key();
 
-        /* To get our key, we sign the seed with the private key */
-        unsigned int siglen;
-        unsigned char sign[LARGE_ENOUGH];
-        EVP_MD_CTX mdctx;
-        EVP_MD_CTX_init(&mdctx);
-        EVP_SignInit(&mdctx, EVP_sha256());
-        EVP_SignUpdate(&mdctx, some_secret, strlen(some_secret));
-        EVP_SignFinal(&mdctx, sign, &siglen, pkey);
+    /* To get our key, we sign the seed with the private key */
+    unsigned int siglen;
+    unsigned char sign[LARGE_ENOUGH];
+    EVP_MD_CTX mdctx;
+    EVP_MD_CTX_init(&mdctx);
+    EVP_SignInit(&mdctx, EVP_sha256());
+    EVP_SignUpdate(&mdctx, some_secret, strlen(some_secret));
+    EVP_SignFinal(&mdctx, sign, &siglen, pkey);
 
-        /* And we keep only the first bytes. */
-        memcpy(keys, sign, sizeof(keys));
+    /* And we keep only the first bytes. */
+    memcpy(keys, sign, sizeof(keys));
 
-        /* Tell OpenSSL to use those keys */
-        SSL_CTX_set_tlsext_ticket_keys(ctx, keys, sizeof(keys));
+    /* Tell OpenSSL to use those keys */
+    SSL_CTX_set_tlsext_ticket_keys(ctx, keys, sizeof(keys));
 
 [pr2]: https://github.com/bumptech/stud/pull/30
 
