@@ -37,9 +37,15 @@ luffy.comments = function() {
     }
 
     /* Load if we have an anchor */
-    if (location.hash.match("^#comment-[0-9]+")) {
-        load();
+    var onHashChange = function() {
+        if (location.hash.match("^#comment-[0-9]+")) {
+            load();
+        }
+    };
+    if (window.addEventListener) {
+        window.addEventListener("hashchange", onHashChange);
     }
+    onHashChange();
 
     // Display introduction text
     el.children[1].className = el.children[2].className;
