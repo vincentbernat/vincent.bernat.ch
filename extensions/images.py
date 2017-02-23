@@ -148,46 +148,6 @@ class JPEGTranPlugin(CLTransformer):
         target.delete()
 
 
-class SVGOPlugin(CLTransformer):
-    """
-    The plugin class for SVG optimizer
-    """
-
-    def __init__(self, site):
-        super(SVGOPlugin, self).__init__(site)
-
-    @property
-    def plugin_name(self):
-        """
-        The name of the plugin.
-        """
-        return "svgo"
-
-    def option_prefix(self, option):
-        return "--"
-
-    def text_resource_complete(self, resource, text):
-        """
-        Run svgo to compress the SVG file.
-        """
-        if not resource.source_file.kind == 'svg':
-            return
-
-        supported = [
-            "multipass",
-            "pretty",
-        ]
-        source = File.make_temp(text)
-        target = File.make_temp('')
-        svgo = self.app
-        args = [unicode(svgo)]
-        args.extend(["--quiet"])
-        args.extend(self.process_args(supported))
-        args.extend([unicode(source), unicode(target)])
-        self.call_app(args)
-        return target.read_all()
-
-
 class ImageSizerPlugin(_ImageSizerPlugin):
     def _handle_img_size(self, image):
         if image.source_file.kind not in ['svg']:

@@ -94,6 +94,10 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
+        local("find media/images -type f -name '*.svg'"
+              "| sed 's+/[^/]*$++' | sort | uniq"
+              "| grep -v '^media/images/l'"
+              "| xargs -n1 ../node_modules/svgo/bin/svgo --quiet")
         for p in ['media/images/l/sprite*.png',
                   'media/images/l/sprite*.svg',
                   'media/js/*.js',
