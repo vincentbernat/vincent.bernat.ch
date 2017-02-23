@@ -7,7 +7,10 @@ Contains classes to handle images related things
 
 from hyde.plugin import Plugin
 from hyde.plugin import CLTransformer
+from hyde.ext.plugins.images import ImageSizerPlugin as _ImageSizerPlugin
 from fswrap import File, Folder
+
+import xml.etree.ElementTree as ET
 
 from PIL import Image
 import new
@@ -98,6 +101,7 @@ class ImageThumbnailsPlugin(Plugin):
                 self.logger.debug("Adding thumbnail function to [%s]" % resource)
                 resource.thumb = new.instancemethod(thumbfn, resource, resource.__class__)
 
+
 class JPEGTranPlugin(CLTransformer):
     """
     The plugin class for JPEGTran
@@ -142,3 +146,59 @@ class JPEGTranPlugin(CLTransformer):
         self.call_app(args)
         target.copy_to(source)
         target.delete()
+
+
+class SVGOPlugin(CLTransformer):
+    """
+    The plugin class for SVG optimizer
+    """
+
+    def __init__(self, site):
+        super(SVGOPlugin, self).__init__(site)
+
+    @property
+    def plugin_name(self):
+        """
+        The name of the plugin.
+        """
+        return "svgo"
+
+    def option_prefix(self, option):
+        return "--"
+
+    def text_resource_complete(self, resource, text):
+        """
+        Run svgo to compress the SVG file.
+        """
+        if not resource.source_file.kind == 'svg':
+            return
+
+        supported = [
+            "multipass",
+            "pretty",
+        ]
+        source = File.make_temp(text)
+        target = File.make_temp('')
+        svgo = self.app
+        args = [unicode(svgo)]
+        args.extend(["--quiet"])
+        args.extend(self.process_args(supported))
+        args.extend([unicode(source), unicode(target)])
+        self.call_app(args)
+        return target.read_all()
+
+
+class ImageSizerPlugin(_ImageSizerPlugin):
+    def _handle_img_size(self, image):
+        if image.source_file.kind not in ['svg']:
+            return super(ImageSizerPlugin, self)._handle_img_size(image)
+        # We have a SVG, it should be quite easy, just take
+        # width/height from svg root element.
+        try:
+            svg = ET.parse(image.path).getroot()
+            return tuple(x and int(x) or None
+                         for x in (svg.attrib.get('width', None),
+                                   svg.attrib.get('height', None)))
+        except IOError:
+            self.logger.warn("Unable to process image [%s]" % image)
+            return (None, None)
