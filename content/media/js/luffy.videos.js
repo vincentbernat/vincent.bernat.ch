@@ -15,7 +15,7 @@ luffy.videos = function() {
             div.className = "lf-video";
             iframe.setAttribute("allowfullscreen", "");
             iframe.setAttribute("src",
-                                "https://www.youtube.com/embed/" + id + "?rel=0&autoplay=1");
+                                "https://www.youtube-nocookie.com/embed/" + id + "?rel=0&autoplay=1");
             div.appendChild(iframe);
             this.parentNode.appendChild(div);
             this.parentNode.removeChild(this);
