@@ -189,7 +189,7 @@ several ways (in the order of difficulty to setup):
  - use **more server ports** by asking the web server to listen to several
    additional ports (81, 82, 83, ...),
  - use **more client IP** by configuring additional IP on the load
-   balancer and use them in a round-robin fashion,
+   balancer and use them in a round-robin fashion[^bind],
  - use **more server IP** by configuring additional IP on the web
    server[^others].
 
@@ -200,6 +200,10 @@ several ways (in the order of difficulty to setup):
              enough to be able to share the same local tuple for
              different destinations. Thanks to Willy Tarreau for his [insight][] on this aspect.
 
+[^bind]: To avoid `EADDRINUSE` errors, the load balancer needs to use
+    the `SO_REUSEADDR` option before
+    calling [`bind()`, then `connect()`][11].
+
 [^others]: This last solution may seem a bit dumb since you could just
            use more ports but some servers are not able to be
            configured this way. The before last solution can also be
@@ -207,6 +211,7 @@ several ways (in the order of difficulty to setup):
            software, but uses less IP than the last solution.
 
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
+[11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
 
 Of course, a last solution is to tweak `net.ipv4.tcp_tw_reuse` and
 `net.ipv4.tcp_tw_recycle`. Don't do that yet, we will cover those

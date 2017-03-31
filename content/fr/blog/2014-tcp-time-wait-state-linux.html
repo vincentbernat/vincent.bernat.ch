@@ -182,7 +182,7 @@ difficulté) :
    pour écouter sur des ports supplémentaires (81, 82, 83, ...),
  - utiliser **plus d'IP clients** en configurant des IP
    supplémentaires sur le répartiteur de charge et en les utilisant
-   l'une après l'autre,
+   l'une après l'autre[^bind],
  - utiliser **plus d'IP serveurs** en configurant des IP
    supplémentaires sur le serveur web[^others].
 
@@ -195,6 +195,10 @@ difficulté) :
              Willy Tarreau pour son [point de vue][insight] sur la
              question.
 
+[^bind]: Pour éviter les erreurs `EADDRINUSE`, le répartiteur de
+    charge doit utiliser l'option `SO_REUSEADDR` avant
+    d'appeler [`bind()` puis `connect()`][11].
+
 [^others]: La dernière solution peut sembler un peu stupide par
            rapport à l'utilisation de ports supplémentaires mais
            certains serveurs ne permettent pas d'écouter sur plusieurs
@@ -202,6 +206,7 @@ difficulté) :
            nombre d'IP consommées.
 
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
+[11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
 
 Une dernière solution est de modifier `net.ipv4.tcp_tw_reuse` et
 `net.ipv4.tcp_tw_recycle`. Patientez encore un peu, nous y arriverons
