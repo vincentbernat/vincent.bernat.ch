@@ -25,8 +25,14 @@ luffy.comments = function() {
                 this.language = lang;
             };
 
-            var src = 'https://' + window.disqus_shortname + '.disqus.com/embed.js';
-	    $script(src, function() {});
+            // Create a script tag
+            var e = document.createElement("script");
+            e.type = "text/javascript";
+            e.async = true;
+            e.src = 'https://' + window.disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName("head")[0] ||
+             document.getElementsByTagName("body")[0])
+                .appendChild(e);
             return;
 	}
     }();

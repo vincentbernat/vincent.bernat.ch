@@ -1,7 +1,6 @@
 ---
 combine:
     files:
-      - script.js
       - luffy.*.js
     where: top
     remove: yes
