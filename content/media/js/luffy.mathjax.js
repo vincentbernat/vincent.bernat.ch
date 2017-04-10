@@ -10,19 +10,19 @@ luffy.mathjax = function() {
     if ((main.innerText || main.textContent || "").indexOf(delim) === -1) return;
 
     /* Otherwise, load. Input: TeX/AMS. Output: HTML+CSS.*/
-    $script(mathjax + "?config=TeX-AMS_HTML-full&delayStartupUntil=configured",
+    $script(mathjax + "?config=TeX-AMS_CHTML&delayStartupUntil=configured",
 	    function() {
 		  /* Add more configuration stuff */
 		  MathJax.Hub.Config({
 		      elements: ["lf-main"], // Only process part of the page.
+		      showMathMenu: false,
 		      tex2jax: {
 			  inlineMath: [ [delim,delim] ],
 			  displayMath: [ [delim + delim, delim + delim] ],
 			  processEnvironments: false
 		      },
-		      "HTML-CSS": {
+		      "CommonHTML": {
 			  scale: 97,
-			  showMathMenu: false
 		      }
 		  });
 		  MathJax.Hub.Configured();
