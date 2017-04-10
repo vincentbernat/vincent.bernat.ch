@@ -10,7 +10,7 @@ luffy.mathjax = function() {
     if ((main.innerText || main.textContent || "").indexOf(delim) === -1) return;
 
     /* Otherwise, load. Input: TeX/AMS. Output: HTML+CSS.*/
-    $script(mathjax + "?config=TeX-AMS_CHTML&delayStartupUntil=configured",
+    $script(mathjax + "?config=TeX-AMS_CHTML&delayStartupUntil=configured&noContrib",
 	    function() {
 		  /* Add more configuration stuff */
 		  MathJax.Hub.Config({
