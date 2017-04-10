@@ -3,7 +3,7 @@
 var luffy = luffy || {};
 luffy.mathjax = function() {
     var delim = "·"; // It's "middle dot"
-    var mathjax = "https://cdn.mathjax.org/mathjax/latest/MathJax.js";
+    var mathjax = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js";
     var main = document.getElementById("lf-main");
 
     /* Don't load if we don't find the delimiter. */
