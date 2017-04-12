@@ -1,0 +1,393 @@
+---
+title: "Isolation d'un pont réseau sous Linux"
+description: |
+  Sous Linux, un pont réseau sans adresse IP va tout de même traiter
+  les paquets IP. Comment désactiver cette fonctionnalité ?
+keywords: "linux, bridge, ip, securité, isolation"
+uuid: 5aa023c8-3cca-45ea-953a-4b255784ee9b
+---
+
+**En bref** : pour isoler correctement un pont Linux, utilisez
+les commandes suivantes :
+
+    ::console
+    # bridge vlan del dev br0 vid 1 self
+    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    
+---
+
+Un pont réseau (aussi appelé « commutateur » ou « *switch* ») permet
+d'interconnecter plusieurs segments Ethernet ensemble. C'est un
+élément d'infrastructure banal et implémenté de longue date par Linux.
+
+Un usage typique est exposé dans la figure
+ci-dessous. L'**hyperviseur** exécute trois **machines
+virtuelles**. Chacune d'elle est attachée au **pont** `br0`
+(représenté par un segment horizontal). L'hyperviseur dispose de deux
+interfaces réseau physiques :
+
+ - `eth0` est attachée à un **réseau public** fournissant divers
+   services aux machines virtuelles (DHCP, DNS, NTP, routeurs vers
+   Internet, ...). Elle fait partie du pont `br0`.
+ - `eth1` est attachée à un **réseau d'infrastructure** fournissant
+   divers services à l'hyperviseur (DNS, NTP, gestion de la
+   configuration, routeurs vers Internet, ...). Elle ne fait **pas**
+   partie du pont `br0`.
+
+![Usage typique d'un pont réseau sous Linux][1]
+[1]: [[!!images/isolated-bridge.svg]] "Usage typique d'un pont réseau sous Linux avec un hyperviseur et des machines virtuelles"
+
+Dans une telle configuration, il est raisonnable de penser que les
+machines virtuelles peuvent accéder aux ressources du réseau public
+**sans être capable d'atteindre les ressources du réseau
+d'infrastructure** (y compris les ressources hébergées par
+l'hyperviseur lui-même, comme le serveur SSH). En d'autres mots, la
+séparation entre le domaine vert et le domaine violet doit être
+totale.
+
+Ce n'est pas le cas. Depuis n'importe quelle machine virtuelle :
+
+    ::console
+    # ip route add 192.168.14.3/32 dev eth0
+    # ping -c 3 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=59 time=0.644 ms
+    64 bytes from 192.168.14.3: icmp_seq=2 ttl=59 time=0.829 ms
+    64 bytes from 192.168.14.3: icmp_seq=3 ttl=59 time=0.894 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2033ms
+    rtt min/avg/max/mdev = 0.644/0.789/0.894/0.105 ms
+
+[TOC]
+
+# Pourquoi ?
+
+Il y a deux facteurs contribuant à ce fait :
+
+ 1. **Un pont peut accepter du trafic IP**. C'est une fonctionnalité
+    utile pour permettre à Linux de proposer des services IP aux
+    utilisateurs du pont (par exemple un relai DHCP ou une passerelle
+    par défaut). C'est généralement mis en œuvre en configurant
+    l'adresse IP directement sur le pont : `ip addr add 192.0.2.2/25
+    dev br0`.
+ 2. **Une interface n'a pas besoin d'une adresse IP pour traiter le
+    trafic IP entrant**. De plus, par défaut, Linux accepte de
+    répondre aux requêtes ARP sans tenir compte de l'interface les
+    ayant reçues.
+
+## Traitement d'une trame par le pont réseau
+
+Après réception d'une trame Ethernet et son placement dans un tampon,
+le pilote réseau transfère ce dernier à la fonction
+`netif_receive_skb()`. Les actions suivantes sont exécutées :
+
+ 1. copie de la trame vers les **TAP** globaux ou associés à
+    l'interface (par exemple, `tcpdump`) ;
+ 2. évaluation de la **politique de réception** (configurée avec `tc`) ;
+ 3. délégation de la trame à la **fonction de réception** associée à l'interface, si elle existe ;
+ 4. délégation de la trame à une **fonction de protocole** (IPv4, ARP, IPv6).
+
+Pour une interface membre d'un pont, le noyau a configuré une fonction
+de réception : `br_handle_frame()`. Cette fonction ne laissera pas la
+trame continuer plus loin, à l'exception des trames STP ou LLDP ou si
+le « *brouting* » est activé[^brouting] : les **fonctions de protocole
+ne sont jamais exécutées**.
+
+[^brouting]: Une trame traversant un pont peut être routée de force
+    (L3) en « broutant » le paquet. C'est une action qui
+    est [activée avec `ebtables`][brouting].
+
+Après quelques vérifications supplémentaires, Linux décide si la trame
+doit être traitée localement :
+
+ - l'entrée dans la table MAC/port (FDB) indique une livraison locale
+ - la MAC cible est une adresse de diffusion (*broadcast* ou *multicast*)
+
+Dans ces deux cas, la trame est transmisse à la fonction
+`br_pass_frame_up()`. Une vérification optionnelle liée aux VLAN est
+effectuée. Le tampon réseau est rattaché au pont (`br0`) plutôt qu'à
+l'interface physique (`eth0`). La trame est évaluée par *Netfilter*
+puis retransmise à la fonction `netif_receive_skb()` où elle va
+repasser les quatre étapes.
+    
+## Traitement IPv4
+
+Si une fonction de réception n'est pas attachée à l'interface réseau,
+une fonction de protocole va être utilisée :
+
+    ::console
+    # cat /proc/net/ptype
+    Type Device      Function
+    0800          ip_rcv
+    0011          llc_rcv [llc]
+    0004          llc_rcv [llc]
+    0806          arp_rcv
+    86dd          ipv6_rcv
+
+Si le type Ethernet de la trame est `0x800`, le paquet est transmis à
+la fonction `ip_rcv()`. Cette dernière effectue notamment les trois
+étapes suivantes :
+
+ - Si la destination de la trame n'est pas l'adresse MAC de
+   l'interface par laquelle elle est arrivée et que ce n'est pas une
+   adresse de diffusion (*multicast* ou *broadcast*), la trame est
+   rejetée (« pas pour nous »).
+ - *Netfilter* évalue le paquet (dans une chaîne `PREROUTING`).
+ - Le système de routage décide de la destination du paquet via la
+   fonction `ip_route_input_slow()` : est-ce un paquet à livrer
+   localement, doit-il être routé, doit-il être rejeté ? Notamment, le
+   filtrage par la source (*reverse-path filtering*) est effectué à ce
+   niveau.
+
+Le filtrage par la source (aussi connu sous le nom uRPF ou *unicast
+reverse-path forwarding*, [RFC 3704][]) permet à Linux de refuser tout
+trafic dont la réponse ne repartirait pas par la même interface.
+
+## Traitement ARP
+
+Si le type Ethernet de la trame est `0x806`, le paquet est transmis à
+la fonction `arp_rcv()`.
+
+ - Comme pour IPv4, la trame est rejetée si elle n'est pas pour nous.
+ - Si l'interface source a le drapeau `NOARP`, la trame est rejetée.
+ - *Netfilter* évalue le paquet (la configuration est faite avec `arptables`).
+ - Lorsqu'il s'agit d'une requête ARP, les valeurs de `arp_ignore` et
+   de `arp_filter` peuvent conduire à rejeter le paquet.
+
+## Traitement IPv6
+
+Si le type Ethernet de la trame est `0x86dd`, la paquet est transmis à
+la fonction `ipv6_rcv()`.
+
+ - Comme pour IPv4, la trame est rejetée si elle n'est pas pour nous.
+ - Si IPv6 est désactivé sur l'interface, le paquet est rejeté.
+ - *Netfilter* évalue le paquet (dans une chaîne `PREROUTING`).
+ - Le système de routage décide de la destination du
+   paquet. Toutefois, contrairement à IPv4, il n'y a pas de filtrage
+   par la source[^rpfilter].
+   
+[^rpfilter]: Pour IPv6, le filtrage par la source se fait uniquement
+    via *Netfilter*, en utilisant
+    la [condition `rpfilter`][rpfilter match].
+
+# Isolement
+
+Il existe de nombreuses méthodes pour corriger cette situation.
+
+Nous ignorons complètement le cas des interfaces qui constituent le
+pont : tant qu'elles font partie du pont, elles ne peuvent pas traiter
+les protocoles des couches supérieures (IPv4, IPv6, ARP). Nous pouvons
+nous concentrer uniquement sur le trafic rattaché à `br0`.
+
+Il convient de noter que pour IPv4, IPv6 et ARP, la vérification de
+l'adresse MAC cible, qui est effectuée très tôt pour chaque protocole,
+peut être simplement contournée en utilisant une adresse MAC de diffusion.
+
+## Indépendamment du protocole
+
+Les quatre méthodes suivantes permettent un isolement du pont pour
+tous les protocoles simultanément (IPv4, ARP et IPv6).
+
+### Utilisation du filtrage des VLAN
+
+Linux 3.9 a introduit la possibilité d'effectuer un filtrage des VLAN
+sur les ports du pont. Cela permet d'éviter tout trafic local :
+
+    ::console
+    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    # bridge vlan del dev br0 vid 1 self
+    # bridge vlan show
+    port    vlan ids
+    eth0     1 PVID Egress Untagged
+    eth2     1 PVID Egress Untagged
+    eth3     1 PVID Egress Untagged
+    eth4     1 PVID Egress Untagged
+    br0     None
+
+C'est la méthode la plus efficace car la trame est rejetée directement
+dans la fonction `br_pass_frame_up()`.
+
+### Utilisation de la politique de réception
+
+Une autre possibilité est de rejeter la trame juste après son second
+passage dans la fonction `netif_receive_skb()`. La politique de
+réception d'une interface est évaluée au tout début. Les commandes
+suivantes s'assurent donc qu'aucune livraison locale (c'est-à-dire
+attachée à l'interface du pont) n'aura lieu :
+
+    ::console
+    # tc qdisc add dev br0 handle ffff: ingress
+    # tc filter add dev br0 parent ffff: u32 match u8 0 0 action drop
+
+À mon sens, il s'agit de la seconde méthode la plus efficace.
+
+### Utilisation d'`ebtables`
+
+Avant le second passage dans la fonction `netif_receive_skb()`,
+*Netfilter* a l'occasion de décider du destin de la trame. Il est
+possible de la rejeter à ce moment là :
+
+    ::console
+    # ebtables -A INPUT --logical-in br0 -j DROP
+
+Toutefois, à ma connaissance, cette partie de *Netfilter* est connue
+pour être assez inefficace.
+    
+### Utilisation des espaces de noms
+
+L'isolation peut également être obtenue en plaçant toutes les
+interfaces dans un espace de nom réseau spécifique et d'y configurer
+le pont :
+
+    ::console
+    # ip netns add bridge0
+    # ip link set netns bridge0 eth0
+    # ip link set netns bridge0 eth2
+    # ip link set netns bridge0 eth3
+    # ip link set netns bridge0 eth4
+    # ip link del dev br0
+    # ip netns exec bridge0 brctl addbr br0
+    # for i in 0 2 3 4; do
+    >    ip netns exec bridge0 brctl addif br0 eth$i
+    >    ip netns exec bridge0 ip link set up dev eth$i
+    > done
+    # ip netns exec bridge0 ip link set up dev br0
+
+Le paquet va voyager un peu dans la pile IP en utilisant quelques
+cycles CPU, mais sera au final rejeté.
+
+## Dépendamment du protocole
+
+À moins de vouloir mettre en place une défense en profondeur, si une
+des méthodes précédente est appliquée, les méthodes présentées
+ci-dessous ne sont pas nécessaire.
+
+### ARP
+
+La façon la plus simple de désactiver le traitement d'ARP est de
+placer le drapeau `NOARP` sur l'interface du pont. Le paquet sera
+rejeté au tout début de la fonction gérant ARP.
+
+    ::console
+    # ip link set arp off dev br0
+    # ip l l dev br0
+    8: br0: <BROADCAST,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+        link/ether 50:54:33:00:00:04 brd ff:ff:ff:ff:ff:ff
+
+Il est également possible d'utiliser `arptables`:
+
+    ::console
+    # arptables -A INPUT -i br0 -j DROP
+
+Une autre méthode est de configurer `arp_ignore` à la valeur 2 pour
+l'interface du pont. Le noyau ne répondra aux requêtes ARP que si
+l'adresse IP cible est configurée sur l'interface entrante. Comme
+l'interface du pont n'a pas d'IP, cela revient à ignorer toute les
+requêtes.
+
+    ::console
+    # sysctl -qw net.ipv4.conf.br0.arp_ignore=2
+
+À noter que désactiver le traitement des requêtes ARP ne dispense pas
+d'appliquer une méthode spécifique à IPv4. Un utilisateur peut en
+effet ajouter manuellement une entrée dans son cache ARP :
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr 50:54:33:00:00:04 dev eth0
+    # ping -c 1 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.30 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    1 packets transmitted, 1 received, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 1.309/1.309/1.309/0.000 ms
+
+Étant donné que Linux est assez libéral sur les adresses MAC
+autorisées, il n'est même pas nécessaire de deviner l'adresse MAC :
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr ff:ff:ff:ff:ff:ff dev eth0
+    # ping -c 1 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.12 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    1 packets transmitted, 1 received, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 1.129/1.129/1.129/0.000 ms
+
+### IPv4
+
+La première méthode pour rejeter un paquet IPv4 est d'utiliser
+*Netfilter*[^filtering] :
+
+    ::console
+    # iptables -t raw -I PREROUTING -i br0 -j DROP
+
+[^filtering]: Si le module `br_netfilter` est chargé, le *sysctl*
+    `net.bridge.bridge-nf-call-ipatbles` doit être configuré
+    à 0. Sinon, il est nécessaire de spécifier
+    une [condition `physdev`][physdev match] pour ne pas rejeter
+    également les paquets IPv4 *traversant* le pont.
+    
+Si *Netfilter* est désactivé, une autre possibilité est d'activer le
+filtrage par la source sur l'interface du pont. Dans ce cas, comme il
+n'y a pas d'adresse IP configurée sur l'interface, le paquet sera
+rejeté lors de la consultation des tables de routage :
+
+    ::console
+    # sysctl -qw net.ipv4.conf.br0.rp_filter=1
+
+Une autre option est d'utiliser une règle de routage. Cela permet de
+rejeter le paquet un brin plus tôt, toujours pendant l'évaluation des
+routes
+
+    ::console
+    # ip rule add iif br0 blackhole
+
+### IPv6
+
+Linux autorise la désactivation complète d'IPv6 sur une interface. Le
+paquet sera rejeté au tout début de la fonction gérant IPv6 :
+
+    ::console
+    # sysctl -qw net.ipv6.conf.br0.disable_ipv6=1
+
+Comme pour IPv4, il est également possible d'utiliser *Netfilter* ou
+une règle de routage.
+
+# À propos de l'exemple
+
+Dans l'exemple ci-dessus, la machine virtuelle reçoit des réponses
+ICMP car celles-ci sont routées à travers le réseau d'infrastructure
+vers Internet (c'est-à-dire que l'hyperviseur a en route par défaut
+une passerelle qui va également faire du NAT vers Internet). Quand ce
+n'est pas le cas, la communication ne peut se faire que dans un seul
+sens. Cela permet toujours de faire quelques dégâts dont des dénis de
+service.
+
+De plus, si l'hyperviseur est également un routeur, les machines
+virtuelles peuvent atteindre n'importe quelle machine du réseau
+d'infrastructure, exposant ainsi certains nœuds peu protégés tels que
+des PDU disposant d'un agent SNMP. L'attaquant peut aussi forger son
+adresse IP pour contourner certains mécanismes d'authentification.
+    
+*[ICMP]: Internet Control Message Protocol
+*[ARP]: Address Resolution Protocol
+*[TTL]: Time to live
+*[STP]: Spanning Tree Protocol
+*[LLDP]: Link-Layer Discovery Protocol
+*[DoS]: Denial of Service
+*[PDU]: Power distribution unit
+*[FDB]: Forwarding Database
+*[SNMP]: Simple Network Management Protocol
+
+[brouting]: http://ebtables.netfilter.org/examples/basic.html#ex_brouter "ebtables: making a brouter"
+[physdev match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#physdev "iptables physdev match extension"
+[rpfilter match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#rpfilter "iptables rpfilter match extension"
+[RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

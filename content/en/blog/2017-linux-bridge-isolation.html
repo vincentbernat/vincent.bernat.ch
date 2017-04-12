@@ -1,0 +1,393 @@
+---
+title: "Proper isolation of a Linux bridge"
+description: |
+  On Linux, a network bridge without any IP address configured will still
+  process IP packets. How to disable such a feature?
+keywords: "linux, bridge, ip, security, isolation"
+uuid: 5aa023c8-3cca-45ea-953a-4b255784ee9b
+---
+
+**TL;DR**: when configuring a Linux bridge, use the following
+commands to enforce isolation:
+
+    ::console
+    # bridge vlan del dev br0 vid 1 self
+    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    
+---
+
+A network bridge (also commonly called a "switch") brings several
+Ethernet segments together. It is a common element in most
+infrastructures. Linux provides its own implementation.
+
+A typical use of a Linux bridge is shown below. The **hypervisor** is
+running three **virtual hosts**. Each virtual host is attached to the
+`br0` **bridge** (represented by the horizontal segment). The hypervisor
+has two physical network interfaces:
+
+ - `eth0` is attached to a **public network** providing various services
+   for the virtual hosts (DHCP, DNS, NTP, routers to Internet, ...). It is
+   also part of the `br0` bridge.
+ - `eth1` is attached to an **infrastructure network** providing
+   various services to the hypervisor (DNS, NTP, configuration
+   management, routers to Internet, ...). It is **not** part of the
+   `br0` bridge.
+
+![Typical use of Linux bridging with virtual machines][1]
+[1]: [[!!images/isolated-bridge.svg]] "Typical use of Linux bridging on an hypervisor with virtual hosts"
+
+The main expectation of such a setup is that while the virtual hosts
+should be able to use resources from the public network, they should
+**not be able to access resources from the infrastructure network**
+(including resources hosted on the hypervisor itself, like a SSH
+server). In other words, we expect a total isolation between the green
+domain and the purple one.
+
+That's not the case. From any virtual host:
+
+    ::console
+    # ip route add 192.168.14.3/32 dev eth0
+    # ping -c 3 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=59 time=0.644 ms
+    64 bytes from 192.168.14.3: icmp_seq=2 ttl=59 time=0.829 ms
+    64 bytes from 192.168.14.3: icmp_seq=3 ttl=59 time=0.894 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    3 packets transmitted, 3 received, 0% packet loss, time 2033ms
+    rtt min/avg/max/mdev = 0.644/0.789/0.894/0.105 ms
+
+[TOC]
+
+# Why?
+
+There are two main factors of this behavior:
+
+ 1. **A bridge can accept IP traffic**. This is a useful feature if
+    you want Linux to act as a bridge and provide some IP services to
+    bridge users (a DHCP relay or a default gateway). This is usually
+    done by configuring the IP address on the bridge device: `ip addr
+    add 192.0.2.2/25 dev br0`.
+ 2. **An interface doesn't need an IP address to process incoming IP
+    traffic**. Additionally, by default, Linux accepts to answer ARP
+    requests independently from the incoming interface.
+    
+## Bridge processing
+
+After turning an incoming Ethernet frame into a socket buffer, the
+network driver transfers the buffer to the `netif_receive_skb()`
+function. The following actions are executed:
+
+ 1. copy the frame to any registered global or per-device **taps**
+    (e.g. `tcpdump`),
+ 2. evaluate the **ingress policy** (configured with `tc`),
+ 3. hand over the frame to the device-specific **receive handler**, if
+    any,
+ 4. hand over the frame to a global or device-specific **protocol
+    handler** (e.g. IPv4, ARP, IPv6).
+
+For a bridged interface, the kernel has configured a device-specific
+receive handler, `br_handle_frame()`. This function won't allow any
+additional processing in the context of the incoming interface, except
+for STP and LLDP frames or if "brouting" is
+enabled[^brouting]. Therefore, the **protocol handlers are never
+executed** in this case.
+
+[^brouting]: A frame can be forcibly routed (L3) instead of bridged
+    (L2) by "brouting" the packet. This action can be [triggered using
+    `ebtables`][brouting].
+
+After a few additional checks, Linux will decide if the frame has to
+be locally delivered:
+
+ - the entry for the target MAC in the FDB is marked for local delivery, or
+ - the target MAC is a broadcast or a multicast address.
+
+In this case, the frame is passed to the `br_pass_frame_up()`
+function. A VLAN-related check is optionally performed. The socket
+buffer is attached to the bridge interface (`br0`) instead of the
+physical interface (`eth0`), is evaluated by *Netfilter* and sent back
+to `netif_receive_skb()`. It will go through the four steps a second
+time.
+    
+## IPv4 processing
+
+When a device doesn't have a protocol-independent receive handler, a
+protocol-specific handler will be used:
+
+    ::console
+    # cat /proc/net/ptype
+    Type Device      Function
+    0800          ip_rcv
+    0011          llc_rcv [llc]
+    0004          llc_rcv [llc]
+    0806          arp_rcv
+    86dd          ipv6_rcv
+
+Therefore, if the Ethernet type of the incoming frame is `0x800`, the
+socket buffer is handled by `ip_rcv()`. Among other things, the three
+following steps will happen:
+
+ - If the frame destination address is not the MAC address of the
+   incoming interface, not a multicast one and not a broadcast one, the
+   frame is dropped ("not for us").
+ - *Netfilter* gets a chance to evaluate the packet (in a `PREROUTING`
+   chain).
+ - The routing subsystem will decide the destination of the packet
+   in `ip_route_input_slow()`: is it a local packet, should it be
+   forwarded, should it be dropped, should it be encapsulated?
+   Notably, the reverse-path filtering is done during this evaluation
+   in `fib_validate_source()`.
+   
+Reverse-path filtering (also known as uRPF, or unicast reverse-path
+forwarding, [RFC 3704][]) enables Linux to reject traffic on
+interfaces which it should never have originated: the source address
+is looked up in the routing tables and if the outgoing interface is
+different from the current incoming one, the packet is rejected.
+
+## ARP processing
+
+When the Ethernet type of the incoming frame is `0x806`, the socket
+buffer is handled by `arp_rcv()`.
+
+ - Like for IPv4, if the frame is not for us, it is dropped.
+ - If the incoming device has the `NOARP` flag, the frame is dropped.
+ - *Netfilter* gets a chance to evaluate the packet (configuration is
+   done with `arptables`).
+ - For an ARP request, the values of `arp_ignore` and `arp_filter` may
+   trigger a drop of the packet.
+
+## IPv6 processing
+
+When the Ethernet type of the incoming frame is `0x86dd`, the socket
+buffer is handled by `ipv6_rcv()`.
+
+ - Like for IPv4, if the frame is not for us, it is dropped.
+ - If IPv6 is disabled on the interface, the packet is dropped.
+ - *Netfilter* gets a chance to evaluate the packet (in a `PREROUTING`
+   chain).
+ - The routing subsystem will decide the destination of the
+   packet. However, unlike IPv4, there is no reverse-path
+   filtering[^rpfilter].
+   
+[^rpfilter]: For IPv6, reverse-path filtering needs to be implemented
+    with *Netfilter*, using the [`rpfilter` match][rpfilter match].
+
+# Workarounds
+
+There are various methods to fix the situation.
+
+We can completely ignore the bridged interfaces: as long as they are
+attached to the bridge, they cannot process any upper layer protocol
+(IPv4, IPv6, ARP). Therefore, we can focus on filtering incoming
+traffic from `br0`.
+
+It should be noted that for IPv4, IPv6 and ARP protocols, the MAC
+address check can be circumvented by using the broadcast MAC address.
+
+## Protocol-independent workarounds
+
+The four following fixes will indistinctly drop IPv4, ARP and IPv6
+packets.
+
+### Using VLAN-aware bridge
+
+Linux 3.9 introduced the ability to use VLAN filtering on bridge
+ports. This can be used to prevent any local traffic:
+
+    ::console
+    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    # bridge vlan del dev br0 vid 1 self
+    # bridge vlan show
+    port    vlan ids
+    eth0     1 PVID Egress Untagged
+    eth2     1 PVID Egress Untagged
+    eth3     1 PVID Egress Untagged
+    eth4     1 PVID Egress Untagged
+    br0     None
+
+This is the most efficient method since the frame is dropped directly
+in `br_pass_frame_up()`.
+
+### Using ingress policy
+
+It's also possible to drop the bridged frame early after it has been
+re-delivered to `netif_receive_skb()` by `br_pass_frame_up()`. The
+ingress policy of an interface is evaluated before any
+handler. Therefore, the following commands will ensure no local
+delivery (the source interface of the packet is the bridge interface)
+happens:
+
+    ::console
+    # tc qdisc add dev br0 handle ffff: ingress
+    # tc filter add dev br0 parent ffff: u32 match u8 0 0 action drop
+    
+In my opinion, this is the second most efficient method.
+
+### Using `ebtables`
+
+Just before re-delivering the frame to `netif_receive_skb()`,
+*Netfilter* gets a chance to issue a decision. It's easy to configure it
+to drop the frame:
+
+    ::console
+    # ebtables -A INPUT --logical-in br0 -j DROP
+
+However, to the best of my knowledge, this part of *Netfilter* is
+known to be inefficient.
+    
+### Using namespaces
+
+Isolation can also be obtained by moving all the bridged interfaces
+into a dedicated network namespace and configure the bridge inside this
+namespace:
+
+    ::console
+    # ip netns add bridge0
+    # ip link set netns bridge0 eth0
+    # ip link set netns bridge0 eth2
+    # ip link set netns bridge0 eth3
+    # ip link set netns bridge0 eth4
+    # ip link del dev br0
+    # ip netns exec bridge0 brctl addbr br0
+    # for i in 0 2 3 4; do
+    >    ip netns exec bridge0 brctl addif br0 eth$i
+    >    ip netns exec bridge0 ip link set up dev eth$i
+    > done
+    # ip netns exec bridge0 ip link set up dev br0
+
+The frame will still wander a bit inside the IP stack, wasting some
+CPU cycles and increasing the possible attack surface. But ultimately,
+it will be dropped.
+
+## Protocol-dependent workarounds
+
+Unless you require multiple layers of security, if one of the previous
+workarounds is already applied, there is no need to apply one of the
+protocol-dependent fix below.
+
+### ARP
+
+The easiest way to disable ARP processing on a bridge is to set the
+`NOARP` flag on the device. The ARP packet will be dropped as the very
+first step of the ARP handler.
+
+    ::console
+    # ip link set arp off dev br0
+    # ip l l dev br0
+    8: br0: <BROADCAST,MULTICAST,NOARP,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP mode DEFAULT group default qlen 1000
+        link/ether 50:54:33:00:00:04 brd ff:ff:ff:ff:ff:ff
+
+`arptables` can also drop the packet quite early:
+
+    ::console
+    # arptables -A INPUT -i br0 -j DROP
+
+Another way is to set `arp_ignore` to 2 for the given interface. The
+kernel will only answer to ARP requests whose target IP address is
+configured on the incoming interface. Since the bridge interface
+doesn't have any IP address, no ARP requests will be answered.
+
+    ::console
+    # sysctl -qw net.ipv4.conf.br0.arp_ignore=2
+    
+Disabling ARP processing is not a sufficient workaround for IPv4. A
+user can still insert the appropriate entry in its neighbor cache:
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr 50:54:33:00:00:04 dev eth0
+    # ping -c 1 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.30 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    1 packets transmitted, 1 received, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 1.309/1.309/1.309/0.000 ms
+
+As the check on the target MAC address is quite loose, they don't even
+need to guess the MAC address:
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr ff:ff:ff:ff:ff:ff dev eth0
+    # ping -c 1 192.168.14.3
+    PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
+    64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.12 ms
+    
+    --- 192.168.14.3 ping statistics ---
+    1 packets transmitted, 1 received, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 1.129/1.129/1.129/0.000 ms
+
+### IPv4
+
+The earliest place to drop an IPv4 packet is with
+*Netfilter*[^filtering]:
+
+    ::console
+    # iptables -t raw -I PREROUTING -i br0 -j DROP
+
+[^filtering]: If the `br_netfilter` module is loaded,
+    `net.bridge.bridge-nf-call-ipatbles` *sysctl* has to be set
+    to 0. Otherwise, you also need to use
+    the [`physdev` match][physdev match] to not drop IPv4 packets
+    going *through* the bridge.
+    
+If *Netfilter* is disabled, another possibility is to enable strict
+reverse-path filtering for the interface. In this case, since there is
+no IP address configured on the interface, the packet will be dropped
+during the route lookup:
+
+    ::console
+    # sysctl -qw net.ipv4.conf.br0.rp_filter=1
+    
+Another option is the use of a dedicated routing rule. Compared to the
+reverse-path filtering option, the packet will be dropped a bit
+earlier, still during the route lookup.
+
+    ::console
+    # ip rule add iif br0 blackhole
+
+### IPv6
+
+Linux provides a way to completely disable IPv6 on a given
+interface. The packet will be dropped as the very first step of the
+IPv6 handler:
+
+    ::console
+    # sysctl -qw net.ipv6.conf.br0.disable_ipv6=1
+    
+Like for IPv4, it's possible to use *Netfilter* or a dedicated routing
+rule.
+
+# About the example
+
+In the above example, the virtual host get ICMP replies because they
+are routed through the infrastructure network to Internet (e.g. the
+hypervisor has a default gateway which also acts as a NAT router to
+Internet). This may not be the case. One-way communication still
+allows a lot of bad things, like DoS attacks.
+
+Additionally, if the hypervisor happens to also act as a router, the
+reach is extended to the whole infrastructure network, potentially
+exposing weak devices (e.g. PDU) exposing an SNMP agent. If one-way
+communication is all that's needed, the attacker can also spoof its
+source IP address, bypassing IP-based authentication.
+    
+*[ICMP]: Internet Control Message Protocol
+*[ARP]: Address Resolution Protocol
+*[TTL]: Time to live
+*[STP]: Spanning Tree Protocol
+*[LLDP]: Link-Layer Discovery Protocol
+*[DoS]: Denial of Service
+*[PDU]: Power distribution unit
+*[FDB]: Forwarding Database
+*[SNMP]: Simple Network Management Protocol
+
+[brouting]: http://ebtables.netfilter.org/examples/basic.html#ex_brouter "ebtables: making a brouter"
+[physdev match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#physdev "iptables physdev match extension"
+[rpfilter match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#rpfilter "iptables rpfilter match extension"
+[RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
