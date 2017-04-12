@@ -156,7 +156,7 @@ class ImageSizerPlugin(_ImageSizerPlugin):
         # width/height from svg root element.
         try:
             svg = ET.parse(image.path).getroot()
-            return tuple(x and int(x) or None
+            return tuple(x and int(float(x)) or None
                          for x in (svg.attrib.get('width', None),
                                    svg.attrib.get('height', None)))
         except IOError:
