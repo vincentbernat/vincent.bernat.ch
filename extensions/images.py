@@ -247,6 +247,10 @@ class ImageSizerPlugin(PILPlugin):
         if wh is None:
             return img
         width, height = wh
+        if width < 100:
+            # No need to make this image responsive
+            return result[:-1] + ' width="%s" height="%s" class="%s">' % (
+                width, height, classes)
         if classes:
             classes += " "
         # We use <span> elements so that inline styles are noop if the
@@ -276,4 +280,4 @@ class ImageSizerPlugin(PILPlugin):
         # Use a simple regex
         return re.sub(r'<img\s+.*?>',
                       partial(self._handle_img_str, resource),
-                      text, flags=re.MULTILINE)
+                      text, flags=re.DOTALL)
