@@ -222,7 +222,7 @@ class ImageSizerPlugin(PILPlugin):
 
     def _handle_img_str(self, resource, mo):
         img = mo.group(0)
-        width, height, src = None, None, None
+        width, height, src, title = None, None, None, None
         classes = ""
         result = img
         mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", result)
@@ -240,6 +240,9 @@ class ImageSizerPlugin(PILPlugin):
         mo = re.search(r"\bsrc=([\"'])(?P<value>.*?)\1", result)
         if mo:
             src = mo.group("value")
+        mo = re.search(r"\btitle=([\"'])(?P<value>.*?)\1", result)
+        if mo:
+            title = mo.group("value")
         wh = self._handle_img(resource, src, width, height)
         if wh is None:
             return img
@@ -250,10 +253,14 @@ class ImageSizerPlugin(PILPlugin):
         # appropriate stylesheet is not loaded.
         result = result[:-1] + ' width="%s" height="%s" class="%slf-img-wrapped">' % (
             width, height, classes)
-        result = '<span class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%">%s</span>' % (
+        result = '<span class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%;">%s</span>' % (
             float(height)*100./width, result)
-        result = '<span class="lf-img-wrapper" style="width: %dpx">%s</span>' % (
+        result = '<span class="lf-img-wrapper" style="width: %dpx;">%s</span>' % (
             width, result)
+        if title is not None:
+            result = ('<span class="lf-captioned">%s'
+                      '<span class="lf-caption" style="display: none;">%s</span>'
+                      '</span>') % (result, title)
         return result
 
     def text_resource_complete(self, resource, text):
