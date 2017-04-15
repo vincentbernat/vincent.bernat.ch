@@ -6,7 +6,9 @@ luffy.captions = function() {
     var els = document.querySelectorAll("article img[title]"), i;
     for (i = 0; i < els.length; i++) {
         var el = els[i], title = el.getAttribute("title");
-        if (el.parentNode.tagName.toLowerCase() === "a") {
+        while (el.parentNode.tagName.toLowerCase() === "a" ||
+               el.parentNode.className === "lf-img-inner-wrapper" ||
+               el.parentNode.className === "lf-img-wrapper") {
             el = el.parentNode;
         }
         var caption = document.createElement("div");

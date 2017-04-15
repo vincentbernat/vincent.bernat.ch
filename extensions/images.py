@@ -7,7 +7,7 @@ Contains classes to handle images related things
 
 from hyde.plugin import Plugin
 from hyde.plugin import CLTransformer
-from hyde.ext.plugins.images import ImageSizerPlugin as _ImageSizerPlugin
+from hyde.ext.plugins.images import PILPlugin
 from fswrap import File, Folder
 
 import xml.etree.ElementTree as ET
@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 from PIL import Image
 import new
 import os
+import re
 from functools import partial
 
 class Thumb(object):
@@ -148,17 +149,124 @@ class JPEGTranPlugin(CLTransformer):
         target.delete()
 
 
-class ImageSizerPlugin(_ImageSizerPlugin):
+class ImageSizerPlugin(PILPlugin):
+    """Each HTML page is modified to add width and height for images if
+    they are not already specified. Moreover, images are embedded into
+    a container to ensure their aspect ratio is conserved if their
+    width is constrained.
+    """
+
+    def __init__(self, site):
+        super(ImageSizerPlugin, self).__init__(site)
+        self.cache = {}
+
     def _handle_img_size(self, image):
-        if image.source_file.kind not in ['svg']:
-            return super(ImageSizerPlugin, self)._handle_img_size(image)
-        # We have a SVG, it should be quite easy, just take
-        # width/height from svg root element.
-        try:
-            svg = ET.parse(image.path).getroot()
-            return tuple(x and int(float(x)) or None
-                         for x in (svg.attrib.get('width', None),
-                                   svg.attrib.get('height', None)))
-        except IOError:
-            self.logger.warn("Unable to process image [%s]" % image)
+        if image.source_file.kind not in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
+            self.logger.warn(
+                "[%s] has an img tag not linking to an image" % resource)
             return (None, None)
+        # Now, get the size of the image
+        try:
+            if image.source_file.kind == 'svg':
+                svg = ET.parse(image.path).getroot()
+                return tuple(x and int(float(x)) or None
+                             for x in (svg.attrib.get('width', None),
+                                       svg.attrib.get('height', None)))
+            return self.Image.open(image.path).size
+        except IOError:
+            self.logger.warn(
+                "Unable to process image [%s]" % image)
+            return (None, None)
+
+    def _handle_img(self, resource, src, width, height):
+        """Determine what should be added to an img tag."""
+        if height is not None and width is not None:
+            return None
+        if src is None:
+            self.logger.warn(
+                "[%s] has an img tag without src attribute" % resource)
+            return None
+        if src not in self.cache:
+            if src.startswith(self.site.config.media_url):
+                path = src[len(self.site.config.media_url):].lstrip("/")
+                path = self.site.config.media_root_path.child(path)
+                image = self.site.content.resource_from_relative_deploy_path(
+                    path)
+            elif re.match(r'([a-z]+://|//).*', src):
+                # Not a local link
+                return None
+            elif src.startswith("/"):
+                # Absolute resource
+                path = src.lstrip("/")
+                image = self.site.content.resource_from_relative_deploy_path(
+                    path)
+            else:
+                # Relative resource
+                path = resource.node.source_folder.child(src)
+                image = self.site.content.resource_from_path(path)
+            if image is None:
+                self.logger.warn(
+                    "[%s] has an unknown image" % resource)
+                return None
+            self.cache[src] = self._handle_img_size(image)
+            self.logger.debug("Image [%s] is %s" % (src,
+                                                    self.cache[src]))
+        new_width, new_height = self.cache[src]
+        if new_width is None or new_height is None:
+            return None
+        if width is not None:
+            return (width, int(width) * new_height / new_width)
+        elif height is not None:
+            return (int(height) * new_width / new_height, height)
+        return (new_width, new_height)
+
+    def _handle_img_str(self, resource, mo):
+        img = mo.group(0)
+        width, height, src = None, None, None
+        classes = ""
+        result = img
+        mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", result)
+        if mo:
+            width = int(mo.group("value"))
+            result = result[:mo.start()] + result[mo.end():]
+        mo = re.search(r"\bheight=([\"'])(?P<value>\d+)\1", result)
+        if mo:
+            height = int(mo.group("value"))
+            result = result[:mo.start()] + result[mo.end():]
+        mo = re.search(r"\bclass=([\"'])(?P<value>.*?)\1", result)
+        if mo:
+            classes = mo.group("value")
+            result = result[:mo.start()] + result[mo.end():]
+        mo = re.search(r"\bsrc=([\"'])(?P<value>.*?)\1", result)
+        if mo:
+            src = mo.group("value")
+        wh = self._handle_img(resource, src, width, height)
+        if wh is None:
+            return img
+        width, height = wh
+        if classes:
+            classes += " "
+        # We use <span> elements so that inline styles are noop if the
+        # appropriate stylesheet is not loaded.
+        result = result[:-1] + ' width="%s" height="%s" class="%slf-img-wrapped">' % (
+            width, height, classes)
+        result = '<span class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%">%s</span>' % (
+            float(height)*100./width, result)
+        result = '<span class="lf-img-wrapper" style="width: %dpx">%s</span>' % (
+            width, result)
+        return result
+
+    def text_resource_complete(self, resource, text):
+        """
+        When the resource is generated, search for img tag and specify
+        their sizes.
+
+        Some img tags may be missed, this is not a perfect parser.
+        """
+        if not resource.source_file.kind == 'html':
+            return
+
+        # Use a simple regex
+        return re.sub(r'<img\s+.*?>',
+                      partial(self._handle_img_str, resource),
+                      text, flags=re.MULTILINE)
