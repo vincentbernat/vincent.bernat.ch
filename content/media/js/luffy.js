@@ -6,8 +6,7 @@ combine:
     remove: yes
 ---
 
-var scripts = [luffy.captions,
-               luffy.videos,
+var scripts = [luffy.videos,
                luffy.footnotes,
                luffy.mathjax,
                luffy.comments,
