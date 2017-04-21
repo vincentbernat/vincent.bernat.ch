@@ -1,4 +1,4 @@
-#lf-page {
+article {
     sup {
         font-size: 0.7em;
         vertical-align: baseline;
@@ -12,7 +12,7 @@
         }
         p {
             .font-size(0.875);
-            margin: (@line-height/0.875em) 0 0 0;
+            margin-top: (@line-height/0.875em);
         }
     }
 
@@ -20,88 +20,50 @@
         box-sizing: border-box;
         display: none;
         position: relative;
-        float: left;
-        clear: left;
-        right: @sidenote-width + 2em;
-        width: @sidenote-width + 2em;
-        margin: -1em (-@sidenote-width - 2em) 1.3em 0;
+        float: right;
+        clear: right;
+        margin-right: -@sidenote-width;
+        width: @sidenote-width;
         padding: 1em;
-        border: 1px solid #ddd;
-        border-right: none;
+        padding-left: @sidenote-margin;
         background: white;
         .lf-refmark {
             position: absolute;
-            left: 0;
+            left: 3rem;
             top: 0;
             padding: 0 .5em .1em .4em;
-            background-color: @sidenote-background-color;
+            background-color: @sidenote-ref-color;
             border: 1px solid #ddd;
-            border-left: none;
-            border-top: none;
             border-bottom-right-radius: 50%;
             font-size: .8em;
             & + p {
-                margin-top: 0;
+                margin-top: 0 !important;
             }
         }
         .footnote-backref {
             display: none;
         }
         & > p {
-            text-align: left;
+            text-align: left !important;
         }
         & > .codehilite {
-            border-width: 1px 1px 1px 0;
+            border-width: 1px;
             margin-left: -1em;
             margin-right: -1em;
         }
     }
 
-    /* There is some minor adjustments needed for positioning in certain
-       cases. */
-    ul, ol, dl {
-        /* If the note is inside a list, we need to move the sidenote more to
-           the left. We don't handle nested cases as they don't exist currently. */
-        .lf-sidenote {
-            right: @sidenote-width + 2em + 2*@normal-margin-width;
-        }
-    }
-    p + .lf-sidenote,
-    .codehilite + .lf-sidenote,
-    ul + .lf-sidenote,
-    ol + .lf-sidenote,
-    dl + .lf-sidenote {
-        /* If the note is inserted after a paragraph, the bottom margin is not
-           present (because we may want to put a list). Therefore, we need to
-           add it as top margin of the side note. */
-        margin-top: (@line-height*1em-1em);
-        margin-bottom: .3em;
-    }
 }
 
 /* Footnotes require a minimal width */
-@media only screen and (max-width: (@page-width + @sidenote-width + 4em)) {
-    #lf-page {
-        .lf-sidenote {
-            display: none;
-        }
-    }
-    .lf-has-sidenotes #lf-pages {
-        margin-left: auto;
+@media @large {
+    .lf-sidenote {
+        display: none;
     }
 }
-
-@media only screen and (max-width: (@page-width + 2*@sidenote-width + 8em)) and (min-width: (@page-width + @sidenote-width + 4em)) {
+@media @larger {
     .lf-has-sidenotes {
-        #lf-pages {
-            margin-left: @sidenote-width + 2em;
-        }
-    }
-}
-
-@media only screen and (min-width: (@page-width + @sidenote-width + 4em)) {
-    .lf-has-sidenotes {
-        #lf-page {
+        #lf-content {
             .lf-sidenote {
                 display: block;
             }
@@ -114,8 +76,8 @@
                 color: inherit;
             }
             .footnote-ref {
-                background-color: @sidenote-background-color;
-                border: 1px solid darken(@sidenote-background-color, 5%);
+                background-color: @sidenote-ref-color;
+                border: 1px solid darken(@sidenote-ref-color, 5%);
             }
         }
     }

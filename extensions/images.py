@@ -221,51 +221,50 @@ class ImageSizerPlugin(PILPlugin):
         return (new_width, new_height)
 
     def _handle_img_str(self, resource, mo):
-        img = mo.group(0)
         width, height, src, title = None, None, None, None
         classes = ""
-        result = img
-        mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", result)
+        original = mo.group(0)
+        paragraph = mo.group("popening") is not None
+        img = mo.group("img")
+        mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", img)
         if mo:
             width = int(mo.group("value"))
-            result = result[:mo.start()] + result[mo.end():]
-        mo = re.search(r"\bheight=([\"'])(?P<value>\d+)\1", result)
+            img = img[:mo.start()] + img[mo.end():]
+        mo = re.search(r"\bheight=([\"'])(?P<value>\d+)\1", img)
         if mo:
             height = int(mo.group("value"))
-            result = result[:mo.start()] + result[mo.end():]
-        mo = re.search(r"\bclass=([\"'])(?P<value>.*?)\1", result)
+            img = img[:mo.start()] + img[mo.end():]
+        mo = re.search(r"\bclass=([\"'])(?P<value>.*?)\1", img)
         if mo:
             classes = mo.group("value")
-            result = result[:mo.start()] + result[mo.end():]
-        mo = re.search(r"\bsrc=([\"'])(?P<value>.*?)\1", result)
+            img = img[:mo.start()] + img[mo.end():]
+        mo = re.search(r"\bsrc=([\"'])(?P<value>.*?)\1", img)
         if mo:
             src = mo.group("value")
-        mo = re.search(r"\btitle=([\"'])(?P<value>.*?)\1", result)
+        mo = re.search(r"\btitle=([\"'])(?P<value>.*?)\1", img)
         if mo:
             title = mo.group("value")
         wh = self._handle_img(resource, src, width, height)
         if wh is None:
-            return img
+            return original
         width, height = wh
-        if width < 100:
+        if not paragraph:
             # No need to make this image responsive
-            return result[:-1] + ' width="%s" height="%s" class="%s">' % (
+            return img[:-1] + ' width="%s" height="%s" class="%s">' % (
                 width, height, classes)
         if classes:
             classes += " "
-        # We use <span> elements so that inline styles are noop if the
-        # appropriate stylesheet is not loaded.
-        result = result[:-1] + ' width="%s" height="%s" class="%slf-img-wrapped">' % (
+        img = img[:-1] + ' width="%s" height="%s" class="%slf-img-wrapped">' % (
             width, height, classes)
-        result = '<span class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%;">%s</span>' % (
-            float(height)*100./width, result)
-        result = '<span class="lf-img-wrapper" style="width: %dpx;">%s</span>' % (
-            width, result)
+        img = '<div class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%;">%s</div>' % (
+            float(height)*100./width, img)
+        img = '<div class="lf-img-wrapper" style="width: %dpx;">%s</div>' % (
+            width, img)
         if title is not None:
-            result = ('<span class="lf-captioned">%s'
-                      '<span class="lf-caption" style="display: none;">%s</span>'
-                      '</span>') % (result, title)
-        return result
+            img = ('<div class="lf-captioned">%s'
+                   '<div class="lf-caption" style="display: none;">%s</div>'
+                   '</div>') % (img, title)
+        return img
 
     def text_resource_complete(self, resource, text):
         """
@@ -278,6 +277,6 @@ class ImageSizerPlugin(PILPlugin):
             return
 
         # Use a simple regex
-        return re.sub(r'<img\s+.*?>',
+        return re.sub(r'(?P<popening><p>)?(?P<img><img\s+.*?>)(?P<pclosing></p>)?',
                       partial(self._handle_img_str, resource),
                       text, flags=re.DOTALL)

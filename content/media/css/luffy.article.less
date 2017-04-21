@@ -1,54 +1,97 @@
-/* -*- css -*- */
-
 body {
     font: normal 100% @font-regular;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
 
-/* Content */
-article {
-    padding: 0;
+/* Horizontal alignment. */
+#lf-content {
+    margin-left: @left-margin;
+    width: @page-width;
+
+    @media @medium {
+        margin-left: @minimal-margin;
+        width: @page-width;
+    }
+    @media @small {
+        margin-left: @minimal-margin;
+        margin-right: @minimal-margin;
+        width: auto;
+    }
+    #lf-main > .codehilite {
+        margin-left: -@left-margin;
+        width: @left-margin + @page-width;
+        @media @medium {
+            margin-left: -@minimal-margin;
+            width: auto;
+        }
+        @media @small {
+            margin-right: -@minimal-margin;
+        }
+    }
+    #lf-main {
+        & > ul, & > ol, & > dl {
+            .codehilite {
+                margin-left: -@left-margin - 2*@list-left-margin;
+                width: @left-margin + @page-width;
+                @media @medium {
+                    margin-left: -@minimal-margin - 2*@list-left-margin;
+                    width: auto;
+                }
+                @media @small {
+                    margin-left: -@minimal-margin - @list-left-margin;
+                }
+            }
+        }
+    }
 }
-#lf-page {
+
+#lf-content {
     color: #222;
     line-height: @line-height;
     header {
+        margin-top: @line-height*2em;
+        margin-bottom: @line-height*2em;
         padding-bottom: @line-height*1em;
-        margin: (@line-height*2em) @normal-margin-width;
-        @media only screen and (max-width: @page-width) {
-            margin: (@line-height*2em) @minimal-margin-width;
-        }
         font-family: @font-headings;
+        h1, h2 {
+            font-weight: normal;
+        }
         h1 {
             color: @theme-color;
-            font-weight: normal;
             .font-size(2.625);
             margin: 0;
         }
         h2 {
             color: #6F6F6F;
-            text-align: right;
-            font-weight: normal;
             font-size: 1em;
+            line-height: @line-height;
+            margin-top: 0;
+            margin-bottom: 0;
+            text-align: right;
             time:before {
                 content: "—";
             }
         }
     }
     p {
-        margin: (@line-height*1em) 0 0;
+        margin-top: @line-height*1em;
     }
-    p, article li, article dd {
+    p, li, dd {
         text-align: justify;
         hyphens: auto;
-        @media only screen and (max-width: @page-width) {
+        @media @small {
             text-align: inherit;
             hyphens: none;
         }
     }
     a {
-        .regular-link;
+        color: @theme-color;
+        text-decoration: none;
+        &:hover {
+            color: lighten(@theme-color, 20%);
+            border-bottom: 1px solid lighten(@theme-color, 20%);
+        }
     }
     em {
         font-style: italic;
@@ -94,14 +137,12 @@ article {
         }
     }
     code {
-        .background-transparent(lighten(@theme-color, 55%));
+        background-color: lighten(@theme-color, 58%);
         border-radius: 3px;
-        border: 1px solid lighten(@theme-color, 45%);
+        border: 1px solid lighten(@theme-color, 48%);
         padding: 0 2px;
     }
-}
 
-#lf-main {
     h1, h2, h3, h4 {
         color: @theme-color;
         font-family: @font-headings;
@@ -114,25 +155,20 @@ article {
     }
     h1 {
         .font-size(2.125);
-        margin: round(@line-height/2.125*2em,3) round(@normal-margin-width/2.125,3) round(@line-height/2.125em,3);
-        @media only screen and (max-width: @page-width) {
-            margin: round(@line-height/2.125*2em,3) round(@minimal-margin-width/2.125,3) round(@line-height/2.125em,3);
-        }
+        margin-top: round(@line-height/2.125*2em,3);
+        margin-bottom: round(@line-height/2.125em,3);
     }
     h2 {
         .font-size(1.625);
-        margin: round(@line-height/1.625*2em,3) round(@normal-margin-width/1.625,3) round(@line-height/1.625em,3);
-        @media only screen and (max-width: @page-width) {
-            margin: round(@line-height/1.625*2em,3) round(@minimal-margin-width/1.625,3) round(@line-height/1.625em,3);
-        }
+        margin-top: round(@line-height/1.625*2em,3);
+        margin-bottom: round(@line-height/1.625em,3);
     }
     h3 {
         .font-size(1.312);
-        margin: round(@line-height/1.312*2em,3) round(@normal-margin-width/1.312,3) round(@line-height/1.312em,3);
-        @media only screen and (max-width: @page-width) {
-            margin: round(@line-height/1.312*2em,3) round(@minimal-margin-width/1.312,3) round(@line-height/1.312em,3);
-        }
+        margin-top: round(@line-height/1.312*2em,3);
+        margin-bottom: round(@line-height/1.312em,3);
     }
+
     table {
         overflow: auto;
         width: 92%;
@@ -163,10 +199,10 @@ article {
                 padding: 0.2em 0.5em;
             }
             tr {
-                .background-transparent(lighten(@theme-color, 75%));
+                background-color: lighten(@theme-color, 78%);
                 color: #444;
                 &:nth-child(odd) {
-                    .background-transparent(lighten(@theme-color, 55%));
+                    background-color: lighten(@theme-color, 58%);
                 }
                 &:hover {
                     color: black;
@@ -174,34 +210,10 @@ article {
             }
         }
     }
-}
 
-#lf-main, #disqus_thread {
-    & > p {
-        margin-left: @normal-margin-width;
-        margin-right: @normal-margin-width;
-        @media only screen and (max-width: @page-width) {
-            margin-left: @minimal-margin-width;
-            margin-right: @minimal-margin-width;
-        }
-        & > .lf-captioned {
-            margin-left: -@normal-margin-width;
-            margin-right: -@normal-margin-width;
-            @media only screen and (max-width: @page-width) {
-                margin-left: -@minimal-margin-width;
-                margin-right: -@minimal-margin-width;
-            }
-        }
-    }
-
-}
-
-#lf-page blockquote {
-    font-style: italic;
-    em { font-style: normal; }    
-}
-#lf-page article {
     blockquote {
+        font-style: italic;
+        em { font-style: normal; }
         &:before {
             display: block;
             font-size: 4.5em;
@@ -224,29 +236,16 @@ article {
         }
         margin: (@line-height*1em) 1em (@line-height*1em) 1.5em;
         padding: 0 1.5em (@line-height*1em);
-        .background-transparent(lighten(@theme-color, 50%));
     }
-}
 
-#lf-main {
     ul, ol, dl {
-        margin: 0 @minimal-margin-width 0 @normal-margin-width;
-        .codehilite {
-            margin-left: -@normal-margin-width;
-            margin-right: -@minimal-margin-width;
-        }
+        margin-left: @list-left-margin;
     }
-    & > ul, & > ol, & > dl {
-        margin: 0 @normal-margin-width 0 2*@normal-margin-width;
-        .codehilite {
-            margin-left: -2*@normal-margin-width;
-            margin-right: -@normal-margin-width;
-        }
-        @media only screen and (max-width: @page-width) {
-            margin: 0 @minimal-margin-width 0 @normal-margin-width;
-            .codehilite {
-                margin-left: -@normal-margin-width;
-                margin-right: -@minimal-margin-width;
+    #lf-main {
+        & > ul, & > ol, & > dl {
+            margin-left: 2*@list-left-margin;
+            @media @small {
+                margin-left: @list-left-margin;
             }
         }
     }
@@ -266,34 +265,32 @@ article {
         }
         dd {
             margin-left: 1.2em;
-            @media only screen and (max-width: @page-width) {
+            @media @small {
                 margin-left: .2em;
             }
         }
     }
-}
 
-#lf-page .toc {
-    margin: (@line-height*1em) 0 (@line-height*1em) 3em;
-    padding: 0 1em;
-    max-width: 25em;
-    border-left: 1px dashed lighten(@theme-color, 30%);
-    .background-transparent(lighten(@theme-color, 55%));
-    ul {
-        margin-left: 0;
-        list-style-type: none;
-        .font-size(0.875);
+    .toc {
+        margin: (@line-height*1em) 0 (@line-height*1em) 3em;
+        padding: 0 1em;
+        max-width: 25em;
+        border-left: 1px dashed lighten(@theme-color, 30%);
+        background-color: lighten(@theme-color, 58%);
         ul {
-            font-size: 1em;
-            li { padding-left: 1em; }
-        }
-        li {
-            background: none;
+            margin-left: 0;
+            list-style-type: none;
+            .font-size(0.875);
+            ul {
+                font-size: 1em;
+                li { padding-left: 1em; }
+            }
+            li {
+                background: none;
+            }
         }
     }
-}
 
-#lf-main {
     .lf-img-wrapped {
         width: 100%;
         height: 100%;
@@ -312,7 +309,7 @@ article {
         display: block;
         position: relative;
     }
-    & > p > .lf-captioned {
+    .lf-captioned {
         display: block;
         margin-bottom: (@line-height*2em);
         .lf-img-wrapper { margin-bottom: 0; }
@@ -326,16 +323,14 @@ article {
             color: #555;
         }
     }
-}
 
-#lf-main {
     .lf-video-container {
         padding: 0.5em 0;
         display: block;
         margin: 1em auto;
         max-width: 100%;
         background-color: white;
-        .shadow(10px);
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
     }
     .lf-video {
         display: block;
@@ -386,26 +381,5 @@ article {
     }
     .lf-video:hover .lf-video-play-button {
         background-color: @theme-color;
-    }
-}
-
-.lf-main-title header {
-    h1 {
-        text-align: center;
-        color: black;
-        .font-size(4);
-        text-transform: none;
-    }
-    h2 {
-        text-align: center;
-        .font-size(2.25);
-    }
-}
-
-@media only screen and (max-width: 768px) {
-    article {
-        .toc {
-            margin-left: 0.5em;
-        }
     }
 }
