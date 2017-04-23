@@ -225,6 +225,7 @@ class ImageSizerPlugin(PILPlugin):
         classes = ""
         original = mo.group(0)
         paragraph = mo.group("popening") is not None
+        atag = mo.group("aopening") or ""
         img = mo.group("img")
         mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", img)
         if mo:
@@ -248,14 +249,17 @@ class ImageSizerPlugin(PILPlugin):
         if wh is None:
             return original
         width, height = wh
+        if paragraph:
+            classes += " lf-img-wrapped"
+            classes = classes.lstrip()
+        img = '%s width="%s" height="%s"%s>' % (
+            img[:-1],
+            width, height,
+            classes and (' class="%s"' % classes) or "")
+        if atag:
+            img = "%s%s</a>" % (atag, img)
         if not paragraph:
-            # No need to make this image responsive
-            return img[:-1] + ' width="%s" height="%s" class="%s">' % (
-                width, height, classes)
-        if classes:
-            classes += " "
-        img = img[:-1] + ' width="%s" height="%s" class="%slf-img-wrapped">' % (
-            width, height, classes)
+            return img
         img = '<div class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%;">%s</div>' % (
             float(height)*100./width, img)
         img = '<div class="lf-img-wrapper" style="width: %dpx;">%s</div>' % (
@@ -276,7 +280,11 @@ class ImageSizerPlugin(PILPlugin):
         if not resource.source_file.kind == 'html':
             return
 
-        # Use a simple regex
-        return re.sub(r'(?P<popening><p>)?(?P<img><img\s+.*?>)(?P<pclosing></p>)?',
+        # This is quite hacky, but rely on a regex.
+        return re.sub(r'(?P<popening><p>)?'
+                      r'(?P<aopening><a\s+[^>]*>)?'
+                      r'(?P<img><img\s+[^>]*>)'
+                      r'(?P<aclosing></a>)?'
+                      r'(?P<pclosing></p>)?',
                       partial(self._handle_img_str, resource),
                       text, flags=re.DOTALL)
