@@ -366,15 +366,41 @@ rule.
 In the above example, the virtual host get ICMP replies because they
 are routed through the infrastructure network to Internet (e.g. the
 hypervisor has a default gateway which also acts as a NAT router to
-Internet). This may not be the case. One-way communication still
-allows a lot of bad things, like DoS attacks.
+Internet). This may not be the case.
 
-Additionally, if the hypervisor happens to also act as a router, the
-reach is extended to the whole infrastructure network, potentially
-exposing weak devices (e.g. PDU) exposing an SNMP agent. If one-way
-communication is all that's needed, the attacker can also spoof its
-source IP address, bypassing IP-based authentication.
-    
+If you want to check if you are "vulnerable" despite not getting an
+ICMP reply, look at the guest neighbor table to check if you got an
+ARP reply from the host:
+
+    ::console
+    # ip route add 192.168.14.3/32 dev eth0
+    # ip neigh show dev eth0
+    192.168.14.3 lladdr 50:54:33:00:00:04 REACHABLE
+
+If you didn't get a reply, you could still have issues with IP
+processing. Add a static neighbor entry before checking the next step:
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr ff:ff:ff:ff:ff:ff dev eth0
+
+To check if IP processing is enabled, check the bridge host's network
+statistics:
+
+    ::console
+    # netstat -s | grep "ICMP messages"
+        15 ICMP messages received
+        15 ICMP messages sent
+        0 ICMP messages failed
+
+If the counters are increasing, it is processing incoming IP packets.
+
+One-way communication still allows a lot of bad things, like DoS
+attacks. Additionally, if the hypervisor happens to also act as a
+router, the reach is extended to the whole infrastructure network,
+potentially exposing weak devices (e.g. PDU) exposing an SNMP
+agent. If one-way communication is all that's needed, the attacker can
+also spoof its source IP address, bypassing IP-based authentication.
+
 *[ICMP]: Internet Control Message Protocol
 *[ARP]: Address Resolution Protocol
 *[TTL]: Time to live

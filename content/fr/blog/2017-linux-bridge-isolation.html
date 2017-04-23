@@ -365,16 +365,43 @@ une règle de routage.
 Dans l'exemple ci-dessus, la machine virtuelle reçoit des réponses
 ICMP car celles-ci sont routées à travers le réseau d'infrastructure
 vers Internet (c'est-à-dire que l'hyperviseur a en route par défaut
-une passerelle qui va également faire du NAT vers Internet). Quand ce
-n'est pas le cas, la communication ne peut se faire que dans un seul
-sens. Cela permet toujours de faire quelques dégâts dont des dénis de
-service.
+une passerelle qui va également faire du NAT vers Internet).
 
-De plus, si l'hyperviseur est également un routeur, les machines
-virtuelles peuvent atteindre n'importe quelle machine du réseau
-d'infrastructure, exposant ainsi certains nœuds peu protégés tels que
-des PDU disposant d'un agent SNMP. L'attaquant peut aussi forger son
-adresse IP pour contourner certains mécanismes d'authentification.
+Pour vérifier si l'on est « vulnérable » malgré l'absence de réponse
+ICMP, il convient de regarder si une entrée est présente dans la table
+de correspondance MAC/IP de la machine invitée :
+
+    ::console
+    # ip route add 192.168.14.3/32 dev eth0
+    # ip neigh show dev eth0
+    192.168.14.3 lladdr 50:54:33:00:00:04 REACHABLE
+
+Dans le cas contraire, pour pouvoir tester davantage, ajoutez une entrée
+statique :
+
+    ::console
+    # ip neigh replace 192.168.14.3 lladdr ff:ff:ff:ff:ff:ff dev eth0
+
+Une façon simple de vérifier si le traitement des paquets IP est
+activé est d'observer les compteurs sur l'hôte faisant office de
+pont :
+
+    ::console
+    # netstat -s | grep "ICMP messages"
+        15 ICMP messages received
+        15 ICMP messages sent
+        0 ICMP messages failed
+
+Si les compteurs s'incrémentent, cela signifie que le pont traite les
+paquets IP.
+
+La communication dans un seul sens permet toujours de faire quelques
+dégâts dont des dénis de service. De plus, si l'hyperviseur est
+également un routeur, les machines virtuelles peuvent atteindre
+n'importe quelle machine du réseau d'infrastructure, exposant ainsi
+certains nœuds peu protégés tels que des PDU disposant d'un agent
+SNMP. L'attaquant peut aussi forger son adresse IP pour contourner
+certains mécanismes d'authentification.
     
 *[ICMP]: Internet Control Message Protocol
 *[ARP]: Address Resolution Protocol
