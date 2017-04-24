@@ -17,7 +17,17 @@ class FrenchPunctuationPlugin(Plugin):
         # Patch typogrify
         from typogrify import filters
         original_applyfilters = filters.applyfilters
+        original_process_ignores = filters.process_ignores
         filters.applyfilters = lambda text: self.frenchpunct(original_applyfilters(text))
+        filters.process_ignores = self.process_ignores(original_process_ignores)
+
+    def process_ignores(self, orig):
+        def process(text, ignore_tags=None):
+            if ignore_tags is None:
+                ignore_tags = []
+            ignore_tags.append("latex")
+            return orig(text, ignore_tags)
+        return process
 
     def frenchpunct(self, text):
         tag_pattern = '</?\w+((\s+\w+(\s*=\s*(?:".*?"|\'.*?\'|[^\'">\s]+))?)+\s*|\s*)/?>'
