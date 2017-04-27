@@ -31,9 +31,9 @@ class TextlinksPlugin(Plugin):
             if what == "youtube":
                 return """
 <div class="lf-video-container">
- <a class="lf-video" href="https://www.youtube.com/watch?v={id}" title="Youtube video {id}">
+ <a class="lf-video" href="https://www.youtube.com/watch?v={id}" title="YouTube video #{id}">
+  YouTube video #{id}
   <div class="lf-video-play-button"></div>
-  <img src="https://i.ytimg.com/vi/{id}/sddefault.jpg" alt="Youtube video cover {id}">
  </a>
 </div>
 """.format(id=id)
