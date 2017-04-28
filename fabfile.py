@@ -1,5 +1,5 @@
 from fabric.api import *
-from fabric.contrib.console import confirm
+from fabric.contrib.console import confirm, prompt
 
 import os
 import shutil
@@ -7,6 +7,8 @@ import time
 import glob
 import hashlib
 import yaml
+import csv
+import re
 
 env.shell = "/bin/sh -c"
 env.command_prefixes = ['export PATH=$HOME/.virtualenvs/hyde/bin:$PATH']
@@ -86,6 +88,70 @@ def screenshots():
                                                    url=url,
                                                    js=js,
                                                    slug=url.replace("/", "-").replace(".", "-")))
+
+@task
+def linkchecker():
+    """Check links"""
+    # local("linkchecker -f ./linkcheckerrc http://localhost:8080/")
+    fp = open("linkchecker-out.csv")
+    reader = csv.DictReader(filter(lambda row: row[0]!='#', fp), delimiter=';')
+    seen = {}
+    for row in reader:
+        year = None
+        archive = {}
+        mo = re.search(r"/blog/(\d+)-", row['parentname'])
+        if seen.get(row['urlname']):
+            continue
+        if mo:
+            year = int(mo.group(1))
+            archive = {'a': "https://archive.is/{}/{}".format(year, row['urlname']),
+                       'w': "http{}://web.archive.org/web/{}/{}".format(
+                           not row['urlname'].startswith('http:') and "s" or "",
+                           year, row['urlname'])}
+        while True:
+            print """
+URL:    {urlname}
+Source: {parentname}
+Result: {result}""".format(**row)
+            print """
+(c) Continue
+(b) Browse {urlname}
+(p) Browse {parentname}
+(r) Replace by your own URL
+(q) Quit""".format(**row)
+            valid = "cbqr"
+            for a in archive:
+                print "({}) Browse {}".format(a, archive[a])
+                print "({}) Replace {} by {}".format(a.upper(), row['urlname'], archive[a])
+                valid += a
+                valid += a.upper()
+            print
+            ans = prompt("Command?", validate=r"[{}]".format(valid))
+            if ans == "c":
+                break
+            elif ans == "q":
+                return
+            elif ans == "r":
+                url = prompt("URL?")
+                local("git grep -Fl '{}' | xargs sed -i 's+ {}+ {}+g'".format(
+                    row['urlname'], row['urlname'], url))
+                break
+            elif ans == "b":
+                local("x-www-browser {}".format(row['urlname']))
+            else:
+                found = False
+                for a in archive:
+                    if ans == a:
+                        local("x-www-browser {}".format(archive[a]))
+                        break
+                    elif ans == a.upper():
+                        local("git grep -Fl '{}' | xargs sed -i 's+ {}+ {}+g'".format(
+                            row['urlname'], row['urlname'], archive[a]))
+                        found = True
+                        break
+                if found:
+                    break
+        seen[row['urlname']] = True
 
 @task
 def build():
