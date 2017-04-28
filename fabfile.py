@@ -92,7 +92,7 @@ def screenshots():
 @task
 def linkchecker():
     """Check links"""
-    # local("linkchecker -f ./linkcheckerrc http://localhost:8080/")
+    local("linkchecker -f ./linkcheckerrc http://localhost:8080/")
     fp = open("linkchecker-out.csv")
     reader = csv.DictReader(filter(lambda row: row[0]!='#', fp), delimiter=';')
     seen = {}
