@@ -30,12 +30,12 @@ class TextlinksPlugin(Plugin):
 
             if what == "youtube":
                 return """
-<div class="lf-video-container">
+<div class="lf-video-outer"><div class="lf-video-inner">
  <a class="lf-video" href="https://www.youtube.com/watch?v={id}" title="YouTube video #{id}">
   YouTube video #{id}
   <div class="lf-video-play-button"></div>
  </a>
-</div>
+</div></div>
 """.format(id=id)
 
             return match.group(0)
