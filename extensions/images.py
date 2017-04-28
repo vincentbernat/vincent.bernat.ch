@@ -250,7 +250,7 @@ class ImageSizerPlugin(PILPlugin):
             return original
         width, height = wh
         if paragraph:
-            classes += " lf-img-wrapped"
+            classes += " lf-img"
             classes = classes.lstrip()
         img = '%s width="%s" height="%s"%s>' % (
             img[:-1],
@@ -260,13 +260,13 @@ class ImageSizerPlugin(PILPlugin):
             img = "%s%s</a>" % (atag, img)
         if not paragraph:
             return img
-        img = '<div class="lf-img-inner-wrapper" style="padding-bottom: %.3f%%;">%s</div>' % (
+        img = '<div class="lf-img-inner" style="padding-bottom: %.3f%%;">%s</div>' % (
             float(height)*100./width, img)
-        img = '<div class="lf-img-wrapper" style="width: %dpx;">%s</div>' % (
+        img = '<div class="lf-img-outer" style="width: %dpx;">%s</div>' % (
             width, img)
         if title is not None:
             img = ('<div class="lf-captioned">%s'
-                   '<div class="lf-caption" style="display: none;">%s</div>'
+                   '<div class="lf-caption">%s</div>'
                    '</div>') % (img, title)
         return img
 

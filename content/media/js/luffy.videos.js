@@ -10,14 +10,12 @@ luffy.videos = function() {
         youtube[i].addEventListener("click", function(event) {
             event.preventDefault();
             var iframe = document.createElement("iframe"),
-                div = document.createElement("div"),
                 id = this.href.match(/v=(.*)$/)[1];
-            div.className = "lf-video";
+            iframe.className = "lf-video";
             iframe.setAttribute("allowfullscreen", "");
             iframe.setAttribute("src",
                                 "https://www.youtube-nocookie.com/embed/" + id + "?rel=0&autoplay=1");
-            div.appendChild(iframe);
-            this.parentNode.appendChild(div);
+            this.parentNode.appendChild(iframe);
             this.parentNode.removeChild(this);
         });
     }
