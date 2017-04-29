@@ -211,11 +211,6 @@ def build():
 @task
 def push():
     """Push built site to production"""
-    push_main()
-
-@task
-def push_main():
-    """Push built site to ace"""
     local("git push github")
     local("git push ace.luffy.cx")
 
@@ -224,82 +219,3 @@ def push_main():
 
     # HTML
     local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
-
-def _s3cmd(args):
-    local("s3cmd --exclude=.git/* --no-preserve --config=./s3cmd.cfg "
-          "-F -P --no-check-md5 %s" % args)
-
-@task
-def push_s3():
-    """Push built site to S3"""
-    try:
-        # This is a simplified version of the site. Notably, we
-        # don't have a separate media site.
-        local(r"find .final/* -type f -print0 | xargs -0 sed -i 's+\(src\|href\)=\"\(%s\|//media.luffy.cx/\)+\1=\"/media/+g'" % media)
-        # Compress HTML, CSS and JS
-        for t in "css js html".split():
-            local(r"find .final/* -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % t)
-        # JS and CSS in media, 1 year, compress
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/x-javascript"
-               " --encoding=UTF-8"
-               " --exclude=* --include=*.js"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'" # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=text/css"
-               " --encoding=UTF-8"
-               " --exclude=* --include=*.css"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        # Fonts in media, WOFF, not compressed
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --mime-type=font/woff2"
-               " --exclude=* --include=*.woff2"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --mime-type=application/font-woff"
-               " --exclude=* --include=*.woff"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        # Fonts in media, others, compressed
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/x-font-truetype"
-               " --exclude=* --include=*.ttf"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/x-font-opentype"
-               " --exclude=* --include=*.otf"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=31536000, immutable'"  # 1 year
-               " --add-header=Access-Control-Allow-Origin:https://vincent.bernat.im"
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=application/vnd.ms-fontobject"
-               " --exclude=* --include=*.eot"
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        # Other files in media, 30 days, don't compress
-        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
-               "   sync .final/media/ s3://vincent.bernat.im/media/")
-        _s3cmd(" --add-header=Cache-Control:'max-age=2592000'" # 30 days
-               "   sync .final/media/favicon.ico s3://vincent.bernat.im/")
-        # HTML files, 1h, compress
-        _s3cmd(" --add-header=Cache-Control:'max-age=3600'" # 1h
-               " --add-header=Content-Encoding:'gzip'"
-               " --mime-type=text/html"
-               " --encoding=UTF-8"
-               " --exclude=* --include=*.html"
-               "   sync .final/ s3://vincent.bernat.im/")
-        # Remaining files, 1h, don't compress
-        _s3cmd(" --add-header=Cache-Control:'max-age=3600'" # 1h
-               " --exclude=media/* --exclude=nginx.conf"
-               "   sync .final/ s3://vincent.bernat.im/")
-    finally:
-        with lcd(".final"):
-            local("git reset --hard")
