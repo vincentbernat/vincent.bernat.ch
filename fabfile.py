@@ -90,9 +90,19 @@ def screenshots():
                                                    slug=url.replace("/", "-").replace(".", "-")))
 
 @task
-def linkchecker():
+def linkcheck(remote='yes'):
     """Check links"""
-    local("linkchecker -f ./linkcheckerrc http://localhost:8080/")
+    with settings(warn_only=True):
+        result = local("linkchecker -f ./linkcheckerrc {}".format(
+            remote == 'yes' and
+            'https://vincent.bernat.im/' or
+            'http://localhost:8080/'))
+    if result.failed:
+        fixlinks()
+
+@task
+def fixlinks():
+    """Try to fix links"""
     fp = open("linkchecker-out.csv")
     reader = csv.DictReader(filter(lambda row: row[0]!='#', fp), delimiter=';')
     seen = {}
