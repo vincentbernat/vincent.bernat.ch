@@ -69,7 +69,7 @@ partenaires et des transitaires (_R1_ dans notre
 cas). L'implémentation utilisée est [BIRD][]. Voici un fragment de sa
 configuration :
 
-    ::nginx
+    ::junos
     router id 1.1.1.2;
     
     protocol static NETS { # ➊
@@ -105,7 +105,7 @@ protocole est activé sur _ER2_, _ER3_, _DR6_, _DR7_ et _DR8_. À titre
 d'exemple, voici les fragments pertinents de la configuration de
 _DR6_ :
 
-    ::nginx
+    ::junos
     router id 1.1.1.6;
     protocol kernel {
        persist;
@@ -127,7 +127,7 @@ _DR6_ :
 
 _ER2_ et _ER3_ **injectent une route par défaut** dans OSPF :
 
-    ::nginx
+    ::junos
     protocol static DEFAULT {
       import all;
       export none;
@@ -213,7 +213,7 @@ Route          | W1  | W2  | W3      | Best   | Backup
 
 La configuration d'_ExaBGP_ est très simple :
 
-    ::nginx
+    ::junos
     group rs {
       neighbor 2001:db8:1::4 {
         router-id 1.1.1.11;
@@ -312,7 +312,7 @@ Il y a deux parties dans la configuration de BGP : les sessions BGP avec
 les nœuds _ExaBGP_ et celles avec les routeurs. Voici la configuration
 concernant cette dernière :
 
-    ::nginx
+    ::junos
     template bgp INFRABGP {
       export all;
       import none;
@@ -345,7 +345,7 @@ routeurs mais aucune route n'est acceptée de ceux-ci.
 
 Voyons la deuxième partie :
 
-    ::nginx
+    ::junos
     # Only import loopback IPs
     filter only_loopbacks { # ➊
       if net ~ [ 2001:db8:30::/64{128,128} ] then accept;
@@ -389,7 +389,7 @@ capable de réagir rapidement si un serveur devient indisponible.
 La configuration de Quagga est un peu plus verbeuse mais strictement
 équivalente :
 
-    ::text
+    ::quagga
     router bgp 65002 view EXABGP
      bgp router-id 1.1.1.5
      bgp log-neighbor-changes
@@ -454,7 +454,7 @@ noyau[^view].
 
 La configuration de _BIRD_ sur les routeurs est assez simple :
 
-    ::nginx
+    ::junos
     # BGP with route servers
     protocol bgp RS4 {
       import all;

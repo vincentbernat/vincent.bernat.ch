@@ -67,7 +67,7 @@ BGP is enabled on _ER2_ and _ER3_ to exchange routes with peers and
 transits (only _R1_ for this lab). [BIRD][] is used as a BGP
 daemon. Its configuration is pretty basic. Here is a fragment:
 
-    ::nginx
+    ::junos
     router id 1.1.1.2;
     
     protocol static NETS { # ➊
@@ -103,7 +103,7 @@ OSPF will distribute routes inside the AS. It is enabled on _ER2_,
 _ER3_, _DR6_, _DR7_ and _DR8_. For example, here is the relevant part
 of the configuration of _DR6_:
 
-    ::nginx
+    ::junos
     router id 1.1.1.6;
     protocol kernel {
        persist;
@@ -125,7 +125,7 @@ of the configuration of _DR6_:
 
 _ER2_ and _ER3_ **inject a default route** into OSPF:
 
-    ::nginx
+    ::junos
     protocol static DEFAULT {
       import all;
       export none;
@@ -211,7 +211,7 @@ Route          | W1  | W2  | W3      | Best   | Backup
 
 The configuration of _ExaBGP_ is quite simple:
 
-    ::nginx
+    ::junos
     group rs {
       neighbor 2001:db8:1::4 {
         router-id 1.1.1.11;
@@ -309,7 +309,7 @@ There are two sides for BGP configuration: the BGP sessions with the
 _ExaBGP_ nodes and the ones with the routers. Here is the
 configuration for the later:
 
-    ::nginx
+    ::junos
     template bgp INFRABGP {
       export all;
       import none;
@@ -340,7 +340,7 @@ are accepted from them.
 
 Let's have a look at the other side:
 
-    ::nginx
+    ::junos
     # Only import loopback IPs
     filter only_loopbacks { # ➊
       if net ~ [ 2001:db8:30::/64{128,128} ] then accept;
@@ -385,7 +385,7 @@ routers.
 
 Quagga's configuration is a bit more verbose but should be strictly equivalent:
 
-    ::text
+    ::quagga
     router bgp 65002 view EXABGP
      bgp router-id 1.1.1.5
      bgp log-neighbor-changes
@@ -452,7 +452,7 @@ The view is here to not install routes in the kernel[^view].
 Configuring _BIRD_ to receive routes from route servers is
 straightforward:
 
-    ::nginx
+    ::junos
     # BGP with route servers
     protocol bgp RS4 {
       import all;
