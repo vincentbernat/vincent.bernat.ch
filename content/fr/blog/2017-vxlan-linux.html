@@ -1,0 +1,491 @@
+---
+title: "VXLAN & Linux"
+description: |
+  VXLAN est un protocole réseau pour transporter du trafic L2 au-dessus
+  d'un réseau IP. Explorons comment l'utiliser sous Linux.
+keywords: "vxlan, unicast, multicast, linux, pont, contrôleur"
+uuid: 6b4bc3ab-861d-4a1f-8a4c-65bc2cd3fd14
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-vxlan": "Dépôt GitHub"
+tags:
+  - network
+---
+
+**VXLAN** est un protocole réseau permettant de transporter du trafic
+Ethernet au-dessus d'un réseau IP existant tout en supportant un
+nombre très elevé de locataires. Il est défini dans la [RFC 7348][].
+
+Depuis Linux 3.12, l'implémentation de VXLAN est plutôt complète et
+supporte aussi bien le **multicast** que l'**unicast**, au-dessus
+d'IPv6 ou d'IPv4. Regardons les différentes façons de le mettre en
+œuvre.
+
+![VXLAN setup][i1]
+[i1]: [[!!images/vxlan/lab-2.svg]] "Exemple de déploiement de VXLAN"
+
+Pour illustrer les exemples qui suivent, nous utilisons la
+configuration suivante :
+
+ - un **réseau IP** existant (hautement disponible et évolutif, peut-être Internet),
+ - trois ponts Linux servant de **terminaison VXLAN**
+   (*VXLAN tunnel endpoints* ou VTEP),
+ - quatre **serveurs** croyant partager un segment Ethernet commun.
+
+Un tunnel VXLAN étend les segments Ethernet existants en un unique
+segment Ethernet (virtuel). Depuis n'importe quel hôte (par exemple
+`H1`), nous pouvons atteindre tous les autres hôtes partageant le
+segment virtuel:
+
+    ::console
+    $ ping -c10 -w1 -t1 ff02::1%eth0
+    PING ff02::1%eth0(ff02::1%eth0) 56 data bytes
+    64 bytes from fe80::5254:33ff:fe00:8%eth0: icmp_seq=1 ttl=64 time=0.016 ms
+    64 bytes from fe80::5254:33ff:fe00:b%eth0: icmp_seq=1 ttl=64 time=4.98 ms (DUP!)
+    64 bytes from fe80::5254:33ff:fe00:9%eth0: icmp_seq=1 ttl=64 time=4.99 ms (DUP!)
+    64 bytes from fe80::5254:33ff:fe00:a%eth0: icmp_seq=1 ttl=64 time=4.99 ms (DUP!)
+    
+    --- ff02::1%eth0 ping statistics ---
+    1 packets transmitted, 1 received, +3 duplicates, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 0.016/3.745/4.991/2.152 ms
+
+[TOC]
+
+# Usage simple
+
+Le déploiement de référence pour VXLAN est d'utiliser un groupe IP
+multicast pour joindre les autres VTEP:
+
+    ::console
+    # ip -6 link add vxlan100 type vxlan \
+    >   id 100 \
+    >   dstport 4789 \
+    >   local 2001:db8:1::1 \
+    >   group ff05::100 \
+    >   dev eth0 \
+    >   ttl 5
+    # brctl addbr br100
+    # brctl addif br100 vnet22
+    # brctl addif br100 vnet25
+    # brctl stp br100 off
+    # ip link set up dev br100
+    # ip link set up dev vxlan100
+
+Les commandes ci-dessus créent une interface de terminaison VXLAN
+appelée `vxlan100` et la place dans un pont avec d'autres interfaces
+classiques[^bridges]. Chaque segment VXLAN est associé à un identifant
+sur 24 bits, le *VXLAN Network Identifier* (VNI). Dans notre exemple,
+le VNI par défaut est configuré avec la directive `id 100`.
+
+La première implémentation de VXLAN remonte à Linux 3.7 et le port UDP
+à utiliser n'était pas encore défini. Plusieurs constructeurs ont
+choisi 8472 et Linux a aussi opté pour cette valeur. Afin de ne pas
+casser les déploiements existants, c'est toujours la valeur par
+défaut. Pour utiliser le port assigné par l'IANA, il faut indiquer
+explictement la directive `dstport 4789`.
+
+Pour utiliser le transport multicast, nous devons en préciser le
+groupe (`group ff05::100`) ainsi que l'interface physique à laquelle
+s'associer (`dev eth0`). Le TTL par défaut est alors de 1. Si le
+réseau sous-jacent utilise du routage, il peut être nécessaire
+d'augmenter cette valeur, comme ici avec la directive `ttl 5`.
+
+L'interface `vxlan100` se comporte comme un pont et considère les VTEP
+distants comme des ports virtuels :
+
+ - les trames dont la destination n'est pas connue et celles à large
+   diffusion (**broadcast, unknown unicast and multicast** ou « BUM »)
+   sont envoyées à tous les VTEP en utilisant le groupe multicast,
+ - les associations entre les adresses MAC et les IP des VTEP sont
+   découvertes via l'**apprentissage des adresses source**.
+
+[^bridges]: Il s'agit d'une implémentation possible. Le pont n'est
+    nécessaire que si une forme d'apprentissage des adresses sources
+    est nécessaire. Une autre stratégie est d'utiliser des
+    interfaces [MACVLAN][].
+
+La figure suivante détaille la configuration mise en place:
+
+![Bridged VXLAN device][i2]
+[i2]: [[!!images/vxlan/vxlan-bridge.svg]] "Interface VXLAN associée à un pont et communiquant avec deux VTEP distants"
+
+La table de correspondance MAC/VTEP (« *Forwarding Database* » ou FDB)
+de l'interface VXLAN peut être consultée avec la commande
+`bridge`. Lorsque l'adresse MAC destination est connue, la trame est
+envoyée au VTEP associé (unicast). L'adresse `00:00:00:00:00:00` n'est
+utilisée que lorsqu'une entrée plus spécifique n'existe pas.
+
+    ::console
+    # bridge fdb show dev vxlan100 | grep dst
+    00:00:00:00:00:00 dst ff05::100 via eth0 self permanent
+    50:54:33:00:00:0b dst 2001:db8:3::1 self
+    50:54:33:00:00:08 dst 2001:db8:1::1 self
+
+Pour plus de détails sur la façon de configurer un réseau multicast et
+l'utiliser pour construire des segments VXLAN, jetez un œil à mon
+article « [Réseaux virtuels avec VXLAN][] ».
+
+# Sans multicast
+
+L'utilisation d'un réseau IP multicast comme transport pour VXLAN
+présente plusieurs avantages :
+
+ - découverte automatique des autres VTEP,
+ - bonne utilisation de la bande passante (les paquets sont dupliqués tardivement),
+ - conception décentralisée et sans contrôleur[^decentralized].
+ 
+[^decentralized]: Le réseau multicast sous-jacent peut cependant
+    nécessiter des composants centraux, tels que des points de
+    rendez-vous pour le protocole PIM-SM. Il est possible de rendre
+    ceux-ci hautement disponibles et évolutifs (en utilisant par
+    exemple Anycast-RP, [RFC 4610][]).
+
+Toutefois, le multicast n'est pas disponible partout et sa mise en
+œuvre est parfois compliquée. Depuis Linux 3.8, les extensions DOVE
+ont été ajoutées et elles permettent notamment de supprimer cette
+dépendance sur le multicast.
+
+## Unicast avec déclaration statique des VTEP
+
+Il est possible de remplacer le multicast par une réplication par
+l'émetteur de chaque trame de type « BUM » vers une liste de VTEP
+distants[^patch1] :
+
+    ::console
+    # ip -6 link add vxlan100 type vxlan \
+    >   id 100 \
+    >   dstport 4789 \
+    >   local 2001:db8:1::1
+    # bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 2001:db8:3::1
+
+[^patch1]: Pour cet exemple et les suivants, un [patch][patch1] pour
+    utiliser IPv6 comme transport est nécessaire pour la commande `ip`
+    (versions 4.10 et antérieures). Il est aussi possible d'utiliser
+    cette astuce pour contourner le problème :
+
+        ::console hl_lines="5"
+        # ip -6 link add vxlan100 type vxlan \
+        >   id 100 \
+        >   dstport 4789 \
+        >   local 2001:db8:1::1 \
+        >   remote 2001:db8:2::1
+        # bridge fdb append 00:00:00:00:00:00 \
+        >   dev vxlan100 dst 2001:db8:3::1
+
+Le VXLAN est défini sans groupe multicast. À la place, les VTEP
+distants sont associés à l'adresse `00:00:00:00:00:00`. Une trame de
+type « BUM » sera envoyée à chacune de ces destinations. L'interface
+VXLAN apprend également toujours les adresses MAC sources, limitant
+ainsi ce type d'envois.
+
+Il s'agit d'une solution très simple. Avec un peu d'automatisation, il
+est possible de garder à jour la liste des VTEP. La duplication des
+trames à la source devient problématique quand il y a des centaines de
+VTEP.
+
+Le [démon vxfld de Cumulus][Cumulus vxfld daemon] est un exemple
+d'utilisation de cette stratégie dans l'un des deux modes de
+fonctionnement supportés.
+
+## Unicast avec déclaration statique des entrées L2
+
+Quand l'association entre les adresses MAC et les VTEP est connue, il
+est possible de renseigner par avance la FDB et de désactiver
+l'apprentissage :
+
+    ::console hl_lines="5 8 9 10"
+    # ip -6 link add vxlan100 type vxlan \
+    >   id 100 \
+    >   dstport 4789 \
+    >   local 2001:db8:1::1 \
+    >   nolearning
+    # bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 2001:db8:3::1
+    # bridge fdb append 50:54:33:00:00:09 dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 50:54:33:00:00:0a dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 50:54:33:00:00:0b dev vxlan100 dst 2001:db8:3::1
+
+Le drapeau `nolearning` désactive l'apprentissage des adresses
+sources. Si une adresse MAC est manquante, la trame sera toujours
+envoyée en utilisant les adresses pour l'entrée `00:00:00:00:00:00`.
+
+Cette dernière est toujours nécessaire pour le trafic à diffusion
+générale ou restreinte (ARP et la découverte des voisins en IPv6). Ce
+type de configuration fonctionne bien pour des machines virtuelles
+(les adresses MAC sont connues, mais pas les adresses IP). Un
+composant qui maintient à jour les entrées de la FDB est nécessaire.
+
+[BGP EVPN][RFC 7432] avec [Cumulus Quagga][] est un exemple
+d'utilisation de cette stratégie (voir mon article
+« [VXLAN: BGP EVPN avec Cumulus Quagga][] » pour plus d'informations).
+
+## Unicast avec déclaration statique des entrées L3
+
+Dans l'exemple précédent, l'entrée `00:00:00:00:00:00` reste
+nécessaire pour permettre à ARP et à la découverte des voisins IPv6 de
+fonctionner. Toutefois, Linux peut répondre à ces requêtes à la place
+des nœuds distants[^patch2]. Quand cette fonctionnalité est activée,
+les entrées par défaut ne sont plus nécessaires (mais il est possible
+de les conserver) :
+
+    ::console hl_lines="6 7 8 9"
+    # ip -6 link add vxlan100 type vxlan \
+    >   id 100 \
+    >   dstport 4789 \
+    >   local 2001:db8:1::1 \
+    >   nolearning \
+    >   proxy
+    # ip -6 neigh add 2001:db8:ff::11 lladdr 50:54:33:00:00:09 dev vxlan100
+    # ip -6 neigh add 2001:db8:ff::12 lladdr 50:54:33:00:00:0a dev vxlan100
+    # ip -6 neigh add 2001:db8:ff::13 lladdr 50:54:33:00:00:0b dev vxlan100
+    # bridge fdb append 50:54:33:00:00:09 dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 50:54:33:00:00:0a dev vxlan100 dst 2001:db8:2::1
+    # bridge fdb append 50:54:33:00:00:0b dev vxlan100 dst 2001:db8:3::1
+
+[^patch2]: Un [patch][patch2] supplémentaire pour IPv6 peut être nécessaire
+    (versions 4.11 ou antérieures).
+
+Il n'y a plus de duplication des paquets vers tous les
+VTEP. Toutefois, les protocoles reposant sur le multicast ne
+fonctionnent alors plus. Avec un peu d'automatisation, cette
+configuration fonctionne bien avec des conteneurs : s'il y a un
+registre recensant les adresses IP et les adresses MAC utilisées, un
+programme peut écouter les changements effectués dans ce registre et
+mettre à jour la FDB et la table des voisins.
+
+Le moteur VXLAN de [libnetwork][Docker's libnetwork] (utilisé par
+*Docker*) est un exemple d'utilisation d'une telle stratégie (il
+utilise aussi la méthode suivante).
+
+## Unicast avec entrées L3 dynamiques
+
+Linux peut également notifier un programme quand une entrée (L2 ou L3)
+est manquante. Ce programme peut interroger un registre et ajouter
+l'entrée nécessaire. Toutefois, pour une entrée L2, les notifications
+sont envoyées uniquement si les conditions suivantes sont réunies :
+
+ - l'adresse MAC destination n'est pas connue,
+ - il n'y a pas d'entrée pour `00:00:00:00:00:00` dans la FDB,
+ - l'adresse MAC n'est ni multicast, ni broadcast.
+
+Ces limitations empêchent tout scénario de type « unicast avec entrées
+L2 dynamiques ».
+
+Tout d'abord, créons une interface VXLAN avec les drapeaux `l2miss` et
+`l3miss`[^patch3]:
+
+    ::sh hl_lines="6 7"
+    ip -6 link add vxlan100 type vxlan \
+       id 100 \
+       dstport 4789 \
+       local 2001:db8:1::1 \
+       nolearning \
+       l2miss \
+       l3miss \
+       proxy
+
+[^patch3]: Un [patch][patch3] est nécessaire pour recevoir des
+    notifications L3 pour les adresses IPv6 (versions 4.11 et
+    antérieures).
+
+Les notifications sont envoyées à tout programme écoutant sur une
+chaussette `AF_NETLINK` avec le protocole `NETLINK_ROUTE` et liée au
+groupe `RTNLGRP_NEIGH`. La commande suivante se comporte de cette
+façon et décode les notifications reçues :
+
+    ::console
+    # ip monitor neigh dev vxlan100
+    miss 2001:db8:ff::12 STALE
+    miss lladdr 50:54:33:00:00:0a STALE
+
+La première notification concerne l'absence d'une entrée dans la table
+des voisins pour l'adresse IP mentionnée. Elle peut être ajoutée avec
+la commande suivante :
+
+    ::sh
+    ip -6 neigh replace 2001:db8:ff::12 \
+        lladdr 50:54:33:00:00:0a \
+        dev vxlan100 \
+        nud reachable
+
+L'entrée n'est pas permanente et expirera sans action particulière de
+notre part. Une autre notification sera générée afin de la rafraîchir
+si nécessaire.
+
+Une fois que la réponse parvient à l'hôte source, ce dernier peut
+envoyer une trame en utilisant l'adresse MAC ainsi apprise. La seconde
+notification concerne l'absence de cette adresse MAC dans la FDB. La
+commande suivante permet d'ajouter l'entrée nécessaire[^sooner] :
+
+    ::sh
+    bridge fdb replace 50:54:33:00:00:0a \
+        dst 2001:db8:2::1 \
+        dev vxlan100 dynamic
+        
+[^sooner]: Il aurait été judicieux d'ajouter directement l'entrée dans
+    la FDB lors de la première notification afin d'éviter à l'hôte
+    source de retransmettre les premières trames.
+
+L'entrée est marquée comme non permanente pour permettre à la MAC de
+migrer sur le pont local (une entrée dynamique ne peut pas être mise
+en place s'il y a déjà une entrée permanente).
+
+Cette méthode fonctione bien avec des conteneurs et un registre
+global. Elle impose cependant une légère latence lors des premières
+connexions. De plus, le multicast et broadcast ne sont pas disponibles
+pour le réseau sous-jacent. Le moteur VXLAN de [flannel][], une
+fabrique réseau pour *Kubernetes* est une application de cette
+stratégie.
+
+# Décision
+
+Il n'y a pas de solution universelle.
+
+L'utilisation du **multicast** s'impose si :
+
+ - vous êtes dans un environnement où le multicast est disponible,
+ - vous êtes prêts à opérer (et étendre) un réseau multicast,
+ - vous avez besoin du multicast et du broadcast dans les segments virtuels,
+ - vous ne disposez pas des adresses L2/L3 utilisées par les locataires.
+
+Cette solution reste valable avec plusieurs milliers de locataires si
+l'on prend garde à ne pas mettre tous les VXLAN dans le même groupe
+multicast (par exemple, en utilisant le dernier octet du VNI comme
+dernier octet du group multicast).
+
+Quand le multicast n'est pas disponible, une autre solution générique
+est **BGP EVPN** : BGP est utilisé comme contrôleur pour assurer la
+distribution de la liste des VTEP et de leurs FDB. Comme indiqué
+précédemment, [Cumulus Quagga][] fournit une implémentation de cette
+solution. J'explore davantage cette option dans un article séparé :
+« [VXLAN: BGP EVPN avec Cumulus Quagga][] ».
+
+Si vous êtes dans un environnement utilisant des conteneurs avec un
+registre, une solution reposant sur la **gestion statique et/ou
+dynamique des entrées L2 et L3**, sans apprentissage automatique des
+adresses, convient également. Elle apporte une meilleure sécurité
+(limite des ressources utilisées, protection contre les attaques MiTM,
+maîtrise de la bande passante). Différentes solutions sont disponibles
+selon l'orchestrateur utilisé[^examples]. Il est aussi possible
+d'écrire sa propre solution.
+
+[^examples]: [flannel][]
+    et [libnetwork pour *Docker*][Docker's libnetwork] ont déjà été
+    mentionnés. Il existe aussi des expérimentations intéressantes
+    comme [BaGPipe BGP pour Kubernetes][BaGPipe BGP for Kubernetes]
+    qui utilise BGP EVPN et est donc interopérable avec des solutions
+    constructeurs.
+
+# Considérations annexes
+
+Indépendamment de la solution choisie, voici quelques points
+importants à garder à l'esprit en utilisant VXLAN.
+
+## Isolation
+
+Alors que l'on peut penser qu'une interface VXLAN ne concerne que le
+traffic Ethernet, Linux ne désactive pas le traitement IP pour ces
+interfaces. Quand la MAC de destination est locale, Linux route ou
+délivre le paquet IP encapsulé. Pour plus de détails, référez-vous à
+mon article sur l'[isolation d'un pont réseau sous Linux][].
+
+## Chiffrement
+
+VXLAN apporte une isolation entre les différents « locataires » mais
+le trafic circule en clair. La solution la plus simple pour le
+chiffrer est *IPsec*. Certaines solutions dédiées aux conteneurs
+disposent déjà d'un tel support
+(notamment [libnetwork][Docker's libnetwork] pour *Docker*
+mais [flannel][] a aussi ça dans les cartons). C'est un point crucial
+pour les déploiements sur un nuage public.
+
+## Coût supplémentaire en octet
+
+Le format d'une trame encapsulée dans VXLAN est le suivant :
+
+![Encapsulation VXLAN][i3]
+[i3]: [[!!images/vxlan/encapsulation.svg]] "Encapsulation VXLAN dans un datagramme UDP"
+
+L'utilisation de VXLAN alourdit donc la trame Ethernet envoyée de 50
+octets supplémentaires. Si vous utilisez en plus IPsec, le coût
+engendré dépend de plusieurs facteurs. En mode transport, avec AES et
+SHA256, il est de 56 octets. Avec le transport compatible avec le NAT,
+il passe à 64 octets. En mode tunnel, il devient de 72 octets. Cisco
+propose une [calculatrice][Cisco IPsec Overhead Calculator Tool].
+
+Certains utilisateurs s'attendent à ce que le MTU Ethernet soit de
+1500 ce qui impose d'augmenter le MTU du réseau sous-jacent. Si ce
+n'est pas possible, il est important de s'assurer que tous les clients
+utilisent un MTU réduit[^pmtu].
+
+[^pmtu]: Il n'existe pas de mécanisme de découverte du MTU pour un
+    segment Ethernet.
+
+## IPv6
+
+Bien qu'IPv6 ait été utilisé dans tous les exemples, l'écosystème
+reste très jeune. La stratégie multicast fonctionne bien avec IPv6
+mais tous les autres scénarios nécessitent des patchs
+([1][patch1], [2][patch2], [3][patch3]).
+
+De plus, IPv6 n'est souvent pas implémenté dans les outils orchestrant
+VXLAN :
+
+ - [Cumulus Quagga][] (pour la partie EVPN) et
+   le [Cumulus vxfld][Cumulus vxfld daemon] ne supportent pas IPv6,
+ - [flannel][] n'a absolument [aucun support pour IPv6][flannel-ipv6],
+ - [libnetwork][Docker's libnetwork] pour
+   *Docker* [n'a pas de support IPv6][libnetwork-ipv6] pour la partie
+   VXLAN.
+
+## Multicast
+
+Linux n'effectue pas d'*IGMP snooping* sur les interfaces VXLAN. Le
+trafic multicast est alors diffusé à tous les VTEP à moins d'insérer
+manuellement les adresses MAC multicast appropriées dans la FDB.
+
+*[VXLAN]: Virtual eXtensible LAN
+*[L2]: Layer 2
+*[L3]: Layer 3
+*[VTEP]: VXLAN Tunnel Endpoint
+*[VTEPs]: VXLAN Tunnel Endpoints
+*[IANA]: Internet Assigned Numbers Authority
+*[VNI]: VXLAN Network Identifier
+*[TTL]: Time to live
+*[BUM]: Broadcast, unknown unicast and multicast
+*[FDB]: Forwarding Database
+*[FDBs]: Forwarding Databases
+*[PIM-SM]: Protocol Independent Multicast - Sparse Mode
+*[DOVE]: Distributed Overlay Virtual Ethernet
+*[BGP]: Border Gateway Protocol
+*[EVPN]: Ethernet VPN
+*[VPN]: Virtual Private Network
+*[IGMP]: Internet Group Management Protocol
+*[MiTM]: Man in The Middle
+*[DF]: Don't Fragment
+
+[RFC 7348]: https://tools.ietf.org/html/rfc7348 "Virtual eXtensible Local Area Network (VXLAN)"
+[RFC 4610]: https://tools.ietf.org/html/rfc4610 "Anycast-RP Using Protocol Independent Multicast (PIM)"
+[RFC 7432]: https://tools.ietf.org/html/rfc7432 "BGP MPLS-Based Ethernet VPN"
+[draft-ietf-bess-evpn-overlay]: https://tools.ietf.org/html/draft-ietf-bess-evpn-overlay-08 "A Network Virtualization Overlay Solution using EVPN"
+[linux]: http://lwn.net/Articles/518292/ "vxlan: virtual extensible lan"
+[Réseaux virtuels avec VXLAN]: [[fr/blog/2012-multicast-vxlan.html]] "Réseaux virtuels avec VXLAN"
+[isolation d'un pont réseau sous Linux]: [[fr/blog/2017-linux-bridge-isolation.html]] "Isolation d'un pont réseau sous Linux"
+[patch1]: https://git.kernel.org/pub/scm/linux/kernel/git/shemminger/iproute2.git/commit/?id=97d564b90ccb1e4a3c756d9caae161f55b2b63a2 "vxlan: use preferred address family when neither group or remote is specified"
+[patch2]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=f1fb08f6337ca9e3af371a7994b91a5786ba93f9 "vxlan: fix ND proxy when skb doesn't have transport header offset"
+[patch3]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=8f48ba71ede12231d5d63fdd34bd8ce7908a3377 "vxlan: use appropriate family on L3 miss"
+[flannel]: https://github.com/coreos/flannel "flannel: a network fabric for containers, designed for Kubernetes"
+[Docker's libnetwork]: https://github.com/docker/libnetwork "libnetwork - networking for containers"
+[Cumulus vxfld daemon]: https://github.com/CumulusNetworks/vxfld "VXFLD: VXLAN BUM Flooding Suite"
+[Cumulus Quagga]: https://github.com/CumulusNetworks/quagga "Cumulus Quagga routing suite"
+[MACVLAN]: https://hicu.be/bridge-vs-macvlan "Hi Cube: Bridge vs Macvlan"
+[Cisco IPsec Overhead Calculator Tool]: https://cway.cisco.com/tools/ipsec-overhead-calc/ "Cisco IPsec Overhead Calculator Tool"
+[flannel-ipv6]: https://github.com/coreos/flannel/issues/248 "flannel: add IPv6 support"
+[libnetwork-ipv6]: https://github.com/docker/libnetwork/issues/1169 "libnetwork: IPv6 ND doesn't work between hosts in overlay"
+[BaGPipe BGP for Kubernetes]: https://github.com/murat1985/bagpipe-cni "CNI plugin for BaGPipe BGP"
+[VXLAN: BGP EVPN avec Cumulus Quagga]: [[fr/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN avec Cumulus Quagga"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
