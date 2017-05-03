@@ -1,0 +1,873 @@
+---
+title: "VXLAN: BGP EVPN avec Cumulus Quagga"
+description: |
+  VXLAN est un protocole réseau pour transporter du trafic L2 au-dessus
+  d'un réseau IP. BGP EVPN est une des options de déploiement.
+keywords: "vxlan, unicast, bgp, evpn, linux, pont, quagga, cumulus, juniper"
+uuid: ca8ca2a6-fa21-4140-b80a-7e968f0cd30d
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-vxlan": "Dépôt GitHub"
+tags:
+  - network
+---
+
+
+**VXLAN** est un protocole réseau permettant de transporter du trafic
+Ethernet au-dessus d'un réseau IP existant tout en supportant un
+nombre très elevé de locataires. Il est défini dans
+la [RFC 7348][]. Pour une introduction dans le cadre de Linux, jetez
+un œil à mon article « [VXLAN & Linux][] ».
+
+![Déploiement de VXLAN][i1]
+[i1]: [[!!images/vxlan/vxlan-deployment.svg]] "Exemple de déploiement de VXLAN avec des hyperviseurs agissant comme VTEP"
+
+Dans l'exemple de déploiement ci-dessus, des **hyperviseurs**
+hébergent des **machines virtuelles** appartenant à différents
+**locataires**. Chaque machine virtuelle a un accès un **segment
+Ethernet virtuel** propre à son locataire. Ces derniers s'attendent à
+obtenir un segment Ethernet classique : pas de restriction sur les
+adresses MAC[^bridge], un contrôle total sur l'adressage IP et la
+disponibilité du multicast.
+
+[^bridge]: Par exemple, ils peuvent configurer des ponts pour
+    interconnecter des conteneurs.
+
+[TOC]
+
+Dans un déploiement à large échelle de VXLAN, il y a deux aspects
+cruciaux :
+
+ 1. la **découverte des autres terminaisons** (VTEP) partageant les mêmes segments VXLAN,
+ 2. la **limitation des trames « BUM »** (*broadcast, unknown unicast
+    and multicast*) qui sont diffusées à l'ensemble des VTEP.
+
+Une solution courante pour le premier point est d'utiliser le
+multicast. Le second point est généralement résolu par un
+apprentissage des adresses sources.
+
+# Introduction à BGP EVPN
+
+BGP EVPN ([RFC 7432][] et [draft-ietf-bess-evpn-overlay][] pour son
+application à VXLAN) est un protocole destiné à résoudre efficacement
+ces deux aspects sans reposer sur l'usage du multicast ni sur
+l'apprentissage des adresses sources.
+
+BGP EVPN repose sur BGP ([RFC 4271][]) et ses extensions MP-BGP
+([RFC 4760][]). **BGP** est le protocole de routage animant
+Internet. Via les extensions **MP-BGP**, il peut être utilisé pour
+transporter des informations d'accessibilité (NLRI) pour divers
+protocoles (IPv4, IPv6, L3 VPN et dans le cas qui nous intéresse,
+EVPN). **EVPN** est une famille spéciale permettant de publier des
+informations sur les adresses MAC et les équipements terminaux y
+donnant accès.
+
+Il y a principalement deux types de routes qu'un VTEP peut publier à
+travers BGP EVPN :
+
+ 1. les VNI dont ils disposent localement (routes de type 3),
+ 2. les adresses MAC locales pour chacun des VNI (routes de type 2).
+
+Le protocole couvre également d'autres aspects des segments Ethernet
+virtuels (informations concernant les voisins IP, mobilité des
+adresses MAC et attachement d'un segment Ethernet à plusieurs
+terminaisons[^multi-homing]) que nous n'aborderons pas ici.
+
+[^multi-homing]: Une telle fonctionnalité permet de remplacer les
+    implémentations propriétaires de type MC-LAG, permettant à
+    plusieurs VTEP de terminer un aggrégat. Ce n'est pas utile dans
+    notre cas où les hyperviseurs agissent en tant que VTEP.
+
+Usuellement, le déploiement de BGP EVPN utilise plusieurs
+**réflecteurs de routes** (à la fois pour la redondance et la montée
+en charge) comme illustré ci-dessous. Chaque VTEP ouvre une session
+BGP vers au moins deux réflecteurs, envoie les informations dont il
+dispose et réceptionne les informations disponibles. Cela permet de
+limiter le nombre de sessions BGP à configurer et maintenir.
+
+![Déploiement VXLAN avec des réflecteurs de routes][i2]
+[i2]: [[!!images/vxlan/vxlan-deployment-rr.svg]] "Déploiement VXLAN avec des hyperviseurs utilisant BGP EVPN avec des réflecteurs de routes"
+
+Par rapport aux [autres solutions pour déployer VXLAN][VXLAN & Linux],
+BGP EVPN présente trois avantages :
+
+ - **interopérabilité** avec les autres constructeurs (notamment Juniper et Cisco),
+ - **montée en charge** éprouvée (un routeur BGP gère plusieurs millions de routes),
+ - possibilité de mettre en place des **politiques de distribution**.
+
+Sous Linux, [Cumulus Quagga][] est une implémentation relativement
+complète de BGP EVPN (routes de type 3 pour la découverte de VTEP,
+routes de type 2 pour partager MAC et IP, mobilité des adresses MAC
+quand un hôte passe d'un VTEP à un autre) et ne nécessite que peu de
+configuration.
+
+Il s'agit d'un dérivé de [Quagga][] et est utilisé extensivement
+dans [Cumulus Linux][], une distribution réseau basée sur Debian et
+animant diverses marques de commutateurs. Dans le futur,
+l'implémentation de BGP EVPN sera reversé au projet [FRR][], un dérivé
+maintenu communautaire de *Quagga*[^fork].
+
+[^fork]: Le développement de *Quagga* est lent et opaque. Les
+    nouvelles fonctionnalités sont souvent bloquées. *FRR* est placé
+    sous le patronage de la *Linux Foundation*. Il a opté pour un
+    développement basé sur *GitHub* et une gouvernance
+    démocratique. Plusieurs fonctionnalités intéressantes ont déjà été
+    contribuées (notamment, *add-path* pour BGP, support des
+    interfaces sans IP, MPLS et LDP).
+
+Notons toutefois que cette implémentation de BGP EVPN ne prend
+actuellement en compte qu'IPv4.
+
+# Configuration des réflecteurs
+
+Avant de configurer les VTEP, nous devons configurer les
+réflecteurs. Plusieurs solutions sont possibles, dont :
+
+ - *Cumulus Quagga*,
+ - *GoBGP*, une implémentation de BGP en Go,
+ - *Juniper JunOS*.
+
+Pour des raisons de fiabilité, il peut être intéressant de panacher
+les implémentations utilisées, celles-ci étant entièrement
+interopérables sans difficultés dans ce rôle.
+
+Les configurations proposées sont très minimales. Il est possible de
+centraliser les politiques de distributions sur les réflecteurs (par
+exemple, les routes présentant telle communauté ne doivent être
+redistribuées que sur un certain type de VTEP).
+
+## Quagga
+
+La configuration est simple. Le réflecteur utilise l'adresse
+`203.0.113.254`.
+
+    ::quagga
+    router bgp 65000
+      bgp router-id 203.0.113.254
+      bgp cluster-id 203.0.113.254
+      bgp log-neighbor-changes
+      no bgp default ipv4-unicast
+      neighbor fabric peer-group
+      neighbor fabric remote-as 65000
+      neighbor fabric capability extended-nexthop
+      neighbor fabric update-source 203.0.113.254
+      bgp listen range 203.0.113.0/24 peer-group fabric
+      !
+      address-family evpn
+       neighbor fabric activate
+       neighbor fabric route-reflector-client
+      exit-address-family
+      !
+      exit
+    !
+
+Un groupe `fabric` est défini et nous utilisons une fonctionnalité
+intéressante de *Cumulus Quagga* permettant d'accepter des voisins
+sans avoir à les déclarer individuellement. Cela réduit la
+configuration nécessaire : tout client issu du réseau `203.0.113.0/24`
+et s'identifiant comme faisant partie de l'AS 65000 peut se
+connecter. Toutes les routes EVPN envoyées sont acceptées et
+réfléchies vers les autres clients.
+
+Il n'est pas nécessaire de faire tourner *Zebra*, la partie de
+*Quagga* qui dialogue avec le noyau. Pour éviter que `bgpd` ne se
+plaigne de son absence, il convient de le démarrer avec le drapeau
+`--no_kernel`.
+
+## GoBGP
+
+[GoBGP][] est une implémentation de BGP en Go[^go]. Il fournit une API
+de type RPC pour la configuration mais accepte également des fichiers
+de configuration classiques et est livré avec un client en ligne de
+commande.
+
+[^go]: Je suis souvent circonspect envers les projets se contentant de
+    réécrire un service existant en Go. Toutefois, bien que plutôt
+    jeune, *GoBGP* a des mérites propres (bonne architecture, bonnes
+    performances).
+
+Il est nécessaire de définir tous les voisins via l'API, le client en
+ligne de commande ou fichier de configuration construit à partir d'un
+gabarit. Voici une configuration pour un seul voisin :
+
+    ::yaml
+    global:
+      config:
+        as: 65000
+        router-id: 203.0.113.254
+        local-address-list:
+          - 203.0.113.254
+    neighbors:
+      - config:
+          neighbor-address: 203.0.113.1
+          peer-as: 65000
+        afi-safis:
+          - config:
+              afi-safi-name: l2vpn-evpn
+        route-reflector:
+          config:
+            route-reflector-client: true
+            route-reflector-cluster-id: 203.0.113.254
+
+Il est possible d'ajouter des voisins depuis la ligne de commande :
+
+    ::console
+    $ gobgp neighbor add 203.0.113.2 as 65000 \
+    >         route-reflector-client 203.0.113.254 \
+    >         --address-family evpn
+
+Par défaut, *GoBGP* ne tente aucune interaction avec le noyau, ce qui
+nous convient parfaitement dans ce rôle.
+
+## Juniper JunOS
+
+De nombreux produits Juniper peuvent jouer le rôle de réflecteur, notamment :
+
+ - le [Juniper QFX5100][][^qfx], un commutateur de baie,
+ - le [Juniper MX240][][^mx], un routeur haut de gamme,
+ - le [Juniper vRR][][^vrr], une machine virtuelle embarquant *JunOS*
+   mais sans la possibilité de router des paquets.
+
+[^qfx]: La version 48 ports coûte autour de 10 000 $ avec la licence BGP.
+[^mx]: Un chassis vide avec deux cartes de routage (RE-S-1800X4-16G) coûte autour de 30 000 $.
+[^vrr]: Je ne connais pas son prix mais il est disponible gratuitement
+    à des fins d'évaluation pour les clients existants.
+
+Le principal facteur est le CPU (type x86) et la mémoire. Le *QFX5100*
+ne dispose pas de beaucoup de mémoire et ne pourra donc pas supporter
+de très gros déploiements sans utiliser une politique de distribution
+plus agressive.
+
+Voici une configuration comparable à celle proposée pour *Quagga* :
+
+    ::junos
+    interfaces {
+        lo0 {
+            unit 0 {
+                family inet {
+                    address 203.0.113.254/32;
+                }
+            }
+        }
+    }
+    
+    protocols {
+        bgp {
+            group fabric {
+                family evpn {
+                    signaling {
+                        /* Do not try to install EVPN routes */
+                        no-install;
+                    }
+                }
+                type internal;
+                cluster 203.0.113.254;
+                local-address 203.0.113.254;
+                allow 203.0.113.0/24;
+            }
+        }
+    }
+    
+    routing-options {
+        router-id 203.0.113.254;
+        autonomous-system 65000;
+    }
+
+# Configuration des VTEP
+
+La seconde étape est de configurer les VTEP/hyperviseurs. Chaque VXLAN
+est assorti à un pont pour y placer les interfaces locales, comme
+illustré ci-dessous. Le pont gère les adresses MAC locales (notamment
+leur apprentissage par la source) tandis que l'interface VXLAN
+s'occupe des adresses MAC distantes (reçues via BGP EVPN).
+
+![Interface VXLAN et son pont][i3]
+[i3]: [[!!images/vxlan/vxlan-bridge-simple.svg]] "Interface VXLAN assortie à un pont"
+
+Les interfaces VXLAN sont créées avec le script
+suivant. L'apprentissage des adresses source est désactivé car
+superflu : BGP EVPN permet de synchroniser les FDB entre les
+hyperviseurs.
+
+    ::sh
+    for vni in 100 200; do
+        # Création de l'interface VXLAN
+        ip link add vxlan${vni} type vxlan
+            id ${vni} \
+            dstport 4789 \
+            local 203.0.113.2 \
+            nolearning
+        # Création du pont associé
+        brctl addbr br${vni}
+        brctl stp br${vni} off
+        ip link set up dev br${vni}
+        ip link set up dev vxlan${vni}
+    done
+    # Attacher les VM locales sur les segments appropriés
+    brctl addif br100 vnet10
+    brctl addif br100 vnet11
+    brctl addif br200 vnet12
+
+La configuration de *Cumulus Quagga* est similaire à celle d'un
+réflecteur mais la directive `advertise-all-vni` indique à *Quagga* de
+publier l'ensemble des VNI présents localement :
+
+    ::quagga hl_lines="14"
+    router bgp 65000
+      bgp router-id 203.0.113.2
+      no bgp default ipv4-unicast
+      neighbor fabric peer-group
+      neighbor fabric remote-as 65000
+      neighbor fabric capability extended-nexthop
+      neighbor fabric update-source dummy0
+      ! BGP sessions with route reflectors
+      neighbor 203.0.113.253 peer-group fabric
+      neighbor 203.0.113.254 peer-group fabric
+      !
+      address-family evpn
+       neighbor fabric activate
+       advertise-all-vni
+      exit-address-family
+      !
+      exit
+    !
+
+Une fois la configuration mise en place, les instances partageant un
+même VNI doivent pouvoir communiquer entre elles. Si IPv6 est activé
+sur toutes les machines virtuelles, la commande `ping` permet de
+vérifier le bon fonctionnement de l'ensemble :
+
+    ::console
+    $ ping -c10 -w1 -t1 ff02::1%eth0
+    PING ff02::1%eth0(ff02::1%eth0) 56 data bytes
+    64 bytes from fe80::5254:33ff:fe00:8%eth0: icmp_seq=1 ttl=64 time=0.016 ms
+    64 bytes from fe80::5254:33ff:fe00:b%eth0: icmp_seq=1 ttl=64 time=4.98 ms (DUP!)
+    64 bytes from fe80::5254:33ff:fe00:9%eth0: icmp_seq=1 ttl=64 time=4.99 ms (DUP!)
+    64 bytes from fe80::5254:33ff:fe00:a%eth0: icmp_seq=1 ttl=64 time=4.99 ms (DUP!)
+    
+    --- ff02::1%eth0 ping statistics ---
+    1 packets transmitted, 1 received, +3 duplicates, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 0.016/3.745/4.991/2.152 ms
+
+# Vérifications
+
+Regardons point par point comment tous les éléments se sont combinés
+pour en arriver à ce résultat stupéfiant.
+
+## Récupération des informations sur les VXLAN
+
+Sur chaque VTEP, *Quagga* doit obtenir la liste des interfaces
+VXLAN. La commande `vtysh` permet de vérifier ce point:
+
+    ::console hl_lines="12 13 15"
+    # show interface vxlan100
+    Interface vxlan100 is up, line protocol is up
+      Link ups:       1    last: 2017/04/29 20:01:33.43
+      Link downs:     0    last: (never)
+      PTM status: disabled
+      vrf: Default-IP-Routing-Table
+      index 11 metric 0 mtu 1500
+      flags: <UP,BROADCAST,RUNNING,MULTICAST>
+      Type: Ethernet
+      HWaddr: 62:42:7a:86:44:01
+      inet6 fe80::6042:7aff:fe86:4401/64
+      Interface Type Vxlan
+      VxLAN Id 100
+      Access VLAN Id 1
+      Master (bridge) ifindex 9 ifp 0x56536e3f3470
+
+Les deux points importants sont :
+
+ - le VNI est 100,
+ - le pont associé à l'interface est correctement détecté.
+
+*Quagga* doit également récupérer pour chaque VXLAN les adresses MAC
+locales qui y sont attachées :
+
+    ::console
+    # show evpn mac vni 100
+    Number of MACs (local and remote) known for this VNI: 2
+    MAC               Type   Intf/Remote VTEP      VLAN
+    50:54:33:00:00:0a local  eth1.100
+    50:54:33:00:00:0b local  eth2.100
+
+## Sessions BGP
+
+Chaque VTEP doit établir une session BGP vers les réflecteurs. Sur un
+VTEP, cela peut être vérifié avec `vtysh` :
+
+    ::console hl_lines="5 15 20"
+    # show bgp neighbors 203.0.113.254
+    BGP neighbor is 203.0.113.254, remote AS 65000, local AS 65000, internal link
+     Member of peer-group fabric for session parameters
+      BGP version 4, remote router ID 203.0.113.254
+      BGP state = Established, up for 00:00:45
+      Neighbor capabilities:
+        4 Byte AS: advertised and received
+        AddPath:
+          L2VPN EVPN: RX advertised L2VPN EVPN
+        Route refresh: advertised and received(new)
+        Address family L2VPN EVPN: advertised and received
+        Hostname Capability: advertised
+        Graceful Restart Capabilty: advertised
+    [...]
+     For address family: L2VPN EVPN
+      fabric peer-group member
+      Update group 1, subgroup 1
+      Packet Queue length 0
+      Community attribute sent to this neighbor(both)
+      8 accepted prefixes
+    
+      Connections established 1; dropped 0
+      Last reset never
+    Local host: 203.0.113.2, Local port: 37603
+    Foreign host: 203.0.113.254, Foreign port: 179
+
+La commande donne les informations suivantes :
+
+ - l'état de la session BGP est établie (`Established`),
+ - la famille `L2VPN EVPN` est correctement publiée,
+ - 8 routes sont reçues du réflecteur.
+
+L'état des sessions BGP peut également être vérifié depuis les
+réflecteurs. Avec *GoBGP*, utilisez la commande suivante :
+
+    ::console hl_lines="4 10 19"
+    # gobgp neighbor 203.0.113.2
+    BGP neighbor is 203.0.113.2, remote AS 65000, route-reflector-client
+      BGP version 4, remote router ID 203.0.113.2
+      BGP state = established, up for 00:04:30
+      BGP OutQ = 0, Flops = 0
+      Hold time is 9, keepalive interval is 3 seconds
+      Configured hold time is 90, keepalive interval is 30 seconds
+      Neighbor capabilities:
+        multiprotocol:
+            l2vpn-evpn:     advertised and received
+        route-refresh:      advertised and received
+        graceful-restart:   received
+        4-octet-as: advertised and received
+        add-path:   received
+        UnknownCapability(73):      received
+        cisco-route-refresh:        received
+    [...]
+      Route statistics:
+        Advertised:             8
+        Received:               5
+        Accepted:               5
+
+Avec *JunOS*, voici la commande équivalente :
+
+    ::console hl_lines="5 9 37"
+    > show bgp neighbor 203.0.113.2
+    Peer: 203.0.113.2+38089 AS 65000 Local: 203.0.113.254+179 AS 65000
+      Group: fabric                Routing-Instance: master
+      Forwarding routing-instance: master
+      Type: Internal    State: Established
+      Last State: OpenConfirm   Last Event: RecvKeepAlive
+      Last Error: None
+      Options: <Preference LocalAddress Cluster AddressFamily Rib-group Refresh>
+      Address families configured: evpn
+      Local Address: 203.0.113.254 Holdtime: 90 Preference: 170
+      NLRI evpn: NoInstallForwarding
+      Number of flaps: 0
+      Peer ID: 203.0.113.2     Local ID: 203.0.113.254     Active Holdtime: 9
+      Keepalive Interval: 3          Group index: 0    Peer index: 2
+      I/O Session Thread: bgpio-0 State: Enabled
+      BFD: disabled, down
+      NLRI for restart configured on peer: evpn
+      NLRI advertised by peer: evpn
+      NLRI for this session: evpn
+      Peer supports Refresh capability (2)
+      Stale routes from peer are kept for: 300
+      Peer does not support Restarter functionality
+      NLRI that restart is negotiated for: evpn
+      NLRI of received end-of-rib markers: evpn
+      NLRI of all end-of-rib markers sent: evpn
+      Peer does not support LLGR Restarter or Receiver functionality
+      Peer supports 4 byte AS extension (peer-as 65000)
+      NLRI's for which peer can receive multiple paths: evpn
+      Table bgp.evpn.0 Bit: 20000
+        RIB State: BGP restart is complete
+        RIB State: VPN restart is complete
+        Send state: in sync
+        Active prefixes:              5
+        Received prefixes:            5
+        Accepted prefixes:            5
+        Suppressed due to damping:    0
+        Advertised prefixes:          8
+      Last traffic (seconds): Received 276  Sent 170  Checked 276
+      Input messages:  Total 61     Updates 3       Refreshes 0     Octets 1470
+      Output messages: Total 62     Updates 4       Refreshes 0     Octets 1775
+      Output Queue[1]: 0            (bgp.evpn.0, evpn)
+
+Dans le cas où une session BGP ne s'établit pas, les journaux des
+différents démons BGP doivent en indiquer la cause.
+
+## Routes envoyées
+
+Depuis chaque VTEP, *Quagga* doit envoyer :
+
+ - une route de type 3 pour chaque VNI local,
+ - une route de type 2 pour chaque adresse MAC locale.
+ 
+Le meilleur endroit pour vérifier les routes envoyées est l'un des
+réflecteurs. Avec *JunOS*, la commande suivante affiche les routes
+reçues du VTEP dont l'IP est fournie :
+
+    ::console
+    > show route table bgp.evpn.0 receive-protocol bgp 203.0.113.2
+    
+    bgp.evpn.0: 10 destinations, 10 routes (10 active, 0 holddown, 0 hidden)
+      Prefix                  Nexthop              MED     Lclpref    AS path
+      2:203.0.113.2:100::0::50:54:33:00:00:0a/304 MAC/IP
+    *                         203.0.113.2                  100        I
+      2:203.0.113.2:100::0::50:54:33:00:00:0b/304 MAC/IP
+    *                         203.0.113.2                  100        I
+      3:203.0.113.2:100::0::203.0.113.2/304 IM
+    *                         203.0.113.2                  100        I
+      3:203.0.113.2:200::0::203.0.113.2/304 IM
+    *                         203.0.113.2                  100        I
+
+
+Il y a une route de type 3 pour le VNI 100 et une autre pour le
+VNI 200. Il y a également deux routes de type 2 concernant deux
+adresses MAC associées au VNI 100. Le mot clef `extensive` permet
+obtenir davantage d'informations. Par exemple, voici une route de type
+3 indiquant que `203.0.113.2` est un VTEP pour le VNI 100[^vni100] :
+
+    ::console
+    > show route table bgp.evpn.0 receive-protocol bgp 203.0.113.2 extensive
+    
+    bgp.evpn.0: 11 destinations, 11 routes (11 active, 0 holddown, 0 hidden)
+    * 3:203.0.113.2:100::0::203.0.113.2/304 IM (1 entry, 1 announced)
+         Accepted
+         Route Distinguisher: 203.0.113.2:100
+         Nexthop: 203.0.113.2
+         Localpref: 100
+         AS path: I
+         Communities: target:65000:268435556 encapsulation:vxlan(0x8)
+    [...]
+
+[^vni100]: La valeur de 100 utilisée en *route distinguisher*
+    (`203.0.113.2:100`) n'est pas utilisée pour encoder le VNI. Ce
+    dernier est encodé dans le *route target* (`65000:268435556`),
+    dans les 24 derniers bits (`268435556 & 0xffffff` égale
+    `100`). Tant que les VNI sont uniques, ces détails ne sont pas
+    très importants.
+
+Et voici une route de type 2 indiquant la localisation de l'adresse
+MAC `50:54:33:00:00:0a` pour le VNI 100:
+
+    ::console
+    > show route table bgp.evpn.0 receive-protocol bgp 203.0.113.2 extensive
+    
+    bgp.evpn.0: 11 destinations, 11 routes (11 active, 0 holddown, 0 hidden)
+    * 2:203.0.113.2:100::0::50:54:33:00:00:0a/304 MAC/IP (1 entry, 1 announced)
+         Accepted
+         Route Distinguisher: 203.0.113.2:100
+         Route Label: 100
+         ESI: 00:00:00:00:00:00:00:00:00:00
+         Nexthop: 203.0.113.2
+         Localpref: 100
+         AS path: I
+         Communities: target:65000:268435556 encapsulation:vxlan(0x8)
+    [...]
+
+Avec *Quagga*, la commande suivante permet d'obtenir des informations similaires :
+
+    ::console
+    # show bgp evpn route
+    BGP table version is 0, local router ID is 203.0.113.1
+    Status codes: s suppressed, d damped, h history, * valid, > best, i - internal
+    Origin codes: i - IGP, e - EGP, ? - incomplete
+    EVPN type-2 prefix: [2]:[ESI]:[EthTag]:[MAClen]:[MAC]
+    EVPN type-3 prefix: [3]:[EthTag]:[IPlen]:[OrigIP]
+    
+       Network          Next Hop            Metric LocPrf Weight Path
+    Route Distinguisher: 203.0.113.2:100
+    *>i[2]:[0]:[0]:[48]:[50:54:33:00:00:0a]
+                        203.0.113.2                   100      0 i
+    *>i[2]:[0]:[0]:[48]:[50:54:33:00:00:0b]
+                        203.0.113.2                   100      0 i
+    *>i[3]:[0]:[32]:[203.0.113.2]
+                        203.0.113.2                   100      0 i
+    Route Distinguisher: 203.0.113.2:200
+    *>i[3]:[0]:[32]:[203.0.113.2]
+                        203.0.113.2                   100      0 i
+    [...]
+
+Avec *GoBGP*, il convient d'utiliser cette commande :
+
+    ::console
+    # gobgp global rib -a evpn | grep rd:203.0.113.2:200
+        Network  Next Hop             AS_PATH              Age        Attrs
+    *>  [type:macadv][rd:203.0.113.2:100][esi:single-homed][etag:0][mac:50:54:33:00:00:0a][ip:<nil>][labels:[100]]203.0.113.2                               00:00:17   [{Origin: i} {LocalPref: 100} {Extcomms: [VXLAN], [65000:268435556]}]
+    *>  [type:macadv][rd:203.0.113.2:100][esi:single-homed][etag:0][mac:50:54:33:00:00:0b][ip:<nil>][labels:[100]]203.0.113.2                               00:00:17   [{Origin: i} {LocalPref: 100} {Extcomms: [VXLAN], [65000:268435556]}]
+    *>  [type:macadv][rd:203.0.113.2:200][esi:single-homed][etag:0][mac:50:54:33:00:00:0a][ip:<nil>][labels:[200]]203.0.113.2                               00:00:17   [{Origin: i} {LocalPref: 100} {Extcomms: [VXLAN], [65000:268435656]}]
+    *>  [type:multicast][rd:203.0.113.2:100][etag:0][ip:203.0.113.2]203.0.113.2                               00:00:17   [{Origin: i} {LocalPref: 100} {Extcomms: [VXLAN], [65000:268435556]}]
+    *>  [type:multicast][rd:203.0.113.2:200][etag:0][ip:203.0.113.2]203.0.113.2                               00:00:17   [{Origin: i} {LocalPref: 100} {Extcomms: [VXLAN], [65000:268435656]}]
+
+## Routes reçues
+
+Chaque VTEP doit recevoir de la part des réflecteurs les routes de
+type 2 et 3 concernant ses collègues. Cela peut être vérifié avec
+`vtysh` et la commande `show bgp evpn route`.
+
+*Quagga* comprend-il correctement les routes reçues ? Pour vérifier la
+bonne interprétation des routes de type 3, nous utilisons la commande
+suivante pour voir l'association entre les VNI et les VTEP distants :
+
+    ::console
+    # show evpn vni
+    Number of VNIs: 2
+    VNI        VxLAN IF              VTEP IP         # MACs   # ARPs   Remote VTEPs
+    100        vxlan100              203.0.113.2     4        0        203.0.113.3
+                                                                       203.0.113.1
+    200        vxlan200              203.0.113.2     3        0        203.0.113.3
+                                                                       203.0.113.1
+
+Pour les routes de type 2, l'association entre les MAC distantes et
+les VTEP peut être visualisée avec la commande suivante :
+
+    ::console hl_lines="4 7"
+    # show evpn mac vni 100
+    Number of MACs (local and remote) known for this VNI: 4
+    MAC               Type   Intf/Remote VTEP      VLAN
+    50:54:33:00:00:09 remote 203.0.113.1
+    50:54:33:00:00:0a local  eth1.100
+    50:54:33:00:00:0b local  eth2.100
+    50:54:33:00:00:0c remote 203.0.113.3
+
+## Programmation de la FDB dans le noyau
+
+La dernière étape est de s'assurer que *Quagga* programme correctement
+les informations reçues dans le noyau. Cela peut se faire avec la
+commande `bridge` :
+
+    ::console
+    # bridge fdb show dev vxlan100 | grep dst
+    00:00:00:00:00:00 dst 203.0.113.1 self permanent
+    00:00:00:00:00:00 dst 203.0.113.3 self permanent
+    50:54:33:00:00:0c dst 203.0.113.3 self
+    50:54:33:00:00:09 dst 203.0.113.1 self
+
+Parfait ! Les deux premières lignes correspondent aux routes de type 3
+(les trames de type « BUM » seront envoyées à la fois à `203.0.113.1`
+et à `203.0.113.3`). Les deux dernières lignes correspondent aux
+routes de type 2.
+
+# Interopérabilité
+
+Un des avantages de BGP EVPN est son interopérabilité avec les
+implémentations d'autres constructeurs. Pour montrer qu'il s'agit
+d'une réalité, nous allons configurer un [Juniper vMX][] pour agir en
+tant que VTEP.
+
+Tout d'abord, nous devons le configurer en tant que pont. La
+configuration ci-dessous est équivalente à l'utilisation de `ip link`
+et `brctl` avec Linux. Nous ne configurons qu'une seule interface
+physique avec deux VLAN classiques que l'on associe aux VXLAN de façon
+à ce que les identifiants correspondent.
+
+    ::junos
+    interfaces {
+        ge-0/0/1 {
+            unit 0 {
+                family bridge {
+                    interface-mode trunk;
+                    vlan-id-list [ 100 200 ];
+                }
+            }
+        }
+    }
+    routing-instances {
+        switch {
+            instance-type virtual-switch;
+            interface ge-0/0/1.0;
+            bridge-domains {
+                vlan100 {
+                    domain-type bridge;
+                    vlan-id 100;
+                    vxlan {
+                        vni 100;
+                        ingress-node-replication;
+                    }
+                }
+                vlan200 {
+                    domain-type bridge;
+                    vlan-id 200;
+                    vxlan {
+                        vni 200;
+                        ingress-node-replication;
+                    }
+                }
+            }
+        }
+    }
+
+Nous devons ensuite configurer BGP EVPN pour publier l'ensemble des
+VNI locaux. La configuration est similaire à celle de *Quagga* :
+
+    ::junos
+    protocols {
+        bgp {
+            group fabric {
+                type internal;
+                multihop;
+                family evpn signaling;
+                local-address 203.0.113.3;
+                neighbor 203.0.113.253;
+                neighbor 203.0.113.254;
+            }
+        }
+    }
+    
+    routing-instances {
+        switch {
+            vtep-source-interface lo0.0;
+            route-distinguisher 203.0.113.3:1; # ❶
+            vrf-import EVPN-VRF-VXLAN;
+            vrf-target {
+                target:65000:1;
+                auto;
+            }
+            protocols {
+                evpn {
+                    encapsulation vxlan;
+                    extended-vni-list all;
+                    multicast-mode ingress-replication;
+                }
+            }
+        }
+    }
+    
+    routing-options {
+        router-id 203.0.113.3;
+        autonomous-system 65000;
+    }
+    
+    policy-options {
+        policy-statement EVPN-VRF-VXLAN {
+            then accept;
+        }
+    }
+
+Un [petit patch de compatibilité][patch1] est de plus
+nécessaire[^whypatch] pour *Cumulus Quagga*.
+
+[^whypatch]: L'encodage du VNI dans le *route target* est en cours de
+    standardisation dans [draft-ietf-bess-evpn-overlay][]. Juniper
+    implémente déjà les premières versions de ce document.
+
+Les routes générées sont très similaires à celles de Quagga. Il y a
+toutefois ces deux différences :
+
+ - sur *JunOS*, le *route distinguisher* est configuré statiquement en ❶,
+ - sur *JunOS*, le VNI est également encodé en tant que *Ethernet tag ID*.
+
+Voici une route de type 3 envoyée par *JunOS* :
+
+    ::console
+    > show route table bgp.evpn.0 receive-protocol bgp 203.0.113.3 extensive
+    
+    bgp.evpn.0: 13 destinations, 13 routes (13 active, 0 holddown, 0 hidden)
+    * 3:203.0.113.3:1::100::203.0.113.3/304 IM (1 entry, 1 announced)
+         Accepted
+         Route Distinguisher: 203.0.113.3:1
+         Nexthop: 203.0.113.3
+         Localpref: 100
+         AS path: I
+         Communities: target:65000:268435556 encapsulation:vxlan(0x8)
+         PMSI: Flags 0x0: Label 6: Type INGRESS-REPLICATION 203.0.113.3
+    [...]
+
+Et voici une route de type 2 :
+
+    ::console
+    > show route table bgp.evpn.0 receive-protocol bgp 203.0.113.3 extensive
+    
+    bgp.evpn.0: 13 destinations, 13 routes (13 active, 0 holddown, 0 hidden)
+    * 2:203.0.113.3:1::200::50:54:33:00:00:0f/304 MAC/IP (1 entry, 1 announced)
+         Accepted
+         Route Distinguisher: 203.0.113.3:1
+         Route Label: 200
+         ESI: 00:00:00:00:00:00:00:00:00:00
+         Nexthop: 203.0.113.3
+         Localpref: 100
+         AS path: I
+         Communities: target:65000:268435656 encapsulation:vxlan(0x8)
+    [...]
+
+Nous pouvons vérifier que le *vMX* comprend correctement les
+informations reçues de ses collègues qui font tourner *Quagga* :
+
+    ::console
+    > show evpn database l2-domain-id 100
+    Instance: switch
+    VLAN  DomainId  MAC address        Active source                  Timestamp        IP address
+         100        50:54:33:00:00:0c  203.0.113.1                    Apr 30 12:46:20
+         100        50:54:33:00:00:0d  203.0.113.2                    Apr 30 12:32:42
+         100        50:54:33:00:00:0e  203.0.113.2                    Apr 30 12:46:20
+         100        50:54:33:00:00:0f  ge-0/0/1.0                     Apr 30 12:45:55
+
+Inversement, ces derniers comprennent correctement les routes
+construites par *JunOS* :
+
+    ::console hl_lines="5 15"
+    # show evpn vni 100
+    VNI: 100
+     VxLAN interface: vxlan100 ifIndex: 9 VTEP IP: 203.0.113.1
+     Remote VTEPs for this VNI:
+      203.0.113.3
+      203.0.113.2
+     Number of MACs (local and remote) known for this VNI: 4
+     Number of ARPs (IPv4 and IPv6, local and remote) known for this VNI: 0
+    # show evpn mac vni 100
+    Number of MACs (local and remote) known for this VNI: 4
+    MAC               Type   Intf/Remote VTEP      VLAN
+    50:54:33:00:00:0c local  eth1.100
+    50:54:33:00:00:0d remote 203.0.113.2
+    50:54:33:00:00:0e remote 203.0.113.2
+    50:54:33:00:00:0f remote 203.0.113.3
+
+Je suis intéressé par tout retour sur l'interopérabilité avec d'autres
+constructeurs !
+
+*[VXLAN]: Virtual eXtensible LAN
+*[L2]: Layer 2
+*[L3]: Layer 3
+*[VTEP]: VXLAN Tunnel Endpoint
+*[IANA]: Internet Assigned Numbers Authority
+*[VNI]: VXLAN Network Identifier
+*[TTL]: Time to live
+*[BUM]: Broadcast, unknown unicast and multicast
+*[FDB]: Forwarding Database
+*[BGP]: Border Gateway Protocol
+*[EVPN]: Ethernet VPN
+*[VPN]: Virtual Private Network
+*[MC-LAG]: Multi-Chassis Link Aggregation Group
+*[MP-BGP]: Multi-Protocol Border Gateway Protocol
+*[NLRI]: Network Layer Reachability Information
+*[RIB]: Routing Information Base
+
+[RFC 7348]: https://tools.ietf.org/html/rfc7348 "Virtual eXtensible Local Area Network (VXLAN)"
+[RFC 7432]: https://tools.ietf.org/html/rfc7432 "BGP MPLS-Based Ethernet VPN"
+[RFC 4271]: https://tools.ietf.org/html/rfc4271 "A Border Gateway Protocol 4 (BGP-4)"
+[RFC 4760]: https://tools.ietf.org/html/rfc4760 "Multiprotocol Extensions for BGP-4"
+[draft-ietf-bess-evpn-overlay]: https://tools.ietf.org/html/draft-ietf-bess-evpn-overlay-08 "A Network Virtualization Overlay Solution using EVPN"
+[VXLAN & Linux]: [[fr/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
+[Cumulus Quagga]: https://github.com/CumulusNetworks/quagga "Cumulus Quagga routing suite"
+[cmaster branch]: https://github.com/cumulusnetworks/quagga/tree/cmaster "cmaster branch of Cumulus Quagga on GitHub"
+[Cumulus Linux]: https://cumulusnetworks.com/products/cumulus-linux/ "Cumulus Linux"
+[Quagga]: http://www.nongnu.org/quagga/ "Quagga Routing Suite"
+[FRR]: https://github.com/FRRouting/frr "The FRRouting Protocol Suite, forked from Quagga"
+[GoBGP]: https://osrg.github.io/gobgp/ "GoBGP, BGP implemented in the Go Programming Language"
+[Juniper QFX5100]: https://www.juniper.net/us/en/products-services/switching/qfx-series/qfx5100/ "QFX5100 10/40GbE data center switches"
+[Juniper MX240]: http://www.juniper.net/us/en/products-services/routing/mx-series/mx240/ "MX240 edge router"
+[Juniper vRR]: https://www.juniper.net/documentation/en_US/junos/topics/concept/virtual-route-reflector-overview.html "Juniper Virtual Route Reflector"
+[Juniper vMX]: https://www.juniper.net/us/en/products-services/routing/mx-series/vmx/ "vMX virtual router for enterprises and service providers"
+[patch1]: https://github.com/vincentbernat/quagga/commit/96d15fb77c0cc8a39ecb7c4782e5f7669b568828 "Patch pour rendre Cumulus Quagga interopérable avec Juniper"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
