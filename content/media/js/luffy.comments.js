@@ -54,6 +54,6 @@ luffy.comments = function() {
     onHashChange();
 
     // Display introduction text
-    el.children[1].className = el.children[2].className;
-    el.children[2].className = '';
+    el.children[0].className = el.children[1].className;
+    el.children[1].className = '';
 };
