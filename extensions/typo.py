@@ -21,6 +21,9 @@ class FrenchPunctuationPlugin(Plugin):
         filters.applyfilters = lambda text: self.frenchpunct(original_applyfilters(text))
         filters.process_ignores = self.process_ignores(original_process_ignores)
 
+        # Don't use widont
+        filters.widont = lambda t: t
+
     def process_ignores(self, orig):
         def process(text, ignore_tags=None):
             if ignore_tags is None:
