@@ -8,8 +8,9 @@ import re
 from hyde.plugin import Plugin
 
 
-class FrenchPunctuationPlugin(Plugin):
-    """Monkey-patch typogrify to correctly handle french punctuation."""
+class TypographyPlugin(Plugin):
+    """Monkey-patch typogrify to correctly handle french punctuation and
+    various other aspects not handled by typogrify."""
 
     NNBSP = u'&#x202f;'
 
