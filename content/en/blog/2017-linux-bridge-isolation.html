@@ -401,6 +401,25 @@ potentially exposing weak devices (e.g. PDU) exposing an SNMP
 agent. If one-way communication is all that's needed, the attacker can
 also spoof its source IP address, bypassing IP-based authentication.
 
+# About macvlan interfaces
+
+When source-address learning is not needed, bridges can be replaced by
+*macvlan* or *macvtap* interfaces. Have a look at the following
+article for more details: “[Bridge vs Macvlan][MACVLAN]”.
+
+In this case, the packet processing is different and asymmetric. When
+a frame exits the *macvlan* interface, it is directly transmitted to
+the appropriate interface (either another *macvlan* interface or the
+lower device). In this direction, communication with the host is not
+possible.
+
+However, when a frame enters the lower device, if the destination MAC
+is not one of the sub-interfaces, the frame is processed by the host
+using the appropriate *protocol handler* (ARP, IPv4, IPv6). Therefore,
+isolation can only be obtained by
+using
+[the protocol-dependent methods](#protocol-dependent-workarounds).
+
 *[ICMP]: Internet Control Message Protocol
 *[ARP]: Address Resolution Protocol
 *[TTL]: Time to live
@@ -415,6 +434,7 @@ also spoof its source IP address, bypassing IP-based authentication.
 [physdev match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#physdev "iptables physdev match extension"
 [rpfilter match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#rpfilter "iptables rpfilter match extension"
 [RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
+[MACVLAN]: https://hicu.be/bridge-vs-macvlan "Hi Cube: Bridge vs Macvlan"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
