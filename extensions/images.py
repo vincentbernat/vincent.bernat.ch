@@ -260,7 +260,7 @@ class ImageSizerPlugin(PILPlugin):
             img = "%s%s</a>" % (atag, img)
         if not paragraph:
             return img
-        img = '<span class="lf-img-inner" style="padding-bottom: %.3f%%;">%s</div>' % (
+        img = '<span class="lf-img-inner" style="padding-bottom: %.3f%%;">%s</span>' % (
             float(height)*100./width, img)
         img = '<div class="lf-img-outer" style="width: %dpx;">%s</div>' % (
             width, img)
