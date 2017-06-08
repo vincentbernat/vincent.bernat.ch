@@ -17,7 +17,7 @@ class ResponsiveTableExtension(Extension):
         self.processor = ResponsiveTableTreeprocessor()
         self.processor.md = md
         self.processor.config = self.getConfigs()
-        md.treeprocessors.add('headerid', self.processor, '_end')
+        md.treeprocessors.add('responsive-table', self.processor, '_end')
 
 
 class ResponsiveTableTreeprocessor(Treeprocessor):
