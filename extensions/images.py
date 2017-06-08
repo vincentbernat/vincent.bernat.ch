@@ -160,6 +160,18 @@ class ImageSizerPlugin(PILPlugin):
         super(ImageSizerPlugin, self).__init__(site)
         self.cache = {}
 
+    def _topx(self, x):
+        mo = re.match(r'(?P<size>\d+(?:\.\d*)?)(?P<unit>.*)', x)
+        if not mo:
+            raise ValueError("cannot convert {} to pixel".format(x))
+        unit = mo.group("unit")
+        size = float(mo.group("size"))
+        if unit in ["", "px"]:
+            return int(size)
+        if unit == "pt":
+            return int(size*4/3)
+        raise ValueError("unknown unit {}".format(unit))
+
     def _handle_img_size(self, image):
         if image.source_file.kind not in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
             self.logger.warn(
@@ -169,7 +181,7 @@ class ImageSizerPlugin(PILPlugin):
         try:
             if image.source_file.kind == 'svg':
                 svg = ET.parse(image.path).getroot()
-                return tuple(x and int(float(x)) or None
+                return tuple(x and self._topx(x) or None
                              for x in (svg.attrib.get('width', None),
                                        svg.attrib.get('height', None)))
             return self.Image.open(image.path).size
