@@ -24,7 +24,6 @@ luffy.gallery = function() {
     // Global options and their defaults
     var options = {},
         defaults = {
-            captions: true,
             fullScreen: false,
             noScrollbars: false,
             titleTag: false,
@@ -374,16 +373,12 @@ luffy.gallery = function() {
             }
             return;
         }
-        // Get element reference, optional caption and source path
+        // Get element reference source path
         var imageElement = imagesMap[currentGallery][index];
-        var imageCaption = typeof options.captions === 'function' ?
-                           options.captions.call(imagesMap[currentGallery], imageElement) :
-                           imageElement.getAttribute('data-caption') || imageElement.title;
         var imageSrc = getImageSrc(imageElement);
         // Prepare image container elements
         var figure = create('figure');
         var image = create('img');
-        var figcaption = create('figcaption');
         imageContainer.appendChild(figure);
         // Add loader element
         figure.innerHTML = '<div class="baguetteBox-spinner">' +
@@ -400,15 +395,7 @@ luffy.gallery = function() {
             }
         };
         image.setAttribute('src', imageSrc);
-        if (options.titleTag && imageCaption) {
-            image.title = imageCaption;
-        }
         figure.appendChild(image);
-        // Insert caption if available
-        if (options.captions && imageCaption) {
-            figcaption.innerHTML = imageCaption;
-            figure.appendChild(figcaption);
-        }
         // Run callback
         if (options.async && callback) {
             callback();
