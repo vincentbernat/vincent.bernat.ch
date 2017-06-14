@@ -170,18 +170,6 @@ luffy.gallery = function() {
         });
     }
 
-    function unbindImageClickListeners() {
-        galleries.forEach(function(gallery) {
-            [].forEach.call(gallery, function() {
-                var galleryID = imagesMap.length - 1;
-                [].forEach.call(imagesMap[galleryID], function(imageElement) {
-                    unbind(imageElement, 'click', imagedEventHandlers[galleryID + '_' + imageElement]);
-                });
-                imagesMap.pop();
-            });
-        });
-    }
-
     function buildOverlay() {
         overlay = getByID('baguetteBox-overlay');
         // Check if the overlay already exists
@@ -249,16 +237,6 @@ luffy.gallery = function() {
         bind(overlay, 'touchstart', touchstartHandler);
         bind(overlay, 'touchmove', touchmoveHandler);
         bind(overlay, 'touchend', touchendHandler);
-    }
-
-    function unbindEvents() {
-        unbind(overlay, 'click', overlayClickHandler);
-        unbind(previousButton, 'click', previousButtonClickHandler);
-        unbind(nextButton, 'click', nextButtonClickHandler);
-        unbind(closeButton, 'click', closeButtonClickHandler);
-        unbind(overlay, 'touchstart', touchstartHandler);
-        unbind(overlay, 'touchmove', touchmoveHandler);
-        unbind(overlay, 'touchend', touchendHandler);
     }
 
     function prepareOverlay(galleryIndex) {
@@ -584,17 +562,6 @@ luffy.gallery = function() {
 
     function create(element) {
         return document.createElement(element);
-    }
-
-    function destroyPlugin() {
-        unbindEvents();
-        unbindImageClickListeners();
-        unbind(document, 'keydown', keyDownHandler);
-        document.getElementsByTagName('body')[0].removeChild(document.getElementById('baguetteBox-overlay'));
-        currentIndex = 0;
-        currentGallery = -1;
-        galleries.length = 0;
-        imagesMap.length = 0;
     }
 
     run('.lf-gallery');
