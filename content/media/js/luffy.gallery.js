@@ -1,5 +1,5 @@
 /* Handle image gallery */
-/* From: https://github.com/feimosi/baguetteBox.js/blob/v1.6.3/src/baguetteBox.js
+/* From: https://github.com/feimosi/baguetteBox.js/blob/v1.8.2/src/baguetteBox.js
    MIT licensed. Copyright (c) 2016 feimosi
  */
 
@@ -41,23 +41,22 @@ luffy.gallery = function() {
     var supports = {};
     // DOM Elements references
     var overlay, slider, previousButton, nextButton, closeButton;
-    // Current image index inside the slider and displayed gallery index
-    var currentIndex = 0, currentGallery = -1;
+    // An array with all images in the current gallery
+    var currentGallery = [];
+    // Current image index inside the slider
+    var currentIndex = 0;
     // Touch event start position (for slide gesture)
-    var touchStartX;
-    var touchStartY;
+    var touch = {};
     // If set to true ignore touch events because animation was already fired
     var touchFlag = false;
     // Regex pattern to match image files
     var regex = /.+\.(gif|jpe?g|png|webp)/i;
-    // Array of all used galleries (Array od NodeList elements)
-    var galleries = [];
-    // 2D array of galleries and images inside them
-    var imagesMap = [];
+    // Object of all used galleries
+    var data = {};
     // Array containing temporary images DOM elements
     var imagesElements = [];
-    // Event handlers
-    var imagedEventHandlers = {};
+    // The last focused element before opening the overlay
+    var documentLastFocus = null;
     var overlayClickHandler = function(event) {
         // Close the overlay when user clicks directly on the background
         if (event.target.id.indexOf('baguette-img') !== -1) {
@@ -77,31 +76,46 @@ luffy.gallery = function() {
         hideOverlay();
     };
     var touchstartHandler = function(event) {
+        touch.count++;
+        if (touch.count > 1) {
+            touch.multitouch = true;
+        }
         // Save x and y axis position
-        touchStartX = event.changedTouches[0].pageX;
-        touchStartY = event.changedTouches[0].pageY;
+        touch.startX = event.changedTouches[0].pageX;
+        touch.startY = event.changedTouches[0].pageY;
     };
     var touchmoveHandler = function(event) {
-        // If action was already triggered return
-        if (touchFlag) {
+        // If action was already triggered or multitouch return
+        if (touchFlag || touch.multitouch) {
             return;
         }
         event.preventDefault ? event.preventDefault() : event.returnValue = false; // jshint ignore:line
-        var touch = event.touches[0] || event.changedTouches[0];
+        var touchEvent = event.touches[0] || event.changedTouches[0];
         // Move at least 40 pixels to trigger the action
-        if (touch.pageX - touchStartX > 40) {
+        if (touchEvent.pageX - touch.startX > 40) {
             touchFlag = true;
             showPreviousImage();
-        } else if (touch.pageX - touchStartX < -40) {
+        } else if (touchEvent.pageX - touch.startX < -40) {
             touchFlag = true;
             showNextImage();
         // Move 100 pixels up to close the overlay
-        } else if (touchStartY - touch.pageY > 100) {
+        } else if (touch.startY - touchEvent.pageY > 100) {
             hideOverlay();
         }
     };
     var touchendHandler = function() {
+        touch.count--;
+        if (touch.count <= 0) {
+            touch.multitouch = false;
+        }
         touchFlag = false;
+    };
+
+    var trapFocusInsideOverlay = function(event) {
+        if (overlay.style.display === 'block' && (overlay.contains && !overlay.contains(event.target))) {
+            event.stopPropagation();
+            initFocus();
+        }
     };
 
     // forEach polyfill for IE8
@@ -140,32 +154,49 @@ luffy.gallery = function() {
 
     function bindImageClickListeners(selector, userOptions) {
         // For each gallery bind a click event to every image inside it
-        var gallery = document.querySelectorAll(selector);
-        galleries.push(gallery);
-        [].forEach.call(gallery, function(galleryElement) {
+        var galleryNodeList = document.querySelectorAll(selector);
+        var selectorData = {
+            galleries: [],
+            nodeList: galleryNodeList
+        };
+        data[selector] = selectorData;
+
+        [].forEach.call(galleryNodeList, function(galleryElement) {
             if (userOptions && userOptions.filter) {
                 regex = userOptions.filter;
             }
+
+            // Get nodes from gallery elements or single-element galleries
+            var tagsNodeList = [];
+            if (galleryElement.tagName === 'A') {
+                tagsNodeList = [galleryElement];
+            } else {
+                tagsNodeList = galleryElement.getElementsByTagName('a');
+            }
+
             // Filter 'a' elements from those not linking to images
-            var tags = galleryElement.getElementsByTagName('a');
-            tags = [].filter.call(tags, function(element) {
+            tagsNodeList = [].filter.call(tagsNodeList, function(element) {
                 return regex.test(element.href);
             });
+            if (tagsNodeList.length === 0) {
+                return;
+            }
 
-            // Get all gallery images and save them in imagesMap with custom options
-            var galleryID = imagesMap.length;
-            imagesMap.push(tags);
-            imagesMap[galleryID].options = userOptions;
-
-            [].forEach.call(imagesMap[galleryID], function(imageElement, imageIndex) {
+            var gallery = [];
+            [].forEach.call(tagsNodeList, function(imageElement, imageIndex) {
                 var imageElementClickHandler = function(event) {
                     event.preventDefault ? event.preventDefault() : event.returnValue = false; // jshint ignore:line
-                    prepareOverlay(galleryID);
+                    prepareOverlay(gallery, userOptions);
                     showOverlay(imageIndex);
                 };
-                imagedEventHandlers[galleryID + '_' + imageElement] = imageElementClickHandler;
+                var imageItem = {
+                    eventHandler: imageElementClickHandler,
+                    imageElement: imageElement
+                };
                 bind(imageElement, 'click', imageElementClickHandler);
+                gallery.push(imageItem);
             });
+            selectorData.galleries.push(gallery);
         });
     }
 
@@ -181,6 +212,7 @@ luffy.gallery = function() {
         }
         // Create overlay element
         overlay = create('div');
+        overlay.setAttribute('role', 'dialog');
         overlay.id = 'baguetteBox-overlay';
         document.getElementsByTagName('body')[0].appendChild(overlay);
         // Create gallery slider element
@@ -206,7 +238,7 @@ luffy.gallery = function() {
         closeButton.setAttribute('type', 'button');
         closeButton.id = 'close-button';
         closeButton.setAttribute('aria-label', 'Close');
-        closeButton.innerHTML = supports.svg ? closeX : '&times';
+        closeButton.innerHTML = supports.svg ? closeX : '&times;';
         overlay.appendChild(closeButton);
 
         previousButton.className = nextButton.className = closeButton.className = 'baguetteBox-button';
@@ -216,15 +248,15 @@ luffy.gallery = function() {
 
     function keyDownHandler(event) {
         switch (event.keyCode) {
-            case 37: // Left arrow
-                showPreviousImage();
-                break;
-            case 39: // Right arrow
-                showNextImage();
-                break;
-            case 27: // Esc
-                hideOverlay();
-                break;
+        case 37: // Left arrow
+            showPreviousImage();
+            break;
+        case 39: // Right arrow
+            showNextImage();
+            break;
+        case 27: // Esc
+            hideOverlay();
+            break;
         }
     }
 
@@ -236,29 +268,35 @@ luffy.gallery = function() {
         bind(overlay, 'touchstart', touchstartHandler);
         bind(overlay, 'touchmove', touchmoveHandler);
         bind(overlay, 'touchend', touchendHandler);
+        bind(document, 'focus', trapFocusInsideOverlay, true);
     }
 
-    function prepareOverlay(galleryIndex) {
+    function prepareOverlay(gallery, userOptions) {
         // If the same gallery is being opened prevent from loading it once again
-        if (currentGallery === galleryIndex) {
+        if (currentGallery === gallery) {
             return;
         }
-        currentGallery = galleryIndex;
+        currentGallery = gallery;
         // Update gallery specific options
-        setOptions(imagesMap[galleryIndex].options);
+        setOptions(userOptions);
         // Empty slider of previous contents (more effective than .innerHTML = "")
         while (slider.firstChild) {
             slider.removeChild(slider.firstChild);
         }
         imagesElements.length = 0;
-        // Prepare and append images containers
-        for (var i = 0, fullImage; i < imagesMap[galleryIndex].length; i++) {
+
+        var imagesFiguresIds = [];
+        // Prepare and append images containers and populate figure and captions IDs arrays
+        for (var i = 0, fullImage; i < gallery.length; i++) {
             fullImage = create('div');
             fullImage.className = 'full-image';
             fullImage.id = 'baguette-img-' + i;
             imagesElements.push(fullImage);
+
+            imagesFiguresIds.push('baguetteBox-figure-' + i);
             slider.appendChild(imagesElements[i]);
         }
+        overlay.setAttribute('aria-labelledby', imagesFiguresIds.join(' '));
     }
 
     function setOptions(newOptions) {
@@ -277,7 +315,7 @@ luffy.gallery = function() {
         slider.style.transition = slider.style.webkitTransition = (options.animation === 'fadeIn' ? 'opacity .4s ease' :
             options.animation === 'slideIn' ? '' : 'none');
         // Hide buttons if necessary
-        if (options.buttons === 'auto' && ('ontouchstart' in window || imagesMap[currentGallery].length === 1)) {
+        if (options.buttons === 'auto' && ('ontouchstart' in window || currentGallery.length === 1)) {
             options.buttons = false;
         }
         // Set buttons style to hide or display them
@@ -285,12 +323,15 @@ luffy.gallery = function() {
         // Set overlay color
         try {
             overlay.style.backgroundColor = options.overlayBackgroundColor;
-        } catch(e) {}
+        } catch (e) {
+            // Silence the error and continue
+        }
     }
 
     function showOverlay(chosenImageIndex) {
         if (options.noScrollbars) {
-            document.body.style.overflow = 'hidden';
+            document.documentElement.style.overflowY = 'hidden';
+            document.body.style.overflowY = 'scroll';
         }
         if (overlay.style.display === 'block') {
             return;
@@ -298,6 +339,11 @@ luffy.gallery = function() {
 
         bind(document, 'keydown', keyDownHandler);
         currentIndex = chosenImageIndex;
+        touch = {
+            count: 0,
+            startX: null,
+            startY: null
+        };
         loadImage(currentIndex, function() {
             preloadNext(currentIndex);
             preloadPrev(currentIndex);
@@ -317,6 +363,16 @@ luffy.gallery = function() {
         }, 50);
         if (options.onChange) {
             options.onChange(currentIndex, imagesElements.length);
+        }
+        documentLastFocus = document.activeElement;
+        initFocus();
+    }
+
+    function initFocus() {
+        if (options.buttons) {
+            previousButton.focus();
+        } else {
+            closeButton.focus();
         }
     }
 
@@ -342,7 +398,8 @@ luffy.gallery = function() {
 
     function hideOverlay() {
         if (options.noScrollbars) {
-            document.body.style.overflow = 'auto';
+            document.documentElement.style.overflowY = 'auto';
+            document.body.style.overflowY = 'auto';
         }
         if (overlay.style.display === 'none') {
             return;
@@ -358,11 +415,16 @@ luffy.gallery = function() {
                 options.afterHide();
             }
         }, 500);
+        documentLastFocus.focus();
     }
 
     function loadImage(index, callback) {
         var imageContainer = imagesElements[index];
-        if (typeof imageContainer === 'undefined') {
+        var galleryItem = currentGallery[index];
+
+        // Return if the index exceeds prepared images in the overlay
+        // or if the current gallery has been changed / closed
+        if (imageContainer === undefined || galleryItem === undefined) {
             return;
         }
 
@@ -373,19 +435,23 @@ luffy.gallery = function() {
             }
             return;
         }
-        // Get element reference source path
-        var imageElement = imagesMap[currentGallery][index];
+
+        // Get element reference, optional caption and source path
+        var imageElement = galleryItem.imageElement;
+        var thumbnailElement = imageElement.getElementsByTagName('img')[0];
         var imageSrc = getImageSrc(imageElement);
-        // Prepare image container elements
+
+        // Prepare figure element
         var figure = create('figure');
-        var image = create('img');
-        imageContainer.appendChild(figure);
-        // Add loader element
+        figure.id = 'baguetteBox-figure-' + index;
         figure.innerHTML = '<div class="baguetteBox-spinner">' +
             '<div class="baguetteBox-double-bounce1"></div>' +
             '<div class="baguetteBox-double-bounce2"></div>' +
             '</div>';
-        // Set callback function when image loads
+        imageContainer.appendChild(figure);
+
+        // Prepare gallery img element
+        var image = create('img');
         image.onload = function() {
             // Remove loader element
             var spinner = document.querySelector('#baguette-img-' + index + ' .baguetteBox-spinner');
@@ -395,7 +461,9 @@ luffy.gallery = function() {
             }
         };
         image.setAttribute('src', imageSrc);
+        image.alt = thumbnailElement ? thumbnailElement.alt || '' : '';
         figure.appendChild(image);
+
         // Run callback
         if (options.async && callback) {
             callback();
@@ -525,18 +593,23 @@ luffy.gallery = function() {
         });
     }
 
-    function bind(element, event, callback) {
+    function bind(element, event, callback, useCapture) {
         if (element.addEventListener) {
-            element.addEventListener(event, callback, false);
+            element.addEventListener(event, callback, useCapture);
         } else {
             // IE8 fallback
-            element.attachEvent('on' + event, callback);
+            element.attachEvent('on' + event, function(event) {
+                // `event` and `event.target` are not provided in IE8
+                event = event || window.event;
+                event.target = event.target || event.srcElement;
+                callback(event);
+            });
         }
     }
 
-    function unbind(element, event, callback) {
+    function unbind(element, event, callback, useCapture) {
         if (element.removeEventListener) {
-            element.removeEventListener(event, callback, false);
+            element.removeEventListener(event, callback, useCapture);
         } else {
             // IE8 fallback
             element.detachEvent('on' + event, callback);
