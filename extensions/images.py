@@ -277,9 +277,9 @@ class ImageSizerPlugin(PILPlugin):
         img = '<div class="lf-img-outer" style="width: %dpx;">%s</div>' % (
             width, img)
         if title is not None:
-            img = ('<div class="lf-captioned">%s'
-                   '<div class="lf-caption">%s</div>'
-                   '</div>') % (img, title)
+            img = ('<figure>%s'
+                   '<figcaption>%s</figcaption>'
+                   '</figure>') % (img, title)
         return img
 
     def text_resource_complete(self, resource, text):
