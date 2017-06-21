@@ -1,0 +1,526 @@
+---
+title: "Fonctionnement de la table de routage IPv4 sous Linux"
+description: |
+  Linux utilise un arbre compressé pour stocker les routes IPv4
+  avec de très bonnes performances et un usage mémoire modéré.
+keywords: "linux, trie, arbre radix, trie patricia, table de routage, réseau"
+uuid: 5c21d42f-f48c-49fb-94d7-b2d1659250da
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-trie-routes": "Dépôt GitHub"
+tags:
+  - network
+---
+
+**En bref** : Avec une implémentation des tables de routage IPv4
+utilisant les tries « LPC », Linux offre de bonnes performances pour
+la recherche de routes (50 ns pour une vue complète
+d'Internet). L'utilisation mémoire est de plus très modérée (64 MiB de
+mémoire suffisent pour 500 000 routes).
+
+---
+
+Une étape importante du voyage d'un datagramme IPv4 à l'intérieur du
+noyau Linux est la **recherche de la route à utiliser** via la
+fonction [`fib_lookup()`][fib_lookup()]. À partir des informations
+essentielles concernant le datagramme (addresses IP source et
+destination, interfaces, ...), cette fonction doit fournir rapidement
+une décision. Quelques unes des options possibles sont :
+
+ - livraison locale (`RTN_LOCAL`),
+ - routage via un intermédiaire fourni (`RTN_UNICAST`),
+ - destruction sans notification (`RTN_BLACKHOLE`).
+
+Depuis la version 2.6.39, Linux stocke les routes dans un **arbre
+préfixe compressé** ([commit 3630b7c050d9][]). Auparavant,
+un [cache des routes][route cache] était maintenu mais celui-ci a
+été [retiré][route cache removed][^why] de Linux 3.6.
+
+[^why]: Le cache des routes était une cible facile pour des attaques
+    par déni de service. Il était également supposément inefficace sur
+    des sites importants bien que j'aie personnellement mesuré le
+    contraire.
+
+[TOC]
+
+# Recherche d'une route dans un trie
+
+Rechercher une route dans une table de routage revient à trouver le
+**préfixe le plus spécifique** correspondant à la
+destination. Considérons par exemple la table de routage suivante :
+
+    ::console
+    $ ip route show scope global table 100
+    default via 203.0.113.5 dev out2
+    192.0.2.0/25
+            nexthop via 203.0.113.7  dev out3 weight 1
+            nexthop via 203.0.113.9  dev out4 weight 1
+    192.0.2.47 via 203.0.113.3 dev out1
+    192.0.2.48 via 203.0.113.3 dev out1
+    192.0.2.49 via 203.0.113.3 dev out1
+    192.0.2.50 via 203.0.113.3 dev out1
+
+Voici quelques exemples de recherches et les décisions associées :
+
+IP destination   | Prochain saut
+---------------- | -------------------------------------------------------------
+`192.0.2.49`     | `203.0.113.3` via `out1`
+`192.0.2.50`     | `203.0.113.3` via `out1`
+`192.0.2.51`     | `203.0.113.7` via `out3` or `203.0.113.9` via `out4` (ECMP)
+`192.0.2.200`    | `203.0.113.5` via `out2`
+
+Une structure très courante pour rechercher une route est le [trie][],
+une structure de recherche en arbre où chaque nœud a son père pour
+préfixe.
+
+## Recherche dans un trie simple
+
+Le trie suivant encode la table de routage exposée ci-dessus :
+
+![Simple routing trie][i10]
+[i10]: [[!!images/linux/lpc-trie-simple-trie.svg]] "Trie primitif de recherche pour une petite table de routage. Pour des raisons de lisibilité, le trie a été coupé en deux. Les nœuds avec une flèche contiennent une entrée de routage."
+
+À tout moment, la longueur du préfixe correspond à la profondeur
+actuelle et le préfixe lui-même correspond au chemin depuis la racine.
+
+Une recherche dans un tel trie est simple. À chaque étape, récupérer
+le *n*<sup>ème</sup> bit de l'adresse IP où *n* est la profondeur
+actuelle dans le trie. Si celui-ci est 0, continuer avec le fils de
+gauche. Sinon, continuer avec celui de droite. Si un fils est
+manquant, remonter dans l'arbre jusqu'à trouver une entrée de
+routage. Par exemple, pour `192.0.2.50`, le parcours de l'arbre se
+termine sur la feuille correspondante. Par contre, pour `192.0.2.50`,
+lorsque le nœud `192.0.2.50/31` est atteint, il n'y a pas de fils à
+droite. On remonte donc l'arbre jusqu'à trouver l'entrée
+`192.0.2.0/25`.
+
+Ajouter ou retirer des routes est trivial. Du point de vue de la
+performance, la profondeur étant bornée par 32, la recherche se fait
+en temps constant par rapport au nombre de routes.
+
+[Quagga][trie-quagga] est un exemple de logiciel de routage utilisant
+toujours cette approche.
+
+## Recherche dans un trie compressé
+
+Dans l'exemple précédent, la plupart des nœuds n'ont qu'un seul
+fils. Cela entraîne beaucoup de comparaisons bit à bit ainsi qu'un
+usage sous-optimal de la mémoire. Pour résoudre ce problème, il est
+possible de **compresser les chemins** : chaque nœud ayant un fils
+unique (et n'hébergeant par une entrée de routage) est supprimé. Les
+nœuds restants gagnent une propriété supplémentaire indiquant le
+nombre de bits en entrée qui doivent être ignorés. Un tel trie est
+aussi connu sous le nom d'*arbre Patricia* ou
+d'[arbre radix][radix trie]. Voici la version avec des chemins
+compressés du trie précédent :
+
+![Arbre Patricia][i11]
+[i11]: [[!!images/linux/lpc-trie-patricia-trie.svg]] "Arbre Patricia pour une petite table de routage. Certains nœuds indiquent combien de bits supplémentaires doivent être ignorés dans l'adresse IP recherchée."
+
+Parce que certains bits ont été ignorés, une vérification finale est
+nécessaire pour s'assurer que l'entrée trouvée correspond à l'IP
+recherchée. Dans le cas contraire, on considère que l'entrée n'a pas
+été trouvée et on remonte l'arbre pour trouver une route adéquate. La
+figure ci-dessous montre deux adresses IP qui aboutissent à la même
+feuille :
+
+![Recherche dans un arbre Patricia][i12]
+[i12]: [[!!images/linux/lpc-trie-patricia-trie-lookup.svg]] "Recherche de deux adresses IP dans un arbre Patricia. Les deux IP partagent les mêmes bits aux endroits clefs mais sont différents sur les parties ignorées."
+
+La réduction de la profondeur du trie compense la complexité
+supplémentaire résultant de la nécessité de gérer les faux
+positifs. L'insertion et la suppression de routes restent relativement
+aisées.
+
+De nombreux systèmes de routage utilisent des arbres Patricia :
+
+ - [OpenBSD][patricia-openbsd]
+ - [NetBSD][patricia-netbsd]
+ - [FreeBSD][patricia-freebsd]
+ - [GoBGP][] (via [go-radix][])
+
+## Recherche dans un trie doublement compressé
+
+En plus de la compression le long des chemins, il est possible de
+**compresser certains sous-arbres**[^ref-lpc]. Cela consiste à
+détecter les sous-arbres **densément peuplés** et de les remplacer par
+un unique nœud contenant un vecteur de 2<sup>*k*</sup> fils. Ce nœud
+consomme donc *k* bits en entrée au lieu d'un seul. Par exemple, voici
+une version doublement compressée de notre trie précédent :
+
+![Trie doublement compressé][i13]
+[i13]: [[!!images/linux/lpc-trie-lpc-trie.svg]] "Trie doublement compressé. La fusion d'un sous-arbre produit un nœud avec un vecteur de 4 éléments. Le dernier élément est vide."
+
+[^ref-lpc]: “[IP-address lookup using LC-tries][lpc-trie]”, IEEE
+    Journal on Selected Areas in Communications, 17(6):1083-1092, Juin
+    1999.
+
+Un tel trie est appelé trie LC (*level compressed trie*) ou **trie
+LPC** (*level and path compressed trie*). Il offre des performances
+plus élevées par rapport à un arbre radix.
+
+Une heuristique est utilisée pour décider combien de bits un nœud doit
+traiter. Linux considère que si le ratio du nombre de fils non vides
+sur le nombre total de fils est supérieur à 50% quand le nœud traite
+un bit supplémentaire, alors le bit en question est alloué au
+nœud. Par contre, si le ratio est actuellement inférieur à 25%, le
+nœud perd la responsabilité d'un bit. Ces valeurs ne sont pas
+configurables.
+
+L'insertion et la suppression d'une route devient une tâche beaucoup
+plus complexe mais la temps de recherche est également sensiblement
+réduit.
+
+# Implémentation sous Linux
+
+L'implémentation pour IPv4 existe depuis Linux 2.6.13
+([commit 19baf839ff4a][]) et est utilisée par défaut depuis la version
+2.6.39 ([commit 3630b7c050d9][]).
+
+Voici la représentation en mémoire de notre table de routage[^tnode] :
+
+![Représentation en mémoire d'un trie][i14]
+[i14]: [[!!images/linux/lpc-trie-struct.svg]] "Représentation en mémoire d'un trie LPC sous Linux"
+
+[^tnode]: Pour les nœuds internes, la structure `key_vector` est
+    incluse dans une structure `tnode`. Cette dernière contient des
+    informations jamais ou rarement utilisées pour une recherche,
+    notamment la référence au père qui n'est généralement pas
+    nécessaire pour remonter l'arbre car Linux mémorise le parent le
+    plus proche dans une variable lors de la traversée initiale.
+
+Plusieurs structures sont utilisées :
+
+ - [`struct fib_table`][struct fib_table] représente une table de routage,
+ - [`struct trie`][struct trie] représente un trie,
+ - [`struct key_vector`][struct key_vector] représente un nœud interne
+   (quand `bits` est différent de 0) ou une feuille,
+ - [`struct fib_info`][struct fib_info] contient des attributs
+   partagés par plusieurs routes (comme l'adresse du prochain saut ou
+   l'interface de sortie),
+ - [`struct fib_alias`][struct fib_alias] assure le lien entre les
+   feuilles et les structures `fib_info`.
+
+Le trie peut etre visualisé à travers `/proc/net/fib_trie`:
+
+    ::console
+    $ cat /proc/net/fib_trie
+    Id 100:
+      +-- 0.0.0.0/0 2 0 2
+         |-- 0.0.0.0
+            /0 universe UNICAST
+         +-- 192.0.2.0/26 2 0 1
+            |-- 192.0.2.0
+               /25 universe UNICAST
+            |-- 192.0.2.47
+               /32 universe UNICAST
+            +-- 192.0.2.48/30 2 0 1
+               |-- 192.0.2.48
+                  /32 universe UNICAST
+               |-- 192.0.2.49
+                  /32 universe UNICAST
+               |-- 192.0.2.50
+                  /32 universe UNICAST
+    [...]
+
+Pour les nœuds internes, les trois nombres suivant le préfixe sont :
+
+ 1. le nombre de bits consommés par ce nœud,
+ 2. le nombre de fils qui ne gèrent qu'un seul bit,
+ 3. le nombre de fils vides.
+
+De plus, si le noyau a été configuré avec l'option
+`CONFIG_IP_FIB_TRIE_STATS`, des statistiques sur la structure sont
+disponibles dans `/proc/net/fib_triestat`[^stats]:
+
+    ::console
+    $ cat /proc/net/fib_triestat
+    Basic info: size of leaf: 48 bytes, size of tnode: 40 bytes.
+    Id 100:
+            Aver depth:     2.33
+            Max depth:      3
+            Leaves:         6
+            Prefixes:       6
+            Internal nodes: 3
+              2: 3
+            Pointers: 12
+    Null ptrs: 4
+    Total size: 1  kB
+    [...]
+
+[^stats]: Une feuille peut contenir plusieurs préfixes (`struct
+    fib_alias` est en réalité une liste). Le nombre de « préfixes »
+    peut donc être supérieur au nombre de feuilles. Le système garde
+    également quelques statistiques sur la répartition des nœuds selon
+    le nombre de bits qu'ils consomment. Dans notre exemple, les trois
+    nœuds internes utilisent tous 2 bits.
+
+Quand une table de routage est très dense, un nœud peut gérer de
+nombreux bits. Par exemple, si une table de routage contient un
+million d'entrées /32 placées dans un /12, un seul nœud interne peut
+gérer 20 bits. Dans ce cas, la recherche se réduit à récupérer
+l'élément adéquat dans un tableau.
+
+Le graphique suivant montre le nombre de nœuds internes utilisés par
+rapport au nombre de routes insérées. Différents scénarios sont
+envisagés (routes provenant d'une vue complète d'Internet, routes /32
+réparties sur 4 sous-réseaux différents avec des densités
+variées). Lorsque les routes sont denses, le nombre de nœuds internes
+est très réduit.
+
+![Nœuds internes et pointeurs nuls][i0]
+[i0]: [[!!images/linux/lpc-trie-nodes.svg]] "Nombre de nœuds internes et de pointeurs nuls par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+## Performance
+
+À quel point la recherche d'une route est-elle performante ? La
+profondeur maximale du trie reste limité (environ 6 pour une vue
+complète d'Internet) ce qui rend la recherche particulièrement
+rapide. À l'aide d'un petit [module noyau][kernel module], il est
+possible de mesurer précisément[^bench] le temps utilisé par la
+fonction `fib_lookup()` :
+
+![Profondeur maximale et temps de recherche][i2]
+[i2]: [[!!images/linux/lpc-trie-maxdepth.svg]] "Profondeur maximale du trie et temps de recherche selon le nombre de routes insérées. L'axe horizontal utilise une échelle logarithmique."
+
+[^bench]: Les mesures sont faites dans une machine virtuelle équipée
+    d'un seul CPU. Le CPU hôte est un [Intel Core i5-4670K][] tournant
+    à 3,7 GHz durant les mesures (le gouverneur CPU est configuré en
+    mode performance). Le noyau est Linux 4.11. Une phase de chauffe
+    est suivie par l'exécution chronométrée de 100 000 itérations. La
+    TSC est utilisée pour mesurer le temps pris par chacune des
+    itérations. Le résultat reporté sur le graphique est la médiane.
+
+Le temps de recherche est empiriquement lié à la profondeur
+maximale. Quand la table de routage est densément peuplée, la
+profondeur maximale est limitée et les temps de recherche sont
+rapides.
+
+Pour router à 10 Gbps, le budget pour le traitement d'un paquet est
+d'environ 50 ns. C'est aussi le temps nécessaire pour rechercher une
+route dans certains scénarios. Il n'est donc pas possible de router à
+pleine vitesse avec un seul cœur. Toutefois, les résultats restent
+très bons.
+
+Un autre chiffre intéressant est le temps pour insérer un grand nombre
+de routes dans le noyau. Linux est également particulièrement efficace
+dans ce domaine puisque deux millions de routes sont insérées en moins
+de 10 secondes :
+
+![Temps d'insertion][i3]
+[i3]: [[!!images/linux/lpc-trie-time.svg]] "Temps d'insertion (temps système) par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+## Utilisation mémoire
+
+La quantité de mémoire utilisée est indiquée directement dans le
+fichier `/proc/net/fib_triestat`. Cela ne prend pas en compte l'espace
+utilisé par les structures `fib_info`. Toutefois, celles-ci sont
+normalement peu nombreuses (une par saut possible). Comme on peut le
+voir sur le graphique ci-dessous, la quantité de mémoire utilisée est
+linéaire avec le nombre de routes insérées, quelle que soit la forme
+des routes.
+
+![Utilisation mémoire][i1]
+[i1]: [[!!images/linux/lpc-trie-memory.svg]] "Utilisation mémoire du trie par rapport aux nombres de routes insérées. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+Les résultats sont très bons : deux millions de routes tiennent dans
+256 MiB !
+
+# Règles de routage
+
+À moins d'être configuré sans l'option `CONFIG_IP_MULTIPLE_TABLES`,
+**Linux gère plusieurs tables de routage** et dispose d'un système de
+règles pour choisir la table à utiliser. Ces règles peuvent être
+configurées avec `ip rule`. Par défaut, il en existe trois :
+
+    ::console
+    $ ip rule show
+    0:      from all lookup local
+    32766:  from all lookup main
+    32767:  from all lookup default
+
+Linux va d'abord utiliser la table `local` et en cas d'échec se
+rabattre sur `main` puis `default`.
+
+## Tables par défaut
+
+La table `local` contient les routes pour la livraison locale :
+
+    ::console hl_lines="4 7"
+    $ ip route show table local
+    broadcast 127.0.0.0 dev lo proto kernel scope link src 127.0.0.1
+    local 127.0.0.0/8 dev lo proto kernel scope host src 127.0.0.1
+    local 127.0.0.1 dev lo proto kernel scope host src 127.0.0.1
+    broadcast 127.255.255.255 dev lo proto kernel scope link src 127.0.0.1
+    broadcast 192.168.117.0 dev eno1 proto kernel scope link src 192.168.117.55
+    local 192.168.117.55 dev eno1 proto kernel scope host src 192.168.117.55
+    broadcast 192.168.117.63 dev eno1 proto kernel scope link src 192.168.117.55
+
+Cette table est gérée automatiquement par le noyau quand des adresses
+IP sont configurées. Regardons d'abord les trois dernières
+lignes. Quand l'adresse IP `192.168.117.55` a été configurée sur
+l'interface `eno1`, trois nouvelles routes ont été ajoutées
+automatiquement :
+
+ - une route pour `192.168.117.55` pour la livraison locale en unicast,
+ - une route pour `192.168.117.255` pour une livraison de type « *broadcast* »,
+ - une route pour `192.168.117.0` pour une livraison de type « *broadcast* » vers l'adresse de réseau.
+
+Quand `127.0.0.1` est configurée sur l'interface de *loopback*, des
+routes similaires sont ajoutées. Toutefois, une adresse de
+*loopback* reçoit un traitement spécial et le noyau ajoute également
+le sous-réseau entier à la table `local`. Cela permet d'utiliser
+n'importe quelle adresse dans `127.0.0.0/8` :
+
+    ::console
+    $ ping -c1 127.42.42.42
+    PING 127.42.42.42 (127.42.42.42) 56(84) bytes of data.
+    64 bytes from 127.42.42.42: icmp_seq=1 ttl=64 time=0.039 ms
+    
+    --- 127.42.42.42 ping statistics ---
+    1 packets transmitted, 1 received, 0% packet loss, time 0ms
+    rtt min/avg/max/mdev = 0.039/0.039/0.039/0.000 ms
+
+La table `main` contient habituellement toutes les autres routes :
+
+    ::console
+    $ ip route show table main
+    default via 192.168.117.1 dev eno1 proto static metric 100
+    192.168.117.0/26 dev eno1 proto kernel scope link src 192.168.117.55 metric 100
+
+La route `default` a été mise en place par un démon DHCP. La route
+connectée (`scope link`) a été ajoutée automatiquement par le noyau
+(`proto kernel`) lors de la configuration de l'adresse IP sur
+l'interface `eno1`.
+
+La table `default` est vide et est rarement utilisée. Elle reste là
+depuis Linux 2.1.68 en hommage à la première tentative de routage
+avancé dans Linux 2.1.15[^old-doc].
+
+[^old-doc]: Histoire vraie : la documentation de cette première
+    tentative est toujours présente dans les sources du noyau et
+    explique l'utilisation de
+    la [classe de routage « *default* »][policy-routing.txt].
+
+## Performance
+
+Depuis Linux 4.1 ([commit 0ddcf43d5d4a][]), quand les règles de
+routage ne sont pas modifiées, les tables `main` et `local` sont
+fusionnées en une seule table. Ainsi, il n'y a pas d'impact sur les
+performances à utiliser un noyau supportant plusieurs tables de
+routage. Toutefois, dès qu'une nouvelle règle est ajoutée, quelques
+cycles CPU sont utilisés pour chaque datagramme à l'évaluation des
+règles. Voici une paire de graphiques démontrant l'impact des règles
+de routage sur les performances :
+
+![Impact des règles de routage sur les performances][i20]
+[i20]: [[!!images/linux/lpc-trie-rules.svg]] "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire."
+
+La relation est linéaire quand le nombre de règles est entre 1 et 100
+mais la pente augmente sensiblement au-delà. Le second graphique met
+en évidence l'impact négatif de la première règle de routage (environ
+30 ns).
+
+Une utilisation courante des règles de routage est la création de
+**routeurs virtuels** : les interfaces sont isolées en domaines et
+quand un datagramme entre par une interface du domaine *A*, la table
+de routage *A* est utilisée :
+
+    ::console
+    # ip rule add iif vlan457 table 10
+    # ip rule add iif vlan457 blackhole
+    # ip rule add iif vlan458 table 20
+    # ip rule add iif vlan458 blackhole
+
+Les règles de type « *blackhole* » peuvent être supprimées si on
+s'assure qu'il y a toujours une règle par défaut dans chaque table de
+routage. Par exemple, on peut y ajouter une route par défaut qui
+rejette silencieusement tout datagramme. Une métrique importante est
+utilisée pour cohabiter avec une éventuelle route par défaut
+existante :
+
+    ::console hl_lines="1 2"
+    # ip route add blackhole default metric 9999 table 10
+    # ip route add blackhole default metric 9999 table 20
+    # ip rule add iif vlan457 table 10
+    # ip rule add iif vlan458 table 20
+
+Pour réduire l'impact sur les performances quand de nombreuses règles
+de ce type sont utilisées, les interfaces peuvent être attachées à des
+instances VRF et une unique règle de routage permet de sélectionner la
+table de routage adéquate :
+
+    ::console hl_lines="5 6"
+    # ip link add vrf-A type vrf table 10
+    # ip link set dev vrf-A up
+    # ip link add vrf-B type vrf table 20
+    # ip link set dev vrf-B up
+    # ip link set dev vlan457 master vrf-A
+    # ip link set dev vlan458 master vrf-B
+    # ip rule show
+    0:      from all lookup local
+    1000:   from all lookup [l3mdev-table]
+    32766:  from all lookup main
+    32767:  from all lookup default
+
+La règle spéciale `l3mdev-table` est ajoutée automatiquement lors de
+la définition de la première interface VRF. Cette règle sélectionne la
+table de routage associée à l'instance VRF à laquelle l'interface
+d'entrée (ou de sortie) a été attachée.
+
+VRF a été introduit dans Linux 4.3 ([commit 193125dbd8eb][]). Les
+performances ont été grandement améliorées dans Linux 4.8
+([commit 7889681f4a6c][]). La règle de routage générique a également
+été introduite dans Linux 4.8
+([commit 96c63fa7393d][],
+[commit 1aa6c4f6b8cd][]). La [documentation du noyau][vrf.txt]
+contient des détails supplémentaires sur son utilisation.
+
+# Conclusion
+
+Les points à retenir sont :
+
+ - le temps de recherche d'une route augmente très peu avec le nombre de routes,
+ - la recherche d'une route parmi des /32 densément distribuées est extrêmement rapide,
+ - l'utilisation mémoire est très modérée (128 MiB par million de routes),
+ - aucune optimisation n'est effectuée sur les règles de routage.
+
+*[VRF]: Virtual Routing and Forwarding
+*[ECMP]: Equal Cost Multipath
+*[TSC]: Time Stamp Counter
+
+[Intel Core i5-4670K]: http://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
+[route cache removed]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=5e9965c15ba88319500284e590733f4a4629a288 "Retrait du cache des routes de Linux"
+[policy-routing.txt]: http://elixir.free-electrons.com/linux/v4.11.5/source/Documentation/networking/policy-routing.txt#L30 "Linux: Documentation/networking/policy-routing.txt"
+[commit 0ddcf43d5d4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0ddcf43d5d4a03ded1ee3f6b3b72a0cbed4e90b1 "ipv4: FIB Local/MAIN table collapse"
+[commit 3630b7c050d9]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3630b7c050d9c3564f143d595339fc06b888d6f3 "ipv4: Remove fib_hash"
+[commit 19baf839ff4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=19baf839ff4a8daa1f2a7400897094fc18e4f5e9 "ipv4: Add LC-Trie FIB lookup algorithm"
+[commit 193125dbd8eb]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=193125dbd8eb292d88feb201f030889b488b0a02 "net: Introduce VRF device driver"
+[commit 96c63fa7393d]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=96c63fa7393d0a346acfe5a91e0c7d4c7782641b "net: Add l3mdev rule"
+[commit 1aa6c4f6b8cd]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1aa6c4f6b8cd84b8b36ebf43c6861ca87eab4da0 "net: vrf: Add l3mdev rules on first device create"
+[commit 7889681f4a6c]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7889681f4a6c2148e1245604bac751a1cae8f882 "net: vrf: Update flags and features settings"
+[fib_lookup()]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L282 "Linux: fib_lookup() definition (without multiple tables)"
+[struct net]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/net_namespace.h#L47 "Linux: struct net definition"
+[struct flowi4]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/flow.h#L68 "Linux: struct flowi4 definition"
+[struct fib_result]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L138 "Linux: struct fib_result definition"
+[struct fib_table]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L238 "Linux: struct fib_table definition"
+[struct trie]: http://elixir.free-electrons.com/linux/v4.11.5/source/net/ipv4/fib_trie.c#L269 "Linux: struct trie definition"
+[struct key_vector]: http://elixir.free-electrons.com/linux/v4.11.5/source/net/ipv4/fib_trie.c#L223 "Linux: struct key_vector definition"
+[struct fib_alias]: http://elixir.free-electrons.com/linux/v4.11.5/source/net/ipv4/fib_lookup.h#L8 "Linux: struct fib_alias definition"
+[struct fib_info]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L103 "Linux: struct fib_info definition"
+[vrf.txt]: https://www.kernel.org/doc/Documentation/networking/vrf.txt "Virtual Routing and Forwarding (VRF)"
+[route cache]: [[fr/blog/2011-ipv4-route-cache-linux.html]] "Comprendre la mise en cache des routes IPv4 sous Linux"
+[trie]: https://fr.wikipedia.org/wiki/Trie_(informatique) "Article Wikipedia sur le trie"
+[radix trie]: https://fr.wikipedia.org/wiki/Arbre_radix "Article Wikipedia sur l'arbre radix"
+[patricia-openbsd]: http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/net/radix.c?rev=1.56&content-type=text/x-cvsweb-markup "Code source de sys/net/radix.c dans OpenBSD"
+[patricia-netbsd]: http://cvsweb.netbsd.org/bsdweb.cgi/src/sys/net/radix.c?rev=1.47&content-type=text/x-cvsweb-markup&only_with_tag=MAIN "Code source de sys/net/radix.c dans NetBSD"
+[patricia-freebsd]: https://svnweb.freebsd.org/base/head/sys/net/radix.c?revision=314436&view=markup "Code source de sys/net/radix.c dans FreeBSD"
+[go-radix]: https://github.com/armon/go-radix "Implémentation des arbres radix en Go"
+[trie-quagga]: https://github.com/Quagga/quagga/blob/stable/1.0/lib/table.c "Code source de lib/table.c dans Quagga"
+[lpc-trie]: https://www.nada.kth.se/~snilsson/publications/IP-address-lookup-using-LC-tries/ "IP-address lookup using LC-tries"
+[kernel module]: https://github.com/vincentbernat/network-lab/blob/master/lab-trie-routes/kbench_mod.c "Module noyau pour chronométrer les performances de fib_lookup()"
+[GoBGP]: https://osrg.github.io/gobgp/ "GoBGP, BGP implemented in the Go Programming Language"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
