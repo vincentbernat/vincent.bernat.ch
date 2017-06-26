@@ -74,7 +74,7 @@ where each node has its parent as prefix.
 The following trie encodes the previous routing table:
 
 ![Simple routing trie][i10]
-[i10]: [[!!images/linux/lpc-trie-simple-trie.svg]] "Simple routing trie for a small routing table. For readibility, the trie has been cut in two parts. The nodes with an arrow contain an actual route entry."
+[i10]: [[!!images/linux/lpc-trie-simple-trie-2.svg]] "Simple routing trie for a small routing table. For readibility, the trie has been cut in two parts. The nodes with an arrow contain an actual route entry."
 
 For each node, the prefix is known by its path from the root node and
 the prefix length is the current depth.
@@ -107,7 +107,7 @@ many input bits should be skipped. Such a trie is also known as a
 version of the previous trie:
 
 ![Patricia trie][i11]
-[i11]: [[!!images/linux/lpc-trie-patricia-trie.svg]] "Patricia trie for a small routing table. Some nodes indicate how many additional input bits to skip."
+[i11]: [[!!images/linux/lpc-trie-patricia-trie-2.svg]] "Patricia trie for a small routing table. Some nodes indicate how many additional input bits to skip."
 
 Since some bits have been ignored, on a match, a final check is
 executed to ensure all bits from the found entry are matching the
@@ -116,7 +116,7 @@ input IP address. If not, we must act as if the entry wasn't found
 two IP addresses matching the same leaf:
 
 ![Lookup in a Patricia trie][i12]
-[i12]: [[!!images/linux/lpc-trie-patricia-trie-lookup.svg]] "Lookup of two IP addresses in a Patricia trie. Both IP share the same checked bits but differ on the skipped ones."
+[i12]: [[!!images/linux/lpc-trie-patricia-trie-lookup-2.svg]] "Lookup of two IP addresses in a Patricia trie. Both IP share the same checked bits but differ on the skipped ones."
 
 The reduction on the average depth of the tree compensates the
 necessity to handle those false positives. The insertion and deletion
@@ -140,7 +140,7 @@ one. For example, here is a level-compressed version our previous
 trie:
 
 ![Level-compressed trie][i13]
-[i13]: [[!!images/linux/lpc-trie-lpc-trie.svg]] "LPC trie. Two levels are merged into a single one using a 4-element vector. The last element of this vector is empty."
+[i13]: [[!!images/linux/lpc-trie-lpc-trie-2.svg]] "LPC trie. Two levels are merged into a single one using a 4-element vector. The last element of this vector is empty."
 
 [^ref-lpc]: “[IP-address lookup using LC-tries][lpc-trie]”, IEEE
     Journal on Selected Areas in Communications, 17(6):1083-1092, June
@@ -168,7 +168,7 @@ The implementation for IPv4 in Linux exists since 2.6.13
 Here is the representation of our example routing table in memory[^tnode]:
 
 ![Memory representation of a trie][i14]
-[i14]: [[!!images/linux/lpc-trie-struct.svg]] "In-memory representation of an LPC trie in Linux"
+[i14]: [[!!images/linux/lpc-trie-struct-2.svg]] "In-memory representation of an LPC trie in Linux"
 
 [^tnode]: For internal nodes, the `key_vector` structure is embedded
     into a `tnode` structure. This structure contains information
@@ -253,7 +253,7 @@ with various densities). When routes are densily packed, the number of
 internal nodes are quite limited.
 
 ![Internal nodes and null pointers][i0]
-[i0]: [[!!images/linux/lpc-trie-nodes.svg]] "Number of internal nodes and null pointers depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
+[i0]: [[!!images/linux/lpc-trie-nodes-2.svg]] "Number of internal nodes and null pointers depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
 
 ## Performance
 
@@ -263,7 +263,7 @@ help of a small [kernel module][], we can accurately benchmark[^bench]
 the `fib_lookup()` function:
 
 ![Maximum depth and lookup time][i2]
-[i2]: [[!!images/linux/lpc-trie-maxdepth.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic."
+[i2]: [[!!images/linux/lpc-trie-maxdepth-2.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic."
 
 [^bench]: The measurements are done in a virtual machine with one
     vCPU. The host is an [Intel Core i5-4670K][] running at 3.7 GHz
@@ -288,7 +288,7 @@ routes into the kernel. Linux is also quite efficient in this area
 since you can insert 2 million routes in less than 10 seconds:
 
 ![Insertion time][i3]
-[i3]: [[!!images/linux/lpc-trie-time.svg]] "Insertion time (system time) for a given number of routes (linear). The x-axis scale is logarithmic. The blue line is a linear regression."
+[i3]: [[!!images/linux/lpc-trie-time-2.svg]] "Insertion time (system time) for a given number of routes (linear). The x-axis scale is logarithmic. The blue line is a linear regression."
 
 ## Memory usage
 
@@ -300,7 +300,7 @@ the memory use is linear with the number of routes inserted, whatever
 the shape of the routes is.
 
 ![Memory usage][i1]
-[i1]: [[!!images/linux/lpc-trie-memory.svg]] "Memory usage of the LPC-trie depending on the number of routes inserted (linear). The x-axis cale is logarithmic. The blue line is a linear regression."
+[i1]: [[!!images/linux/lpc-trie-memory-2.svg]] "Memory usage of the LPC-trie depending on the number of routes inserted (linear). The x-axis cale is logarithmic. The blue line is a linear regression."
 
 The results are quite good. With only 256 MiB, about 2 million routes
 can be stored!
@@ -394,7 +394,7 @@ evaluate them. Here is a couple of graphs demonstrating the impact
 of routing rules on lookup times:
 
 ![Routing rules impact on performance][i20]
-[i20]: [[!!images/linux/lpc-trie-rules.svg]] "Lookup time for a given number of routing rules. Only last routing rule matches. The first graph uses a logarithmic scale while the second uses a linear scale. The blue line is a linear regression."
+[i20]: [[!!images/linux/lpc-trie-rules-2.svg]] "Lookup time for a given number of routing rules. Only last routing rule matches. The first graph uses a logarithmic scale while the second uses a linear scale. The blue line is a linear regression."
 
 For some reason, the relation is linear when the number of rules is
 between 1 and 100 but the slope increases noticeably past this
