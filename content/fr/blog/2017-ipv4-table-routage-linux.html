@@ -406,12 +406,13 @@ avancé dans Linux 2.1.15[^old-doc].
 
 Depuis Linux 4.1 ([commit 0ddcf43d5d4a][]), quand les règles de
 routage ne sont pas modifiées, les tables `main` et `local` sont
-fusionnées en une seule table. Ainsi, il n'y a pas d'impact sur les
-performances à utiliser un noyau supportant plusieurs tables de
-routage. Toutefois, dès qu'une nouvelle règle est ajoutée, quelques
-cycles CPU sont utilisés pour chaque datagramme à l'évaluation des
-règles. Voici une paire de graphiques démontrant l'impact des règles
-de routage sur les performances :
+fusionnées en une seule table. De plus, depuis Linux 3.0
+([commit f4530fa574df][]), sans règles spécifiques configurées, il n'y
+a pas d'impact sur les performances à utiliser un noyau supportant
+plusieurs tables de routage. Toutefois, dès qu'une nouvelle règle est
+ajoutée, quelques cycles CPU sont utilisés pour chaque datagramme à
+l'évaluation des règles. Voici une paire de graphiques démontrant
+l'impact des règles de routage sur les performances :
 
 ![Impact des règles de routage sur les performances][i20]
 [i20]: [[!!images/linux/lpc-trie-rules-2.svg]] "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire."
@@ -499,6 +500,7 @@ Les points à retenir sont :
 [commit 96c63fa7393d]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=96c63fa7393d0a346acfe5a91e0c7d4c7782641b "net: Add l3mdev rule"
 [commit 1aa6c4f6b8cd]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1aa6c4f6b8cd84b8b36ebf43c6861ca87eab4da0 "net: vrf: Add l3mdev rules on first device create"
 [commit 7889681f4a6c]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7889681f4a6c2148e1245604bac751a1cae8f882 "net: vrf: Update flags and features settings"
+[commit f4530fa574df]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f4530fa574df4d833506c53697ed1daa0d390bf4 "ipv4: Avoid overhead when no custom FIB rules are installed"
 [fib_lookup()]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L282 "Linux: fib_lookup() definition (without multiple tables)"
 [struct net]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/net_namespace.h#L47 "Linux: struct net definition"
 [struct flowi4]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/flow.h#L68 "Linux: struct flowi4 definition"

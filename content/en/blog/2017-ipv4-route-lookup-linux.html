@@ -387,11 +387,12 @@ Linux 2.1.68 after a first tentative using "classes" in Linux
 Since Linux 4.1 ([commit 0ddcf43d5d4a][]), when the set of rules is
 left unmodified, the `main` and `local` tables are merged and the
 lookup is done with this single table (and the `default` table if not
-empty). Without specific rules, there is no performance hit when
-enabling the support for multiple routing tables. However, as soon as
-you add new rules, some CPU cycles will be spent for each datagram to
-evaluate them. Here is a couple of graphs demonstrating the impact
-of routing rules on lookup times:
+empty). Moreover, since Linux 3.0 ([commit f4530fa574df][]), without
+specific rules, there is no performance hit when enabling the support
+for multiple routing tables. However, as soon as you add new rules,
+some CPU cycles will be spent for each datagram to evaluate them. Here
+is a couple of graphs demonstrating the impact of routing rules on
+lookup times:
 
 ![Routing rules impact on performance][i20]
 [i20]: [[!!images/linux/lpc-trie-rules-2.svg]] "Lookup time for a given number of routing rules. Only last routing rule matches. The first graph uses a logarithmic scale while the second uses a linear scale. The blue line is a linear regression."
@@ -472,6 +473,7 @@ The takeaways from this article are:
 [commit 96c63fa7393d]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=96c63fa7393d0a346acfe5a91e0c7d4c7782641b "net: Add l3mdev rule"
 [commit 1aa6c4f6b8cd]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=1aa6c4f6b8cd84b8b36ebf43c6861ca87eab4da0 "net: vrf: Add l3mdev rules on first device create"
 [commit 7889681f4a6c]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7889681f4a6c2148e1245604bac751a1cae8f882 "net: vrf: Update flags and features settings"
+[commit f4530fa574df]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f4530fa574df4d833506c53697ed1daa0d390bf4 "ipv4: Avoid overhead when no custom FIB rules are installed"
 [fib_lookup()]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L282 "Linux: fib_lookup() definition (without multiple tables)"
 [struct net]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/net_namespace.h#L47 "Linux: struct net definition"
 [struct flowi4]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/flow.h#L68 "Linux: struct flowi4 definition"
