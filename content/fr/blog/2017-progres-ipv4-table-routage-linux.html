@@ -1,0 +1,112 @@
+---
+title: "Progression des performances de la table de routage IPv4 sous Linux"
+description: |
+  Les performances de Linux concernant la recherche d'une route IPv4
+  dans une table de routage ont évolué positivement avec le temps.
+keywords: "linux, routage, routes, performance, histoire"
+uuid: 3a2194a6-aabb-43da-8c80-15a61ba90f96
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv4": "Dépôt GitHub"
+tags:
+  - network
+---
+
+**En bref** : Linux 2.6.39, 3.6 et 4.0 apportent un progrès notable
+sur les performances de la table de routage IPv4.
+
+---
+
+Dans un [précédent article][IPv4 route lookup on Linux], j'expliquais
+comment Linux stockait les routes dans un arbre compressé pour obtenir
+d'excellents résultats sur les temps de recherche. Le graphique
+suivant montre la progression des performances à travers les époques :
+
+![Performance de la table de routage IPv4][i3]
+[i3]: [[!!images/linux/lpc-trie-perf-2.svg]] "Temps de recherche d'une route pour diverses versions du noyau Linux. La table de routage contient 500 000 routes. Les versions mises en valeur apportent un gain notable."
+
+Deux scénarios sont testés :
+
+ - 500 000 routes extraites d'un routeur Internet (la moitié étant des /24)
+ - 500 000 routes /32 réparties consécutivement dans 4 sous-réseaux distincts
+
+Tous les noyaux sont compilés avec *GCC* 4.9 (issu de *Debian
+Jessie*). Cette version est compatible avec des noyaux antiques[^old]
+ainsi qu'avec les noyaux les plus récents. La configuration du noyau
+utilisée est celle par défaut avec les options `CONFIG_SMP` et
+`CONFIG_IP_MULTIPLE_TABLES` activées (sans toutefois utiliser de
+règles de routage). D'autres options mineures sont activées pour
+permettre de prendre les mesures.
+
+[^old]: Certains anciens noyaux ne compilent plus avec les outils
+    actuels à moins d'appliquer de [petits][p2] [correctifs][p3].
+
+Le banc d'essai se déroule dans une machine virtuelle utilisant un
+seul vCPU[^smp]. Le CPU hôte est un [Intel Core i5-4670K][] et le
+gouverneur CPU est configuré en mode « performance ».  Les mesures
+sont faites par un [module noyau][kernel module] appelant la fonction
+`fib_lookup()` en boucle en variant les destinations. Le chronométrage
+de chacune des 100 000 itérations est effectuée par la TSC et
+convertie en nanosecondes en se basant sur une fréquence d'horloge
+arbitraire. La valeur médiane est retenue.
+
+[^smp]: Les noyaux sont toutefois compilés avec l'option `CONFIG_SMP`
+    pour activer le mécanisme [RCU hiérarchique][hierarchical RCU]
+    afin de suivre des chemins de code similaires aux routeurs
+    multi-cœurs. Toutefois, tout progrès sur le parallélisme passe
+    inaperçu.
+
+Quelques noyaux apportent un progrès notable :
+
+ - Avec Linux **2.6.39**, [commit 3630b7c050d9][], David Miller retire
+   l'implémentation basée sur des tables de hachage pour utiliser des
+   arbres compressés (disponible sous forme d'option à la compilation
+   depuis Linux 2.6.13). Cela provoque une légère régression dans le
+   cas des routes en /32 mais améliore grandement les performances
+   dans le cas général.
+
+ - Avec Linux **3.0**, [commit 281dc5c5ec0f][], l'amélioration n'est
+   pas liée à un changement dans le sous-système réseau. Linus
+   Torvalds a désactivé l'optimisation en taille qui était utilisée
+   par défaut. Cette option devait permettre de rendre le cache des
+   instructions plus efficace mais les compilateurs généraient
+   cependant un code plus lent sur x86.
+
+ - Avec Linux **3.6**, [commit f4530fa574df][], David Miller ajoute
+   une optimisation destinée à ne plus évaluer les règles de routage
+   quand elles n'ont pas été modifiées. À partir de cette version,
+   l'option `CONFIG_IP_MULTIPLE_TABLES` ne dégrade plus les
+   performances à moins de configurer explicitement des règles de
+   routage. Cette version retire également
+   le [cache des routes][route cache]
+   ([commit 5e9965c15ba8][]). Toutefois, cela n'a pas d'effet sur les
+   mesures car l'appel direct à `fib_lookup()` contourne ce cache.
+
+ - Avec Linux **4.0**, notamment le [commit 9f9e636d4f89][], Alexander
+   Duyck réorganise l'algorithme de recherche des routes pour en
+   augmenter les performances. Le résultat est probant !
+
+ - Avec Linux **4.1**, [commit 0ddcf43d5d4a][], Alexander Duyck
+   fusionne les tables `local` et `main` quand aucune règle de routage
+   n'est utilisée. Pour le trafic non local, ces deux tables étaient
+   successivement consultées.
+
+*[TSC]: Time Stamp Counter
+
+[IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
+[route cache]: [[fr/blog/2011-ipv4-route-cache-linux.html]] "Comprendre la mise en cache des routes IPv4 sous Linux"
+[Intel Core i5-4670K]: http://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
+[commit 3630b7c050d9]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3630b7c050d9c3564f143d595339fc06b888d6f3 "ipv4: Remove fib_hash"
+[commit 281dc5c5ec0f]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=281dc5c5ec0fb299514567cbc358562649c1af95 "Give up on pushing CC_OPTIMIZE_FOR_SIZE"
+[commit f4530fa574df]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f4530fa574df4d833506c53697ed1daa0d390bf4 "ipv4: Avoid overhead when no custom FIB rules are installed"
+[commit 9f9e636d4f89]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9f9e636d4f89f788c5cf9c6a5357501c0d405fcb "fib_trie: Optimize fib_table_lookup to avoid wasting time on loops/variables"
+[commit 0ddcf43d5d4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0ddcf43d5d4a03ded1ee3f6b3b72a0cbed4e90b1 "ipv4: FIB Local/MAIN table collapse"
+[commit 5e9965c15ba8]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5e9965c15ba88319500284e590733f4a4629a288 "Merge removing route cache-related code"
+[hierarchical RCU]: https://lwn.net/Articles/305782/ "Hierarchical RCU"
+[p2]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=425be5679fd292a3c36cb1fe423086708a99f11a "x86/asm/irq: Stop relying on magic JMP behavior for early_idt_handlers"
+[p3]: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/commit/?id=57eb4c95dff59038eb6223dc7696c93b045c4c3f "timeconst.pl: Eliminate Perl warning"
+[kernel module]: https://github.com/vincentbernat/network-lab/blob/master/lab-routes-ipv4/kbench_mod.c "Module noyau pour chronométrer les performances de fib_lookup()"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

@@ -268,10 +268,9 @@ the `fib_lookup()` function:
 [^bench]: The measurements are done in a virtual machine with one
     vCPU. The host is an [Intel Core i5-4670K][] running at 3.7 GHz
     during the experiment (CPU governor was set to performance). The
-    kernel is Linux 4.11. The benchmark is single-threaded. It runs a
-    warm-up phase, then executes about 100,000 timed iterations and
-    keeps the median. Timings of individual runs are computed from the
-    TSC.
+    benchmark is single-threaded. It runs a warm-up phase, then
+    executes about 100,000 timed iterations and keeps the
+    median. Timings of individual runs are computed from the TSC.
 
 The lookup time is loosely tied to the maximum depth. When the routing
 table is densily populated, the maximum depth is low and the lookup
@@ -282,6 +281,10 @@ about 50 ns. Since this is also the time needed for the route lookup
 alone in some cases, we wouldn't be able to forward at line rate with
 only one core. Nonetheless, the results are pretty good and they are
 expected to scale linearly with the number of cores.
+
+The measurements are done with a Linux kernel 4.11 from *Debian
+unstable*. I have gathered performance metrics accross kernel versions
+in “[Performance progression of IPv4 route lookup on Linux][]”.
 
 Another interesting figure is the time it takes to insert all those
 routes into the kernel. Linux is also quite efficient in this area
@@ -485,6 +488,7 @@ The takeaways from this article are:
 [struct fib_info]: http://elixir.free-electrons.com/linux/v4.11.5/source/include/net/ip_fib.h#L103 "Linux: struct fib_info definition"
 [vrf.txt]: https://www.kernel.org/doc/Documentation/networking/vrf.txt "Virtual Routing and Forwarding (VRF)"
 [route cache]: [[en/blog/2011-ipv4-route-cache-linux.html]] "Tuning Linux IPv4 route cache"
+[Performance progression of IPv4 route lookup on Linux]: [[en/blog/2017-performance-progression-ipv4-route-lookup-linux.html]] "Performance progression of IPv4 route lookup on Linux"
 [trie]: https://en.wikipedia.org/wiki/Trie "Wikipedia article about trie"
 [radix tree]: https://en.wikipedia.org/wiki/Radix_tree "Wikipedia article about radix tree"
 [patricia-openbsd]: http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/net/radix.c?rev=1.56&content-type=text/x-cvsweb-markup "Code source of OpenBSD's sys/net/radix.c"

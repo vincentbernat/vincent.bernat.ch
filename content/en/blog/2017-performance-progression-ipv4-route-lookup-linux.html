@@ -1,0 +1,109 @@
+---
+title: "Performance progression of IPv4 route lookup on Linux"
+description: |
+  The performance of IPv4 route lookup on Linux has been improved over
+  time. Which kernels bring a notable difference?
+keywords: "linux, route lookup, routing, performance, benchmark, history"
+uuid: 3a2194a6-aabb-43da-8c80-15a61ba90f96
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv4": "GitHub repository"
+tags:
+  - network
+---
+
+**TL;DR**: Each of Linux 2.6.39, 3.6 and 4.0 brings notable
+performance improvements for the IPv4 route lookup process.
+
+---
+
+In a [previous article][IPv4 route lookup on Linux], I explained how
+Linux implements an IPv4 routing table with compressed tries to offer
+excellent lookup times. The following graph shows the performance
+progression of Linux through history:
+
+![IPv4 route lookup performance][i3]
+[i3]: [[!!images/linux/lpc-trie-perf-2.svg]] "Route lookup times for various Linux kernel versions. Lookup is done on a table with 500,000 routes. Notable performance improvements are highlighted."
+
+Two scenarios are tested:
+
+ - 500,000 routes extracted from an Internet router (half of them are
+   /24), and
+ - 500,000 host routes (/32) tightly packed in 4 distinct subnets.
+
+All kernels are compiled with *GCC* 4.9 (from *Debian Jessie*). This
+version is able to compile older kernels[^old] as well as current
+ones. The kernel configuration used is the default one with
+`CONFIG_SMP` and `CONFIG_IP_MULTIPLE_TABLES` options enabled (however,
+no IP rules are used). Some other unrelated options are enabled to be
+able to boot them in a virtual machine and run the benchmark.
+
+[^old]: Compiling old kernels with an updated userland may
+    still require some [small][p2] [patches][p3].
+
+The measurements are done in a virtual machine with one
+vCPU[^smp]. The host is an [Intel Core i5-4670K][] and the CPU
+governor was set to "performance". The benchmark is
+single-threaded. Implemented as a [kernel module][], it calls
+`fib_lookup()` with various destinations in 100,000 timed iterations
+and keeps the median. Timings of individual runs are computed from the
+TSC (and converted to nanoseconds by assuming a constant clock).
+
+[^smp]: The kernels are compiled with the `CONFIG_SMP` option to use
+    the [hierarchical RCU][] and activate more of the same code paths
+    as actual routers. However, progress on parallelism are left
+    unnoticed.
+
+The following kernel versions bring a notable performance improvement:
+
+ - In Linux **2.6.39**, [commit 3630b7c050d9][], David Miller removes
+   the hash-based routing table implementation to switch to the
+   LPC-trie implementation (available since Linux 2.6.13 as a
+   compile-time option). This brings a small regression for the
+   scenario with many host routes but boosts the performance for the
+   general case.
+
+ - In Linux **3.0**, [commit 281dc5c5ec0f][], the improvement is not
+   related to the network subsystem. Linus Torvalds disables the
+   compiler size-optimization from the default configuration. It was
+   believed that optimizing for size would help keeping the
+   instruction cache efficient. However, compilers generated
+   under-performing code on x86 when this option was enabled.
+
+ - In Linux **3.6**, [commit f4530fa574df][], David Miller adds an
+   optimization to not evaluate IP rules when they are left
+   unconfigured. From this point, the use of the
+   `CONFIG_IP_MULTIPLE_TABLES` option doesn't impact the performances
+   unless some IP rules are configured. This version also removes
+   the [route cache][] ([commit 5e9965c15ba8][]). However, this has no
+   effect on the benchmark as it directly calls `fib_lookup()` which
+   doesn't involve the cache.
+
+ - In Linux **4.0**, notably [commit 9f9e636d4f89][], Alexander Duyck
+   adds several optimizations to the trie lookup algorithm. It really
+   pays off!
+
+ - In Linux **4.1**, [commit 0ddcf43d5d4a][], Alexander Duyck
+   collapses the local and main tables when no specific IP rules are
+   configured. For non-local traffic, both those tables were looked
+   up.
+
+*[TSC]: Time Stamp Counter
+
+[IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
+[route cache]: [[en/blog/2011-ipv4-route-cache-linux.html]] "Tuning Linux IPv4 route cache"
+[Intel Core i5-4670K]: http://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
+[commit 3630b7c050d9]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=3630b7c050d9c3564f143d595339fc06b888d6f3 "ipv4: Remove fib_hash"
+[commit 281dc5c5ec0f]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=281dc5c5ec0fb299514567cbc358562649c1af95 "Give up on pushing CC_OPTIMIZE_FOR_SIZE"
+[commit f4530fa574df]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=f4530fa574df4d833506c53697ed1daa0d390bf4 "ipv4: Avoid overhead when no custom FIB rules are installed"
+[commit 9f9e636d4f89]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=9f9e636d4f89f788c5cf9c6a5357501c0d405fcb "fib_trie: Optimize fib_table_lookup to avoid wasting time on loops/variables"
+[commit 0ddcf43d5d4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0ddcf43d5d4a03ded1ee3f6b3b72a0cbed4e90b1 "ipv4: FIB Local/MAIN table collapse"
+[commit 5e9965c15ba8]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=5e9965c15ba88319500284e590733f4a4629a288 "Merge removing route cache-related code"
+[hierarchical RCU]: https://lwn.net/Articles/305782/ "Hierarchical RCU"
+[p2]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=425be5679fd292a3c36cb1fe423086708a99f11a "x86/asm/irq: Stop relying on magic JMP behavior for early_idt_handlers"
+[p3]: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux-stable.git/commit/?id=57eb4c95dff59038eb6223dc7696c93b045c4c3f "timeconst.pl: Eliminate Perl warning"
+[kernel module]: https://github.com/vincentbernat/network-lab/blob/master/lab-routes-ipv4/kbench_mod.c "Kernel module to bench fib_lookup() function in various conditions"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
