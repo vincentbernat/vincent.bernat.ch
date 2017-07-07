@@ -78,7 +78,7 @@ préfixe.
 Le trie suivant encode la table de routage exposée ci-dessus :
 
 ![Simple routing trie][i10]
-[i10]: [[!!images/linux/lpc-trie-simple-trie-2.svg]] "Trie primitif de recherche pour une petite table de routage. Pour des raisons de lisibilité, le trie a été coupé en deux. Les nœuds avec une flèche contiennent une entrée de routage."
+[i10]: [[!!images/linux/lpc-trie-simple-trie-v3.svg]] "Trie primitif de recherche pour une petite table de routage. Pour des raisons de lisibilité, le trie a été coupé en deux. Les nœuds avec une flèche contiennent une entrée de routage."
 
 À tout moment, la longueur du préfixe correspond à la profondeur
 actuelle et le préfixe lui-même correspond au chemin depuis la racine.
@@ -115,7 +115,7 @@ d'[arbre radix][radix trie]. Voici la version avec des chemins
 compressés du trie précédent :
 
 ![Arbre Patricia][i11]
-[i11]: [[!!images/linux/lpc-trie-patricia-trie-2.svg]] "Arbre Patricia pour une petite table de routage. Certains nœuds indiquent combien de bits supplémentaires doivent être ignorés dans l'adresse IP recherchée."
+[i11]: [[!!images/linux/lpc-trie-patricia-trie-v3.svg]] "Arbre Patricia pour une petite table de routage. Certains nœuds indiquent combien de bits supplémentaires doivent être ignorés dans l'adresse IP recherchée."
 
 Parce que certains bits ont été ignorés, une vérification finale est
 nécessaire pour s'assurer que l'entrée trouvée correspond à l'IP
@@ -125,7 +125,7 @@ figure ci-dessous montre deux adresses IP qui aboutissent à la même
 feuille :
 
 ![Recherche dans un arbre Patricia][i12]
-[i12]: [[!!images/linux/lpc-trie-patricia-trie-lookup-2.svg]] "Recherche de deux adresses IP dans un arbre Patricia. Les deux IP partagent les mêmes bits aux endroits clefs mais sont différents sur les parties ignorées."
+[i12]: [[!!images/linux/lpc-trie-patricia-trie-lookup-v3.svg]] "Recherche de deux adresses IP dans un arbre Patricia. Les deux IP partagent les mêmes bits aux endroits clefs mais sont différents sur les parties ignorées."
 
 La réduction de la profondeur du trie compense la complexité
 supplémentaire résultant de la nécessité de gérer les faux
@@ -150,7 +150,7 @@ consomme donc *k* bits en entrée au lieu d'un seul. Par exemple, voici
 une version doublement compressée de notre trie précédent :
 
 ![Trie doublement compressé][i13]
-[i13]: [[!!images/linux/lpc-trie-lpc-trie-2.svg]] "Trie doublement compressé. La fusion d'un sous-arbre produit un nœud avec un vecteur de 4 éléments. Le dernier élément est vide."
+[i13]: [[!!images/linux/lpc-trie-lpc-trie-v3.svg]] "Trie doublement compressé. La fusion d'un sous-arbre produit un nœud avec un vecteur de 4 éléments. Le dernier élément est vide."
 
 [^ref-lpc]: “[IP-address lookup using LC-tries][lpc-trie]”, IEEE
     Journal on Selected Areas in Communications, 17(6):1083-1092, Juin
@@ -181,7 +181,7 @@ L'implémentation pour IPv4 existe depuis Linux 2.6.13
 Voici la représentation en mémoire de notre table de routage[^tnode] :
 
 ![Représentation en mémoire d'un trie][i14]
-[i14]: [[!!images/linux/lpc-trie-struct-2.svg]] "Représentation en mémoire d'un trie LPC sous Linux"
+[i14]: [[!!images/linux/lpc-trie-struct-v3.svg]] "Représentation en mémoire d'un trie LPC sous Linux"
 
 [^tnode]: Pour les nœuds internes, la structure `key_vector` est
     incluse dans une structure `tnode`. Cette dernière contient des
@@ -270,7 +270,7 @@ variées). Lorsque les routes sont denses, le nombre de nœuds internes
 est très réduit.
 
 ![Nœuds internes et pointeurs nuls][i0]
-[i0]: [[!!images/linux/lpc-trie-nodes-2.svg]] "Nombre de nœuds internes et de pointeurs nuls par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+[i0]: [[!!images/linux/lpc-trie-nodes-v2.svg]] "Nombre de nœuds internes et de pointeurs nuls par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
 
 ## Performance
 
@@ -282,7 +282,7 @@ possible de mesurer précisément[^bench] le temps utilisé par la
 fonction `fib_lookup()` :
 
 ![Profondeur maximale et temps de recherche][i2]
-[i2]: [[!!images/linux/lpc-trie-maxdepth-2.svg]] "Profondeur maximale du trie et temps de recherche selon le nombre de routes insérées. L'axe horizontal utilise une échelle logarithmique."
+[i2]: [[!!images/linux/lpc-trie-maxdepth-v2.svg]] "Profondeur maximale du trie et temps de recherche selon le nombre de routes insérées. L'axe horizontal utilise une échelle logarithmique."
 
 [^bench]: Les mesures sont faites dans une machine virtuelle équipée
     d'un seul CPU. Le CPU hôte est un [Intel Core i5-4670K][] tournant
@@ -314,7 +314,7 @@ dans ce domaine puisque deux millions de routes sont insérées en moins
 de 10 secondes :
 
 ![Temps d'insertion][i3]
-[i3]: [[!!images/linux/lpc-trie-time-2.svg]] "Temps d'insertion (temps système) par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+[i3]: [[!!images/linux/lpc-trie-time-v2.svg]] "Temps d'insertion (temps système) par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
 
 ## Utilisation mémoire
 
@@ -327,7 +327,7 @@ linéaire avec le nombre de routes insérées, quelle que soit la forme
 des routes.
 
 ![Utilisation mémoire][i1]
-[i1]: [[!!images/linux/lpc-trie-memory-2.svg]] "Utilisation mémoire du trie par rapport aux nombres de routes insérées. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+[i1]: [[!!images/linux/lpc-trie-memory-v2.svg]] "Utilisation mémoire du trie par rapport aux nombres de routes insérées. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
 
 Les résultats sont très bons : deux millions de routes tiennent dans
 256 MiB !
@@ -421,7 +421,7 @@ l'évaluation des règles. Voici une paire de graphiques démontrant
 l'impact des règles de routage sur les performances :
 
 ![Impact des règles de routage sur les performances][i20]
-[i20]: [[!!images/linux/lpc-trie-rules-2.svg]] "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire."
+[i20]: [[!!images/linux/lpc-trie-rules-v2.svg]] "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire."
 
 La relation est linéaire quand le nombre de règles est entre 1 et 100
 mais la pente augmente sensiblement au-delà. Le second graphique met
