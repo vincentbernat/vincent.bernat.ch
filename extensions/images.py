@@ -268,13 +268,13 @@ class ImageSizerPlugin(PILPlugin):
             classes += " lf-img"
             classes = classes.lstrip()
         # SVG are converted to object
-        if src.endswith('.svg'):
+        if "/obj/" in src and src.endswith('.svg'):
             img = '<object data="%s" type="image/svg+xml">' % src
         img = '%s width="%s" height="%s"%s>' % (
             img[:-1],
             width, height,
             classes and (' class="%s"' % classes) or "")
-        if src.endswith('.svg'):
+        if "/obj/" in src and src.endswith('.svg'):
             img = '%s%s</object>' % (img, alt or "")
         if atag:
             img = "%s%s</a>" % (atag, img)
