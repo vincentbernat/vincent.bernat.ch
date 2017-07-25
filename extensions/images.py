@@ -233,7 +233,7 @@ class ImageSizerPlugin(PILPlugin):
         return (new_width, new_height)
 
     def _handle_img_str(self, resource, mo):
-        width, height, src, title = None, None, None, None
+        width, height, src, title, alt = None, None, None, None, None
         classes = ""
         original = mo.group(0)
         paragraph = mo.group("popening") is not None
@@ -257,6 +257,9 @@ class ImageSizerPlugin(PILPlugin):
         mo = re.search(r"\btitle=([\"'])(?P<value>.*?)\1", img)
         if mo:
             title = mo.group("value")
+        mo = re.search(r"\balt=([\"'])(?P<value>.*?)\1", img)
+        if mo:
+            alt = mo.group("value")
         wh = self._handle_img(resource, src, width, height)
         if wh is None:
             return original
@@ -264,10 +267,15 @@ class ImageSizerPlugin(PILPlugin):
         if paragraph:
             classes += " lf-img"
             classes = classes.lstrip()
+        # SVG are converted to object
+        if src.endswith('.svg'):
+            img = '<object data="%s" type="image/svg+xml">' % src
         img = '%s width="%s" height="%s"%s>' % (
             img[:-1],
             width, height,
             classes and (' class="%s"' % classes) or "")
+        if src.endswith('.svg'):
+            img = '%s%s</object>' % (img, alt or "")
         if atag:
             img = "%s%s</a>" % (atag, img)
         if not paragraph:
