@@ -275,7 +275,7 @@ class ImageSizerPlugin(PILPlugin):
             width, height,
             classes and (' class="%s"' % classes) or "")
         if "/obj/" in src and src.endswith('.svg'):
-            img = '%s%s</object>' % (img, alt or "")
+            img = '%s&#128444; %s</object>' % (img, alt or "")
         if atag:
             img = "%s%s</a>" % (atag, img)
         if not paragraph:
