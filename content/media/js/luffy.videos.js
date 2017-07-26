@@ -23,7 +23,7 @@ luffy.videos = function() {
     // Note: we try to use autoplay, but on mobile, autoplay won't
     // work unless the video is muted. Safari on iOS 11 is a bit more
     // leniant, also allowing autoplay when there is no sound
-    // track. YT doesn't allow to set the muted tag using an URL
+    // track. YT doesn't allow one to set the muted tag using an URL
     // parameter, so the video won't autoplay on mobile: the user has
     // to click twice.
 };
