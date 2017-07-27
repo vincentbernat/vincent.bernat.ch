@@ -170,10 +170,6 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
-        local("find media/images -type f -name '*.png'"
-              "| xargs -n1 -I '{}' cwebp -quiet -lossless -q 50 -o '{}'.webp '{}'")
-        local("find media/images -type f -name '*.jpg'"
-              "| xargs -n1 -I '{}' cwebp -quiet -q 80 -o '{}'.webp '{}'")
         local("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -v '^media/images/l$'"
