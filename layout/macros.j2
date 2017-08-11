@@ -5,7 +5,7 @@
 <ul class="lf-list-titles">
 {% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
 {% for resource in sort -%}
-  <li>
+  <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
     <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
     {{ resource_date(resource) }}
   </li>
@@ -30,7 +30,7 @@
   </div>
   <ul class="lf-list-titles">
     {% for resource in rr %}
-    <li>
+    <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag|string() != "outdated" %} class="lf-outdated"{% endif %}>
         <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
         {{ resource_date(resource) }}
     </li>
