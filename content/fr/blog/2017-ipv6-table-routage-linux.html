@@ -1,0 +1,443 @@
+---
+title: "Fonctionnement de la table de routage IPv6 sous Linux"
+description: |
+  Linux utilise un arbre radix pour stocker les routes IPv6. Quelles sont les différences avec IPv4 ?
+keywords: "linux, lpc trie, arbre radix, patricia trie, table de routage, réseau, ipv6"
+uuid: 762f6390-9868-47fe-8f82-f107e01b0cc2
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv6": "Dépôt GitHub"
+tags:
+  - network
+  - kernel
+---
+
+**En bref**: Linux stocke les tables de routage IPv6 à l'aide d'arbres
+radix. Les performances obtenues (450 ns pour une vue complète d'Internet —
+40 000 routes) sont inférieures à IPv4 (50 ns pour une vue complète — 500 000
+routes) mais l'utilisation mémoire reste honnête (20 Mio pour la vue complète).
+
+---
+
+Précédemment, nous avions regardé
+comment
+[fonctionnait la table de routage IPv4 sous Linux][IPv4 route lookup on Linux]. Qu'en
+est-il de l'implémentation pour IPv6 ?
+
+[TOC]
+
+# Arbre de recherche
+
+Chercher un préfixe dans une table de routage revient à trouver **l'entrée la
+plus spécifique** correspondant à la destination souhaitée. Une structure
+courante pour cette tâche est le [*trie*][trie], un arbre de recherche pour
+lequel chaque nœud est préfixé par son père.
+
+Pour IPv4, Linux utilise un [arbre doublement compressé][level-compressed trie]
+(appelé *LPC-trie*), offrant de bonnes performances avec un usage mémoire
+faible. Pour IPv6, Linux emploie le plus classique [arbre radix][radix tree]
+(encore appelé *trie Patricia*). Il y a trois raisons pour ne pas avoir recyclé
+la solution utilisée pour IPv4 :
+
+ - L'implémentation IPv6 (introduite dans Linux 2.1.8, 1996) est antérieure à
+   celle pour IPv4 qui date de Linux 2.6.13 ([commit 19baf839ff4a][]).
+ - Les fonctionnalités offertes sont différentes. Notamment, IPv6 intègre la
+   possibilité d'un routage par l'adresse source[^ssr] (depuis Linux 2.1.120,
+   1998).
+ - L'espace d'adressage IPv4 est beaucoup plus dense que celui d'IPv6, ce qui
+   rend la compression par niveau du trie particulièrement efficace.
+
+[^ssr]: Pour un préfixe destination, il est possible d'y attacher des
+    préfixes sources :
+    
+        ::shell
+        ip -6 route add 2001:db8:1::/64 \
+          from 2001:db8:3::/64 \
+          via fe80::1 \
+          dev eth0
+    
+    La recherche se fait d'abord sur la destination puis sur la source.
+
+À titre d'exemple, l'illustration ci-dessous montre un arbre radix codant 6
+préfixes :
+
+![Arbre radix][i11]
+[i11]: [[!!images/linux/ipv6-radix-tree.svg]] "Arbre radix pour une petite table de routage. Certains nœuds indiquent le nombre de bits supplémentaires à ignorer en entrée. Les nœuds en noir contiennent une entrée."
+
+Pour des explications plus détaillées sur les différents codages possibles d'une
+table de routage et des éclaircissements sur les arbres radix, jetez un œil sur
+les [explications pour IPv4][explanations for IPv4].
+
+La figure ci-dessous montre la représentation en mémoire de l'arbre radix
+précédent. Chaque nœud correspond à une
+structure [`fib6_node`][struct fib6_node]. Quand un nœud a le drapeau
+`RTN_RTINFO`, il contient un pointeur vers une
+structure [`rt6_info`][struct rt6_info] contenant des informations sur le
+prochain saut.
+
+![Représentation mémoire d'une table de routage][i14]
+[i14]: [[!!images/linux/ipv6-radix-struct.svg]] "Représentation mémoire d'une table de routage IPv6 sous Linux. Certains champs ont été omis. Le préfixe 2001:db8:2::/121 est une route ECMP. Quand plusieurs routes sont disponibles pour un préfixe donné, elles sont chaînées via le champ dst."
+
+La fonction [`fib6_lookup_1()`][fib6_lookup_1()] parcourt l'arbre radix en deux
+étapes :
+
+ 1. parcours descendant pour localiser un candidat potentiel,
+ 2. vérification de la validité du candidat et recherche en arrière si besoin.
+
+Voici une version légèrement simplifiée (sans routage par la source) :
+
+    ::c
+    static struct fib6_node *fib6_lookup_1(struct fib6_node *root,
+                                           struct in6_addr  *addr)
+    {
+        struct fib6_node *fn;
+        __be32 dir;
+    
+        /* Step 1: locate potential candidate */
+        fn = root;
+        for (;;) {
+            struct fib6_node *next;
+            dir = addr_bit_set(addr, fn->fn_bit);
+            next = dir ? fn->right : fn->left;
+            if (next) {
+                fn = next;
+                continue;
+            }
+            break;
+        }
+    
+        /* Step 2: check prefix and backtrack if needed */
+        while (fn) {
+            if (fn->fn_flags & RTN_RTINFO) {
+                struct rt6key *key;
+                key = fn->leaf->rt6i_dst;
+                if (ipv6_prefix_equal(&key->addr, addr, key->plen)) {
+                    if (fn->fn_flags & RTN_RTINFO)
+                        return fn;
+                }
+            }
+    
+            if (fn->fn_flags & RTN_ROOT)
+                break;
+            fn = fn->parent;
+        }
+    
+        return NULL;
+    }
+
+# Mise en cache
+
+Alors qu'IPv4 a perdu son cache dans Linux 3.6 ([commit 5e9965c15ba8][]), IPv6
+dispose toujours de ce mécanisme. Toutefois, les entrées sont placées
+directement dans l'arbre radix avec le drapeau `RTF_CACHE` et non dans une
+structure distincte.
+
+Depuis Linux 2.1.30 (1997) et jusqu'à Linux 4.2 ([commit 45e4fd26683c][]),
+quasiment toutes les recherches aboutissaient à la création d'une entrée dans
+le cache. Par exemple, un routeur voyant transiter un ping entre
+`2001:db8:1::1` et `2001:db8:3::1` en crée deux :
+
+    ::console
+    $ ip -6 route show cache
+    2001:db8:1::1 dev r2-r1  metric 0
+        cache
+    2001:db8:3::1 via 2001:db8:2::2 dev r2-r3  metric 0
+        cache
+
+La fonction [`ip6_dst_gc()`][ip6_dst_gc()] assure le nettoyage du cache avec les
+paramètres suivants :
+
+    ::console
+    $ sysctl -a | grep -F net.ipv6.route
+    net.ipv6.route.gc_elasticity = 9
+    net.ipv6.route.gc_interval = 30
+    net.ipv6.route.gc_min_interval = 0
+    net.ipv6.route.gc_min_interval_ms = 500
+    net.ipv6.route.gc_thresh = 1024
+    net.ipv6.route.gc_timeout = 60
+    net.ipv6.route.max_size = 4096
+    net.ipv6.route.mtu_expires = 600
+
+Le ramasse-miette est activé au plus toutes les 500 ms lorsqu'il y a plus de
+1024 entrées dans le cache ou au moins toutes les 30 secondes. Il ne tourne pas
+plus de 60 secondes, sauf s'il y a plus de 4096 entrées. Lorsqu'il tourne, il va
+d'abord effacer les entrées vieilles de plus de 30 secondes. Tant que le nombre
+d'entrées reste supérieur à 4096, il continue d'effacer les entrées de plus en
+plus récentes (mais pas plus récentes que 512 jiffies qui correspond à la valeur
+de `gc_elasticity`) avec une pause de 500 ms entre chaque passage.
+
+Depuis Linux 4.2 ([commit 45e4fd26683c][]), seules les exceptions PMTU
+provoquent la création d'une entrée dans le cache. Un routeur ne gèrant pas ces
+exceptions, seuls les hôtes auront (rarement) des entrées dans le cache. Martin
+KaFai Lau [explique][explains]:
+
+> De toutes les routes IPv6 de type `RTF_CACHE` qui sont créées, le pourcentage
+> qui a un MTU différent est très faible. Sur l'un de nos serveurs mandataires
+> face à des utilisateurs finaux, seulement 1000 entrées sur 80 000 ont un MTU
+> plus faible. En ce qui concerne le trafic dans notre DC, il n'y a pas
+> d'exception MTU.
+
+Voici à quoi ressemble une entrée dans le cache avec une exception PMTU :
+
+    ::console
+    $ ip -6 route show cache
+    2001:db8:1::50 via 2001:db8:1::13 dev out6  metric 0
+        cache  expires 573sec mtu 1400 pref medium
+
+# Performance
+
+Trois scénarios différents sont étudiés :
+
+Extrait d'une vue complète d'Internet
+: Dans ce scénario, Linux se comporte comme un routeur connecté à plusieurs
+  transitaires et disposant d'une vue « complète ». Actuellement, la taille
+  d'une telle table de routage est légèrement supérieure
+  à [40 000 routes][40,000 routes].
+
+Préfixes /48 saupoudrés linéairement avec différentes densités
+: Linux agit comme un routeur au cœur d'un datacentre. Chaque client ou baie
+  obtient un ou plusieurs sous-réseau /48 qu'il convient d'aiguiller. Avec une
+  densité de 1, les /48 sont contigus.
+
+Préfixes /128 répartis aléatoirements dans un /108
+: Linux se comporte comme un routeur d'accès pour un réseau /64 dans lequel les
+  hôtes obtiennent leur IP par auto-configuration. Si tous les hôtes partagent
+  le même OUI, les 40 premiers bits sont fixes. Dans ce scénario, la table des
+  voisins est convertie en routes par un processus externe et redistribué auprès
+  des autres routeurs servant le même sous-réseau[^neigh].
+
+[^neigh]: Ce n'est pas le scénario classique où Linux agit comme une simple
+    passerelle. Dans ce cas, la table de routage ne contiendrait que le préfixe
+    /64 et la table des voisins contiendrait les informations sur chaque membre
+    du réseau.
+
+## Performance de la recherche
+
+À l'aide d'un [module noyau][kernel module], il est possible de mesurer
+précisément le temps d'exécution[^bench]
+de la fonction [`ip6_route_output_flags()`][ip6_route_output_flags()]:
+
+![Profondeur maximale et temps de recherche][i2]
+[i2]: [[!!images/linux/ipv6-radix-maxdepth.svg]] "Profondeur maximale de l'arbre radix et temps de recherche en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. Les barres d'erreur représentent l'écart médian absolu."
+
+[^bench]: Les mesures sont faites dans une machine virtuelle disposant d'un seul
+    vCPU. Le CPU hôte est un [Intel Core i5-4670K][] tournant à une fréquence de
+    3,7 GHz pendant l'expérimentation (le gouverneur CPU est configuré en mode
+    performance). Les mesures sont sérialisées. De nombreuses recherches sont
+    effectuées et la valeur reportée est la médiane. Chaque recherche est
+    chronométrée à l'aide du TSC.
+
+Obtenir des résultats satisfaisants s'avère complexe en raison de la taille de
+l'espace d'adressage. Aucun des scénarios ne dispose d'une route par défaut et
+les mesures ne sont conservées que lorsque la recherche aboutit à une
+solution[^hits]. Pour le scénario avec la vue complète, seules les adresses de
+`2400::/16` à `2a06::/16` sont utilisées (cela comprend plus de la moitié des
+routes). Pour le scénario avec les préfixes /128, l'intégralité du sous-réseau
+/108 est balayé. Pour le scénario avec les /48, le balayage est effectué depuis
+le premier /48 jusqu'au dernier. Pour chaque passage, 5000 adresses sont prises
+semi-aléatoirement. De nouveaux passages sont effectués jusqu'à atteindre 5000
+recherches réussies ou 1 million de recherches au total.
+
+[^hits]: Le destin de la plupart des paquets est d'atteindre une destination. Il
+  semble donc plus représentatif de ne conserver que les recherches
+  réussies. Toutefois, cela signifie que le code correspondant à la recherche en
+  arrière n'est jamais exécuté dans les scénarios avec les /128 et /48. Ajouter
+  une route par défaut donne des résultats très différents et rend difficile
+  l'exploration de l'espace d'adressage.
+
+La relation entre la profondeur maximale de l'arbre et le temps de recherche est
+partielle. Il m'est difficile d'expliquer la différence de performance entre les
+différentes densités du scénario en /48.
+
+On peut toutefois observer deux points importants :
+
+ - Avec une **vue complète**, le temps de recherche médian est de
+   **450 ns**. C'est environ 10 fois le budget pour expédier des paquets à 10
+   Gbps (environ 50 ns).
+ - Avec une **table de routage presque vide**, le temps de recherche est de
+   **150 ns**. C'est encore au-dessus du budget pour une connexion à 10 Gbps.
+
+Avec IPv4, le temps de recherche sur une table presque vide était d'environ 20
+ns tandis qu'avec une vue complète (500 000 routes), il est d'environ 50
+ns. Comment expliquer une telle différence ? Tout d'abord, la profondeur de
+l'arbre compressé en IPv4 est très faible (6 pour 500 000 routes) tandis que la
+profondeur de l'arbre radix avec 40 000 routes est d'environ 40.
+
+Deuxièmement, bien que la fonction [`fib_lookup()`][fib_lookup()] pour IPv4 et
+la fonction [`ip6_route_output_flags()`][ip6_route_output_flags()] pour IPv6 ont
+des coûts fixes liés à l'évaluation des règles de routage, IPv4 dispose de
+plusieurs optimisations quand ces règles de routage n'ont pas été
+modifiées[^ipv6opt]. Ces optimisations sont retirées au premier changement. Dans
+ce cas, IPv4 est impacté de 30 ns. Cela laisse encore un désavantage de 100 ns
+pour IPv6.
+
+[^ipv6opt]: Les mêmes optimisations seraient appliquables à IPv6 mais personne
+    ne s'est [encore][ipv6opt] penché dessus.
+
+Regardons où le temps CPU est dépensé pour chacune des deux fonctions. Voici un
+graphique de type [*flame graph*][CPU flamegraph] pour la fonction
+IPv4 [`fib_lookup()`][fib_lookup()] :
+
+![Graphique flamegraph pour la recherche de routes en IPv4][i5]
+[i5]: [[!!images/obj/linux/ipv4-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv4. Les tables main et local sont séparées et les règles de routage sont évaluées. L'axe horizontal est le temps total écoulé (65 ns). Le graphique est interactif."
+
+Seulement la moitié du temps est dépensé dans le parcours d'arbre via la
+fonction `fib_table_lookup()`. Il convient de noter que cette fonction est en
+réalité exécutée deux fois : une fois pour la table *local* et une fois pour la
+table *main*. Le reste du temps consiste à évaluer les règles de routage
+(environ 30 ns). Le ratio est dépendant du nombre de routes insérées (1000 dans
+cet exemple).
+
+Voici le graphique équivalent pour la fonction
+IPV6 [`ip6_route_output_flags()`][ip6_route_output_flags()] :
+
+![Graphique flamegraph pour la recherche de routes en IPv6][i6]
+[i6]: [[!!images/obj/linux/ipv6-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv6. L'axe horizontal est le temps total écoulé (300 ns). Le graphique est interactif."
+
+Grossièrement, la répartition du temps est la suivante :
+
+ - 50% est dépensé dans le parcours de l'arbre pour la table *main*,
+ - 15% est dépensé dans les verrous (IPv4 repose sur le mécanisme RCU, plus efficace),
+ - 5% est dépensé dans le parcours de l'arbre pour la table *local*,
+ - le reste du temps est dépensé dans l'évaluation des règles de routage (environ 100 ns)[^compileout].
+
+[^compileout]: Retirer le support des règles de routage retire effectivement ces
+    100 ns.
+
+Pourquoi l'évaluation des règles de routage est-elle notoirement plus lente en
+IPv6 ? Encore une fois, je n'ai pas de réponse franche sur ce point.
+
+## Historique
+
+Le graphique suivant montre l'évolution des performances de Linux depuis le
+noyau 2.6.39 :
+
+![Progression des performances de recherche de routes pour IPv6][i30]
+[i30]: [[!!images/linux/ipv6-radix-perf.svg]] "Temps de recherche de routes IPv6 pour différentes versions du noyau. La recherche est effectuée sur une table de 40 000 routes. Les changements notables sont mis en valeur. Les zones ombragées représentent l'écart absolu médian."
+
+Tous les noyaux sont compilés avec *GCC* 4.9 (issu de *Debian Jessie*). Cette
+version est compatible avec des noyaux antiques ainsi qu'avec les noyaux les
+plus récents. La configuration du noyau est celle par défaut avec les options
+`CONFIG_SMP`, `CONFIG_IPV6`, `CONFIG_IPV6_MULTIPLE_TABLES` et
+`CONFIG_IPV6_SUBTREES` activées. D'autres options mineures sont activées pour
+permettre de prendre les mesures.
+
+Il y a trois changements notables :
+
+ - Avec Linux **3.1**, Eric Dumazet retarde la copie des métriques pour corriger
+   le partage involontaire entre toutes les entrées du cache
+   ([commit 21efcfa0ff27][]). Chaque route en cache dispose désormais de ces
+   propres métriques, ce qui explique l'impact sur les performances pour les
+   scénarios autres que celui en /128.
+ - Avec Linux **3.9**, Yoshifuji Hideaki retire l'enchevêtrement entre les
+   entrées de routage et le sous-système des voisins
+   ([commit 887c95cc1da5][]). Cela aurait dû apporter un gain en
+   performance.
+ - Avec Linux **4.2**, Martin KaFai Lau élimine la création des entrées dans le
+   cache pour la plupart des routes à l'exception des routes dont le PMTU est
+   différent du MTU de l'interface sous-jacente. Les gains proviennent
+   essentiellement du [commit 4b32b5ad31a6][] et du [commit 45e4fd26683c][].
+
+## Performance des insertions
+
+Une autre métrique intéressante est le temps d'insertion des routes. La mise en
+place de 40 000 routes se fait en moins de deux secondes. Pour certaines
+raisons, le temps d'insertion n'est plus linéaire au-delà et grimpe rapidement à
+60 secondes pour un demi-million de routes.
+
+![Temps d'insertion][i3]
+[i3]: [[!!images/linux/ipv6-radix-time.svg]] "Temps d'insertion (temps système) en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+Malgré sa logique plus complexe pour insérer des routes, le sous-système IPv4
+est capable d'insérer 2 millions de routes en moins de 10 secondes.
+
+# Utilisation mémoire
+
+Les nœuds de l'arbre radix (`struct fib6_node`) et les informations de routage
+(`struct rt6_info`) sont allouées via l'[allocateur
+slab][slab allocator][^percpu]. Il est donc possible d'extraire du fichier
+`/proc/slabinfo` la quantité de mémoire utilisée à condition de démarrer le
+noyau avec l'option `slab_nomerge` :
+
+    ::console
+    # sed -ne 2p -e '/^ip6_dst/p' -e '/^fib6_nodes/p' /proc/slabinfo | cut -f1 -d:
+    ♯  name            <active_objs> <num_objs> <objsize> <objperslab> <pagesperslab>
+    fib6_nodes         76101  76104     64   63    1
+    ip6_dst_cache      40090  40090    384   10    1
+
+[^percpu]: Il y a aussi des pointeurs propres à chaque CPU alloués directement
+    (4 octets par entrée et par CPU sur une architecture 64 bits). Nous ignorons
+    ce détail.
+
+Dans l'exemple ci-dessus, la mémoire utilisée est de 76104×64+40090×384 octets
+(environ 20 Mio). Le nombre de `struct rt6_info` correspond au nombre de routes
+tandis que le nombre de nœuds est environ le double du nombre de routes :
+
+![Nœuds][i0]
+[i0]: [[!!images/linux/ipv6-radix-nodes.svg]] "Nombre de nœuds dans l'arbre radix en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+La quantité de mémoire utilisée est donc simplement prévisible. Elle est
+également très raisonnable puisque quasiment n'importe quelle plateforme
+actuelle peut stocker plusieurs vues complètes (20 Mio chacune) :
+
+![Utilisation mémoire][i1]
+[i1]: [[!!images/linux/ipv6-radix-memory.svg]] "Utilisation mémoire en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+
+L'arbre de recherche utilisé par IPv4 est plus efficace : alors qu'IPv6
+nécessite 512 Mio pour un million de routes, IPv4 se contente de 128 Mio. Cela
+provient principalement de la différence de taille entre la structure `rt6_info`
+(336 bytes) pour IPv6 et la structure `fib_alias` (48 bytes) pour IPv4 qui
+stocke une bonne partie des informations sur le prochain saut dans des
+structures `fib_info` partagées entre les différentes entrées.
+
+# Conclusion
+
+Les points à retenir sont :
+
+ - un noyau 4.2 ou plus récent est nécessaire pour éviter la mise en cache excessive,
+ - le temps de recherche d'une route est supérieur à IPv4 (d'un ordre de
+   grandeur),
+ - l'option `CONFIG_IPV6_MULTIPLE_TABLES` implique un coût fixe de 100 ns,
+ - l'utilisation mémoire reste raisonnable (20 Mio pour 40 000 routes).
+
+Comparé à IPv4, IPv6 dans Linux ne suscite pas le même intérêt, notamment en
+terme d'optimisations. Heureusement, les choses s'améliorent avec son adoption
+graduelle et son utilisation à l'échelle.
+
+*[OUI]: Organizationally Unique Identifier
+*[RCU]: Read-Copy-Update
+*[MTU]: Maximum Transmission Unit
+*[PMTU]: Path MTU
+*[ECMP]: Equal-Cost Multipath
+*[TSC]: Time Stamp Counter
+
+[IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
+[level-compressed trie]: [[fr/blog/2017-ipv4-table-routage-linux.html]]#recherche-dans-un-trie-doublement-compresse "Fonctionnement de la table de routage IPv4 sous Linux : recherche dans un trie doublement compressé"
+[radix tree]: [[fr/blog/2017-ipv4-table-routage-linux.html]]#recherche-dans-un-trie-compresse "Fonctionnement de la table de routage IPv4 sous Linux : recherche dans un trie compressé"
+[explanations for IPv4]: [[fr/blog/2017-ipv4-table-routage-linux.html]]#recherche-dune-route-dans-un-trie "Fonctionnement de la table de routage IPv4 sous Linux : recherche d’une route dans un trie"
+[commit 19baf839ff4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=19baf839ff4a8daa1f2a7400897094fc18e4f5e9 "ipv4: Add LC-Trie FIB lookup algorithm"
+[commit 5e9965c15ba8]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=5e9965c15ba88319500284e590733f4a4629a288 "Merge removing route cache-related code"
+[commit 45e4fd26683c]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=45e4fd26683c9a5f88600d91b08a484f7f09226a "ipv6: Only create RTF_CACHE routes after encountering pmtu exception"
+[commit 21efcfa0ff27]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=21efcfa0ff27776902a8a15e810147be4d937d69 "ipv6: unshare inetpeers"
+[commit 887c95cc1da5]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=887c95cc1da53f66a5890fdeab13414613010097 "ipv6: Complete neighbour entry removal from dst_entry"
+[commit 4b32b5ad31a6]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=4b32b5ad31a68a661f761c76dfd0d076636d3ae9 "ipv6: Stop rt6_info from using inet_peer's metrics"
+[commit 45e4fd26683c]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=45e4fd26683c9a5f88600d91b08a484f7f09226a "ipv6: Only create RTF_CACHE routes after encountering pmtu exception"
+[trie]: https://en.wikipedia.org/wiki/Trie "Wikipedia article about trie"
+[fib6_lookup_1()]: http://elixir.free-electrons.com/linux/v4.12.3/source/net/ipv6/ip6_fib.c#L1120 "Linux: définition de fib6_lookup_1()"
+[ip6_route_output_flags()]: http://elixir.free-electrons.com/linux/v4.12.3/source/net/ipv6/route.c#L1215 "Linux: définition de ip6_route_output_flags()"
+[fib_lookup()]: http://elixir.free-electrons.com/linux/v4.12.3/source/include/net/ip_fib.h#L334 "Linux: définition de fib_lookup()"
+[ip6_dst_gc()]: http://elixir.free-electrons.com/linux/v4.12.3/source/net/ipv6/route.c#L1736 "Linux: définition de ip6_dst_gc()"
+[struct fib6_node]: http://elixir.free-electrons.com/linux/v4.12.3/source/include/net/ip6_fib.h#L60 "Linux: définition de struct fib6_node"
+[struct rt6_info]: http://elixir.free-electrons.com/linux/v4.12.3/source/include/net/ip6_fib.h#L98 "Linux: définition de struct rt6_info"
+[slab allocator]: https://en.wikipedia.org/wiki/Slab_allocation "Slab allocation on Wikipedia"
+[kernel module]: https://github.com/vincentbernat/network-lab/blob/master/lab-routes-ipv6/kbench_mod.c "Module noyau pour chronométrer les performances de ip6_route_output_flags()"
+[40,000 routes]: http://bgp.potaroo.net/v6/as2.0/ "AS131072 IPv6 BGP Table Data"
+[CPU flamegraph]: http://www.brendangregg.com/FlameGraphs/cpuflamegraphs.html "CPU Flame Graphs"
+[explains]: http://www.spinics.net/lists/netdev/msg330403.html "[PATCH net-next v5 00/11] ipv6: Only create RTF_CACHE route after encountering pmtu exception"
+[Intel Core i5-4670K]: http://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
+[ipv6opt]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=feca7d8c135bc1527b244fe817b8b6498066ccec "net: ipv6: avoid overhead when no custom FIB rules are installed"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}
