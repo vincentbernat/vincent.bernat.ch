@@ -291,34 +291,8 @@ don't have a definitive answer.
 
 ## History
 
-The following graph shows the performance progression of route lookups through
-Linux history:
-
-![IPv6 route lookup performance progression][i30]
-[i30]: [[!!images/linux/ipv6-radix-perf.svg]] "IPv6 route lookup times for various Linux kernel versions. Lookup is done on a table with 40,000 routes. Notable performance changes are highlighted. The shaded surfaces represent the median absolute deviation."
-
-All kernels are compiled with *GCC* 4.9 (from *Debian Jessie*). This version is
-able to compile older kernels as well as current ones. The kernel configuration
-is the default one with `CONFIG_SMP`, `CONFIG_IPV6`,
-`CONFIG_IPV6_MULTIPLE_TABLES` and `CONFIG_IPV6_SUBTREES` options enabled. Some
-other unrelated options are enabled to be able to boot them in a virtual machine
-and run the benchmark.
-
-There are three notable performance changes:
-
- - In Linux **3.1**, Eric Dumazet delays a bit the copy of route metrics to fix
-   the undesirable sharing of route-specific metrics by all cache entries
-   ([commit 21efcfa0ff27][]). Each cache entry now gets its own metrics, which
-   explains the performance hit for the non-/128 scenarios.
- - In Linux **3.9**, Yoshifuji Hideaki removes the reference to the neighbor
-   entry in `struct rt6_info` ([commit 887c95cc1da5][]). This should have lead to
-   a performance increase. The small regression may be due to cache-related
-   issues.
- - In Linux **4.2**, Martin KaFai Lau prevents the creation of cache entries for
-   most route lookups. The most sensible performance improvement comes
-   with [commit 4b32b5ad31a6][]. The second one is from [commit 45e4fd26683c][],
-   which effectively removes creation of cache entries, except for PMTU
-   exceptions.
+**UPDATED (2017.11):** This section has been moved to its [own page][Performance
+progression of IPv6 route lookup on Linux].
 
 ## Insertion performance
 
@@ -390,15 +364,12 @@ term of optimizations. Hopefully, things are changing as its adoption and use
 *[TSC]: Time Stamp Counter
 
 [IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
+[Performance progression of IPv6 route lookup on Linux]: [[en/blog/2017-performance-progression-ipv6-route-lookup-linux.html]] "Performance progression of IPv6 route lookup on Linux"
 [level-compressed trie]: [[en/blog/2017-ipv4-route-lookup-linux.html]]#lookup-with-a-level-compressed-trie "IPv4 route lookup on Linux: lookup with a level-compressed trie"
 [radix tree]: [[en/blog/2017-ipv4-route-lookup-linux.html]]#lookup-with-a-path-compressed-trie "IPv4 route lookup on Linux: lookup with a path-compressed trie"
 [explanations for IPv4]: [[en/blog/2017-ipv4-route-lookup-linux.html]]#route-lookup-in-a-trie "IPv4 route lookup on Linux: route lookup in a trie"
 [commit 19baf839ff4a]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=19baf839ff4a8daa1f2a7400897094fc18e4f5e9 "ipv4: Add LC-Trie FIB lookup algorithm"
 [commit 5e9965c15ba8]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=5e9965c15ba88319500284e590733f4a4629a288 "Merge removing route cache-related code"
-[commit 45e4fd26683c]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=45e4fd26683c9a5f88600d91b08a484f7f09226a "ipv6: Only create RTF_CACHE routes after encountering pmtu exception"
-[commit 21efcfa0ff27]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=21efcfa0ff27776902a8a15e810147be4d937d69 "ipv6: unshare inetpeers"
-[commit 887c95cc1da5]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=887c95cc1da53f66a5890fdeab13414613010097 "ipv6: Complete neighbour entry removal from dst_entry"
-[commit 4b32b5ad31a6]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=4b32b5ad31a68a661f761c76dfd0d076636d3ae9 "ipv6: Stop rt6_info from using inet_peer's metrics"
 [commit 45e4fd26683c]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=45e4fd26683c9a5f88600d91b08a484f7f09226a "ipv6: Only create RTF_CACHE routes after encountering pmtu exception"
 [trie]: https://en.wikipedia.org/wiki/Trie "Wikipedia article about trie"
 [fib6_lookup_1()]: http://elixir.free-electrons.com/linux/v4.12.3/source/net/ipv6/ip6_fib.c#L1120 "Linux: fib6_lookup_1() definition"
