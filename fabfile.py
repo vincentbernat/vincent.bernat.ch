@@ -228,7 +228,7 @@ def push():
     local("git push ace.luffy.cx")
 
     # media.luffy.cx
-    local("rsync --exclude=.git -a .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
+    local("rsync --exclude=.git -ac .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
 
     # HTML
-    local("rsync --exclude=.git -a .final/ ace.luffy.cx:/srv/www/luffy/")
+    local("rsync --exclude=.git -ac .final/ ace.luffy.cx:/srv/www/luffy/")
