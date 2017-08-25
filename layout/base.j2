@@ -1,4 +1,9 @@
 {# -*- web -*- #}
+{%- set formatted_article -%}
+{%- filter markdown|typogrify -%}
+{% block article -%}{%- endblock %}
+{%- endfilter -%}
+{%- endset -%}
 <!doctype html>
 <html lang="{{ resource.meta.language }}">
 <head>
@@ -16,7 +21,7 @@
   <meta name="twitter:description" content="
 {%- filter replace('\n', ' ')|truncate(150)|trim()|e %}
 {%- if resource.meta.description %}{{ resource.meta.description }}
-{%- else %}{{ self.article()|markdown|striptags }}
+{%- else %}{{ formatted_article|truncate(1000)|striptags }}
 {%- endif %}
 {%- endfilter %}">
   <link rel="apple-touch-icon" href="{{ media_url('images/favicon-apple.png') }}">
@@ -72,9 +77,7 @@
 	{% endblock %}
 	{% block main %}
 	<div id="lf-main" role="main">
-	  {% mark article %}{% filter markdown|typogrify -%}
-	  {% block article -%}{%- endblock %}
-	  {%- endfilter %}{% endmark %}
+	  {% mark article %}{{ formatted_article }}{% endmark %}
 	</div>
 	{% endblock %}
       </article>
