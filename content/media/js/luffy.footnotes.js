@@ -3,8 +3,8 @@
 var luffy = luffy || {};
 luffy.footnotes = function() {
     if (typeof document.querySelectorAll !== "function") return;
-  var footnotes = document.querySelector("#lf-main .footnote ol"),
-  footnoteReferences = document.querySelectorAll("#lf-main sup[id^=fnref-]"),
+  var footnotes = document.querySelector("#lf-text .footnote ol"),
+  footnoteReferences = document.querySelectorAll("#lf-text sup[id^=fnref-]"),
   i;
   for (i = 0; i < footnoteReferences.length; i++) {
     var footnoteReference = footnoteReferences[i],
