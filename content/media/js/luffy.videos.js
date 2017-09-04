@@ -1,7 +1,6 @@
-/* Add captions to images. */
+/* Change videos to embed them instead of linking to them. */
 
-var luffy = luffy || {};
-luffy.videos = function() {
+___(function() {
     if (typeof document.querySelectorAll !== "function") return;
 
     // Youtube videos
@@ -26,4 +25,4 @@ luffy.videos = function() {
     // track. YT doesn't allow one to set the muted tag using an URL
     // parameter, so the video won't autoplay on mobile: the user has
     // to click twice.
-};
+});

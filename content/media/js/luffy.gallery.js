@@ -1,10 +1,10 @@
 /* Handle image gallery */
+
 /* From: https://github.com/feimosi/baguetteBox.js/blob/v1.8.2/src/baguetteBox.js
    MIT licensed. Copyright (c) 2016 feimosi
  */
 
-var luffy = luffy || {};
-luffy.gallery = function() {
+___(function() {
     'use strict';
 
     // SVG shapes used on the buttons
@@ -626,4 +626,4 @@ luffy.gallery = function() {
 
     run('.lf-gallery');
 
-};
+});

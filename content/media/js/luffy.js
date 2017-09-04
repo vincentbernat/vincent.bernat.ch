@@ -2,19 +2,14 @@
 combine:
     files:
       - luffy.*.js
-    where: top
+    where: bottom
     remove: yes
 ---
 
-var scripts = [luffy.videos,
-               luffy.footnotes,
-               luffy.mathjax,
-               luffy.comments,
-               luffy.gallery];
-for (var i = 0; i < scripts.length; i++) {
+var ___ = function(fn) {
   try {
-    scripts[i]();
+    fn();
   } catch (e) {
     (console.error || console.log).call(console, e);
   }
-}
+};

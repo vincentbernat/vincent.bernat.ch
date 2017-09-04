@@ -1,8 +1,7 @@
 /* Turn footnotes to sidenotes. */
 
-var luffy = luffy || {};
-luffy.footnotes = function() {
-    if (typeof document.querySelectorAll !== "function") return;
+___(function() {
+  if (typeof document.querySelectorAll !== "function") return;
   var footnotes = document.querySelector("#lf-text .footnote ol"),
   footnoteReferences = document.querySelectorAll("#lf-text sup[id^=fnref-]"),
   i;
@@ -29,4 +28,4 @@ luffy.footnotes = function() {
     parent.parentNode.insertBefore(sidenote, parent);
   }
   document.body.className += ' lf-has-sidenotes';
-};
+});

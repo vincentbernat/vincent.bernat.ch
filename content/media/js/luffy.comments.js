@@ -1,7 +1,6 @@
 /* Comment system (using Disqus) */
 
-var luffy = luffy || {};
-luffy.comments = function() {
+___(function() {
     // Don't do anything if there is no comment
     var el = document.getElementById("disqus_thread");
     if (el === null || el === undefined || el.addEventListener === undefined) return;
@@ -56,4 +55,4 @@ luffy.comments = function() {
     // Display introduction text
     el.children[0].className = el.children[1].className;
     el.children[1].className = '';
-};
+});
