@@ -1,6 +1,6 @@
 /* Comment system (using Disqus) */
 
-___(function() {
+luffy.s.push(function() {
     // Don't do anything if there is no comment
     var el = document.getElementById("disqus_thread");
     if (el === null || el === undefined || el.addEventListener === undefined) return;

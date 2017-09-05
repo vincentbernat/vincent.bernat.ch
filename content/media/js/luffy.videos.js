@@ -1,6 +1,6 @@
 /* Change videos to embed them instead of linking to them. */
 
-___(function() {
+luffy.s.push(function() {
     if (typeof document.querySelectorAll !== "function") return;
 
     // Youtube videos

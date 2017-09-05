@@ -4,7 +4,7 @@
    MIT licensed. Copyright (c) 2016 feimosi
  */
 
-___(function() {
+luffy.s.push(function() {
     'use strict';
 
     // SVG shapes used on the buttons

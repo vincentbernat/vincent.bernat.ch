@@ -1,6 +1,6 @@
 /* Turn footnotes to sidenotes. */
 
-___(function() {
+luffy.s.push(function() {
   if (typeof document.querySelectorAll !== "function") return;
   var footnotes = document.querySelector("#lf-text .footnote ol"),
   footnoteReferences = document.querySelectorAll("#lf-text sup[id^=fnref-]"),
