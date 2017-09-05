@@ -4,6 +4,7 @@
    MIT licensed. Copyright (c) 2016 feimosi
  */
 
+var luffy = luffy || {s: []};
 luffy.s.push(function() {
     'use strict';
 
