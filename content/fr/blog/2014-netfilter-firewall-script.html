@@ -1,5 +1,5 @@
 ---
-title: "Préparer des règles Netfilter dans un espace de nommage réseau"
+title: "Préparer des règles Netfilter dans un espace de noms réseau"
 uuid: dbd083fc-a6f4-44ff-a405-c7fd156f1a63
 tags:
   - network
@@ -185,12 +185,12 @@ méthode suivante est bien plus élégante.
             vice-versa. Ces problèmes n'existent pas avec la deuxième
             méthode.
 
-# Avec un espace de nommage
+# Avec un espace de noms
 
 Une approche hybride est de construire les règles avec `ip{,6}tables`
-dans un espace de nommage réseau (*network namespace*) puis de les
+dans un espace de noms réseau (*network namespace*) puis de les
 sauver avec `ip{,6}tables-save` et enfin de les appliquer dans
-l'espace de nommage principal avec `ip{,6}tables-restore`.
+l'espace de noms principal avec `ip{,6}tables-restore`.
 
     ::sh
     #!/bin/zsh
@@ -218,19 +218,19 @@ l'espace de nommage principal avec `ip{,6}tables-restore`.
         ip6tables-save >&6
     }
 
-En ➊, le script est réexécuté dans un **nouvel espace de nommage
+En ➊, le script est réexécuté dans un **nouvel espace de noms
 réseau**. Celui-ci dispose de ces propres règles de pare-feu qui
-peuvent être modifiées sans altérer celles de l'espace de nommage
+peuvent être modifiées sans altérer celles de l'espace de noms
 principal. La variable `$ipatbles` est utilisée pour déterminer quel
-est l'espace de nommage courant. Dans le nouvel espace de nommage, les
+est l'espace de noms courant. Dans le nouvel espace de noms, les
 fichiers de règles sont exécutés (➌). Ceux-ci contiennent l'appel aux
 commandes `ip{,6}tables`. Si une erreur survient, nous n'allons pas
 plus loin grâce à l'utilisation de `set -e`. Sinon, en ➍, les règles
 sont sauvegardées avec `ip{,6}tables-save` et envoyées dans l'espace
-de nommage principal en utilisant les descripteurs de fichier dédiés à
+de noms principal en utilisant les descripteurs de fichier dédiés à
 cet effet.
 
-L'exécution dans l'espace de nommage principal continue en ➊. Les
+L'exécution dans l'espace de noms principal continue en ➊. Les
 résultats de `ip{,6}tables-save` sont envoyées à
 `ip{,6}tables-restore`. À ce point, le pare-feu est presque
 fonctionnel. Les fichiers de règles sont toutefois rejoués (➌) mais
@@ -238,11 +238,11 @@ les commandes `ip{,6}tables` sont neutralisées (➋) de façon à ce que
 les éventuelles autres commandes, comme par exemple l'activation du
 routage IP, soient exécutées.
 
-Le nouvel espace de nommage ne dispose pas du même environnement que
-l'espace de nommage principal. Notamment, il ne contient pas
+Le nouvel espace de noms ne dispose pas du même environnement que
+l'espace de noms principal. Notamment, il ne contient pas
 d'interfaces réseau. Il n'est donc pas possible de consulter ou de
 configurer des adresses IP. Lorsque des commandes ne peuvent être
-exécutées que dans l'espace de nommage principal, il est nécessaire de
+exécutées que dans l'espace de noms principal, il est nécessaire de
 les préfixer par `main` :
 
     ::sh
