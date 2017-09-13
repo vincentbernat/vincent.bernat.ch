@@ -1,0 +1,445 @@
+---
+title: "Route-based IPsec VPN on Linux with strongSwan"
+description: |
+  Linux IPsec implementation is usually policy-based. However, route-based VPNs
+  with a pseudo-interface are also available.
+uuid: 7c90aa05-84bc-48ee-8a9d-e1ac21443387
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routed-vpn": "GitHub repository"
+tags:
+  - network
+---
+
+A common way to establish an IPsec tunnel on Linux is to use an IKE daemon, like
+the one from the [strongSwan][] project, with a minimal
+configuration[^libreswan]:
+
+    ::properties
+    conn V2-1
+      left        = 2001:db8:1::1
+      leftsubnet  = 2001:db8:a1::/64
+      right       = 2001:db8:2::1
+      rightsubnet = 2001:db8:a2::/64
+      authby      = psk
+      auto        = start
+
+[^libreswan]: Everything in this post should work with [Libreswan][].
+
+The same configuration can be used on both sides. Each side will figure out if
+it is "left" or "right". The IPsec site-to-site tunnel endpoints are
+`2001:db8:­1::1` and `2001:db8:­2::1`. The protected subnets are
+`2001:db8:­a1::/64` and `2001:db8:­a2::/64`. As a result, *strongSwan*
+configures the following policies in the kernel:
+
+    ::console
+    $ ip xfrm policy
+    src 2001:db8:a1::/64 dst 2001:db8:a2::/64
+            dir out priority 399999 ptype main
+            tmpl src 2001:db8:1::1 dst 2001:db8:2::1
+                    proto esp reqid 4 mode tunnel
+    src 2001:db8:a2::/64 dst 2001:db8:a1::/64
+            dir fwd priority 399999 ptype main
+            tmpl src 2001:db8:2::1 dst 2001:db8:1::1
+                    proto esp reqid 4 mode tunnel
+    src 2001:db8:a2::/64 dst 2001:db8:a1::/64
+            dir in priority 399999 ptype main
+            tmpl src 2001:db8:2::1 dst 2001:db8:1::1
+                    proto esp reqid 4 mode tunnel
+    […]
+
+This kind of IPsec tunnel is a **policy-based VPN**: encapsulation and
+decapsulation are governed by these policies. Each of them contains the
+following elements:
+
+ - a *direction* (`out`, `in` or `fwd`[^fwd]),
+ - a *selector* (source subnet, destination subnet, protocol, ports),
+ - a *mode* (`transport` or `tunnel`),
+ - an *encapsulation protocol* (`esp` or `ah`), and
+ - the endpoint *source and destination* addresses.
+
+[^fwd]: `fwd` is for incoming packets on non-local addresses. It only makes
+    sense in `transport` mode and is a Linux-only particularity.
+
+When a matching policy is found, the kernel will look for a corresponding
+security association (using `reqid` and the endpoint source and destination
+addresses):
+
+    ::console
+    $ ip xfrm state
+    src 2001:db8:1::1 dst 2001:db8:2::1
+            proto esp spi 0xc1890b6e reqid 4 mode tunnel
+            replay-window 0 flag af-unspec
+            auth-trunc hmac(sha256) 0x5b68[…]8ba2904 128
+            enc cbc(aes) 0x8e0e377ad8fd91e8553648340ff0fa06
+            anti-replay context: seq 0x0, oseq 0x0, bitmap 0x00000000
+    […]
+
+If no security association is found, the packet is put on hold and the IKE
+daemon is asked to negotiate an appropriate one. Otherwise, the packet is
+encapsulated. The receiving end identifies the appropriate security association
+using the SPI in the header. Two security associations are needed to establish
+a bidirectionnal tunnel:
+
+    ::console
+    $ tcpdump -pni eth0 -c2 -s0 esp
+    13:07:30.871150 IP6 2001:db8:1::1 > 2001:db8:2::1: ESP(spi=0xc1890b6e,seq=0x222)
+    13:07:30.872297 IP6 2001:db8:2::1 > 2001:db8:1::1: ESP(spi=0xcf2426b6,seq=0x204)
+
+All IPsec implementations are compatible with policy-based VPNs. However, some
+configurations are difficult to implement. For example, consider the following
+proposition for redundant site-to-site VPNs:
+
+![Redundant VPNs between 3 sites][i1]
+[i1]: [[!!images/vpn-routed.svg]] "Three sites using redundant IPsec VPNs to protect some subnets. AS 65001 borrows some IPs from one of the AS 65002 subnets."
+
+A possible configuration between `V1-1` and `V2-1` could be:
+
+    ::properties
+    conn V1-1-to-V2-1
+      left        = 2001:db8:1::1
+      leftsubnet  = 2001:db8:a1::/64,2001:db8:a6::cc:1/128,2001:db8:a6::cc:5/128
+      right       = 2001:db8:2::1
+      rightsubnet = 2001:db8:a2::/64,2001:db8:a6::/64,2001:db8:a8::/64
+      authby      = psk
+      keyexchange = ikev2
+      auto        = start
+
+Each time a subnet is modified on one site, the configurations need to be
+updated on all sites. Moreover, overlapping subnets (`2001:db8:­a6::/64` on one
+side and `2001:db8:­a6::cc:1/128` at the other) can also be problematic.
+
+The alternative is to use **route-based VPNs**: any packet traversing a
+pseudo-interface will be encapsulated using a security policy bound to the
+interface. This brings two features:
+
+1. **Routing daemons** can be used to distribute routes to be protected by the
+   VPN. This decreases the administrative burden when many subnets are present
+   on each side.
+2. Encapsulation and decapsulation can be executed in a **different routing
+   instance or namespace**. This enables a clean separation between a private
+   routing instance (where VPN users are) and a public routing instance (where
+   VPN endpoints are).
+
+# Route-based VPN on Juniper
+
+Before looking at how to achieve that on Linux, let's have a look at the way it
+works with a *JunOS*-based platform (like a *Juniper vSRX*). This platform as
+long-standing history of supporting route-based VPNs (a feature already present
+in the *Netscreen ISG* platform).
+
+Let's assume we want to configure the IPsec VPN from `V3-2` to `V1-1`. First, we
+need to configure the tunnel interface and bind it to the "private" routing
+instance containing only internal routes (with IPv4, they would have been RFC
+1918 routes):
+
+    ::junos hl_lines="13"
+    interfaces {
+        st0 {
+            unit 1 {
+                family inet6 {
+                    address 2001:db8:ff::7/127;
+                }
+            }
+        }
+    }
+    routing-instances {
+        private {
+            instance-type virtual-router;
+            interface st0.1;
+        }
+    }
+
+The second step is to configure the VPN:
+
+    ::junos hl_lines="33"
+    security {
+        /* Phase 1 configuration */
+        ike {
+            proposal IKE-P1 {
+                authentication-method pre-shared-keys;
+                dh-group group20;
+                encryption-algorithm aes-256-gcm;
+            }
+            policy IKE-V1-1 {
+                mode main;
+                proposals IKE-P1;
+                pre-shared-key ascii-text "d8bdRxaY22oH1j89Z2nATeYyrXfP9ga6xC5mi0RG1uc";
+            }
+            gateway GW-V1-1 {
+                ike-policy IKE-V1-1;
+                address 2001:db8:1::1;
+                external-interface lo0.1;
+                general-ikeid;
+                version v2-only;
+            }
+        }
+        /* Phase 2 configuration */
+        ipsec {
+            proposal ESP-P2 {
+                protocol esp;
+                encryption-algorithm aes-256-gcm;
+            }
+            policy IPSEC-V1-1 {
+                perfect-forward-secrecy keys group20;
+                proposals ESP-P2;
+            }
+            vpn VPN-V1-1 {
+                bind-interface st0.1;
+                df-bit copy;
+                ike {
+                    gateway GW-V1-1;
+                    ipsec-policy IPSEC-V1-1;
+                }
+                establish-tunnels on-traffic;
+            }
+        }
+    }
+
+We get a route-based VPN because we bind the `st0.1` interface to the
+`VPN-V1-1` VPN. Once the VPN is up, any packet entering `st0.1` will be
+encapsulated and sent to the `2001:db8:­1::1` endpoint.
+
+The last step is to configure BGP in the "private" routing instance to exchange
+routes with the remote site:
+
+    ::junos
+    routing-instances {
+        private {
+            routing-options {
+                router-id 1.0.3.2;
+                maximum-paths 16;
+            }
+            protocols {
+                bgp {
+                    preference 140;
+                    log-updown;
+                    group v4-VPN {
+                        type external;
+                        local-as 65003;
+                        hold-time 6;
+                        neighbor 2001:db8:ff::6 peer-as 65001;
+                        multipath;
+                        export [ NEXT-HOP-SELF OUR-ROUTES NOTHING ];
+                    }
+                }
+            }
+        }
+    }
+
+The export filter `OUR-ROUTES` needs to select the routes to be advertised to
+the other peers. For example:
+
+    ::junos
+    policy-options {
+        policy-statement OUR-ROUTES {
+            term 10 {
+                from {
+                    protocol ospf3;
+                    route-type internal;
+                }
+                then {
+                    metric 0;
+                    accept;
+                }
+            }
+        }
+    }
+
+The configuration needs to be repeated for the other peers. The complete version
+is available on [GitHub][junos-conf]. Once the BGP sessions are up, we start
+learning routes from the other sites. For example, here is the route for
+`2001:db8:­a1::/64`:
+
+    ::console
+    > show route 2001:db8:a1::/64 protocol bgp table private.inet6.0 best-path
+    
+    private.inet6.0: 15 destinations, 19 routes (15 active, 0 holddown, 0 hidden)
+    + = Active Route, - = Last Active, * = Both
+    
+    2001:db8:a1::/64   *[BGP/140] 01:12:32, localpref 100, from 2001:db8:ff::6
+                          AS path: 65001 I, validation-state: unverified
+                          to 2001:db8:ff::6 via st0.1
+                        > to 2001:db8:ff::14 via st0.2
+
+It was learnt both from `V1-1` (through `st0.1`) and `V1-2` (through
+`st0.2`). The route is part of the `private` routing instance but encapsulated
+packets are sent/received in the `public` routing instance. No route-leaking is
+needed for this configuration. The VPN cannot be used as a gateway from internal
+hosts to external hosts (or vice-versa). This could also have been done with
+JunOS' security policies (stateful firewall rules) but doing the separation with
+routing instances also ensure routes from different domains are not mixed and a
+simple policy misconfiguration won't lead to a disaster.
+
+# Route-based VPN on Linux
+
+Starting from Linux 3.15, a similar configuration is possible with the help of a
+virtual tunnel interface[^history]. First, we create the "private" namespace:
+
+    ::console
+    # ip netns add private
+    # ip netns exec private sysctl -qw net.ipv6.conf.all.forwarding=1
+
+[^history]: Virtual tunnel interfaces (VTI) were introduced in Linux 3.6 (for
+    IPv4) and Linux 3.12 (for IPv6). Appropriate namespace support was added in
+    3.15. *KLIPS*, an alternative out-of-tree stack available since Linux 2.2,
+    also features tunnel interfaces.
+
+Any "private" interface needs to be moved to this namespace (no IP is configured
+as we can use IPv6 link-local addresses):
+
+    ::console
+    # ip link set netns private dev eth1
+    # ip link set netns private dev eth2
+    # ip netns exec private ip link set up dev eth1
+    # ip netns exec private ip link set up dev eth2
+
+Then, we create `vti6`, a tunnel interface (similar to `st0.1` in the *JunOS*
+example):
+
+    ::console hl_lines="5 6"
+    # ip tunnel add vti6 \
+       mode vti6 \
+       local 2001:db8:1::1 \
+       remote 2001:db8:3::2 \
+       key 6
+    # ip link set netns private dev vti6
+    # ip netns exec private ip addr add 2001:db8:ff::6/127 dev vti6
+    # ip netns exec private sysctl -qw net.ipv4.conf.vti6.disable_policy=1
+    # ip netns exec private sysctl -qw net.ipv4.conf.vti6.disable_xfrm=1
+    # ip netns exec private ip link set vti6 mtu 1500
+    # ip netns exec private ip link set vti6 up
+
+The tunnel interface is created in the initial namespace and moved to the
+"private" one. It will remember its original namespace where it will process
+encapsulated packets. Any packet entering the interface will temporarily get a
+firewall mark of 6 that will be used only to match the appropriate IPsec
+policy[^netfilter] below. For some reason, the kernel sets a too low MTU on the
+interface. We set it to 1500 and let PMTUD do its work (the MTU is dependant on
+the ciphers used for the IPsec tunnel).
+
+[^netfilter]: The mark is set right before doing a policy lookup and restored
+    after that. Consequently, it doesn't affect other possible uses (filtering,
+    routing). However, as Netfilter can also set a mark, one should be careful
+    for conflicts.
+
+We can then configure *strongSwan*[^ciphers]:
+
+    ::properties hl_lines="3 5 7"
+    conn V3-2
+      left        = 2001:db8:1::1
+      leftsubnet  = ::/0
+      right       = 2001:db8:3::2
+      rightsubnet = ::/0
+      authby      = psk
+      mark        = 6
+      auto        = start
+      keyexchange = ikev2
+      keyingtries = %forever
+      ike         = aes256gcm16-prfsha384-ecp384!
+      esp         = aes256gcm16-prfsha384-ecp384!
+      mobike      = no
+
+[^ciphers]: The ciphers used here are the strongest ones currently possible
+    while keeping compatibility with *JunOS*. The documentation for *strongSwan*
+    contains a [complete list of supported algorithms][] as well
+    as [security recommendations][] to choose them.
+
+The IKE daemon configures the following policies in the kernel:
+
+    ::console hl_lines="4 9 14"
+    $ ip xfrm policy
+    src ::/0 dst ::/0
+            dir out priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:1::1 dst 2001:db8:3::2
+                    proto esp reqid 1 mode tunnel
+    src ::/0 dst ::/0
+            dir fwd priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:3::2 dst 2001:db8:1::1
+                    proto esp reqid 1 mode tunnel
+    src ::/0 dst ::/0
+            dir in priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:3::2 dst 2001:db8:1::1
+                    proto esp reqid 1 mode tunnel
+    […]
+
+Those policies are used for any source or destination as long as the firewall
+mark is equal to 6, which matches the mark configured for the tunnel interface.
+
+The last step is to configure BGP to exchange routes. We can use [BIRD][] for this:
+
+    ::junos
+    router id 1.0.1.1;
+    protocol device {
+       scan time 10;
+    }
+    protocol kernel {
+       persist;
+       learn;
+       import all;
+       export all;
+       merge paths yes;
+    }
+    protocol bgp IBGP_V3_2 {
+       local 2001:db8:ff::6 as 65001;
+       neighbor 2001:db8:ff::7 as 65003;
+       import all;
+       export where ifname ~ "eth*";
+       preference 160;
+       hold time 6;
+    }
+
+Once *BIRD* is started in the "private" namespace, we can check routes are learned
+correctly:
+
+    ::console
+    $ ip netns exec private ip -6 route show 2001:db8:a3::/64
+    2001:db8:a3::/64 proto bird metric 1024
+            nexthop via 2001:db8:ff::5  dev vti5 weight 1
+            nexthop via 2001:db8:ff::7  dev vti6 weight 1
+
+The above route was learnt from both `V3-1` (through `vti5`) and `V3-2` (through
+`vti6`). Like for the *JunOS* version, there is no route-leaking between the
+"private" namespace and the initial one. The VPN cannot be used as a gateway
+between the two namespaces, only for encapsulation. This also prevent a
+misconfiguration (for example, IKE daemon not running) from allowing packets to
+leave the private network.
+
+As a bonus, unencrypted traffic can be observed with `tcpdump` on the tunnel
+interface:
+
+    ::console
+    $ ip netns exec private tcpdump -pni vti6 icmp6
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on vti6, link-type LINUX_SLL (Linux cooked), capture size 262144 bytes
+    20:51:15.258708 IP6 2001:db8:a1::1 > 2001:db8:a3::1: ICMP6, echo request, seq 69
+    20:51:15.260874 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 69
+
+You can find all the configuration files for this example on [GitHub][]. The
+documentation of *strongSwan* also features a [page about route-based VPNs][].
+
+*[IKE]: Internet Key Exchange
+*[ESP]: Encapsulating Security Payload
+*[SPI]: Security Parameters Index
+*[VRF]: Virtual routing and forwarding
+*[VTI]: Virtual Tunnel Interface
+*[GRE]: Generic Routing Encapsulation
+*[MTU]: Maximum Transmission Unit
+*[PMTUD]: Path MTU discovery
+
+[strongSwan]: https://strongswan.org/ "strongSwan: the OpenSource IPsec-based VPN Solution"
+[Libreswan]: https://libreswan.org/ "Libreswan VPN software"
+[junos-conf]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn/junos-V3-2.conf "JunOS configuration for a route-based VPN"
+[GitHub]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn "Configuration files for route-based VPNs"
+[complete list of supported algorithms]: https://wiki.strongswan.org/projects/strongswan/wiki/IKEv2CipherSuites "strongSwan: IKEv2 Cipher Suites"
+[security recommendations]: https://wiki.strongswan.org/projects/strongswan/wiki/SecurityRecommendations "strongSwan: Security Recommendations"
+[page about route-based VPNs]: https://wiki.strongswan.org/projects/strongswan/wiki/RouteBasedVPN "strongSwan: Route-based VPNs"
+[BIRD]: http://bird.network.cz/ "The BIRD Internet Routing Daemon"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}

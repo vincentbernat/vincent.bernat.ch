@@ -1,0 +1,454 @@
+---
+title: "VPN IPsec routé avec Linux et strongSwan"
+description: |
+  IPsec sous Linux repose sur des politiques de sécurité. Cependant, il est
+  aussi possible d'utiliser une pseudo-interface et des routes.
+uuid: 7c90aa05-84bc-48ee-8a9d-e1ac21443387
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routed-vpn": "Dépôt GitHub"
+tags:
+  - network
+---
+
+La façon la plus courante d'établir un tunnel IPsec sous Linux est d'utiliser un
+démon IKE, comme celui du projet [strongSwan][]. Voici un exemple minimal de
+configuration[^libreswan] :
+
+    ::properties
+    conn V2-1
+      left        = 2001:db8:1::1
+      leftsubnet  = 2001:db8:a1::/64
+      right       = 2001:db8:2::1
+      rightsubnet = 2001:db8:a2::/64
+      authby      = psk
+      auto        = start
+
+[^libreswan]: [Libreswan][] est une alternative qui devrait fonctionner de
+    manière identique pour les besoins de cet article.
+
+La même configuration peut être utilisée des deux côtés. Chacun sait déterminer
+s'il est « *left* » ou « *right* ». Les terminaisons du tunnel sont
+`2001:db8:­1::1` et `2001:db8:­2::1`. Les réseaux protégés sont
+`2001:db8:­a1::/64` et `2001:db8:­a2::/64`. En utilisant cette configuration,
+*strongSwan* met en place les politiques de sécurité suivantes dans le noyau :
+
+    ::console
+    $ ip xfrm policy
+    src 2001:db8:a1::/64 dst 2001:db8:a2::/64
+            dir out priority 399999 ptype main
+            tmpl src 2001:db8:1::1 dst 2001:db8:2::1
+                    proto esp reqid 4 mode tunnel
+    src 2001:db8:a2::/64 dst 2001:db8:a1::/64
+            dir fwd priority 399999 ptype main
+            tmpl src 2001:db8:2::1 dst 2001:db8:1::1
+                    proto esp reqid 4 mode tunnel
+    src 2001:db8:a2::/64 dst 2001:db8:a1::/64
+            dir in priority 399999 ptype main
+            tmpl src 2001:db8:2::1 dst 2001:db8:1::1
+                    proto esp reqid 4 mode tunnel
+    […]
+
+Ce type de tunnel IPsec se base exclusivement sur ces **politiques de sécurité**
+pour décider de l'encapsulation des paquets (*policy-based VPN*). Chaque
+politique de sécurité est constituée des éléments suivants :
+
+ - une *direction* (`out`, `in` ou `fwd`[^fwd]),
+ - un *sélecteur* (un ensemble de critères tels que réseaux source et destination, ports, ...),
+ - un *mode* (`transport` ou `tunnel`),
+ - un *protocole d'encapsulation* (`esp` ou `ah`),
+ - les adresses *source et destination* du tunnel.
+
+[^fwd]: `fwd` est utilisé pour les paquets arrivant pour une adresse non
+    locale. Cela ne fait de sens qu'en mode `transport` et il s'agit d'un
+    concept propre à Linux.
+
+Quand une politique de sécurité s'applique, le noyau recherche l'association de
+sécurité correspondante (en utilisant `reqid` et les adresses du tunnel) :
+
+    ::console
+    $ ip xfrm state
+    src 2001:db8:1::1 dst 2001:db8:2::1
+            proto esp spi 0xc1890b6e reqid 4 mode tunnel
+            replay-window 0 flag af-unspec
+            auth-trunc hmac(sha256) 0x5b68[…]8ba2904 128
+            enc cbc(aes) 0x8e0e377ad8fd91e8553648340ff0fa06
+            anti-replay context: seq 0x0, oseq 0x0, bitmap 0x00000000
+    […]
+
+Si aucune association de sécurité n'est trouvée, le paquet est mis de côté et le
+démon IKE est prévenu pour en négocier une. Lorsqu'un paquet encapsulé est reçu,
+l'entête contient le SPI qui permet d'identifier l'association de sécurité à
+utiliser. Deux associations de sécurité sont nécessaires pour un tunnel
+bi-directionnel :
+
+    ::console
+    $ tcpdump -pni eth0 -c2 -s0 esp
+    13:07:30.871150 IP6 2001:db8:1::1 > 2001:db8:2::1: ESP(spi=0xc1890b6e,seq=0x222)
+    13:07:30.872297 IP6 2001:db8:2::1 > 2001:db8:1::1: ESP(spi=0xcf2426b6,seq=0x204)
+
+Toutes les implémentation d'IPsec permettent de travailler avec des politiques
+de sécurité. Toutefois, certaines configurations sont ardues à mettre en place
+de cette façon. Par exemple, considérons l'architecture suivante pour des VPN
+redondants reliant trois sites :
+
+![VPN redondants entre 3 sites][i1]
+[i1]: [[!!images/vpn-routed.svg]] "Trois sites utilisant des tunnels IPsec redondants pour protéger leurs réseaux internes. L'AS 65001 emprunte certaines IP à des réseaux présents sur l'AS 65002."
+
+Une configuration possible pour le tunnel entre `V1-1` et `V2-1` serait :
+
+    ::properties
+    conn V1-1-to-V2-1
+      left        = 2001:db8:1::1
+      leftsubnet  = 2001:db8:a1::/64,2001:db8:a6::cc:1/128,2001:db8:a6::cc:5/128
+      right       = 2001:db8:2::1
+      rightsubnet = 2001:db8:a2::/64,2001:db8:a6::/64,2001:db8:a8::/64
+      authby      = psk
+      keyexchange = ikev2
+      auto        = start
+
+À chaque fois qu'un réseau est ajouté ou retiré d'un site, les configurations de
+tous les sites doivent être mises à jour. De plus, le chevauchement de certains
+réseaux (`2001:db8:­a6::/64` d'un côté et `2001:db8:­a6::cc:1/128` de l'autre)
+pose quelques problèmes supplémentaires.
+
+L'alernative est d'utiliser des **tunnels routés** : tout paquet traversant une
+pseudo-interface sera encapsulé en utilisant une politique de sécurité associée
+à l'interface. Cela résout principalement deux problèmes :
+
+1. Des **démons de routage** peuvent être utilisés pour distribuer les routes à
+   protéger sur chaque site. Cela réduit grandement la quantité de configuration
+   à gérer quand de nombreux réseaux sont présents.
+2. L'encapsulation et la décapsulation peut s'exécuter dans une **instance de
+   routage ou espace de noms différent**. Cela permet de cloisonner efficacement
+   le routage privé (où les utilisateurs du VPN se trouvent) du routage public
+   (où les terminaisons VPN se trouvent).
+
+# VPN routé avec Juniper
+
+Regardons d'abord comment un tel concept est mis en place sur une plateforme
+*JunOS* (comme le *Juniper vSRX*). Les tunnels routés sont une fonctionnalité
+qui existe depuis longtemps sur celle-ci (héritage des *Netscreen ISG* avec
+*ScreenOS*).
+
+Nous allons configurer le tunnel entre `V3-2` et `V1-1`. Tout d'abord, nous
+mettons en place l'interface tunnel. Elle est associée à l'instance de routage
+`private` qui ne contiendra que les routes internes (avec IPv4, elle ne
+contiendrait que des routes de type RFC 1918) :
+
+    ::junos hl_lines="13"
+    interfaces {
+        st0 {
+            unit 1 {
+                family inet6 {
+                    address 2001:db8:ff::7/127;
+                }
+            }
+        }
+    }
+    routing-instances {
+        private {
+            instance-type virtual-router;
+            interface st0.1;
+        }
+    }
+
+La seconde étape consiste à configurer le VPN :
+
+    ::junos hl_lines="33"
+    security {
+        /* Configuration de la phase 1 */
+        ike {
+            proposal IKE-P1 {
+                authentication-method pre-shared-keys;
+                dh-group group20;
+                encryption-algorithm aes-256-gcm;
+            }
+            policy IKE-V1-1 {
+                mode main;
+                proposals IKE-P1;
+                pre-shared-key ascii-text "d8bdRxaY22oH1j89Z2nATeYyrXfP9ga6xC5mi0RG1uc";
+            }
+            gateway GW-V1-1 {
+                ike-policy IKE-V1-1;
+                address 2001:db8:1::1;
+                external-interface lo0.1;
+                general-ikeid;
+                version v2-only;
+            }
+        }
+        /* Configuration de la phase 2 */
+        ipsec {
+            proposal ESP-P2 {
+                protocol esp;
+                encryption-algorithm aes-256-gcm;
+            }
+            policy IPSEC-V1-1 {
+                perfect-forward-secrecy keys group20;
+                proposals ESP-P2;
+            }
+            vpn VPN-V1-1 {
+                bind-interface st0.1;
+                df-bit copy;
+                ike {
+                    gateway GW-V1-1;
+                    ipsec-policy IPSEC-V1-1;
+                }
+                establish-tunnels on-traffic;
+            }
+        }
+    }
+
+Il s'agit d'un VPN routé car l'interface `st0.1` est associée au VPN
+`VPN-V1-1`. Une fois le tunnel fonctionnel, tout paquet entrant dans `st0.1`
+sera encapsulé et envoyé vers la terminaison `2001:db8:­1::1`.
+
+La dernière étape est de configurer BGP dans l'instance `private` pour échanger
+les routes avec le site distant :
+
+    ::junos
+    routing-instances {
+        private {
+            routing-options {
+                router-id 1.0.3.2;
+                maximum-paths 16;
+            }
+            protocols {
+                bgp {
+                    preference 140;
+                    log-updown;
+                    group v4-VPN {
+                        type external;
+                        local-as 65003;
+                        hold-time 6;
+                        neighbor 2001:db8:ff::6 peer-as 65001;
+                        multipath;
+                        export [ NEXT-HOP-SELF OUR-ROUTES NOTHING ];
+                    }
+                }
+            }
+        }
+    }
+
+Le filtre d'export `OUR-ROUTES` doit sélectionner les routes à publier aux
+autres sites. Par exemple :
+
+    ::junos
+    policy-options {
+        policy-statement OUR-ROUTES {
+            term 10 {
+                from {
+                    protocol ospf3;
+                    route-type internal;
+                }
+                then {
+                    metric 0;
+                    accept;
+                }
+            }
+        }
+    }
+
+La configuration pour les autres terminaisons est similaire. La version complète
+est disponible sur [GitHub][junos-conf]. Une fois les sessions BGP
+opérationnelles, les routes des autres sites sont apprises localement. Par
+exemple, voici la route pour `2001:db8:­a1::/64`:
+
+    ::console
+    > show route 2001:db8:a1::/64 protocol bgp table private.inet6.0 best-path
+    
+    private.inet6.0: 15 destinations, 19 routes (15 active, 0 holddown, 0 hidden)
+    + = Active Route, - = Last Active, * = Both
+    
+    2001:db8:a1::/64   *[BGP/140] 01:12:32, localpref 100, from 2001:db8:ff::6
+                          AS path: 65001 I, validation-state: unverified
+                          to 2001:db8:ff::6 via st0.1
+                        > to 2001:db8:ff::14 via st0.2
+
+Elle a été apprise de `V1-1` (via `st0.1`) et `V1-2` (via `st0.2`). Elle fait
+partie de l'instance de routage `private` mais les paquets encapsulés sont
+matérialisés dans l'instance de routage `public`. Il n'y a pas besoin d'échanger
+de routes entre ces deux instances pour que cela soit fonctionnel. L'étanchéité
+est donc assurée et le VPN ne peut pas servir de passerelle entre l'intérieur et
+l'extérieur. Il aurait été possible d'utiliser des règles de filtrage pour
+obtenir le même effet mais cette séparation simplifie le routage et évite qu'un
+problème de configuration se transforme en un désastre de sécurité.
+
+# VPN routé avec Linux
+
+Depuis Linux 3.15, une configuration similaire est possible en utilisant les
+interfaces « VTI » (*virtual tunnel interface*)[^history]. Tout d'abord, créons
+un espace de noms « privé » :
+
+    ::console
+    # ip netns add private
+    # ip netns exec private sysctl -qw net.ipv6.conf.all.forwarding=1
+
+[^history]: Les interfaces VTI ont été introduites dans Linux 3.6 (pour IPv4) et
+    Linux 3.12 (pour IPv6). La possibilité de les changer d'espace de noms est
+    disponible depuis Linux 3.15.
+
+Les interfaces constituant le domaine « privé » doivent être déplacées dans ce
+nouvel espace de noms (aucune IP n'est configurée car nous utilisons les adresses
+locales au lien) :
+
+    ::console
+    # ip link set netns private dev eth1
+    # ip link set netns private dev eth2
+    # ip netns exec private ip link set up dev eth1
+    # ip netns exec private ip link set up dev eth2
+
+Ensuite, nous créons l'interface tunnel `vti6` (similaire à `st0.1` dans
+l'exemple *JunOS*) :
+
+    ::console hl_lines="5 6"
+    # ip tunnel add vti6 \
+       mode vti6 \
+       local 2001:db8:1::1 \
+       remote 2001:db8:3::2 \
+       key 6
+    # ip link set netns private dev vti6
+    # ip netns exec private ip addr add 2001:db8:ff::6/127 dev vti6
+    # ip netns exec private sysctl -qw net.ipv4.conf.vti6.disable_policy=1
+    # ip netns exec private sysctl -qw net.ipv4.conf.vti6.disable_xfrm=1
+    # ip netns exec private ip link set vti6 mtu 1500
+    # ip netns exec private ip link set vti6 up
+
+L'interface tunnel est créée dans l'espace de noms initial et déplacé dans celui
+« privé ». L'espace de noms d'origine est mémorisé par l'interface et sera
+utilisé pour recevoir et envoyer les paquets encapsulés. Tout paquet passant
+dans l'interface aura temporairement la marque 6 qui sera utilisée pour trouver
+la politique IPsec configurée par la suite[^netfilter]. Pour une raison non
+déterminée, le noyau met en place un MTU assez faible. Nous le rétablissons à
+1500 et laissons le PMTUD jouer son rôle (le MTU interne dépend des algorithmes
+de chiffrement utilisés pour IPsec).
+
+[^netfilter]: La marque est mise en place juste le temps de regarder la
+    politique de sécurité à appliquer. Elle n'affecte donc pas les autres usages
+    possibles (filtrage, routage). Netfilter peut également placer une marque et
+    il convient donc de s'assurer qu'il n'y a pas de conflit possible.
+
+La configuration de *strongSwan* est la suivante[^ciphers] :
+
+    ::properties hl_lines="3 5 7"
+    conn V3-2
+      left        = 2001:db8:1::1
+      leftsubnet  = ::/0
+      right       = 2001:db8:3::2
+      rightsubnet = ::/0
+      authby      = psk
+      mark        = 6
+      auto        = start
+      keyexchange = ikev2
+      keyingtries = %forever
+      ike         = aes256gcm16-prfsha384-ecp384!
+      esp         = aes256gcm16-prfsha384-ecp384!
+      mobike      = no
+
+[^ciphers]: Les algorithmes de chiffrement utilisés sont les plus robustes
+    compatibles avec *JunOS*. La documentation de *strongSwan* contient
+    une
+    [liste complète des algorithmes disponibles][complete list of supported algorithms] ainsi
+    que des [recommendations concernant la sécurité][security recommendations].
+
+Le démon IKE configure la politique de sécurité adéquate dans le noyau :
+
+    ::console hl_lines="4 9 14"
+    $ ip xfrm policy
+    src ::/0 dst ::/0
+            dir out priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:1::1 dst 2001:db8:3::2
+                    proto esp reqid 1 mode tunnel
+    src ::/0 dst ::/0
+            dir fwd priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:3::2 dst 2001:db8:1::1
+                    proto esp reqid 1 mode tunnel
+    src ::/0 dst ::/0
+            dir in priority 399999 ptype main
+            mark 0x6/0xffffffff
+            tmpl src 2001:db8:3::2 dst 2001:db8:1::1
+                    proto esp reqid 1 mode tunnel
+    […]
+
+Cette politique s'applique quelle que soit la source et la destination tant que
+la marque de firewall est égale à 6, ce qui correspond à ce qui est configuré au
+niveau de l'interface tunnel.
+
+La dernière étape est de configurer BGP pour l'échange des routes. Nous
+utilisons [BIRD][] à cet effet :
+
+    ::junos
+    router id 1.0.1.1;
+    protocol device {
+       scan time 10;
+    }
+    protocol kernel {
+       persist;
+       learn;
+       import all;
+       export all;
+       merge paths yes;
+    }
+    protocol bgp IBGP_V3_2 {
+       local 2001:db8:ff::6 as 65001;
+       neighbor 2001:db8:ff::7 as 65003;
+       import all;
+       export where ifname ~ "eth*";
+       preference 160;
+       hold time 6;
+    }
+
+Une fois que *BIRD* a démarré dans l'espace de noms « privé », les routes
+distantes sont apprises :
+
+    ::console
+    $ ip netns exec private ip -6 route show 2001:db8:a3::/64
+    2001:db8:a3::/64 proto bird metric 1024
+            nexthop via 2001:db8:ff::5  dev vti5 weight 1
+            nexthop via 2001:db8:ff::7  dev vti6 weight 1
+
+Cette route a été apprise depuis `V3-1` (à travers `vti5`) et `V3-2` (à travers
+`vti6`). Comme avec *JunOS*, nous n'avons copié aucune route entre les espaces
+de noms. Ceux-ci sont isolés. Ainsi, le VPN ne peut pas servir de passerelle
+entre les deux domaines. Cela nous assure qu'un problème de configuration (par
+exemple, démon IKE qui ne démarre pas) n'entraînera pas une fuite accidentelle
+des paquets internes.
+
+En bonus, le trafic en clair est observable avec `tcpdump` sur l'interface
+tunnel :
+
+    ::console
+    $ ip netns exec private tcpdump -pni vti6 icmp6
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on vti6, link-type LINUX_SLL (Linux cooked), capture size 262144 bytes
+    20:51:15.258708 IP6 2001:db8:a1::1 > 2001:db8:a3::1: ICMP6, echo request, seq 69
+    20:51:15.260874 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 69
+
+La configuration complète est disponible sur [GitHub][]. La documentation de
+*strongSwan* contient aussi une page dédiée
+aux [VPN routés][page about route-based VPNs].
+
+*[IKE]: Internet Key Exchange
+*[ESP]: Encapsulating Security Payload
+*[SPI]: Security Parameters Index
+*[VRF]: Virtual routing and forwarding
+*[VTI]: Virtual Tunnel Interface
+*[GRE]: Generic Routing Encapsulation
+*[MTU]: Maximum Transmission Unit
+*[PMTUD]: Path MTU discovery
+
+[strongSwan]: https://strongswan.org/ "strongSwan: the OpenSource IPsec-based VPN Solution"
+[Libreswan]: https://libreswan.org/ "Libreswan VPN software"
+[junos-conf]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn/junos-V3-2.conf "JunOS configuration for a route-based VPN"
+[GitHub]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn "Configuration files for route-based VPNs"
+[complete list of supported algorithms]: https://wiki.strongswan.org/projects/strongswan/wiki/IKEv2CipherSuites "strongSwan: IKEv2 Cipher Suites"
+[security recommendations]: https://wiki.strongswan.org/projects/strongswan/wiki/SecurityRecommendations "strongSwan: Security Recommendations"
+[page about route-based VPNs]: https://wiki.strongswan.org/projects/strongswan/wiki/RouteBasedVPN "strongSwan: Route-based VPNs"
+[BIRD]: http://bird.network.cz/ "The BIRD Internet Routing Daemon"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}
