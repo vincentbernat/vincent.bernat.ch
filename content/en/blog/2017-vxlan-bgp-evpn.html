@@ -132,7 +132,7 @@ with some community can only be readvertised to some group of VTEPs).
 ## Using Quagga
 
 The configuration is pretty simple. We suppose the configured route
-reflector has `203.0.113.254` configured as a loopback IP.
+reflector has `203.0.113.254` configured as a loopback IP[^frr2].
 
     ::quagga
     router bgp 65000
@@ -153,6 +153,9 @@ reflector has `203.0.113.254` configured as a loopback IP.
       !
       exit
     !
+
+[^frr2]: With *FRR*, replace `address-family evpn` by `address-family
+    l2vpn evpn`.
 
 A peer group `fabric` is defined and we leverage the dynamic neighbor
 feature of *Cumulus Quagga*: we don't have to explicitely define each
@@ -305,7 +308,7 @@ FDBs between the hypervisors.
 
 The configuration of *Cumulus Quagga* is similar to the one used for a
 route reflector, except we use the `advertise-all-vni` directive to
-publish all local VNIs.
+publish all local VNIs[^frr3].
 
     ::quagga hl_lines="14"
     router bgp 65000
@@ -326,6 +329,9 @@ publish all local VNIs.
       !
       exit
     !
+
+[^frr3]: With *FRR*, replace `address-family evpn` by `address-family
+    l2vpn evpn`.
 
 If everything works as expected, the instances sharing the same VNI
 should be able to ping each other. If IPv6 is enabled on the VMs, the
