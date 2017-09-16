@@ -313,9 +313,9 @@ The tunnel interface is created in the initial namespace and moved to the
 "private" one. It will remember its original namespace where it will process
 encapsulated packets. Any packet entering the interface will temporarily get a
 firewall mark of 6 that will be used only to match the appropriate IPsec
-policy[^netfilter] below. For some reason, the kernel sets a too low MTU on the
-interface. We set it to 1500 and let PMTUD do its work (the MTU is dependant on
-the ciphers used for the IPsec tunnel).
+policy[^netfilter] below. The kernel sets a low MTU on the interface to handle
+any possible combination of ciphers and protocols. We set it to 1500 and let
+PMTUD do its work.
 
 [^netfilter]: The mark is set right before doing a policy lookup and restored
     after that. Consequently, it doesn't affect other possible uses (filtering,
