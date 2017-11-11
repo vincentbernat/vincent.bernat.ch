@@ -235,7 +235,8 @@ not needed anymore (but you could keep them):
     # bridge fdb append 50:54:33:00:00:0b dev vxlan100 dst 2001:db8:3::1
 
 [^patch2]: You may have to [apply an IPv6-related patch][patch2] to
-    the kernel (to be included in 4.12).
+    the kernel (to be included in 4.12). Also, to make ICMPv6 work,
+    you need an [additional patch][patch4] (to be included in 4.15).
 
 This setup totally eliminates head-end replication. However, protocols
 relying on multicast won't work either. With some automation, this is
@@ -450,6 +451,7 @@ addresses are inserted into the FDB.
 [patch1]: https://git.kernel.org/pub/scm/linux/kernel/git/shemminger/iproute2.git/commit/?id=97d564b90ccb1e4a3c756d9caae161f55b2b63a2 "vxlan: use preferred address family when neither group or remote is specified"
 [patch2]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=f1fb08f6337ca9e3af371a7994b91a5786ba93f9 "vxlan: fix ND proxy when skb doesn't have transport header offset"
 [patch3]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=8f48ba71ede12231d5d63fdd34bd8ce7908a3377 "vxlan: use appropriate family on L3 miss"
+[patch4]: http://patchwork.ozlabs.org/patch/837027/ "vxlan: fix the issue that neigh proxy blocks all icmpv6 packets"
 [flannel]: https://github.com/coreos/flannel "flannel: a network fabric for containers, designed for Kubernetes"
 [Docker's libnetwork]: https://github.com/docker/libnetwork "libnetwork - networking for containers"
 [Cumulus vxfld daemon]: https://github.com/CumulusNetworks/vxfld "VXFLD: VXLAN BUM Flooding Suite"
