@@ -1,5 +1,5 @@
 ---
-title: 'Speeding up SSL: enabling session reuse'
+title: 'Speeding up TLS: enabling session reuse'
 uuid: 38894698-5e3a-4d47-a4d6-6f5edb836419
 attachments:
   "https://github.com/vincentbernat/rfc5077": GitHub repository with related tools
@@ -8,7 +8,7 @@ tags:
 ---
 
 Session reuse is one of the most important mechanism to
-[improve SSL performance][1]: by submitting an appropriate blob to the
+[improve TLS performance][1]: by submitting an appropriate blob to the
 server, a client is able to trigger an abbreviated handshake,
 improving latency and computation time. There exists two distinct ways
 to achieve session reuse: **session identifiers** as described in
@@ -25,29 +25,25 @@ and the fall of RC4 as an appropriate cipher.
 
 [TOC]
 
-A quick note: when I say **SSL**, unless I mention a version number,
-you should read **TLS** instead. Look at the article for
-[TLS on Wikipedia][tls] for some background on this.
-
 # Theory of operation
 
-To establish a SSL connection, four messages need to be exchanged
+To establish a TLS connection, four messages need to be exchanged
 between client and server. With a latency of 50 ms, we have a 200 ms
 overhead to establish the connection (plus TCP handshake). Moreover,
 to share a common secret, both the client and the server needs to
 achieve some public-key cryptographic operations which are costly,
 computation-wise.
 
-![SSL full handshake][s1]
-[s1]: [[!!images/benchs-ssl/ssl-handshake.png]] "Full SSL handshake"
+![TLS full handshake][s1]
+[s1]: [[!!images/benchs-ssl/ssl-handshake.png]] "Full TLS handshake"
 
-To avoid a full SSL handshake each time a client request a resource,
+To avoid a full TLS handshake each time a client request a resource,
 it is possible for the client to request an abbreviated handshake,
 saving a complete round-trip (100 ms) and avoiding the costliest part
-of the full SSL handshake.
+of the full TLS handshake.
 
-![SSL abbreviated handshake][s2]
-[s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.png]] "Abbreviated SSL handshake"
+![TLS abbreviated handshake][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.png]] "Abbreviated TLS handshake"
 
 Two mechanisms can be used to accomplish an abbreviated handshake:
 
@@ -56,12 +52,12 @@ Two mechanisms can be used to accomplish an abbreviated handshake:
    in the "Client Hello" message of the next session. If the server
    finds the corresponding session in its cache and accepts to resume
    the session, it will send back the same session identifier and will
-   continue with the abbreviated SSL handshake. Otherwise, it will
+   continue with the abbreviated TLS handshake. Otherwise, it will
    issue a new session identifier and switch to a full handshake. This
    mechanism is detailed in [RFC 5246][rfc5246]. It is the most common
-   mechanism because it exists since earlier versions of SSL.
+   mechanism because it exists since earlier versions of TLS.
 
-2. In the last exchange of a full SSL handshake, the server can
+2. In the last exchange of a full TLS handshake, the server can
    include a "New Session Ticket" message (not represented in the
    handshake described in the picture) which will contain the complete
    session state (including the master secret negotiated between the
@@ -76,7 +72,7 @@ support by sending an empty "Session Ticket" extension in the "Client
 Hello" message. The server will answer with an empty "Session Ticket"
 extension in its "Server Hello" message if it supports it. If one of
 them does not support this extension, they can fallback to the session
-identifier mechanism built into SSL.
+identifier mechanism built into TLS.
 
 [RFC 5077][rfc5077] identifies situations where tickets are desirable
 over session identifiers. The main improvement is to avoid to maintain
@@ -87,7 +83,7 @@ when requests are load-balanced across servers.
 
 # Browser support
 
-Session identifiers are part of SSL and are therefore supported since
+Session identifiers are part of TLS and are therefore supported since
 a long time by clients and servers. <del>However, session tickets are
 an optional TLS extension and therefore, the support is not as
 widespread as for session identifiers.</del> Support for tickets was
@@ -126,7 +122,7 @@ a customer care service of an important French telco:
 - 67.2% of requests exhibit support of [SNI][sni];
 - 86.7% of requests use TLS 1.0; the remaining uses SSL 3.0; almost no TLS
   1.1/1.2;
-- in average, a client execute 8 SSL handshakes;
+- in average, a client execute 8 TLS handshakes;
 - ciphers supported by all clients are 3DES-SHA, RC4-MD5 and RC4-SHA.
 
 With some log analysis to match each requests with the appropriate
@@ -147,7 +143,7 @@ directions:
 - if you use local load-balancing, one easy way to avoid any problem
   is to use ensure that one IP is mapped to one server (either
   statically with hashing or dynamically with a stick table); if your
-  load-balancer understands SSL, you can also use session identifier
+  load-balancer understands TLS, you can also use session identifier
   (and disable tickets[^1]) to build a stick
   table;
 - if you don't want to apply the previous advice, you need to share
@@ -163,7 +159,7 @@ directions:
       present an empty session identifier or generate one. However,
       for all practical purposes, it seems that servers send back a
       non-empty session identifier and clients just stick to this
-      identifier. Please, investigate if you want to use SSL session
+      identifier. Please, investigate if you want to use TLS session
       identifiers for load-balancing while keeping tickets enabled.
 
 Remember that only one client out of three supports TLS
@@ -172,7 +168,7 @@ resume. You need a session cache.
 
 ## Setting a session cache with Apache & nginx
 
-**Apache** features two different SSL engines. The first one is
+**Apache** features two different TLS engines. The first one is
 [mod_ssl][modssl] and uses OpenSSL as backend. It is possible to setup
 a shared session cache with `SSLSessionCache` but the
 memcached-enabled session cache is
@@ -192,7 +188,7 @@ not allow us to register asynchronous callbacks with
 
 As a proof of concept, I have also added a similar feature to
 [**stud**][stud], the scalable TLS unwrapping daemon, a very efficient
-network proxy terminating SSL connections. The same limitation as for
+network proxy terminating TLS connections. The same limitation as for
 *nginx* applies: performances will suffer. Look at the
 [pull request][pr] for more details.
 
@@ -203,7 +199,7 @@ network proxy terminating SSL connections. The same limitation as for
 [RFC 5077][rfc5077] tells tickets allow us to load-balance requests
 across servers. However, to the best of my knowledge, there is
 currently no web server able to share tickets across a pool. Actually,
-when a server initializes its SSL stack, it will randomly generate
+when a server initializes its TLS stack, it will randomly generate
 some keys that will be used to protect and encrypt tickets. In
 OpenSSL, from `ssl/ssl_lib.c`:
 
@@ -265,9 +261,9 @@ is a typical result:
 ![twitter.com RFC session resume][s4]
 [s4]: [[!!images/benchs-ssl/rfc5077-twitter.png]] "Example of test with twitter.com"
 
-The program will try to establish five consecutive SSL connections for
-each IP without and with tickets. For each IP, the last four SSL
-connections should always reuse the first SSL session. Here, Twitter
+The program will try to establish five consecutive TLS connections for
+each IP without and with tickets. For each IP, the last four TLS
+connections should always reuse the first TLS session. Here, Twitter
 web servers seem properly configured: for each IP, session resume is
 successful. Their web servers do not support tickets or they may have
 disabled it because they share the session cache between servers

@@ -1,15 +1,15 @@
 ---
-title: SSL computational DoS mitigation
+title: TLS computational DoS mitigation
 uuid: 508f723b-adbe-4d05-be2d-bc53b4a9cbb5
 attachments:
-  "https://github.com/vincentbernat/ssl-dos": "Various tools related to SSL"
+  "https://github.com/vincentbernat/ssl-dos": "Various tools related to TLS"
 tags:
   - ssl
 ---
 
 Some days ago, a hacker group, THC, released a
-[denial of service tool][thc] for SSL web servers. As stated in its
-description, the problem is not really new: a complete SSL handshake
+[denial of service tool][thc] for TLS web servers. As stated in its
+description, the problem is not really new: a complete TLS handshake
 implies costly cryptographic computations.
 
 There are two different aspects in the presented attack:
@@ -19,7 +19,7 @@ There are two different aspects in the presented attack:
    server will require 15 times the processing power of a client. This
    means a single average workstation could challenge a multi-core
    high-end server.
- - The use of [SSL renegotiation][rfc5746] allows you to trigger hundreds
+ - The use of [TLS renegotiation][rfc5746] allows you to trigger hundreds
    of handshakes in the same TCP connection. Even a client behind a
    DSL connection can therefore bomb a server with a lot of
    renegotiation requests.
@@ -38,17 +38,17 @@ workarounds. Since the DoS tool from THC relies heavily on
 renegotiation, the most obvious one is to disable this mechanism on
 the server side but we will explore other possibilities.
 
-## Disabling SSL renegotiation
+## Disabling TLS renegotiation
 
-Tackling the second problem seems easy: just disable SSL
+Tackling the second problem seems easy: just disable TLS
 renegotiation. It is hardly needed: a server can trigger a
 renegotiation to ask a client to present a certificate but a client
 usually does not have any reason to trigger one. Because of a
-[past vulnerability in SSL renegotiation][cve-2009-3555], recent
+[past vulnerability in TLS renegotiation][cve-2009-3555], recent
 version of _Apache_ and _nginx_ just forbid it, even when the
 [non-vulnerable version][rfc5746] is available.
 
-`openssl s_client` can be used to test if SSL renegotiation is really
+`openssl s_client` can be used to test if TLS renegotiation is really
 disabled. Sending `R` on an empty line trigger renegotiation. Here is
 an example where renegotiation is disabled (despite being advertised
 as supported):
@@ -70,9 +70,9 @@ Disabling renegotation is not trivial with OpenSSL. As an example, I
 have pushed a [patch to disable renegotiation in _stud_][studreneg],
 the scalable TLS unwrapping daemon.
 
-## Rate limiting SSL handshakes
+## Rate limiting TLS handshakes
 
-Disabling SSL renegotiation on the client side is not always
+Disabling TLS renegotiation on the client side is not always
 possible. For example, your web server may be too old to propose such
 an option. Since those renegotiations should not happen often, a
 workaround is to limit them.
@@ -127,12 +127,12 @@ handshake has been done and forbid any subsequent handshakes[^noo].
         be improved to detect the first encrypted handshake at the
         beginning of a TLS record or in the middle of it.
 
-If you happen to disable SSL renegociation, you can still use some
-Netfilter rule to limit the number of SSL handshakes by limiting the
+If you happen to disable TLS renegociation, you can still use some
+Netfilter rule to limit the number of TLS handshakes by limiting the
 number of TCP connections from one IP:
 
 	::sh
-	iptables -A LIMIT_SSL \
+	iptables -A LIMIT_TLS \
 		-p tcp --dport 443 \
 		--syn -m state --state NEW \
 		-m hashlimit \
@@ -153,12 +153,12 @@ I have made all those solutions available in a
 
 ## Increasing server-side power processing
 
-SSL can easily be scaled up and out. Since
-[SSL performance increases linearly with the number of cores][sslbench1],
+TLS can easily be scaled up and out. Since
+[TLS performance increases linearly with the number of cores][sslbench1],
 scaling up can be done by throwing in more CPU or more cores per
-CPU. Adding expensive SSL accelerators would also do the
+CPU. Adding expensive TLS accelerators would also do the
 trick. Scaling out is also relatively easy but you should care about
-[SSL session resume][sslresume].
+[TLS session resume][sslresume].
 
 ## Putting more work on the client side
 
@@ -202,11 +202,11 @@ However, you can't really uses only those shiny cipher suites:
       1.2</del> <del>(not supported by any browser).</del>
 
 Let's dig a bit more on why the server needs more computational power
-in the case of RSA. Here is a SSL handshake when using a cipher suite
+in the case of RSA. Here is a TLS handshake when using a cipher suite
 like `AES256-SHA`:
 
-![SSL full handshake][s2]
-[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Full SSL handshake"
+![TLS full handshake][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Full TLS handshake"
 
 When sending the _Client Key Exchange_ message, the client will
 **encrypt** TLS version and 46 random bytes with the public key of the
@@ -254,7 +254,7 @@ compute ·e·. We could choose ·d· to be small and coprime with
 blazingly fast decryption. Unfortunately, there are two problems with
 this:
 
- - Most SSL implementation expects ·e· to be a 32bit integer.
+ - Most TLS implementation expects ·e· to be a 32bit integer.
  - If ·d· is too small (less than one-quarter as many bits as the
    modulus ·n·), it can be
    [computed efficiently from the public key][wiener].
@@ -308,7 +308,7 @@ cipher suite. No sane server in the wild will support such a
 cipher. You need to configure your web server to support it before
 using this tool.
 
-While Eric explains that there is no need to parse any SSL/TLS
+While Eric explains that there is no need to parse any TLS
 messages, I have found that if the key exchange message is sent before
 the server send the answer, the connection will be aborted. Therefore,
 I quickly parse the server's answer to check if I can continue. Eric
@@ -337,9 +337,9 @@ may just be ineffective.
 *[RSA]: Rivest Shamir Adleman
 *[THC]: The Hacker's Choice
 *[CGN]: Carrier-grade NAT
-[sslbench1]: [[en/blog/2011-ssl-benchmark.html]] "First round of SSL benchmarks"
-[sslbench2]: [[en/blog/2011-ssl-benchmark-round2.html]] "Second round of SSL benchmarks"
-[sslresume]: [[en/blog/2011-ssl-session-reuse-rfc5077.html]] "Speeding up SSL: enabling session reuse"
+[sslbench1]: [[en/blog/2011-ssl-benchmark.html]] "First round of TLS benchmarks"
+[sslbench2]: [[en/blog/2011-ssl-benchmark-round2.html]] "Second round of TLS benchmarks"
+[sslresume]: [[en/blog/2011-ssl-session-reuse-rfc5077.html]] "Speeding up TLS: enabling session reuse"
 [rsa]: http://en.wikipedia.org/wiki/Rivest_Shamir_Adleman "Article on Wikipedia for RSA"
 [prime]: http://en.wikipedia.org/wiki/Prime_number "Article on Wikipedia for prime numbers"
 [coprime]: http://en.wikipedia.org/wiki/Coprime "Article on Wikipedia for coprime numbers"
@@ -353,8 +353,8 @@ may just be ineffective.
 [f5-ssl]: http://devcentral.f5.com/weblogs/david/archive/2011/05/03/ssl-renegotiation-dos-attack-ndash-an-irule-countermeasure.aspx "SSL Renegotiation DOS attack – an iRule Countermeasure"
 [f5-bigip]: http://www.f5.com/products/hardware/big-ip.html "F5 Big-IP product line"
 [cve-2009-3555]: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CAN-2009-3555 "CVE-2009-3555"
-[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Firewall rules to mitigate SSL DoS"
-[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Tool to emit massive parallel SSL handshakes"
+[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Firewall rules to mitigate TLS DoS"
+[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Tool to emit massive parallel TLS handshakes"
 [server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Tool compare processing power needed by client and server"
 [iptables]: https://manpages.debian.org/unstable/iptables/iptables.8.en.html "Manual page of iptables(8)"
 [sslsqueeze]: ftp://ftp.stunnel.org/sslsqueeze/ "sslsqueeze, SSL service load generator"

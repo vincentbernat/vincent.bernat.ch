@@ -1,13 +1,13 @@
 ---
-title: 'SSL termination: stunnel, nginx & stud'
+title: 'TLS termination: stunnel, nginx & stud'
 uuid: d001e3f6-f70b-4b80-ab64-718c5c04bfe1
 tags:
   - ssl
 ---
 
-Here is the short version: to get better performance on your SSL
+Here is the short version: to get better performance on your TLS
 terminator, use [stud][stud] on 64bit system with patch from
-[Émeric Brun for SSL session reuse][studsslreuse] with some AES cipher
+[Émeric Brun for TLS session reuse][studsslreuse] with some AES cipher
 suite (128 or 256, does not really matter), without DHE, on as many
 cores as needed, a key size of 1024 bits unless more is needed.
 
@@ -27,12 +27,8 @@ Varnish team and is now called [hitch](https://github.com/varnish/hitch).
 
 # Introduction
 
-A quick note: when I say **SSL**, you should read **TLS v1**
-instead. Look at the article for [TLS on Wikipedia][tls] for some
-background on this.
-
 One year ago, Adam Langley, from Google,
-[stated SSL was not computationally expensive any more][ssltips]:
+[stated TLS was not computationally expensive any more][ssltips]:
 
 > In January this year (2010), Gmail switched to using HTTPS for
 > everything by default. Previously it had been introduced as an option,
@@ -48,32 +44,32 @@ One year ago, Adam Langley, from Google,
 > If you stop reading now you only need to remember one thing: SSL/TLS
 > is not computationally expensive any more.
 
-This is a very informative post containing tips on how to enhance SSL
+This is a very informative post containing tips on how to enhance TLS
 performance by reducing latency. However, unlike Gmail, you may still
-be worried by SSL raw performances. Maybe each of your frontends is
-able to serve 2000 requests per second and CPU overhead for SSL is
-therefore significative. Maybe you want to terminate SSL in your load
+be worried by TLS raw performances. Maybe each of your frontends is
+able to serve 2000 requests per second and CPU overhead for TLS is
+therefore significative. Maybe you want to terminate TLS in your load
 balancer (even if you know
 [this is not the best way to scale][nginxcaching]).
 
-# Tuning SSL
+# Tuning TLS
 
 There are a lot of knobs you can use to get better performances from
-SSL: choosing the best **implementation**, using more **CPU cores**,
+TLS: choosing the best **implementation**, using more **CPU cores**,
 switching to **64bit** system, choosing the right **cipher suite** and
 the appropriate **key size** and enabling a **session cache**.
 
-We will consider three SSL terminators. They all use OpenSSL under
+We will consider three TLS terminators. They all use OpenSSL under
 the hood. [**stunnel**][stunnel] is the oldest one and uses a threaded
-model. [**stud**][stud] is a recent attempt to write a simple SSL
+model. [**stud**][stud] is a recent attempt to write a simple TLS
 terminator which is efficient and scalable. It uses the
 one-process-per-core model. [**nginx**][nginx] is a web server and it
-can be used as reverse proxy and therefore act as SSL terminator. It
+can be used as reverse proxy and therefore act as TLS terminator. It
 is known to be one of the most efficient web server, hence the choice
 here. It also features built-in basic load balancing. Since *stud* <del>and
 *stunnel*</del>[^0] do not have this feature, we use them with
 [HAProxy][haproxy], an high performance load-balancer that usually
-defers the SSL part to *stunnel* (but *stud* can act as a drop-in
+defers the TLS part to *stunnel* (but *stud* can act as a drop-in
 replacement here).
 
 [^0]: In fact, *stunnel* also has simple round-robin load balancing by
@@ -81,8 +77,8 @@ replacement here).
 
 Those implementations were already tested by
 [Matt Stancliff][matt]. He first concluded
-[nginx sucked at SSL][matt1] then that
-[nginx did not suck at SSL][matt2] (in the first case, *nginx* was the
+[nginx sucked at TLS][matt1] then that
+[nginx did not suck at TLS][matt2] (in the first case, *nginx* was the
 only one to select a DHE cipher suite). The details were very
 scarce. I hope to bring here more details.
 
@@ -92,7 +88,7 @@ encryption. The server will select the strongest one it supports from
 the list proposed by the client. If you enable some expensive cipher
 suite on your server, it is likely to be selected.
 
-The last important knob is SSL session reuse. It matters for both
+The last important knob is TLS session reuse. It matters for both
 performance and latency. During the first handshake, the server will
 send a *session ID*. The client can use this session ID to request an
 *abbreviated handshake*. This handshake is shorter (latency
@@ -134,13 +130,13 @@ disabled and file limits have been raised over 100,000.
 A [Spirent Avalanche 2900][avalanche] appliance is used to run the
 benchmarks.
 
-We are interested in raw SSL performances in term of handshakes per
+We are interested in raw TLS performances in term of handshakes per
 second. Because we want to observe the effects of session reuse, the
 scenario runs by most tests lets clients doing four successive
-requests and reusing the SSL session for three of them. There is no
+requests and reusing the TLS session for three of them. There is no
 HTTP keepalive. There is no compression. The size of the HTTP answer
 from the server is 1024 bytes. Those choices are done because our
-primary target is the number of SSL handshakes per second.
+primary target is the number of TLS handshakes per second.
 
 It should also be noted that HAProxy alone is able to handle 22,000
 TPS on one core. During the tests, it was never the bottleneck.
@@ -150,7 +146,7 @@ TPS on one core. During the tests, it was never the bottleneck.
 We run a first bench to compare *nginx*, *stud* and *stunnel* on one
 core. This bench runs on a 32bit system, with AES128-SHA1 cipher suite
 and a 1024bit key size. Here is the result for *stud* (version 0.1,
-with [Émeric Brun's patch for SSL session reuse][studsslreuse]):
+with [Émeric Brun's patch for TLS session reuse][studsslreuse]):
 
 ![stud, 1 CPU][s1]
 [s1]: [[!!images/benchs-ssl/stud-1cpu.png]] "Performances of stud on 1 core"
@@ -193,25 +189,25 @@ response time is less than 100 ms. *stud* achieves a performance of
 
 ## Number of cores
 
-With multiple cores, we can affect several of them to do SSL hard
+With multiple cores, we can affect several of them to do TLS hard
 work. To get better performance, we pin each processes to a dedicated
 CPU. Here is the repartition used during the tests:
 
               | 1 core  | 2 cores | 4 cores | 6 cores
 ------------- | ------- | ------- | ------- | -----------------
 CPU 1, Core 1 | network | network | network | network + haproxy
-CPU 1, Core 2 | haproxy | haproxy | haproxy | SSL
-CPU 1, Core 3 | SSL     | SSL     | SSL     | SSL
-CPU 1, Core 4 | -       | SSL     | SSL     | SSL
-CPU 2, Core 5 | -       | -       | network | SSL
-CPU 2, Core 6 | -       | -       | SSL     | SSL
-CPU 2, Core 7 | -       | -       | SSL     | SSL
+CPU 1, Core 2 | haproxy | haproxy | haproxy | TLS
+CPU 1, Core 3 | TLS     | TLS     | TLS     | TLS
+CPU 1, Core 4 | -       | TLS     | TLS     | TLS
+CPU 2, Core 5 | -       | -       | network | TLS
+CPU 2, Core 6 | -       | -       | TLS     | TLS
+CPU 2, Core 7 | -       | -       | TLS     | TLS
 CPU 2, Core 8 | system  | system  | system  | system + haproxy
 
 Remember, we have two CPU, 4 cores on each CPU. Cores on the same CPU
 share the same L2 cache (on this model). Therefore, the arrangement
 inside a CPU is not really important. When possible, we try to keep
-things together on the same CPU. The SSL processes always get
+things together on the same CPU. The TLS processes always get
 exclusive use of a core since they will always be the most busy. The
 repartition is done with [cpuset(7)][cpuset] for userland processes
 and by setting `smp_affinity` for network card interrupts.
@@ -262,7 +258,7 @@ hit. TPS are divided by 5.
 
 ## Session cache
 
-The last thing to check is the influence of SSL session reuse. Since
+The last thing to check is the influence of TLS session reuse. Since
 we are on a local network, we see only one of the positive effects of
 session reuse: better TPS because of reduced CPU usages. If there was
 a latency penalty, we should also have seen better
@@ -281,7 +277,7 @@ enabled.
 Here is a summary of the maximum TPS reached during the benchmark
 (with an average response time below 100ms). Our control use case is
 the following: 64bit, 6 cores, AES128, SHA1, 1024bit key, 4 requests
-into the same SSL session.
+into the same TLS session.
 
 Context                     | nginx 1.0.5 | stunnel 4.41  | stud 0.1 ([patched][studsslreuse])
 --------------------------- | ----------- | ------------- | ----------------------------------
@@ -293,10 +289,10 @@ AES256                      | -           | -             | 8880 TPS
 RC4-MD5                     | -           | -             | 7370 TPS
 2048bit                     | -           | -             | 1643 TPS
 no session reuse            | -           | -             | 5844 TPS
-80 requests per SSL session | -           | -             | 10797 TPS
+80 requests per TLS session | -           | -             | 10797 TPS
 
 Therefore, *stud* in our control scenario is able to sustain 1500 TPS
-per core. It seems to be the best current option for a SSL
+per core. It seems to be the best current option for a TLS
 termination. It is not available in Debian yet, but I
 [intend to package it][itp].
 

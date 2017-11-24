@@ -1,5 +1,5 @@
 ---
-title: 'Terminaison SSL : stunnel, nginx & stud, second round'
+title: 'Terminaison TLS : stunnel, nginx & stud, second round'
 uuid: 80df1557-a28c-411a-b311-3a8237f939f6
 tags:
   - ssl
@@ -7,7 +7,7 @@ tags:
 
 Il y a environ un mois, j'ai publié un article comparant les
 [performances de stunnel, nginx et stud][prev] en tant que
-terminaisons SSL. La conclusion était alors d'utiliser [stud][stud]
+terminaisons TLS. La conclusion était alors d'utiliser [stud][stud]
 sur un système 64 bits, avec un cache de sessions et de
 l'AES. [stunnel][stunnel] ne parvenait pas à exploiter plusieurs cœurs
 et [nginx][nginx] présentait d'importants problèmes de latence. J'ai
@@ -37,15 +37,15 @@ L'environnement logiciel est le suivant :
  - Noyau Linux 2.6.39 (250 HZ)
  - 64 bits
  - 1 cœur pour [HAProxy][haproxy], 2 cœurs pour les cartes réseau[^0], 4 cœurs
-   pour SSL, 1 cœur pour le système
+   pour TLS, 1 cœur pour le système
  - limite de 100 000 descripteurs de fichiers par processus
 
-[^0]: La charge induite par les transactions SSL est trop faible pour
+[^0]: La charge induite par les transactions TLS est trop faible pour
       avoir à dédier des cœurs pour *HAProxy* et les cartes
       réseau. Cependant, si la machine doit aussi faire transiter du
       trafic classique, cette configuration peut venir à point nommé.
 
-Du côté SSL, les principaux facteurs sont :
+Du côté TLS, les principaux facteurs sont :
 
  - certificats de 2048 bits
  - suite de chiffrement AES128-SHA
@@ -239,7 +239,7 @@ collectés. Rappelons que la mesure retenue est le maximum de TPS tout
 en maintenant un temps moyen de réponse sous la barre des 100 ms. Tous
 les tests ont été effectués avec quatre cœurs physiques, des
 certificates de 2048 bits et de l'AES-SHA1. Chaque client effectue
-huit requêtes HTTP et réutilise la première session SSL.
+huit requêtes HTTP et réutilise la première session TLS.
 
 Context                     | nginx 1.1.4  | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
 --------------------------- | ------------ | ------------- | ----------------------------------
@@ -278,7 +278,7 @@ graphique avec le correctif adéquat appliqué sur *stud* :
 [stunnel]: http://www.stunnel.org/          "stunnel - multiplatform SSL tunneling proxy"
 [nginx]: http://wiki.nginx.org/             "nginx"
 [haproxy]: http://haproxy.1wt.eu/           "HAProxy"
-[prev]: [[fr/blog/2011-ssl-benchmark.html]] "Premiers benchs SSL"
+[prev]: [[fr/blog/2011-ssl-benchmark.html]] "Premiers benchs TLS"
 [g7]: http://web.archive.org/web/2011/http://h10010.www1.hp.com/wwpc/us/en/sm/WF05a/15351-15351-3328412-241644-241475-4091412.html "HP DL360 G7"
 [avalanche]: http://www.spirent.com/Solutions-Directory/Avalanche.aspx "Spirent Avalanche"
 [l5630]: http://ark.intel.com/products/47927  "Intel Xeon L5630"

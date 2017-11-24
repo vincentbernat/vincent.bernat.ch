@@ -1,5 +1,5 @@
 ---
-title: 'Accélérer SSL : réutilisation des sessions'
+title: 'Accélérer TLS : réutilisation des sessions'
 uuid: 38894698-5e3a-4d47-a4d6-6f5edb836419
 attachments:
   "https://github.com/vincentbernat/rfc5077": Dépôt GitHub pour les outils associés
@@ -8,7 +8,7 @@ tags:
 ---
 
 La réutilisation des session est l'un des mécanismes les plus
-importants pour [améliorer les performances de SSL][1] : le client
+importants pour [améliorer les performances de TLS][1] : le client
 peut effectuer une poignée de mains raccourcie en soumettant dès sa
 seconde requête une donnée présentée précédemment par le serveur,
 permettant ainsi de réduire la latence et les temps de calcul. Il
@@ -26,30 +26,25 @@ chute de RC4 en tant qu'algorithme approprié.
 
 [TOC]
 
-Tout d'abord, lorsqu'il est indiqué **SSL** sans numéro de version
-particulier, il faut lire
-**TLS**. L'[article de Wikipédia sur TLS][tls] donne les explications
-nécessaires sur ce propos.
-
 # Théorie
 
-Pour établir une connexion SSL, le client et le serveur doivent
+Pour établir une connexion TLS, le client et le serveur doivent
 échanger quatre messages. Avec une latence de 50 ms, cet échange
 correspond à une pénalité de 200 ms (sans compter la poignée de mains
 TCP). De plus, afin de s'échanger un secret commun, les deux parties
 doivent mettre en oeuvre des primitives cryptographiques à clef
 publique qui sont coûteuses en temps de calcul.
 
-![Poignée de mains SSL complète][s1]
-[s1]: [[!!images/benchs-ssl/ssl-handshake.png]] "Une poignée de main SSL complète"
+![Poignée de mains TLS complète][s1]
+[s1]: [[!!images/benchs-ssl/ssl-handshake.png]] "Une poignée de main TLS complète"
 
 Pour éviter ces quatre échanges lors de chaque requête, le client peut
 tenter d'initier une poignée de mains raccourcie qui permet
 d'économiser un aller-retour (100 ms) ainsi que la partie la plus
 coûteuse en temps de calcul.
 
-![Poignée de mains SSL raccourcie][s2]
-[s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.png]] "Une poignée de main SSL raccourcie"
+![Poignée de mains TLS raccourcie][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.png]] "Une poignée de main TLS raccourcie"
 
 Deux mécanismes peuvent être utilisés pour mettre en œuvre cette
 poignée de main raccourcie :
@@ -63,13 +58,13 @@ poignée de main raccourcie :
    pas présente dans le cache, il génère un nouvel identifiant de
    session et effectue la poignée de main complète. Les détails se
    trouvent dans la [RFC 5246][rfc5246]. Il s'agit de la façon la plus
-   courante de reprendre une session SSL car ce mécanisme existe
+   courante de reprendre une session TLS car ce mécanisme existe
    depuis longtemps.
 
 2. Dans le dernier échange d'une poignée de mains complète, le serveur
    peut inclure un message « *New Session Ticket* » (non représenté
    dans la poignée de mains illustrée ci-dessus). Ce message comprend
-   un état complet de la session SSL incluant le secret partagé et les
+   un état complet de la session TLS incluant le secret partagé et les
    algorithmes cryptographiques à utiliser, le tout chiffré et protégé
    par une clef connue du serveur. Ce bloc de données opaque est un
    **ticket de session**. Les détails se trouvent dans la
@@ -91,7 +86,7 @@ avec ses compagnons s'il est derrière un répartiteur de charge.
 
 # Support dans les navigateurs
 
-Les identifiants de session font partie de SSL depuis un petit bout de
+Les identifiants de session font partie de TLS depuis un petit bout de
 temps et sont donc bien supportés aussi bien côté client que côté
 serveur. <del>Par contre, les tickets de session sont une extension
 optionnelle de TLS et sont beaucoup moins répandus.</del> Le code
@@ -147,7 +142,7 @@ iOS et le navigateur d'Android).
 
 Il n'y a pas de recette magique pour configurer un serveur web de
 manière appropriée pour permettre la réutilisation des sessions
-SSL. Voici toutefois quelques grandes directions :
+TLS. Voici toutefois quelques grandes directions :
 
 - si le serveur utilise plusieurs processus, un cache de sessions en
   mémoire partagée (ou sur disque) est nécessaire ; concernant les
@@ -156,7 +151,7 @@ SSL. Voici toutefois quelques grandes directions :
   les problèmes qui peuvent survenir est de s'assurer qu'un client
   sera toujours affecté à un même frontal (avec une correspondance
   statique basée sur un condensé de l'IP source ou avec une table de
-  persistance dynamique) ; si le load balancer comprend SSL, il est
+  persistance dynamique) ; si le load balancer comprend TLS, il est
   aussi possible d'utiliser l'identifiant de session (et de
   désactiver les tickets[^1]) pour construire la table de persistance ;
 - si le conseil précédent ne vous convient pas, le cache des sessions
@@ -185,7 +180,7 @@ sessions est indispensable.
 
 ## Cache de sessions avec Apache & nginx
 
-**Apache** dispose de deux moteurs SSL. Le premier est
+**Apache** dispose de deux moteurs TLS. Le premier est
 [mod_ssl][modssl] qui utilise OpenSSL. La mise en place d'un cache de
 sessions partagé en mémoire se fait avec la directive
 `SSLSessionCache`. Seule la version de développement dispose d'un
@@ -207,7 +202,7 @@ permet pas d'enregistrer une fonction de rappel asynchrone avec
 
 À titre d'illustration, j'ai implémenté de manière similaire un
 support pour *memcached* dans [**stud**][stud], un proxy réseau
-destiné à terminer les connexions SSL de manière efficace. Les
+destiné à terminer les connexions TLS de manière efficace. Les
 limitations sont similaires à celles indiquées pour *nginx* : les
 performances se dégradent fortement. Pour plus de détails, jetez un
 œil sur la [demande d'inclusion correspondante][pr].
@@ -220,7 +215,7 @@ La [RFC 5077][rfc5077] indique que les tickets permettent de répartir
 les requêtes sur plusieurs frontaux (sans utiliser un cache
 distribué). Cependant, à ma connaissance, il n'existe actuellement
 aucun serveur web implémentant cette fonctionnalité. Lors de
-l'initialisation de la pile SSL, le serveur génère aléatoirement des clefs qui
+l'initialisation de la pile TLS, le serveur génère aléatoirement des clefs qui
 permettront de protéger et chiffrer les tickets. Par exemple, pour
 OpenSSL, dans `ssl/ssl_lib.c` :
 
@@ -285,11 +280,11 @@ serveurs de cette façon peut être assez long. J'ai donc écrit un
 un exemple de sortie :
 
 ![twitter.com RFC session resume][s4]
-[s4]: [[!!images/benchs-ssl/rfc5077-twitter.png]] "Test de twitter.com sur la réutilisation des sessions SSL"
+[s4]: [[!!images/benchs-ssl/rfc5077-twitter.png]] "Test de twitter.com sur la réutilisation des sessions TLS"
 
 L'outil va effectuer cinq connexions successives pour chaque IP, avec
 et sans tickets. Dans l'idéal, pour chaque IP, les quatre dernières
-connexions doivent réutiliser la session SSL de la première
+connexions doivent réutiliser la session TLS de la première
 connexion. Ici, les serveurs Twitter semblent configurer
 correctement. Il n'y a pas de support des tickets, soit parce que les
 serveurs ne supportent pas cette fonctionnalité soit parce qu'elle a

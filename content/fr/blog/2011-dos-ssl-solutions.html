@@ -1,5 +1,5 @@
 ---
-title: "Déni de service SSL : quelles solutions ?"
+title: "Déni de service TLS : quelles solutions ?"
 uuid: 508f723b-adbe-4d05-be2d-bc53b4a9cbb5
 attachments:
   "https://github.com/vincentbernat/ssl-dos": "Divers outils sur le sujet"
@@ -9,18 +9,18 @@ tags:
 
 Il y a quelques jours, un groupe de hackers, THC, a mis à disposition
 un [outil permettant de lancer un déni de service][thc] contre des
-serveurs web SSL. Comme indiqué dans la description de l'outil, le
-problème n'est pas réellement nouveau : une poignée de mains SSL
+serveurs web TLS. Comme indiqué dans la description de l'outil, le
+problème n'est pas réellement nouveau : une poignée de mains TLS
 implique de coûteux calculs cryptographiques.
 
 L'attaque s'appuie sur deux aspects importants :
 
- - Une poignée de mains SSL nécessite des ressources de calcul plus
+ - Une poignée de mains TLS nécessite des ressources de calcul plus
    importantes du côté du serveur que du côté du client. Il est ainsi
    indiqué qu'un serveur usera 15 fois plus de ressources qu'un
    client. Il est donc possible pour un ordinateur personnel de mettre
    à mal un serveur haut de gamme.
- - L'utilisation de la [renégociation SSL][rfc5746] permet, dans une
+ - L'utilisation de la [renégociation TLS][rfc5746] permet, dans une
    seule connexion TCP, de demander un nombre important de poignées de
    mains, évitant ainsi de devoir rétablir la connexion après chaque
    poignée de mains. De fait, un client derrière une simple connexion
@@ -37,23 +37,23 @@ notamment la chute de RC4 en tant qu'algorithme approprié.
 
 Il n'y a pas de solution toute faite à ce problème, mais il existe
 certaines mesures pour atténuer celui-ci. Comme l'outil développé par
-THC s'appuie sur la renégociation SSL, la mesure la plus immédiate est
+THC s'appuie sur la renégociation TLS, la mesure la plus immédiate est
 de désactiver celle-ci, mais nous allons explorer d'autres
 possibilités.
 
-## Désactiver la renégociation SSL
+## Désactiver la renégociation TLS
 
 La façon la plus simple de parer à l'attaque mise au point par THC est
-de désactiver la renégociation SSL. C'est un mécanisme qui est
+de désactiver la renégociation TLS. C'est un mécanisme qui est
 rarement utilisé en pratique. Un serveur peut demander une
 renégociation si le client désire accéder à une ressource nécessitant
 un certificat mais un client n'a habituellement aucune raison de
 demander une renégociation. En raison d'une
 [vulnérabilité passée][cve-2009-3555], les versions récentes
-d'_Apache_ et _nginx_ interdisent simplement la renégociation SSL,
+d'_Apache_ et _nginx_ interdisent simplement la renégociation TLS,
 même si la [version non vulnérable][rfc5746] est disponible.
 
-Pour déterminer si la renégociation SSL est autorisée, il est possible
+Pour déterminer si la renégociation TLS est autorisée, il est possible
 d'utiliser `openssl s_client`. Une rénégociation peut être demandée en
 envoyant `R` sur une ligne vide. Voici un exemple où la renégociation
 est désactivée (malgré le fait qu'elle soit indiquée comme supportée
@@ -75,11 +75,11 @@ lors de la poignée de mains initiale) :
 Désactiver la renégociation dans un programme n'est pas quelque chose
 de trivial avec OpenSSL. À titre d'exemple, j'ai écrit un
 [patch désactivant celle-ci dans stud][studreneg], un logiciel faisant
-office de terminaison SSL.
+office de terminaison TLS.
 
-## Limiter la fréquence des poignées de mains SSL
+## Limiter la fréquence des poignées de mains TLS
 
-Désactiver la renégociation SSL n'est pas toujours possible. Par
+Désactiver la renégociation TLS n'est pas toujours possible. Par
 exemple, votre serveur web peut être trop ancien pour proposer cette
 option. Comme les renégociations ne doivent avoir lieu que très
 rarement, voire jamais, une solution est d'en limiter fortement le
@@ -143,12 +143,12 @@ toutes celles qui pourraient survenir ensuite[^noo].
         état doit être améliorée pour pouvoir détecter cet
         enregistrement à n'importe quelle position.
 
-Si les renégociations SSL sont désactivées, il est possible de
+Si les renégociations TLS sont désactivées, il est possible de
 simplement limiter le nombre de poignées de mains en limitant le
 nombre de connexions TCP en provenance d'une IP :
 
 	::sh
-	iptables -A LIMIT_SSL \
+	iptables -A LIMIT_TLS \
 		-p tcp --dport 443 \
 		--syn -m state --state NEW \
 		-m hashlimit \
@@ -174,12 +174,12 @@ J'ai réuni ces solutions dans un
 
 Il est relativement facile de faire évoluer les capacités côté serveur
 aussi bien horizontalement que verticalement. Verticalement, les
-[performances de SSL augmentent linéairement avec le nombre de cœurs][sslbench1]
+[performances de TLS augmentent linéairement avec le nombre de cœurs][sslbench1]
 et il suffit donc d'ajouter des CPU supplémentaires ou d'opter pour
 des CPU avec plus de cœurs. Il est également possible d'acquérir des
 accélérateurs cryptos (assez chers). Horizontalement, il suffit
 d'ajouter des serveurs supplémentaires en prenant garde à bien cerner
-la problématique de la [reprise des sessions SSL][sslresume].
+la problématique de la [reprise des sessions TLS][sslresume].
 
 ## Augmenter le travail nécessaire côté client
 
@@ -228,10 +228,10 @@ suites de chiffrement :
 
 Étudions plus en avant pourquoi, dans le cadre d'une suite basée sur
 RSA comme `AES256-SHA`, le serveur doit effectuer plus de calculs que
-le client. Voici à quoi ressemble une poignée de mains SSL :
+le client. Voici à quoi ressemble une poignée de mains TLS :
 
-![Poignée de mains SSL][s2]
-[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Poignée de mains SSL complète"
+![Poignée de mains TLS][s2]
+[s2]: [[!!images/benchs-ssl/ssl-handshake.png]] "Poignée de mains TLS complète"
 
 En envoyant le message _Client Key Exchange_, le client va
 **chiffrer**[^c] la version de TLS ainsi que 46 octets aléatoires avec la
@@ -286,7 +286,7 @@ l'inverse. Ainsi, ·d· pourrait être petit et nous aurions ainsi un
 déchiffrement très rapide. Il y a toutefois deux problèmes importants
 empêchant cette solution :
 
- - La plupart des implémentations SSL attendent à ce que ·e· soit un
+ - La plupart des implémentations TLS attendent à ce que ·e· soit un
    entier de 32 bits.
  - Si ·d· est trop petit (s'il a moins d'un quart des bits de ·n·), il
    est possible de le
@@ -379,9 +379,9 @@ sont inefficaces, à l'exception des limitations via Netfilter.
 *[RSA]: Rivest Shamir Adleman
 *[THC]: The Hacker's Choice
 *[CGN]: Carrier-grade NAT
-[sslbench1]: [[fr/blog/2011-ssl-benchmark.html]]        "Premier round de benchmarks SSL"
-[sslbench2]: [[fr/blog/2011-ssl-benchmark-round2.html]] "Second round de benchmarks SSL"
-[sslresume]: [[fr/blog/2011-sessions-ssl-rfc5077.html]] "Accélérer SSL avec la réutilisation des sessions"
+[sslbench1]: [[fr/blog/2011-ssl-benchmark.html]]        "Premier round de benchmarks TLS"
+[sslbench2]: [[fr/blog/2011-ssl-benchmark-round2.html]] "Second round de benchmarks TLS"
+[sslresume]: [[fr/blog/2011-sessions-ssl-rfc5077.html]] "Accélérer TLS avec la réutilisation des sessions"
 [rsa]: http://fr.wikipedia.org/wiki/Rivest_Shamir_Adleman "Article Wikipédia sur RSA"
 [prime]: http://fr.wikipedia.org/wiki/Nombre_premier "Article Wikipédia sur les nombres premiers"
 [coprime]: http://fr.wikipedia.org/wiki/Nombres_premiers_entre_eux "Article Wikipédia sur les nombres premiers entre eux"
@@ -395,11 +395,11 @@ sont inefficaces, à l'exception des limitations via Netfilter.
 [f5-ssl]: http://devcentral.f5.com/weblogs/david/archive/2011/05/03/ssl-renegotiation-dos-attack-ndash-an-irule-countermeasure.aspx "SSL Renegotiation DOS attack – an iRule Countermeasure"
 [f5-bigip]: http://www.f5.com/products/hardware/big-ip.html "Ligne de produits F5 Big-IP"
 [cve-2009-3555]: http://cve.mitre.org/cgi-bin/cvename.cgi?name=CAN-2009-3555 "CVE-2009-3555"
-[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Règles de firewall pour atténuer les attaques DoS SSL"
-[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Outil pour émettre en masse des poignées de mains SSL"
+[netfilter]: https://github.com/vincentbernat/ssl-dos/blob/master/iptables.sh "Règles de firewall pour atténuer les attaques DoS TLS"
+[brute-shake]: https://github.com/vincentbernat/ssl-dos/blob/master/brute-shake.c "Outil pour émettre en masse des poignées de mains TLS"
 [server-vs-client]: https://github.com/vincentbernat/ssl-dos/blob/master/server-vs-client.c "Outil de comparaison du rapport de puissance entre un client et un serveur"
 [iptables]: https://manpages.debian.org/unstable/iptables/iptables.8.en.html "Page de manuel pour iptables(8)"
-[sslsqueeze]: ftp://ftp.stunnel.org/sslsqueeze/ "sslsqueeze, SSL service load generator"
+[sslsqueeze]: ftp://ftp.stunnel.org/sslsqueeze/ "sslsqueeze, SSLo service load generator"
 [ecdh]: http://www.imperialviolet.org/2011/11/22/forwardsecret.html "Forward secrecy for Google HTTPS"
 
 {# Local Variables: #}

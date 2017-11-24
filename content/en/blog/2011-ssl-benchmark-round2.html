@@ -1,12 +1,12 @@
 ---
-title: 'SSL termination: stunnel, nginx & stud, round 2'
+title: 'TLS termination: stunnel, nginx & stud, round 2'
 uuid: 80df1557-a28c-411a-b311-3a8237f939f6
 tags:
   - ssl
 ---
 
 A month ago, I published an article on the compared
-[performances of stunnel, nginx and stud][prev] as SSL
+[performances of stunnel, nginx and stud][prev] as TLS
 terminators. The conclusion was to use [stud][stud] on a 64-bit
 system, with session caching and AES. [stunnel][stunnel] was unable to
 scale properly and [nginx][nginx] exhibited important latency issues.
@@ -36,14 +36,14 @@ We focus on the following environment:
  - 2.6.39 kernel (250 HZ)
  - 64-bit
  - 1 core for [HAProxy][haproxy], 2 cores for network cards[^0], 4 cores
-   for SSL, 1 core for the system
+   for TLS, 1 core for the system
  - system limit of 100,000 file descriptors per process
 
 [^0]: *HAProxy* and network cards don't need dedicated core for this
-      kind of load. However, if you also want to handle non SSL
+      kind of load. However, if you also want to handle non-TLS
       traffic, those dedicated cores can get busy.
 
-On the SSL side, the main components are:
+On the TLS side, the main components are:
 
  - 2048-bit certificates
  - AES128-SHA cipher suite
@@ -231,7 +231,7 @@ improvement of 26%.
 Here is a quick recap of the maximum TPS reached on each tests (while
 keeping average response time below 100 ms). All tests were run on 4
 physical cores with 2048-bit certificates, AES128-SHA cipher
-suite. Each client makes 8 HTTP requests and reuse the first SSL
+suite. Each client makes 8 HTTP requests and reuse the first TLS
 session.
 
 Context                     | nginx 1.1.4  | stunnel 4.44  | stud [@e207dbc5a3][e207dbc5a3]
@@ -268,7 +268,7 @@ is how the latest plot looks like after the fix:
 [stunnel]: http://www.stunnel.org/          "stunnel - multiplatform SSL tunneling proxy"
 [nginx]: http://wiki.nginx.org/             "nginx homepage"
 [haproxy]: http://haproxy.1wt.eu/           "HAProxy homepage"
-[prev]: [[en/blog/2011-ssl-benchmark.html]] "First round of SSL benchmarks"
+[prev]: [[en/blog/2011-ssl-benchmark.html]] "First round of TLS benchmarks"
 [g7]: http://web.archive.org/web/2011/http://h10010.www1.hp.com/wwpc/us/en/sm/WF05a/15351-15351-3328412-241644-241475-4091412.html "HP DL360 G7"
 [avalanche]: http://www.spirent.com/Solutions-Directory/Avalanche.aspx "Spirent Avalanche"
 [l5630]: http://ark.intel.com/products/47927  "Intel Xeon L5630 specifications"
