@@ -334,6 +334,10 @@ l'option `-d`.
 [^default]: Un utilisateur désireux de modifier certaines options doit
             plutôt utiliser `systemctl edit`.
 
+**MISE À JOUR (11.2017) :** Pour les paquets destinés à Debian Stretch
+ou Ubuntu Yaketty (ou plus récents), placez `10` dans le fichier
+`debian/compat` et ignorez les instructions suivantes.
+
 Il est également nécessaire d'ajouter une dépendance source sur
 `dh-systemd` dans `debian/control` :
 
@@ -351,14 +355,12 @@ Il faut également modifier la règle par défaut dans `debian/rules` :
     	dh $@ --with systemd
 
 Cette complexité supplémetaire est regrettable et est dû au fait que
-l'intégration de *systemd* ne fait pas partie de *debhelper*[^bug822670]. Sans ces
-modifications, le script sera installé mais l'intégration n'aura pas
-lieu et il ne sera pas lancé au démarrage de la machine.
+l'intégration de *systemd* ne faisait pas partie de
+*debhelper*[^bug822670]. Sans ces modifications, le script sera
+installé mais l'intégration n'aura pas lieu et il ne sera pas lancé au
+démarrage de la machine.
 
 [^bug822670]: Voir [#822670](https://bugs.debian.org/cgi-bin/bugreport.cgi?archive=yes&bug=822670)
-              Pour les paquets destinés à Debian Stretch ou Ubuntu Yaketty (ou plus récents),
-              placer `10` dans le fichier `debian/compat` sera suffisant pour retirer `dh-systemd`
-              des dépendances et `--with systemd` du fichier `debian/rules`.
 
 ## Utilisateur dédié
 

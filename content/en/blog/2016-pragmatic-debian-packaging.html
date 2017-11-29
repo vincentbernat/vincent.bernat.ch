@@ -323,6 +323,10 @@ with the `-d` flag.
 [^default]: Instead, a user wanting to customize the options is
             expected to edit the unit with `systemctl edit`.
 
+**UPDATED (2017.11):** When targeting Debian Stretch, Ubuntu Yaketty
+or more recent, put `10` in `debian/compat` and ignore the following
+instructions.
+
 You also need to add a build-dependency to `dh-systemd` in
 `debian/control`:
 
@@ -340,14 +344,11 @@ And you need to modify the default rule in `debian/rules`:
     	dh $@ --with systemd
 
 The extra complexity is a bit unfortunate but *systemd* integration
-is not part of *debhelper*[^bug822670]. Without those additional modifications,
-the unit will get installed but you won't get a proper integration and
-the service won't be enabled on install or boot.
+was not part of *debhelper*[^bug822670]. Without those additional
+modifications, the unit will get installed but you won't get a proper
+integration and the service won't be enabled on install or boot.
 
 [^bug822670]: See [#822670](https://bugs.debian.org/cgi-bin/bugreport.cgi?archive=yes&bug=822670).
-              For packages targetting Debian Stretch or Ubuntu Yaketty or more recent, putting `10`
-              in `debian/compat` should be enough to remove `dh-systemd` from build dependencies
-              and `--with systemd` from `debian/rules`.
 
 ## Dedicated user
 
