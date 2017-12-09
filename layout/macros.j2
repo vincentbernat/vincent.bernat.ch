@@ -7,7 +7,7 @@
 {% for resource in sort -%}
   <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
     <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
-    {{ resource_date(resource) }}
+    {{ resource_short_date(resource) }}
   </li>
 {% endfor %}
 </ul>
@@ -32,7 +32,7 @@
     {% for resource in rr %}
     <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag|string() != "outdated" %} class="lf-outdated"{% endif %}>
         <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
-        {{ resource_date(resource) }}
+        {{ resource_short_date(resource) }}
     </li>
     {% endfor %}
   </ul>
@@ -47,7 +47,15 @@
 {% macro resource_date(resource) %}
 {% if resource.meta.created != None %}
 <time datetime="{{ resource.meta.created|xmldatetime }}"
-      title="{{ resource.meta.created|xmldatetime }}"
+      class="dt-published">
+    {{ resource.meta.created|humandate(resource.meta.language, 'long') }}
+</time>
+{% endif %}
+{% endmacro %}
+{% macro resource_short_date(resource) %}
+{% if resource.meta.created != None %}
+<time datetime="{{ resource.meta.created|xmldatetime }}"
+      title="{{ resource.meta.created|humandate(resource.meta.language, 'long') }}"
       class="dt-published">
     {{ resource.meta.created|humandate(resource.meta.language) }}
 </time>
