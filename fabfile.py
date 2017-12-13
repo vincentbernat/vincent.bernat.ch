@@ -170,6 +170,7 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
+        # Optimize SVG
         local("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -v '^media/images/l$'"
@@ -177,12 +178,21 @@ def build():
               "| grep -v '^media/images/obj$'"
               "| grep -v '^media/images/obj/'"
               "| xargs -n1 ../node_modules/svgo/bin/svgo --quiet")
+        # Subset Iosevka
+        local("pyftsubset media/fonts/iosevka-term-ss05-light.woff  --name-IDs+=0,4,6 --text-file=../glyphs.txt --flavor=woff --with-zopfli")
+        local("pyftsubset media/fonts/iosevka-term-ss05-light.woff2 --name-IDs+=0,4,6 --text-file=../glyphs.txt --flavor=woff2")
+        local("mv media/fonts/iosevka-term-ss05-light.subset.woff  media/fonts/iosevka-term-ss05-light.woff")
+        local("mv media/fonts/iosevka-term-ss05-light.subset.woff2 media/fonts/iosevka-term-ss05-light.woff2")
+        # Compute hash on various files
         for p in ['media/images/l/sprite*.png',
                   'media/images/l/sprite*.svg',
                   'media/js/*.js',
-                  'media/css/*.css']:
+                  'media/css/*.css',
+                  'media/fonts/*']:
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
+                if 'fonts/KaTeX' in f:
+                    continue
                 # Compute hash
                 md5 = local("md5sum %s" % f, capture=True).split(" ")[0][:14]
                 sha = local("openssl dgst -sha256 -binary %s | openssl enc -base64 -A" % f,
@@ -196,10 +206,10 @@ def build():
                 # Remove deploy/media
                 f = f[len('media/'):]
                 newname = newname[len('media/'):]
-                if ext in [".png", ".svg"]:
+                if ext in [".png", ".svg", ".woff", ".woff2"]:
                     # Fix CSS
                     local("sed -i 's+%s+%s+g' media/css/*.css" % (f, newname))
-                else:
+                if ext not in [".png", ".svg"]:
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
