@@ -143,13 +143,13 @@ are still symbolic links. Here is how the core feature is implemented:
 
     ::sh
     _bookmark_directory_name() {
-        emulate -L zsh # ➊
+        emulate -L zsh # ❶
         setopt extendedglob
         case $1 in
             n)
-                [​[ $2 != (​#b)"@"(?*) ]] && return 1 # ➋
+                [​[ $2 != (​#b)"@"(?*) ]] && return 1 # ❷
                 typeset -ga reply
-                reply=(${${:-$MARKPATH/$match[1]}:A}) # ➌
+                reply=(${${:-$MARKPATH/$match[1]}:A}) # ❸
                 return 0
                 ;;
             *)
@@ -172,18 +172,18 @@ to be able to transform **a dynamic name into a regular directory
 name**. In this case, the first parameter of the function is `n` and the
 second one is the dynamic name.
 
-In ➊, the call to `emulate` will restore the pristine behaviour of
+In ❶, the call to `emulate` will restore the pristine behaviour of
 *Zsh* and also ensure that any option set in the scope of the function
 will not have an impact outside. The function can then be reused
 safely in another environment.
 
-In ➋, we check that the dynamic name starts with `@` followed by at
+In ❷, we check that the dynamic name starts with `@` followed by at
 least one character. Otherwise, we declare we don't know how to handle
 it. Another hook will get the chance to do something. `(#b)` is a
 *globbing flag*. It activates backreferences for parenthesised
 groups. When a match is found, it is stored as an array, `$match`.
 
-In ➌, we build the reply. We could have just returned
+In ❸, we build the reply. We could have just returned
 `$MARKPATH/$match[1]` but to hide the symbolic link mechanism, we use
 the `A` modifier to ask *Zsh* to resolve symbolic links if
 possible. *Zsh* allows nested substitutions. It is therefore possible
@@ -205,8 +205,8 @@ name**. In this case, the completion system calls the hook function with
                 # Completion
                 local expl
                 local -a dirs
-                dirs=($MARKPATH/*(N@:t)) # ➊
-                dirs=("@"${^dirs}) # ➋
+                dirs=($MARKPATH/*(N@:t)) # ❶
+                dirs=("@"${^dirs}) # ❷
                 _wanted dynamic-dirs expl 'bookmarked directory' compadd -S\] -a dirs
                 return
                 ;;
@@ -215,7 +215,7 @@ name**. In this case, the completion system calls the hook function with
         # [...]
     }
 
-First, in ➊, we create a list of possible bookmarks. In `*(N@:t)`,
+First, in ❶, we create a list of possible bookmarks. In `*(N@:t)`,
 `N@` is a *glob qualifier*. `N` allows us to not return nothing if
 there is no match (otherwise, we would get an error) while `@` only
 returns symbolic links. `t` is a *modifier* which will remove all
@@ -223,7 +223,7 @@ leading pathname components. This is equivalent to use `basename` or
 `${something##*/}` in POSIX shells but it plays nice with glob
 expressions.
 
-In ➋, we just add `@` before each bookmark name. If we have `b1`, `b2`
+In ❷, we just add `@` before each bookmark name. If we have `b1`, `b2`
 and `b3` as bookmarks, `${^dirs}` expands to `{b1,b2,b3}` and
 therefore `"@"${^dirs}` expands to the `(@b1 @b2 @b3)` array.
 
@@ -252,10 +252,10 @@ argument and the file name to transform.
                 local link slink
                 local -A links
                 for link ($MARKPATH/*(N@)) {
-                    links[${​#link:A}$'\0'${link:A}]=${link:t} # ➊
+                    links[${​#link:A}$'\0'${link:A}]=${link:t} # ❶
                 }
                 for slink (${(@On)${(k)links}}) {
-                    link=${slink#*$'\0'} # ➋
+                    link=${slink#*$'\0'} # ❷
                     if [​[ $2 = (​#b)(${link})(|/*) ]]; then
                         typeset -ga reply
                         reply=("@"${links[$slink]} $(( ${​#match[1]} )) )
@@ -274,7 +274,7 @@ explanation. This is a bit complex because we want to substitute the
 most specific bookmark, hence the need to sort bookmarks by their
 target lengths.
 
-In ➊, the associative array `$links` is created by iterating on each
+In ❶, the associative array `$links` is created by iterating on each
 symbolic link (`$link`) in the `$MARKPATH` directory. The goal is to
 map a target directory with the matching bookmark name. However, we
 need to iterate on this map from the longest to the shortest key. To
@@ -293,7 +293,7 @@ flag) and sorted numerically in descending order (`On` parameter
 flag). Since the keys are directory names prefixed by their lengths,
 the first match will be the longest one.
 
-In ➋, we extract the directory name from the key by removing the
+In ❷, we extract the directory name from the key by removing the
 length and the null character at the beginning. Then, we check if the
 extracted directory name matches the file name we have been
 provided. Again, `(#b)` just activates backreferences. With extended

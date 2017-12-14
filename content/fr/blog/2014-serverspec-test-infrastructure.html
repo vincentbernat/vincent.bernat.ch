@@ -79,10 +79,10 @@ quasiment toute la mémoire disponible sur le système :
     # We want memcached to use almost all memory. With a 2GB margin.
     describe "memcached" do
       it "should use almost all memory" do
-        total = command("vmstat -s | head -1").stdout # ➊
+        total = command("vmstat -s | head -1").stdout # ❶
         total = /\d+/.match(total)[0].to_i
         total /= 1024
-        args = process("memcached").args # ➋
+        args = process("memcached").args # ❷
         memcached = /-m (\d+)/.match(args)[1].to_i
         (total - memcached).should be > 0
         (total - memcached).should be < 2000
@@ -90,8 +90,8 @@ quasiment toute la mémoire disponible sur le système :
     end
 
 Bien que plus complexe, ce test est toujours assez simple à
-comprendre. En ➊, le résultat de la commande `vmstat` est récupérée
-pour être comparé avec une valeur obtenue en ➋ via une autre ressource
+comprendre. En ❶, le résultat de la commande `vmstat` est récupérée
+pour être comparé avec une valeur obtenue en ❷ via une autre ressource
 fournie par _serverspec_.
 
 # Utilisation avancée
@@ -155,20 +155,20 @@ serveur. Elle peut par exemple se baser sur le nom du serveur :
     end
 
 Le code ci-dessous crée ensuite une tâche pour chaque serveur. Voyez,
-en ➋, comment les rôles associés au serveurs vont influencer les tests
-exécutés. De plus, en ➊, une tâche `server:all` va permettre
+en ❷, comment les rôles associés au serveurs vont influencer les tests
+exécutés. De plus, en ❶, une tâche `server:all` va permettre
 de lancer les tests sur tous les serveurs.
 
     ::ruby
     namespace :server do
       desc "Run serverspec to all hosts"
-      task :all => hosts.map { |h| h[:name] } # ➊
+      task :all => hosts.map { |h| h[:name] } # ❶
       
       hosts.each do |host|
         desc "Run serverspec to host #{host[:name]}"
         ServerspecTask.new(host[:name].to_sym) do |t|
           t.target = host[:name]
-          # ➋: Build the list of tests to execute from server roles
+          # ❷: Build the list of tests to execute from server roles
           t.pattern = './spec/{' + host[:roles].join(",") + '}/*_spec.rb'
         end
       end

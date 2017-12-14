@@ -71,18 +71,18 @@ configuration :
     ::junos
     router id 1.1.1.2;
     
-    protocol static NETS { # ➊
+    protocol static NETS { # ❶
       import all;
       export none;
       route 2001:db8::/40 reject;
     }
-    protocol bgp R1 { # ➋
+    protocol bgp R1 { # ❷
       import all;
       export where proto = "NETS";
       local as 64496;
       neighbor 2001:db8:1000::1 as 64511;
     }
-    protocol bgp ER3 { # ➌
+    protocol bgp ER3 { # ❸
       import all;
       export all;
       next hop self;
@@ -90,11 +90,11 @@ configuration :
       neighbor 2001:db8:1::3 as 64496;
     }
 
-En ➊, nous déclarons les routes que nous voulons exporter vers
+En ❶, nous déclarons les routes que nous voulons exporter vers
 Internet. Celles-ci seront inconditionnellement annoncées. Ensuite, en
-➋, _R1_ est déclaré comme voisin et nous lui envoyons la route
+❷, _R1_ est déclaré comme voisin et nous lui envoyons la route
 définie précédemment. De plus, nous acceptons toutes les routes
-soumises par _R1_. En ➌, nous partageons toutes les informations de
+soumises par _R1_. En ❸, nous partageons toutes les informations de
 routage avec le routeur jumeau _ER3_, via iBGP.
 
 ## Configuration d'OSPF
@@ -346,7 +346,7 @@ Voyons la deuxième partie :
 
     ::junos
     # Only import loopback IPs
-    filter only_loopbacks { # ➊
+    filter only_loopbacks { # ❶
       if net ~ [ 2001:db8:30::/64{128,128} ] then accept;
       reject;
     }
@@ -354,11 +354,11 @@ Voyons la deuxième partie :
     # General template for an EXABGP node
     template bgp EXABGP {
       local as 65002;
-      import filter only_loopbacks; # ➋
+      import filter only_loopbacks; # ❷
       export none;
-      route limit 10; # ➌
+      route limit 10; # ❸
       rs client;
-      hold time 6; # ➍
+      hold time 6; # ❹
       multihop 10;
     }
     
@@ -373,13 +373,13 @@ Voyons la deuxième partie :
     }
 
 Pour assurer une bonne séparation des responsabilités, nous sommes un
-peu plus pointilleux. En combinant ➊ et ➋, seules les adresses IP de
+peu plus pointilleux. En combinant ❶ et ❷, seules les adresses IP de
 loopback incluses dans le bon sous-réseau sont acceptées. Aucun
 serveur ne doit pouvoir injecter des routes arbitraires dans notre
-réseau. Grâce à ➌, le nombre de routes qu'un même serveur peut
+réseau. Grâce à ❸, le nombre de routes qu'un même serveur peut
 annoncer est limité.
 
-Avec ➍, nous réduisons le temps de détection d'indisponibilité (_hold
+Avec ❹, nous réduisons le temps de détection d'indisponibilité (_hold
 time_) de 240 à 6 secondes. C'est particulièrement important pour être
 capable de réagir rapidement si un serveur devient indisponible.
 

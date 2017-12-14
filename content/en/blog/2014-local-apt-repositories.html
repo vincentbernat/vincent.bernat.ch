@@ -251,34 +251,34 @@ following blocks into `conf/distributions`:
 
     ::ini
     # Dailymotion Precise packages (staging)
-    Origin: Dailymotion # ➌
-    Label: dm-staging   # ➌
+    Origin: Dailymotion # ❸
+    Label: dm-staging   # ❸
     Suite: precise-staging
     Codename: precise-staging
     Architectures: i386 amd64 source
-    Components: main role/dns role/database role/web # ➊
+    Components: main role/dns role/database role/web # ❶
     Description: Dailymotion Precise staging repository
     Contents: .gz .bz2
     Tracking: keep
     SignWith: yes
-    NotAutomatic: yes # ➋
+    NotAutomatic: yes # ❷
     Log: packages.dm-precise-staging.log
      --type=dsc email-changes
     
     # Dailymotion Precise packages (prod)
-    Origin: Dailymotion # ➌
-    Label: dm-prod      # ➌
+    Origin: Dailymotion # ❸
+    Label: dm-prod      # ❸
     Suite: precise-prod
     Codename: precise-prod
     Architectures: i386 amd64 source
-    Components: main role/dns role/database role/web # ➊
+    Components: main role/dns role/database role/web # ❶
     Description: Dailymotion Precise prod repository
     Contents: .gz .bz2
     Tracking: keep
     SignWith: yes
     Log: packages.dm-precise-prod.log
 
-First notice we use several components (in ➊):
+First notice we use several components (in ❶):
 
  * `main` will contain packages that are not specific to a subset of
    the platform. If you put a package in `main`, it should work
@@ -286,13 +286,13 @@ First notice we use several components (in ➊):
  * `role/*` are components dedicated to a subset of the platform. For
    example, in `role/dns`, we ship a custom version of _BIND_.
 
-The staging distribution has the `NotAutomatic` flag (in ➋) which
+The staging distribution has the `NotAutomatic` flag (in ❷) which
 disallows the package manager to install those packages except if the
 user explicitely requests it. Just below, when a new `dsc` file is
 uploaded, the hook [`email-changes`][email-changes] will be
 executed. It should be in the `conf/` directory.
 
-The `Origin` and `Label` lines (in ➌) are quite important to be able
+The `Origin` and `Label` lines (in ❸) are quite important to be able
 to define an explicit policy of which packages should be
 installed. Let's say we use the following `/etc/apt/sources.list`
 file:
