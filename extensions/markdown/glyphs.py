@@ -9,35 +9,35 @@ glyphs = {
 }
 
 
-class MonospaceGlyphsTreeprocessor(markdown.treeprocessors.Treeprocessor):
+class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
     def __init__(self, glyphs, output):
         self.output = output
         self.glyphs = glyphs
 
     def run(self, root):
-        for code in root.findall('.//code'):
-            if code.text is None:
+        for glyphs in self.extract(root):
+            if glyphs is None:
                 continue
-            self.glyphs |= set(code.text)
+            self.glyphs |= set(glyph
+                               for glyph in glyphs
+                               if ord(glyph) >= 0x20)
         with open(self.output, "w") as f:
-            f.write("".join(self.glyphs).encode('utf-8'))
+            f.write("".join(sorted(self.glyphs)).encode('utf-8'))
 
 
-class RegularGlyphsTreeprocessor(markdown.treeprocessors.Treeprocessor):
-    def __init__(self, glyphs, output):
-        self.output = output
-        self.glyphs = glyphs
+class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):
+    def extract(self, root):
+        for code in root.findall('.//code'):
+            yield code.text
 
-    def run(self, root):
+
+class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
+    def extract(self, root):
         for element in root.iter():
             if element.tag == 'code':
                 continue
-            if element.text is not None:
-                self.glyphs |= set(element.text)
-            if element.tail is not None:
-                self.glyphs |= set(element.tail)
-        with open(self.output, "w") as f:
-            f.write("".join(self.glyphs).encode('utf-8'))
+            yield element.text
+            yield element.tail
 
 
 class GlyphsExtension(markdown.Extension):
