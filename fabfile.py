@@ -180,8 +180,11 @@ def build():
               "| xargs -n1 ../node_modules/svgo/bin/svgo --quiet")
         # Subset fonts
         def subset(font, glyphs):
-            local("pyftsubset media/fonts/{}.woff  --name-IDs+=0,4,6 --text-file=../glyphs-{}.txt --flavor=woff --with-zopfli".format(font, glyphs))
-            local("pyftsubset media/fonts/{}.woff2 --name-IDs+=0,4,6 --text-file=../glyphs-{}.txt --flavor=woff2".format(font, glyphs))
+            options = " ".join(["--name-IDs+=0,4,6",
+                                "--unicodes=20,a0,2000-200a,200b,202f,205f,3000,feff",
+                                "--text-file=../glyphs-{}.txt".format(glyphs)])
+            local("pyftsubset media/fonts/{}.woff  --flavor=woff --with-zopfli {}".format(font, options))
+            local("pyftsubset media/fonts/{}.woff2 --flavor=woff2 {}".format(font, options))
             local("mv media/fonts/{}.subset.woff  media/fonts/{}.woff".format(font, font))
             local("mv media/fonts/{}.subset.woff2 media/fonts/{}.woff2".format(font, font))
         subset('iosevka-term', 'monospace')
