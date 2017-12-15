@@ -183,7 +183,7 @@ def build():
             local("pyftsubset media/fonts/{}.woff  --name-IDs+=0,4,6 --text-file=../glyphs-{}.txt --flavor=woff --with-zopfli".format(font, glyphs))
             local("pyftsubset media/fonts/{}.woff2 --name-IDs+=0,4,6 --text-file=../glyphs-{}.txt --flavor=woff2".format(font, glyphs))
             local("mv media/fonts/{}.subset.woff  media/fonts/{}.woff".format(font, font))
-            local("mv media/fonts/{}.subset.woff2 media/fonts/{}.woff2",format(font, font))
+            local("mv media/fonts/{}.subset.woff2 media/fonts/{}.woff2".format(font, font))
         subset('iosevka-term', 'monospace')
         subset('merriweather', 'regular')
         subset('merriweather-italic', 'regular')
