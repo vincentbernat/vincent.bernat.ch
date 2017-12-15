@@ -190,9 +190,9 @@ def build():
         # Compute hash on various files
         for p in ['media/images/l/sprite*.png',
                   'media/images/l/sprite*.svg',
+                  'media/fonts/*',
                   'media/js/*.js',
-                  'media/css/*.css',
-                  'media/fonts/*']:
+                  'media/css/*.css']:
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
                 if 'fonts/KaTeX' in f:
