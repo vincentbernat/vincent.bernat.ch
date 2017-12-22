@@ -202,7 +202,7 @@ Préfixes /128 répartis aléatoirements dans un /108
   hôtes obtiennent leur IP par auto-configuration. Si tous les hôtes partagent
   le même OUI, les 40 premiers bits sont fixes. Dans ce scénario, la table des
   voisins est convertie en routes par un processus externe et redistribué auprès
-  des autres routeurs servant le même sous-réseau[^neigh].
+  des autres routeurs servant le même sous-réseau.[^neigh]
 
 [^neigh]: Ce n'est pas le scénario classique où Linux agit comme une simple
     passerelle. Dans ce cas, la table de routage ne contiendrait que le préfixe
@@ -228,7 +228,7 @@ de la fonction [`ip6_route_output_flags()`][ip6_route_output_flags()]:
 Obtenir des résultats satisfaisants s'avère complexe en raison de la taille de
 l'espace d'adressage. Aucun des scénarios ne dispose d'une route par défaut et
 les mesures ne sont conservées que lorsque la recherche aboutit à une
-solution[^hits]. Pour le scénario avec la vue complète, seules les adresses de
+solution.[^hits] Pour le scénario avec la vue complète, seules les adresses de
 `2400::/16` à `2a06::/16` sont utilisées (cela comprend plus de la moitié des
 routes). Pour le scénario avec les préfixes /128, l'intégralité du sous-réseau
 /108 est balayé. Pour le scénario avec les /48, le balayage est effectué depuis
@@ -265,7 +265,7 @@ Deuxièmement, bien que la fonction [`fib_lookup()`][fib_lookup()] pour IPv4 et
 la fonction [`ip6_route_output_flags()`][ip6_route_output_flags()] pour IPv6 ont
 des coûts fixes liés à l'évaluation des règles de routage, IPv4 dispose de
 plusieurs optimisations quand ces règles de routage n'ont pas été
-modifiées[^ipv6opt]. Ces optimisations sont retirées au premier changement. Dans
+modifiées.[^ipv6opt] Ces optimisations sont retirées au premier changement. Dans
 ce cas, IPv4 est impacté de 30 ns. Cela laisse encore un désavantage de 100 ns
 pour IPv6.
 
@@ -297,7 +297,7 @@ Grossièrement, la répartition du temps est la suivante :
  - 50% est dépensé dans le parcours de l'arbre pour la table *main*,
  - 15% est dépensé dans les verrous (IPv4 repose sur le mécanisme RCU, plus efficace),
  - 5% est dépensé dans le parcours de l'arbre pour la table *local*,
- - le reste du temps est dépensé dans l'évaluation des règles de routage (environ 100 ns)[^compileout].
+ - le reste du temps est dépensé dans l'évaluation des règles de routage (environ 100 ns).[^compileout]
 
 [^compileout]: Retirer le support des règles de routage retire effectivement ces
     100 ns.
@@ -327,7 +327,7 @@ est capable d'insérer 2 millions de routes en moins de 10 secondes.
 
 Les nœuds de l'arbre radix (`struct fib6_node`) et les informations de routage
 (`struct rt6_info`) sont allouées via l'[allocateur
-slab][slab allocator][^percpu]. Il est donc possible d'extraire du fichier
+slab][slab allocator].[^percpu] Il est donc possible d'extraire du fichier
 `/proc/slabinfo` la quantité de mémoire utilisée à condition de démarrer le
 noyau avec l'option `slab_nomerge` :
 

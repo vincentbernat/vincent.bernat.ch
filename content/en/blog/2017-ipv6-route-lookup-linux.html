@@ -194,7 +194,7 @@ Excerpt of an Internet full view
   autoconfiguration. It is assumed all hosts share the same OUI and therefore,
   the first 40 bits are fixed. In this scenario, neighbor reachability
   information for the /64 subnet are converted into routes by some external
-  process and redistributed among other routers sharing the same subnet[^neigh].
+  process and redistributed among other routers sharing the same subnet.[^neigh]
 
 [^neigh]: This is quite different of the classic scenario where Linux acts as a
     gateway for a /64 subnet. In this case, the neighbor subsystem stores the
@@ -218,7 +218,7 @@ correlate the results with the radix tree size:
 
 Getting meaningful results is challenging due to the size of the address
 space. None of the scenarios have a fallback route and we only measure time for
-successful hits[^hits]. For the full view scenario, only the range from
+successful hits.[^hits] For the full view scenario, only the range from
 `2400::/16` to `2a06::/16` is scanned (it contains more than half of the
 routes). For the /128 scenario, the whole /108 subnet is scanned. For the /48
 scenario, the range from the first /48 to the last one is scanned. For each
@@ -250,7 +250,7 @@ was 6, while the maximum depth of the IPv6 radix tree for 40,000 routes is 40.
 Second, while both IPv4's [`fib_lookup()`][fib_lookup()] and
 IPv6's [`ip6_route_output_flags()`][ip6_route_output_flags()] functions have a
 fixed cost implied by the evaluation of routing rules, IPv4 has several
-optimizations when the rules are left unmodified[^ipv6opt]. Those optimizations
+optimizations when the rules are left unmodified.[^ipv6opt] Those optimizations
 are removed on the first modification. If we cancel those optimizations, the
 lookup time for IPv4 is impacted by about 30 ns. This still leaves a 100 ns
 difference with IPv6 to be explained.
@@ -281,7 +281,7 @@ Here is an approximate breakdown on the time spent:
  - 50% is spent in the route lookup in the *main* table,
  - 15% is spent in handling locking (IPv4 is using the more efficient RCU mechanism),
  - 5% is spent in the route lookup of the *local* table,
- - most of the remaining is spent in routing rule evaluation (about 100 ns)[^compileout].
+ - most of the remaining is spent in routing rule evaluation (about 100 ns).[^compileout]
 
 [^compileout]: Compiling out table support effectively removes those last
     100 ns.
@@ -310,7 +310,7 @@ million routes in less than 10 seconds.
 # Memory usage
 
 Radix tree nodes (`struct fib6_node`) and routing information (`struct
-rt6_info`) are allocated with the [slab allocator][][^percpu]. It is therefore
+rt6_info`) are allocated with the [slab allocator][].[^percpu] It is therefore
 possible to extract the information from `/proc/slabinfo` when the kernel is
 booted with the `slab_nomerge` flag:
 

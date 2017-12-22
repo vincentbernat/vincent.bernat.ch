@@ -52,7 +52,7 @@ As a sidenote, despite the use of `ipv4` in its name, the
 `net.ipv4.tcp_tw_recycle` control also applies to IPv6. Also, keep in
 mind we are looking at the TCP stack of Linux. This is completely
 unrelated to _Netfilter_ connection tracking which may be tweaked in
-other ways[^netfilter].
+other ways.[^netfilter]
 
 [^netfilter]: Notably, fiddling with `net.netfilter.nf_conntrack_tcp_timeout_time_wait`
               won't change anything on how the TCP stack will handle the `TIME-WAIT` state.
@@ -62,7 +62,7 @@ other ways[^netfilter].
 # About `TIME-WAIT` state
 
 Let's rewind a bit and have a close look at this `TIME-WAIT` state.
-What is it? See the TCP state diagram below[^source]:
+What is it? See the TCP state diagram below:[^source]
 
 ![TCP state diagram][tcp-state-diagram]
 [tcp-state-diagram]: [[!!images/tcp/tcp-state-diagram.svg]] "TCP state diagram"
@@ -98,7 +98,7 @@ There are two purposes for the `TIME-WAIT` state:
     certain range to be accepted. This narrows a bit the problem but
     it still exists, especially on fast connections with large receive
     windows. [RFC 1337][] explains in details what happens when the
-    `TIME-WAIT` state is deficient[^rfc1337]. Here is an example of
+    `TIME-WAIT` state is deficient.[^rfc1337] Here is an example of
     what could be avoided if the `TIME-WAIT` state wasn't shortened:
 
 ![Duplicate segments accepted in another connection][duplicate-segment]
@@ -112,7 +112,7 @@ There are two purposes for the `TIME-WAIT` state:
 
   - The other purpose is to ensure **the remote end has closed the
     connection**. When the last _ACK_ is lost, the remote end stays in
-    the `LAST-ACK` state[^lastack]. Without the `TIME-WAIT` state, a
+    the `LAST-ACK` state.[^lastack] Without the `TIME-WAIT` state, a
     connection could be reopened while the remote end still thinks the
     previous connection is valid. When it receives a _SYN_ segment (and
     the sequence number matches), it will answer with a _RST_ as it is
@@ -188,7 +188,7 @@ to list the number of used quadruplets:
        1129 10.24.2.30 10.33.1.70
       10536 10.24.2.30 10.33.1.73
 
-The solution is **more quadruplets**[^outgoing]. This can be done in
+The solution is **more quadruplets**.[^outgoing] This can be done in
 several ways (in the order of difficulty to setup):
 
  - use **more client ports** by setting `net.ipv4.ip_local_port_range` to
@@ -196,9 +196,9 @@ several ways (in the order of difficulty to setup):
  - use **more server ports** by asking the web server to listen to several
    additional ports (81, 82, 83, ...),
  - use **more client IP** by configuring additional IP on the load
-   balancer and use them in a round-robin fashion[^bind],
+   balancer and use them in a round-robin fashion,[^bind]
  - use **more server IP** by configuring additional IP on the web
-   server[^others].
+   server.[^others]
 
 [^outgoing]: On the client side, older kernels also have to find a **free
              local tuple** (source address and source port) for each
@@ -256,7 +256,7 @@ purposes):
     
     Each element of the list of connections in the `TIME-WAIT` state
     is a `struct tcp_timewait_sock`, while the type for other
-    states is `struct tcp_sock`[^tcptimewaitsock]:
+    states is `struct tcp_sock`:[^tcptimewaitsock]
     
         ::c
         struct tcp_timewait_sock {
@@ -293,7 +293,7 @@ purposes):
     
     It uses the same memory space as for the entries in the hash table
     of connections. This is the `struct hlist_node tw_death_node`
-    member of `struct inet_timewait_sock`[^deathrow].
+    member of `struct inet_timewait_sock`.[^deathrow]
 
  3. A **hash table of bound ports**, holding the locally bound ports
     and the associated parameters, is used to determine if it is safe
@@ -475,7 +475,7 @@ counter is increased (despite its name).
 
 This mechanism also relies on the timestamp option but affects **both
 incoming and outgoing connections** which is handy when the server
-usually closes the connection first[^serverfirst].
+usually closes the connection first.[^serverfirst]
 
 [^serverfirst]: When the server closes the connection first, it gets
                 the `TIME-WAIT` state while the client will consider

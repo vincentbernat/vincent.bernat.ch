@@ -16,7 +16,7 @@ vulnerability in [QEMU][] virtual floppy controller:
 
 Even when *QEMU* has been configured with no floppy drive, the
 floppy controller code is still active. The vulnerability is easy to
-test[^exploit]:
+test:[^exploit]
 
     ::c
     #define FDC_IOPORT 0x3f5
@@ -40,7 +40,7 @@ Another possibility would be to patch the running processes. The Linux
 kernel attracted a lot of interest in this area, with solutions like
 [Ksplice][] (mostly killed by Oracle), [kGraft][] (by SUSE) and
 [kpatch][] (by Red Hat) and the inclusion of a [common framework][] in
-the kernel. The userspace has far less out-of-the-box solutions[^userspace].
+the kernel. The userspace has far less out-of-the-box solutions.[^userspace]
 
 [^userspace]: An interesting project seems to be [Katana][]. But there
               are also some insightful [hacking][1] [papers][2] on
@@ -121,7 +121,7 @@ the `handlers[]` array).
 To check if the workaround works as expected, we test it with
 `gdb`. Unless you have compiled *QEMU* yourself, you need to install a
 package with debug symbols. Unfortunately, on Debian, they are not
-available, yet[^debugsymbols]. On Ubuntu, you can install the
+available, yet.[^debugsymbols] On Ubuntu, you can install the
 `qemu-system-x86-dbgsym` package after
 [enabling the appropriate repositories][].
 
@@ -195,7 +195,7 @@ installed in `/usr/lib/debug`. Most modern distributions are now
 relying on the build ID[^buildid] to map an executable to its
 debugging symbols, like the example above. Without a debug package,
 you need to recompile the existing package without stripping debug
-symbols in a clean environment[^reproducible]. On Debian, this can be
+symbols in a clean environment.[^reproducible] On Debian, this can be
 done by setting the `DEB_BUILD_OPTIONS` environment variable to
 `nostrip`.
 
@@ -215,7 +215,7 @@ We have now two possible cases:
 ### The easy case
 
 On x86, here is the standard layout of a *regular* Linux process in
-memory[^more]:
+memory:[^more]
 
 ![Memory layout of a regular process on x86][x86-layout-regular]
 [x86-layout-regular]: [[!!images/memory-layout-regular-v2.svg]] "Memory layout of a regular process on Linux x86 with ASLR."
@@ -355,7 +355,7 @@ the target process:
     }
 
 Then, we retrieve the `command_to_handler[]` array, modify it and put it
-back in memory[^write].
+back in memory.[^write]
 
     ::c
     static int
@@ -404,7 +404,7 @@ back in memory[^write].
 
 Since `ptrace()` only allows one to read or write a word at a time,
 `ptrace_read()` and `ptrace_write()` are wrappers to read or write
-arbitrary large chunks of memory[^vmreadv]. Here is the code for
+arbitrary large chunks of memory.[^vmreadv] Here is the code for
 `ptrace_read()`:
 
     ::c

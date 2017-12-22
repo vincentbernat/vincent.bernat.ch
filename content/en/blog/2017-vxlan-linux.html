@@ -70,7 +70,7 @@ join the other VTEPs:
 
 The above commands create a new interface acting as a VXLAN tunnel
 endpoint, named `vxlan100` and put it in a bridge with some regular
-interfaces[^bridges]. Each VXLAN segment is associated to a 24-bit
+interfaces.[^bridges] Each VXLAN segment is associated to a 24-bit
 segment ID, the *VXLAN Network Identifier* (VNI). In our example, the
 default VNI is specified with `id 100`.
 
@@ -128,7 +128,7 @@ Using VXLAN over a multicast IP network has several benefits:
    group,
  - good bandwidth usage (packets are replicated as late as
    possible),
- - decentralized and controller-less design[^decentralized].
+ - decentralized and controller-less design.[^decentralized]
 
 [^decentralized]: The underlay multicast network may still need some
     central components, like rendez-vous points for PIM-SM
@@ -143,7 +143,7 @@ multicast.
 ## Unicast with static flooding
 
 We can replace multicast by head-end replication of BUM frames to a
-statically configured lists of remote VTEPs[^patch1]:
+statically configured lists of remote VTEPs:[^patch1]
 
     ::console
     # ip -6 link add vxlan100 type vxlan \
@@ -217,7 +217,7 @@ additional information).
 In the previous example, we had to keep the all-zero entries for ARP
 and IPv6 neighbor discovery to work correctly. However, Linux can
 answer to neighbor requests on behalf of the remote
-nodes[^patch2]. When this feature is enabled, the default entries are
+nodes.[^patch2] When this feature is enabled, the default entries are
 not needed anymore (but you could keep them):
 
     ::console hl_lines="6 7 8 9"
@@ -263,7 +263,7 @@ Those limitations prevent us to do a "unicast with dynamic L2 entries"
 scenario.
 
 First, let's create the VXLAN device with the `l2miss` and `l3miss`
-options[^patch3]:
+options:[^patch3]
 
     ::sh hl_lines="6 7"
     ip -6 link add vxlan100 type vxlan \
@@ -305,7 +305,7 @@ notification to refresh it.
 Once the host receives our proxy answer for the neighbor discovery
 request, it can send a frame with the MAC we gave as destination. The
 second notification is about the missing FDB entry for this MAC
-address. We add the appropriate entry with the following command[^sooner]:
+address. We add the appropriate entry with the following command:[^sooner]
 
     ::sh
     bridge fdb replace 50:54:33:00:00:0a \
@@ -398,7 +398,7 @@ SHA256, the overhead is 56 bytes. With NAT traversal, this is 64 bytes
 Some users will expect to be able to use an Ethernet MTU of 1500 for
 the overlay network. Therefore, the underlay MTU should be
 increased. If it is not possible, ensure the inner MTU (inside the
-containers or the virtual machines) is correctly decreased[^pmtu].
+containers or the virtual machines) is correctly decreased.[^pmtu]
 
 [^pmtu]: There is no such thing as MTU discovery on an Ethernet segment.
 
