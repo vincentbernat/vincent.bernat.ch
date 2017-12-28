@@ -1,0 +1,596 @@
+---
+title: "(Micro)benchmarking Linux kernel functions"
+description: |
+  By writing a small kernel module, it is possible to benchmark an isolated
+  Linux function, like the route lookup function.
+uuid: 1f24d486-55fb-4c25-a1b8-4e481fad2b3d
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv4/kbench_mod.c": "Example 1"
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv6/kbench_mod.c": "Example 2"
+tags:
+  - kernel
+---
+
+Usually, the performance of a Linux subsystem is measured through an
+external (local or remote) process stressing it. Depending on the
+input point used, a large portion of code may be involved. To
+benchmark a single function, one solution is to write a **kernel
+module**.
+
+[TOC]
+
+# Minimal kernel module
+
+Let's suppose we want to benchmark the IPv4 route lookup function,
+`fib_lookup()`. The following kernel function executes 1,000 lookups
+for 8.8.8.8 and returns the average value.[^loop] It uses the
+`get_cycles()` function to compute the execution "time."
+
+    ::c hl_lines="18"
+    /* Execute a benchmark on fib_lookup() and put
+       result into the provided buffer `buf`. */
+    static int do_bench(char *buf)
+    {
+        unsigned long long t1, t2;
+        unsigned long long total = 0;
+        unsigned long i;
+        unsigned count = 1000;
+        int err = 0;
+        struct fib_result res;
+        struct flowi4 fl4;
+    
+        memset(&fl4, 0, sizeof(fl4));
+        fl4.daddr = in_aton("8.8.8.8");
+    
+        for (i = 0; i < count; i++) {
+            t1 = get_cycles();
+            err |= fib_lookup(&init_net, &fl4, &res, 0);
+            t2 = get_cycles();
+            total += t2 - t1;
+        }
+        if (err != 0)
+            return scnprintf(buf, PAGE_SIZE, "err=%d msg=\"lookup error\"\n", err);
+        return scnprintf(buf, PAGE_SIZE, "avg=%llu\n", total / count);
+    }
+
+[^loop]: In this simple case, it may be more accurate to use:
+
+        ::c
+        t1 = get_cycles();
+        for (i = 0; i < count; i++) {
+            err |= fib_lookup(…);
+        }
+        t2 = get_cycles();
+        total = t2 - t1;
+
+    However, this prevents us to compute more statistics. Moreover,
+    when you need to provide a non-constant input to the `fib_lookup()`
+    function, the first way is likely to be more accurate.
+
+Now, we need to embed this function in a kernel module. The following
+code registers a *sysfs* directory containing a pseudo-file
+`run`. When a user queries this file, the module runs the benchmark
+function and returns the result as content.
+
+    ::c hl_lines="33 38"
+    #define pr_fmt(fmt) "kbench: " fmt
+    
+    #include <linux/kernel.h>
+    #include <linux/version.h>
+    #include <linux/module.h>
+    #include <linux/inet.h>
+    #include <linux/timex.h>
+    #include <net/ip_fib.h>
+    
+    /* When a user fetches the content of the "run" file, execute the
+       benchmark function. */
+    static ssize_t run_show(struct kobject *kobj,
+                            struct kobj_attribute *attr,
+                            char *buf)
+    {
+        return do_bench(buf);
+    }
+    
+    static struct kobj_attribute run_attr = __ATTR_RO(run);
+    static struct attribute *bench_attributes[] = {
+        &run_attr.attr,
+        NULL
+    };
+    static struct attribute_group bench_attr_group = {
+        .attrs = bench_attributes,
+    };
+    static struct kobject *bench_kobj;
+    
+    int init_module(void)
+    {
+        int rc;
+        /* ❶ Create a simple kobject named "kbench" in /sys/kernel. */
+        bench_kobj = kobject_create_and_add("kbench", kernel_kobj);
+        if (!bench_kobj)
+            return -ENOMEM;
+    
+        /* ❷ Create the files associated with this kobject. */
+        rc = sysfs_create_group(bench_kobj, &bench_attr_group);
+        if (rc) {
+            kobject_put(bench_kobj);
+            return rc;
+        }
+    
+        return 0;
+    }
+    
+    void cleanup_module(void)
+    {
+        kobject_put(bench_kobj);
+    }
+    
+    /* Metadata about this module */
+    MODULE_LICENSE("GPL");
+    MODULE_DESCRIPTION("Microbenchmark for fib_lookup()");
+
+In ❶, `kobject_create_and_add()` creates a new `kobject` named
+`kbench`. A `kobject` is the abstraction behind the *sysfs*
+filesystem. This new `kobject` is visible as the `/sys/kernel/kbench/`
+directory.
+
+In ❷, `sysfs_create_group()` attaches a set of attributes to
+our `kobject`. Those attributes are materialized as files inside
+`/sys/kernel/kbench/`. Currently, we declare only one of them, `run`,
+with the `__ATTR_RO` macro. The attribute is therefore read-only
+(`0444`) and when a user tries to fetch the content of the file, the
+`run_show()` function is invoked with a buffer of `PAGE_SIZE` bytes as
+last argument and is expected to return the number of bytes written.
+
+For more details, you can look at the [documentation in the
+kernel][kobject] and the [associated example][kobject2]. Beware,
+random posts found on the web (including this one) may be outdated.[^backward]
+
+[^backward]: In-kernel API backward compatibility is a [non-goal][] of
+    the Linux kernel.
+
+The following `Makefile` will compile this example:
+
+    ::make
+    # Kernel module compilation
+    KDIR = /lib/modules/$(shell uname -r)/build
+    obj-m += kbench_mod.o
+    kbench_mod.ko: kbench_mod.c
+    	make -C $(KDIR) M=$(PWD) modules
+
+After executing `make`, you should get a `kbench_mod.ko` file:
+
+    ::console
+    $ modinfo kbench_mod.ko
+    filename:       /home/bernat/code/…/kbench_mod.ko
+    description:    Microbenchmark for fib_lookup()
+    license:        GPL
+    depends:
+    name:           kbench_mod
+    vermagic:       4.14.0-1-amd64 SMP mod_unload modversions
+
+You can load it and execute the benchmark:
+
+    ::console
+    $ insmod ./kbench_mod.ko
+    $ ls -l /sys/kernel/kbench/run
+    -r--r--r-- 1 root root 4096 déc.  10 16:05 /sys/kernel/kbench/run
+    $ cat /sys/kernel/kbench/run
+    avg=75
+
+The result is a number of cycles. You can get an approximate time in
+nanoseconds if you divide it by the frequency of your processor in
+gigahertz (25 ns if you have a 3 GHz processor).[^frequency]
+
+[^frequency]: You can get the current frequency with `cpupower
+  frequency-info`. As the frequency may vary (even when using the
+  `performance` governor), this may not be accurate but this still
+  provides an easier representation (comparable results should use the
+  same frequency).
+
+# Configurable parameters
+
+The module hard-code two constants: the number of loops and the
+destination address to test. We can make those parameters
+user-configurable by exposing them as attributes of our `kobject` and
+define a pair of functions to read/write them:
+
+    ::c
+    static unsigned long loop_count      = 5000;
+    static u32           flow_dst_ipaddr = 0x08080808;
+    
+    /* A mutex is used to ensure we are thread-safe when altering attributes. */
+    static DEFINE_MUTEX(kb_lock);
+    
+    /* Show the current value for loop count. */
+    static ssize_t loop_count_show(struct kobject *kobj,
+                                   struct kobj_attribute *attr,
+                                   char *buf)
+    {
+        ssize_t res;
+        mutex_lock(&kb_lock);
+        res = scnprintf(buf, PAGE_SIZE, "%lu\n", loop_count);
+        mutex_unlock(&kb_lock);
+        return res;
+    }
+    
+    /* Store a new value for loop count. */
+    static ssize_t loop_count_store(struct kobject *kobj,
+                                    struct kobj_attribute *attr,
+                                    const char *buf,
+                                    size_t count)
+    {
+        unsigned long val;
+        int err = kstrtoul(buf, 0, &val);
+        if (err < 0)
+            return err;
+        if (val < 1)
+            return -EINVAL;
+        mutex_lock(&kb_lock);
+        loop_count = val;
+        mutex_unlock(&kb_lock);
+        return count;
+    }
+    
+    /* Show the current value for destination address. */
+    static ssize_t flow_dst_ipaddr_show(struct kobject *kobj,
+                                        struct kobj_attribute *attr,
+                                        char *buf)
+    {
+        ssize_t res;
+        mutex_lock(&kb_lock);
+        res = scnprintf(buf, PAGE_SIZE, "%pI4\n", &flow_dst_ipaddr);
+        mutex_unlock(&kb_lock);
+        return res;
+    }
+    
+    /* Store a new value for destination address. */
+    static ssize_t flow_dst_ipaddr_store(struct kobject *kobj,
+                                         struct kobj_attribute *attr,
+                                         const char *buf,
+                                         size_t count)
+    {
+        mutex_lock(&kb_lock);
+        flow_dst_ipaddr = in_aton(buf);
+        mutex_unlock(&kb_lock);
+        return count;
+    }
+    
+    /* Define the new set of attributes. They are read/write attributes. */
+    static struct kobj_attribute loop_count_attr      = __ATTR_RW(loop_count);
+    static struct kobj_attribute flow_dst_ipaddr_attr = __ATTR_RW(flow_dst_ipaddr);
+    static struct kobj_attribute run_attr             = __ATTR_RO(run);
+    static struct attribute *bench_attributes[] = {
+        &loop_count_attr.attr,
+        &flow_dst_ipaddr_attr.attr,
+        &run_attr.attr,
+        NULL
+    };
+
+The IPv4 address is stored as a 32-bit integer but displayed and
+parsed using the dotted quad notation. The kernel provides the
+appropriate helpers for this task.
+
+After this change, we have two new files in `/sys/kernel/kbench`.  We
+can read the current values and modify them:
+
+    ::console
+    # cd /sys/kernel/kbench
+    # ls -l
+    -rw-r--r-- 1 root root 4096 déc.  10 19:10 flow_dst_ipaddr
+    -rw-r--r-- 1 root root 4096 déc.  10 19:10 loop_count
+    -r--r--r-- 1 root root 4096 déc.  10 19:10 run
+    # cat loop_count
+    5000
+    # cat flow_dst_ipaddr
+    8.8.8.8
+    # echo 9.9.9.9 > flow_dst_ipaddr
+    # cat flow_dst_ipaddr
+    9.9.9.9
+
+We still need to alter the `do_bench()` function to make use of those
+parameters:
+
+    ::c
+    static int do_bench(char *buf)
+    {
+        /* … */
+        mutex_lock(&kb_lock);
+        count = loop_count;
+        fl4.daddr = flow_dst_ipaddr;
+        mutex_unlock(&kb_lock);
+        
+        for (i = 0; i < count; i++) {
+            /* … */
+
+
+# Meaningful statistics
+
+Currently, we only compute the average lookup time. This value is
+usually inadequate:
+
+ - A small number of **outliers** can raise this value quite
+   significantly. An outlier can happen because we were preempted out
+   of CPU while executing the benchmarked function. This doesn't
+   happen often if the function execution time is short (less than a
+   millisecond), but when this happens, the outliers can be off by
+   several milliseconds, which is enough to make the average
+   inadequate when most values are several order of magnitude
+   smaller. For this reason, the median usually gives a better view.
+
+ - The **distribution** may be asymmetrical or have several local
+   maxima. It's better to keep several percentiles or even a
+   distribution graph.
+
+To be able to extract meaningful statistics, we store the results in
+an array.
+
+    ::c hl_lines="14"
+    static int do_bench(char *buf)
+    {
+        unsigned long long *results;
+        /* … */
+        
+        results = kmalloc(sizeof(*results) * count, GFP_KERNEL);
+        if (!results)
+            return scnprintf(buf, PAGE_SIZE, "msg=\"no memory\"\n");
+        
+        for (i = 0; i < count; i++) {
+            t1 = get_cycles();
+            err |= fib_lookup(&init_net, &fl4, &res, 0);
+            t2 = get_cycles();
+            results[i] = t2 - t1;
+        }
+        
+        if (err != 0) {
+            kfree(results);
+            return scnprintf(buf, PAGE_SIZE, "err=%d msg=\"lookup error\"\n", err);
+        }
+        /* Compute and display statistics */
+        display_statistics(buf, results, count);
+        
+        kfree(results);
+        return strnlen(buf, PAGE_SIZE);
+    }
+
+Then, We need an helper function to be able to compute percentiles:
+
+    ::c
+    static unsigned long long percentile(int p,
+                                         unsigned long long *sorted,
+                                         unsigned count)
+    {
+        int index = p * count / 100;
+        int index2 = index + 1;
+        if (p * count % 100 == 0)
+            return sorted[index];
+        if (index2 >= count)
+            index2 = index - 1;
+        if (index2 < 0)
+            index2 = index;
+        return (sorted[index] + sorted[index+1]) / 2;
+    }
+
+This function needs a sorted array as input. The kernel provides a
+[heapsort function][], `sort()`, for this purpose. Another useful
+value to have is the deviation from the median. Here is a function to
+compute the [median absolute deviation][]:[^mad]
+
+    ::c
+    static unsigned long long mad(unsigned long long *sorted,
+                                  unsigned long long median,
+                                  unsigned count)
+    {
+        unsigned long long *dmedian = kmalloc(sizeof(unsigned long long) * count,
+                                              GFP_KERNEL);
+        unsigned long long res;
+        unsigned i;
+        
+        if (!dmedian) return 0;
+        for (i = 0; i < count; i++) {
+            if (sorted[i] > median)
+                dmedian[i] = sorted[i] - median;
+            else
+                dmedian[i] = median - sorted[i];
+        }
+        sort(dmedian, count, sizeof(unsigned long long), compare_ull, NULL);
+        res = percentile(50, dmedian, count);
+        kfree(dmedian);
+        return res;
+    }
+
+[^mad]: Only integer arithmetic is available in the kernel. While it
+    is possible to approximate a standard deviation using only
+    integers, the median absolute deviation just reuses the
+    `percentile()` function defined above.
+
+With those two functions, we can provide additional statistics:
+
+    ::c
+    static void display_statistics(char *buf,
+                                   unsigned long long *results,
+                                   unsigned long count)
+    {
+        unsigned long long p95, p90, p50;
+        
+        sort(results, count, sizeof(*results), compare_ull, NULL);
+        if (count == 0) {
+            scnprintf(buf, PAGE_SIZE, "msg=\"no match\"\n");
+            return;
+        }
+        
+        p95 = percentile(95, results, count);
+        p90 = percentile(90, results, count);
+        p50 = percentile(50, results, count);
+        scnprintf(buf, PAGE_SIZE,
+              "min=%llu max=%llu count=%lu 95th=%llu 90th=%llu 50th=%llu mad=%llu\n",
+              results[0],
+              results[count - 1],
+              count,
+              p95,
+              p90,
+              p50,
+              mad(results, p50, count));
+    }
+
+We can also append a [graph of the distribution function][] (and of
+the cumulative distribution function):
+
+    ::text
+    min=72 max=33364 count=100000 95th=154 90th=142 50th=112 mad=6
+        value │                      ┊                         count
+           72 │                                                   51
+           77 │▒                                                3548
+           82 │▒▒░░                                             4773
+           87 │▒▒░░░░░                                          5918
+           92 │░░░░░░░                                          1207
+           97 │░░░░░░░                                           437
+          102 │▒▒▒▒▒▒░░░░░░░░                                  12164
+          107 │▒▒▒▒▒▒▒░░░░░░░░░░░░░░                           15508
+          112 │▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░               23014
+          117 │▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░             6297
+          122 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░              905
+          127 │▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░           3845
+          132 │▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░       6687
+          137 │▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░     4884
+          142 │▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   4133
+          147 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1015
+          152 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1123
+
+# Benchmark validity
+
+While the benchmark produces some figures, we may question their
+validity. There are several traps when writing a microbenchmark:
+
+dead code
+: Compiler may optimize away our benchmark because the result is not
+  used. In our example, we ensure to combine the result in a variable
+  to avoid this.
+
+warmup phase
+: One-time initializations may affect negatively the benchmark. This
+  is less likely to happen with C code since there is no
+  JIT. Nonetheless, you may want to add a small [warmup phase][].
+
+too small dataset
+: If the benchmark is running using the same input parameters over and
+  over, the input data may fit entirely in the L1 cache. This affects
+  positively the benchmark. Therefore, it is important to
+  [iterate over a large dataset][].
+
+too regular dataset
+: A regular dataset may still affect positively the benchmark despite
+  its size. While the whole dataset will not fit into L1/L2 cache, the
+  previous run may have loaded most of the data needed for the current
+  run. In the route lookup example, as route entries are organized in
+  a tree, it's important to not linearly scan the address
+  space. Address space could be explored randomly (a
+  [simple linear congruential generator][] brings reproducible
+  randomness).
+
+large overhead
+: If the benchmarked function runs in a few nanoseconds, the overhead
+  of the benchmark infrastructure may be too high. Typically, the
+  overhead of the method presented here is around 5
+  nanoseconds. `get_cycles()` is a thin wrapper around the
+  [RDTSC instruction][]: it returns the number of cycles for the current
+  processor since last reset. It's also virtualized with low-overhead
+  in case you run the benchmark in a virtual machine. If you want to
+  measure a function with a greater precision, you need to wrap it in
+  a loop. However, the loop itself adds to the overhead, notably if
+  you need to compute a large input set (in this case, the input can
+  be prepared). Compilers also like to mess with loops. At last, a loop
+  hides the result distribution.
+
+preemption
+: While the benchmark is running, the thread executing it can be
+  preempted (or when running in a virtual machine, the whole virtual
+  machine can be preempted by the host). When the function takes less
+  than a millisecond to execute, one can assume preemption is rare
+  enough to be filtered out by using a percentile function.
+
+noise
+: When running the benchmark, noise from unrelated processes (or
+  sibling hosts when benchmarking in a virtual machine) needs to be
+  avoided as it may change from one run to another. Therefore, it is
+  not a good idea to benchmark in a public cloud. On the other hand,
+  adding controlled noise to the benchmark may lead to less artificial
+  results: in our example, route lookup is only a small part of
+  routing a packet and measuring it alone in a tight loop affects
+  positively the benchmark.
+
+syncing parallel benchmarks
+: While it is possible (and safe) to run several benchmarks in
+  parallel, it may be difficult to ensure they really run in parallel:
+  some invocations may work in better conditions because other threads
+  are not running yet, skewing the result. Ideally, each run should
+  execute bogus iterations and start measures only when all runs are
+  present. This doesn't seem a trivial addition.
+
+As a conclusion, the benchmark module presented here is quite
+primitive (notably compared to a framework like [JMH][] for Java) but,
+with care, can deliver some conclusive results like in those posts:
+“[IPv4 route lookup on Linux][]” and “[IPv6 route lookup on Linux][].”
+
+# Alternative
+
+Use of a tracing tool is an alternative approach. For example, if we
+want to benchmark IPv4 route lookup times, we can use the following
+process:
+
+    ::sh
+    while true; do
+      ip route get $((RANDOM%100)).$((RANDOM%100)).$((RANDOM%100)).5
+      sleep 0.1
+    done
+
+Then, we instrument the `__fib_lookup()` function with eBPF (through
+[BCC][]):
+
+    ::console
+    $ sudo funclatency-bpfcc __fib_lookup
+    Tracing 1 functions for "__fib_lookup"... Hit Ctrl-C to end.
+    ^C
+         nsecs               : count     distribution
+             0 -> 1          : 0        |                    |
+             2 -> 3          : 0        |                    |
+             4 -> 7          : 0        |                    |
+             8 -> 15         : 0        |                    |
+            16 -> 31         : 0        |                    |
+            32 -> 63         : 0        |                    |
+            64 -> 127        : 0        |                    |
+           128 -> 255        : 0        |                    |
+           256 -> 511        : 3        |*                   |
+           512 -> 1023       : 1        |                    |
+          1024 -> 2047       : 2        |*                   |
+          2048 -> 4095       : 13       |******              |
+          4096 -> 8191       : 42       |********************|
+
+Currently, the overhead is quite high, as a route lookup on an empty
+routing table is less than 100 ns. Once Linux supports [inter-event
+tracing][], the overhead of this solution may be reduced to be usable
+for such microbenchmarks.
+
+*[TSC]: Time Stamp Counter
+*[eBPF]: Extended Berkeley Packet Filter
+*[JIT]: Just-in-time (compiler)
+
+[BCC]: https://github.com/iovisor/bcc "BCC - Tools for BPF-based Linux IO analysis, networking, monitoring, and more"
+[kobject]: http://elixir.free-electrons.com/linux/v4.14.5/source/Documentation/kobject.txt "Everything you never wanted to know about kobjects, ksets, and ktypes"
+[kobject2]: http://elixir.free-electrons.com/linux/v4.14.5/source/samples/kobject/kobject-example.c "Sample kobject implementation"
+[non-goal]: http://elixir.free-electrons.com/linux/v4.14.5/source/Documentation/process/stable-api-nonsense.rst "The Linux Kernel Driver Interface"
+[heapsort function]: http://elixir.free-electrons.com/linux/v4.14.5/source/lib/sort.c#L62 "Kernel sort() function"
+[median absolute deviation]: https://en.wikipedia.org/wiki/Median_absolute_deviation "Median absolute deviation on Wikipedia"
+[inter-event tracing]: https://lwn.net/Articles/740831/ "tracing: Inter-event (e.g. latency) support"
+[RDTSC instruction]: https://en.wikipedia.org/wiki/Time_Stamp_Counter "Time Stamp Counter on Wikipedia"
+[JMH]: http://openjdk.java.net/projects/code-tools/jmh/ "OpenJDK jmh"
+[graph of the distribution function]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L165-L207
+[warmup phase]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L258-L265
+[iterate over a large dataset]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L278-L309
+[simple linear congruential generator]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L113-L116
+[IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
+[IPv6 route lookup on Linux]: [[en/blog/2017-ipv6-route-lookup-linux.html]] "IPv6 route lookup on Linux"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

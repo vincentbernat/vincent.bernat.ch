@@ -1,0 +1,604 @@
+---
+title: "Mesure des performances d'une fonction du noyau Linux"
+description: |
+  Il est possible de mesurer les performances d'une fonction Linux,
+  telle que la recherche d'une route, à l'aide d'un module noyau.
+uuid: 1f24d486-55fb-4c25-a1b8-4e481fad2b3d
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv4/kbench_mod.c": "Exemple 1"
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routes-ipv6/kbench_mod.c": "Exemple 2"
+tags:
+  - kernel
+---
+
+Habituellement, les performances d'un sous-système du noyau Linux sont
+mesurées à travers un processus externe (local ou distant). Selon le
+point d'entrée utilisé, de nombreuses fonctions peuvent être
+impliquées. Pour tester les performances d'une seule fonction, une
+solution est d'écrire un **module noyau**.
+
+[TOC]
+
+# Module noyau minimal
+
+Supposons que l'on désire mesurer les performances de la fonction
+`fib_lookup()` qui permet de rechercher une route IPv4. La fonction
+noyau suivante exécute 1000 recherches pour 8.8.8.8 et retourne une
+moyenne.[^loop] Elle utilise la fonction `get_cycles()` pour calculer
+le temps d'exécution.
+
+    ::c hl_lines="18"
+    /* Exécute le test pour fib_lookup() and place
+       le résultat dans `buf`. */
+    static int do_bench(char *buf)
+    {
+        unsigned long long t1, t2;
+        unsigned long long total = 0;
+        unsigned long i;
+        unsigned count = 1000;
+        int err = 0;
+        struct fib_result res;
+        struct flowi4 fl4;
+    
+        memset(&fl4, 0, sizeof(fl4));
+        fl4.daddr = in_aton("8.8.8.8");
+    
+        for (i = 0; i < count; i++) {
+            t1 = get_cycles();
+            err |= fib_lookup(&init_net, &fl4, &res, 0);
+            t2 = get_cycles();
+            total += t2 - t1;
+        }
+        if (err != 0)
+            return scnprintf(buf, PAGE_SIZE, "err=%d msg=\"lookup error\"\n", err);
+        return scnprintf(buf, PAGE_SIZE, "avg=%llu\n", total / count);
+    }
+
+[^loop]: Dans ce cas simplifié, il serait plus précis d'utiliser :
+
+        ::c
+        t1 = get_cycles();
+        for (i = 0; i < count; i++) {
+            err |= fib_lookup(…);
+        }
+        t2 = get_cycles();
+        total = t2 - t1;
+
+    Cependant, cela nous interdit de calculer d'autres statistiques ainsi
+    que de faire évoluer cet exemple pour faire varier les arguments de la
+    fonction `fib_lookup()`.
+
+Nous devons placer cette fonction dans un module noyau. Le code
+suivant déclare un dossier *sysfs* contenant un pseudo-fichier
+`run`. Quand l'utilisateur consulte ce fichier, le module exécute le
+test et retourne le résultat en tant que contenu.
+
+    ::c hl_lines="33 38"
+    #define pr_fmt(fmt) "kbench: " fmt
+    
+    #include <linux/kernel.h>
+    #include <linux/version.h>
+    #include <linux/module.h>
+    #include <linux/inet.h>
+    #include <linux/timex.h>
+    #include <net/ip_fib.h>
+    
+    /* Quand un utilisateur consulte le fichier "run", exécute
+       la fonction de test. */
+    static ssize_t run_show(struct kobject *kobj,
+                            struct kobj_attribute *attr,
+                            char *buf)
+    {
+        return do_bench(buf);
+    }
+    
+    static struct kobj_attribute run_attr = __ATTR_RO(run);
+    static struct attribute *bench_attributes[] = {
+        &run_attr.attr,
+        NULL
+    };
+    static struct attribute_group bench_attr_group = {
+        .attrs = bench_attributes,
+    };
+    static struct kobject *bench_kobj;
+    
+    int init_module(void)
+    {
+        int rc;
+        /* ❶ Création d'un kobject "kbench" dans /sys/kernel. */
+        bench_kobj = kobject_create_and_add("kbench", kernel_kobj);
+        if (!bench_kobj)
+            return -ENOMEM;
+    
+        /* ❷ Création des fichiers associés au kobject. */
+        rc = sysfs_create_group(bench_kobj, &bench_attr_group);
+        if (rc) {
+            kobject_put(bench_kobj);
+            return rc;
+        }
+    
+        return 0;
+    }
+    
+    void cleanup_module(void)
+    {
+        kobject_put(bench_kobj);
+    }
+    
+    MODULE_LICENSE("GPL");
+    MODULE_DESCRIPTION("Microbenchmark for fib_lookup()");
+
+En ❶, `kobject_create_and_add()` crée un nouveau `kobject` appelé
+`kbench`. Un `kobject` est l'abstraction derrière le système de
+fichiers *sysfs*. Ce `kobject` sera visible en tant que
+`/sys/kernel/kbench/`.
+
+En ❷, `sysfs_create_group()` attache un ensemble d'attributs au
+`kobject`. Ceux-ci se matérialisent comme des fichiers dans
+`/sys/kernel/kbench/`. Nous n'en déclarons qu'un, `run`, avec la macro
+`__ATTR_RO`. Cet attribut est en lecture seule (`0444`) et quand un
+utilisateur tente d'en récupérer le contenu, la fonction `run_show()`
+est invoquée avec un tampon de `PAGE_SIZE` octets comme dernier
+argument. Elle doit retourner le nombre d'octets effectivement
+écrits.
+
+Pour plus de détails, consultez la [documentation du noyau][kobject]
+et l'[exemple associé][kobject2]. De nombreux exemples sur le web
+(incluant celui-ci) peuvent être partiellement obsolètes.[^backward]
+
+[^backward]: La compatibilité descendante de l'API du noyau [n'est pas
+    un but][non-goal] recherché par ses développeurs.
+
+Le `Makefile` suivant permet de compiler l'exemple :
+
+    ::make
+    # Kernel module compilation
+    KDIR = /lib/modules/$(shell uname -r)/build
+    obj-m += kbench_mod.o
+    kbench_mod.ko: kbench_mod.c
+    	make -C $(KDIR) M=$(PWD) modules
+
+Après exécution de `make`, vous devez obtenir un fichier
+`kbench_mod.ko` :
+
+    ::console
+    $ modinfo kbench_mod.ko
+    filename:       /home/bernat/code/…/kbench_mod.ko
+    description:    Microbenchmark for fib_lookup()
+    license:        GPL
+    depends:
+    name:           kbench_mod
+    vermagic:       4.14.0-1-amd64 SMP mod_unload modversions
+
+Il convient de le charger et d'exécuter le test :
+
+    ::console
+    $ insmod ./kbench_mod.ko
+    $ ls -l /sys/kernel/kbench/run
+    -r--r--r-- 1 root root 4096 déc.  10 16:05 /sys/kernel/kbench/run
+    $ cat /sys/kernel/kbench/run
+    avg=75
+
+Le résultat est un nombre de cycles. Pour obtenir un temps
+approximatif, on le divise par la fréquence du processeur en
+gigahertz (25 ns pour un processeur cadencé à 3 GHz).[^frequency]
+
+[^frequency]: La fréquence actuelle du processeur s'obtient avec la
+  commande `cpupower frequency-info`. Comme cette fréquence varie dans
+  le temps (même en utilisant le gouverneur `performance`), ce n'est
+  pas forcément précis mais cela donne une réprésentation plus simple
+  à comprendre (à condition d'utiliser la même fréquence pour comparer
+  les résultats).
+
+# Paramétrisation
+
+Le module utilise deux constantes : le nombre de boucles et la
+destination à tester. En les exposant comme des attributs
+supplémentaires de notre `kobject` et en définissant une paire de
+fonctions pour les consulter et les modifier, on permet à
+l'utilisateur de les manipuler :
+
+    ::c
+    static unsigned long loop_count      = 5000;
+    static u32           flow_dst_ipaddr = 0x08080808;
+    
+    static DEFINE_MUTEX(kb_lock);
+    
+    /* Retourne le nombre de boucles. */
+    static ssize_t loop_count_show(struct kobject *kobj,
+                                   struct kobj_attribute *attr,
+                                   char *buf)
+    {
+        ssize_t res;
+        mutex_lock(&kb_lock);
+        res = scnprintf(buf, PAGE_SIZE, "%lu\n", loop_count);
+        mutex_unlock(&kb_lock);
+        return res;
+    }
+    
+    /* Modifie le nombre de boucles. */
+    static ssize_t loop_count_store(struct kobject *kobj,
+                                    struct kobj_attribute *attr,
+                                    const char *buf,
+                                    size_t count)
+    {
+        unsigned long val;
+        int err = kstrtoul(buf, 0, &val);
+        if (err < 0)
+            return err;
+        if (val < 1)
+            return -EINVAL;
+        mutex_lock(&kb_lock);
+        loop_count = val;
+        mutex_unlock(&kb_lock);
+        return count;
+    }
+    
+    /* Retourne l'adresse de destination. */
+    static ssize_t flow_dst_ipaddr_show(struct kobject *kobj,
+                                        struct kobj_attribute *attr,
+                                        char *buf)
+    {
+        ssize_t res;
+        mutex_lock(&kb_lock);
+        res = scnprintf(buf, PAGE_SIZE, "%pI4\n", &flow_dst_ipaddr);
+        mutex_unlock(&kb_lock);
+        return res;
+    }
+    
+    /* Modifie l'adresse de destination. */
+    static ssize_t flow_dst_ipaddr_store(struct kobject *kobj,
+                                         struct kobj_attribute *attr,
+                                         const char *buf,
+                                         size_t count)
+    {
+        mutex_lock(&kb_lock);
+        flow_dst_ipaddr = in_aton(buf);
+        mutex_unlock(&kb_lock);
+        return count;
+    }
+    
+    /* Définition des deux nouveaux attributs. */
+    static struct kobj_attribute loop_count_attr      = __ATTR_RW(loop_count);
+    static struct kobj_attribute flow_dst_ipaddr_attr = __ATTR_RW(flow_dst_ipaddr);
+    static struct kobj_attribute run_attr             = __ATTR_RO(run);
+    static struct attribute *bench_attributes[] = {
+        &loop_count_attr.attr,
+        &flow_dst_ipaddr_attr.attr,
+        &run_attr.attr,
+        NULL
+    };
+
+L'adresse IPv4 est stockée dans un entier 32 bits mais affichée et
+modifiée en utilisant la notation en quadruplet. Le noyau fournit de
+sympathiques fonctions à cet usage.
+
+Après ce changement, deux nouveaux fichiers apparaissent dans le
+dossier `/sys/kernel/kbench`. Nous pouvons lire et modifier leurs
+contenus.
+
+    ::console
+    # cd /sys/kernel/kbench
+    # ls -l
+    -rw-r--r-- 1 root root 4096 déc.  10 19:10 flow_dst_ipaddr
+    -rw-r--r-- 1 root root 4096 déc.  10 19:10 loop_count
+    -r--r--r-- 1 root root 4096 déc.  10 19:10 run
+    # cat loop_count
+    5000
+    # cat flow_dst_ipaddr
+    8.8.8.8
+    # echo 9.9.9.9 > flow_dst_ipaddr
+    # cat flow_dst_ipaddr
+    9.9.9.9
+
+Il ne nous reste qu'à modifier la fonction `do_bench()` pour utiliser
+ces variables :
+
+    ::c
+    static int do_bench(char *buf)
+    {
+        /* … */
+        mutex_lock(&kb_lock);
+        count = loop_count;
+        fl4.daddr = flow_dst_ipaddr;
+        mutex_unlock(&kb_lock);
+        
+        for (i = 0; i < count; i++) {
+            /* … */
+
+
+# Meilleures statistiques
+
+Actuellement, seule une moyenne est calculée. Cette valeur est
+habituellement peu significative :
+
+ - Un petit nombre de **données aberrantes** peut augmenter sensiblement
+   la moyenne. Une aberration peut apparaître lorsque la fonction
+   testée est préemptée du CPU. Cela ne se produit pas souvent si
+   celle-ci est de courte durée (moins d'une milliseconde) mais
+   lorsque cela a lieu, la différence est de l'ordre de plusieurs
+   millisecondes, ce qui peut représenter plusieurs ordres de grandeur
+   et fausser totalement la moyenne. Il est donc préférable d'utiliser
+   la médiane.
+
+ - La **distribution** des valeurs peut être asymétrique et avoir
+   plusieurs maxima locaux. Calculer plusieurs percentiles ou afficher
+   un graphe de distribution est alors utile.
+
+Pour calculer des statistiques supplémentaires, les résultats sont
+placés dans un tableau.
+
+    ::c hl_lines="14"
+    static int do_bench(char *buf)
+    {
+        unsigned long long *results;
+        /* … */
+        
+        results = kmalloc(sizeof(*results) * count, GFP_KERNEL);
+        if (!results)
+            return scnprintf(buf, PAGE_SIZE, "msg=\"no memory\"\n");
+        
+        for (i = 0; i < count; i++) {
+            t1 = get_cycles();
+            err |= fib_lookup(&init_net, &fl4, &res, 0);
+            t2 = get_cycles();
+            results[i] = t2 - t1;
+        }
+        
+        if (err != 0) {
+            kfree(results);
+            return scnprintf(buf, PAGE_SIZE, "err=%d msg=\"lookup error\"\n", err);
+        }
+        /* Calcule et affiche les statistiques */
+        display_statistics(buf, results, count);
+        
+        kfree(results);
+        return strnlen(buf, PAGE_SIZE);
+    }
+
+Il nous faut ensuite une fonction pour calculer des percentiles :
+
+    ::c
+    static unsigned long long percentile(int p,
+                                         unsigned long long *sorted,
+                                         unsigned count)
+    {
+        int index = p * count / 100;
+        int index2 = index + 1;
+        if (p * count % 100 == 0)
+            return sorted[index];
+        if (index2 >= count)
+            index2 = index - 1;
+        if (index2 < 0)
+            index2 = index;
+        return (sorted[index] + sorted[index+1]) / 2;
+    }
+
+Cette fonction nécessite un tableau trié en entrée. Le noyau fournit à
+cet effet une fonction de [tri par tas][heapsort function],
+`sort()`. Une autre valeur utile est la déviation par rapport à la
+médiane. La fonction ci-dessous calcule la [déviation absolue
+médiane][median absolute deviation]:[^mad]
+
+    ::c
+    static unsigned long long mad(unsigned long long *sorted,
+                                  unsigned long long median,
+                                  unsigned count)
+    {
+        unsigned long long *dmedian = kmalloc(sizeof(unsigned long long) * count,
+                                              GFP_KERNEL);
+        unsigned long long res;
+        unsigned i;
+        
+        if (!dmedian) return 0;
+        for (i = 0; i < count; i++) {
+            if (sorted[i] > median)
+                dmedian[i] = sorted[i] - median;
+            else
+                dmedian[i] = median - sorted[i];
+        }
+        sort(dmedian, count, sizeof(unsigned long long), compare_ull, NULL);
+        res = percentile(50, dmedian, count);
+        kfree(dmedian);
+        return res;
+    }
+
+[^mad]: Dans le noyau, seule l'arithmétique des entiers est
+    disponible. Bien qu'il soit possible de calculer une approximation
+    de la déviation standard avec des entiers, la déviation absolue
+    médiane réutilise la fonction `percentile()` définie précédemment.
+
+Ces deux fonctions nous permettent de fournir des statistiques
+supplémentaires :
+
+    ::c
+    static void display_statistics(char *buf,
+                                   unsigned long long *results,
+                                   unsigned long count)
+    {
+        unsigned long long p95, p90, p50;
+        
+        sort(results, count, sizeof(*results), compare_ull, NULL);
+        if (count == 0) {
+            scnprintf(buf, PAGE_SIZE, "msg=\"no match\"\n");
+            return;
+        }
+        
+        p95 = percentile(95, results, count);
+        p90 = percentile(90, results, count);
+        p50 = percentile(50, results, count);
+        scnprintf(buf, PAGE_SIZE,
+              "min=%llu max=%llu count=%lu 95th=%llu 90th=%llu 50th=%llu mad=%llu\n",
+              results[0],
+              results[count - 1],
+              count,
+              p95,
+              p90,
+              p50,
+              mad(results, p50, count));
+    }
+
+Enfin, ajoutons un [graphique de la distribution][graph of the
+distribution function] (incluant la fonction de répartition) :
+
+    ::text
+    min=72 max=33364 count=100000 95th=154 90th=142 50th=112 mad=6
+        value │                      ┊                         count
+           72 │                                                   51
+           77 │▒                                                3548
+           82 │▒▒░░                                             4773
+           87 │▒▒░░░░░                                          5918
+           92 │░░░░░░░                                          1207
+           97 │░░░░░░░                                           437
+          102 │▒▒▒▒▒▒░░░░░░░░                                  12164
+          107 │▒▒▒▒▒▒▒░░░░░░░░░░░░░░                           15508
+          112 │▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░               23014
+          117 │▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░             6297
+          122 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░              905
+          127 │▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░           3845
+          132 │▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░       6687
+          137 │▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░     4884
+          142 │▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   4133
+          147 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1015
+          152 │░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  1123
+
+# Validité
+
+Bien que les tests fournissent quelques chiffres attrayants, leur
+validité peut laisser dubitatif. Il y a plusieurs écueils à
+considérer :
+
+code mort
+: Un compilateur peut retirer le code non utilisé. Dans notre exemple,
+  nous combinons le résultat de la fonction testée avec une variable
+  pour éviter ceci.
+
+échauffement
+: La mise en place des données initiales peut affecter négativement le
+  test. En C, c'est un phénomène peu probable. Toutefois, l'ajout
+  d'une [phase d'échauffement][warmup phase] reste possible.
+
+jeu de données trop petit
+: Si le test utilise toujours les mêmes arguments en entrée, le
+  résultat peut être calculé entièrement à partir de données en cache. Cela
+  avantage le test indûment. Il convient donc
+  d'[itérer sur un grand ensemble de données][iterate over a large dataset].
+
+jeu de données trop régulier
+: Quand les arguments donnés en entrée sont trop réguliers, le
+  résultat peut également être impacté positivement : chaque test peut
+  être dérivé en utilisant les données du test précédent (qui se
+  trouvent en cache). Dans notre exemple, les routes sont organisées
+  dans un arbre et il convient donc de ne pas parcourir linéairement
+  l'espace d'adresses. Ce dernier peut être exploré aléatoirement en utilisant
+  un [simple générateur congruentiel linéaire][simple linear congruential generator].
+
+coûts additionels
+: Lorsque la fonction testée s'exécute en quelques nanosecondes, le
+  coût induit par l'infrastructure de test peut s'avérer trop
+  élevé. La méthode présentée ici implique un coût d'environ 5
+  nanosecondes. La fonction `get_cycles()` est une mince couche autour
+  de l'[instruction RDTSC][RDTSC instruction] qui permet d'obtenir le
+  nombre de cycles depuis la dernière mise à zéro du processeur. Elle
+  est aussi disponible en version virtualisée pour un coût similaire
+  lorsque le test est effectué sur une machine virtuelle. Pour mesurer
+  une fonction avec une précision accrue, une solution est d'évaluer
+  le temps d'exécution d'une boucle. Toutefois, les boucles apportent
+  leur propre coût, notamment quand il faut calculer des arguments
+  différents pour chaque itération. Elles cachent de plus la
+  distribution des résultats et les compilateurs aiment les optimiser.
+
+préemption
+: Pendant l'exécution du test, le CPU peut être préempté pour une
+  autre tâche. Lorsque la fonction testée prend moins d'une
+  milliseconde, c'est un cas particulièrement rare qui est filtré par
+  l'utilisation des percentiles.
+
+bruit
+: D'autres processus (ou d'autres machines virtuelles) peuvent
+  accaparer le CPU de manière peu prévisible d'un test à l'autre. Il
+  n'est donc pas souhaitable de faire tourner de tels tests dans un
+  nuage public. D'un autre côté, un test peut être rendu plus réaliste
+  par ajout d'un bruit contrôlé. Dans notre exemple, la recherche
+  d'une route ne représente qu'une petite partie du travail nécessaire
+  pour router un paquet. Mesurer cette fonction dans une boucle serrée
+  affecte positivement le test.
+
+synchronisation de tests parallèles
+: Bien qu'il soit possible de lancer plusieurs tests en parallèle, il
+  est difficile de s'assurer qu'ils s'exécutent bien tous en même
+  temps. Cela fausse les résultats car certains tests tournent sans
+  contention. Idéalement, chaque test devrait tourner à vide jusqu'à
+  ce que tous les tests soient prêts. Cela ne semble pas une
+  modification triviale.
+
+En conclusion, le module de test présenté ici est plutôt primitif
+(notamment par rapport à des outils tels que [JMH][] pour Java) mais
+il peut produire des résultats concluants tels que ceux présentés dans
+« [Fonctionnement de la table de routage IPv4 sous Linux][IPv4 route
+lookup on Linux] » et « [Fonctionnement de la table de routage IPv6
+sous Linux][IPv6 route lookup on Linux] ».
+
+# Alternative
+
+L'utilisation d'un outil de *tracing* constitue une approche
+alternative. Pour mesurer le temps de recherche des routes IPv4, nous
+pouvons faire tourner le processus suivant :
+
+    ::sh
+    while true; do
+      ip route get $((RANDOM%100)).$((RANDOM%100)).$((RANDOM%100)).5
+      sleep 0.1
+    done
+
+Ensuite, nous instrumentons la fonction `__fib_lookup()` via eBPF (à
+l'aide de [BCC][]):
+
+    ::console
+    $ sudo funclatency-bpfcc __fib_lookup
+    Tracing 1 functions for "__fib_lookup"... Hit Ctrl-C to end.
+    ^C
+         nsecs               : count     distribution
+             0 -> 1          : 0        |                    |
+             2 -> 3          : 0        |                    |
+             4 -> 7          : 0        |                    |
+             8 -> 15         : 0        |                    |
+            16 -> 31         : 0        |                    |
+            32 -> 63         : 0        |                    |
+            64 -> 127        : 0        |                    |
+           128 -> 255        : 0        |                    |
+           256 -> 511        : 3        |*                   |
+           512 -> 1023       : 1        |                    |
+          1024 -> 2047       : 2        |*                   |
+          2048 -> 4095       : 13       |******              |
+          4096 -> 8191       : 42       |********************|
+
+Actuellement, le coût de l'instrumentation est très élevé et ne permet
+pas d'obtenir de résultats pertinents. Cela peut changer à l'avenir
+lorsque Linux ajoutera la possibilité de [mesurer la latence entre
+deux évènements][inter-event tracing].
+
+*[TSC]: Time Stamp Counter
+*[eBPF]: Extended Berkeley Packet Filter
+*[JIT]: Just-in-time (compiler)
+
+[BCC]: https://github.com/iovisor/bcc "BCC - Tools for BPF-based Linux IO analysis, networking, monitoring, and more"
+[kobject]: http://elixir.free-electrons.com/linux/v4.14.5/source/Documentation/kobject.txt "Everything you never wanted to know about kobjects, ksets, and ktypes"
+[kobject2]: http://elixir.free-electrons.com/linux/v4.14.5/source/samples/kobject/kobject-example.c "Sample kobject implementation"
+[non-goal]: http://elixir.free-electrons.com/linux/v4.14.5/source/Documentation/process/stable-api-nonsense.rst "The Linux Kernel Driver Interface"
+[heapsort function]: http://elixir.free-electrons.com/linux/v4.14.5/source/lib/sort.c#L62 "Kernel sort() function"
+[median absolute deviation]: https://en.wikipedia.org/wiki/Median_absolute_deviation "Déviation absolue médiane sur Wikipedia"
+[inter-event tracing]: https://lwn.net/Articles/740831/ "tracing: Inter-event (e.g. latency) support"
+[RDTSC instruction]: https://fr.wikipedia.org/wiki/RDTSC "RDTSC sur Wikipedia"
+[JMH]: http://openjdk.java.net/projects/code-tools/jmh/ "OpenJDK jmh"
+[graph of the distribution function]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L165-L207
+[warmup phase]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L258-L265
+[iterate over a large dataset]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L278-L309
+[simple linear congruential generator]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L113-L116
+[IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
+[IPv6 route lookup on Linux]: [[fr/blog/2017-ipv6-table-routage-linux.html]] "Fonctionnement de la table de routage IPv6 sous Linux"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
