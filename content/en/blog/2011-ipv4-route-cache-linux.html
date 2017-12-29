@@ -66,7 +66,7 @@ trivial, several questions need to be answered:
             interface, as defined in [RFC 3704][rfc3704]. This feature
             is enabled by setting `rp_filter` in Linux.
 
-Those checks can be a bit time consuming, even for small route
+These checks can be a bit time consuming, even for small route
 tables. To avoid them for each packets, Linux maintains a *route
 cache* which is queried before doing a regular lookup and updated
 after each one. You can dump it with `ip -s route show cache`:
@@ -145,7 +145,7 @@ There are several values you can tune. Most of them are available in
          power of two and, internally, is stored as `rt_hash_mask +
          1`.
 
-You may find documentation about those obsolete *sysctl* values:
+You may find documentation about these obsolete *sysctl* values:
 
  - `net.ipv4.route.secret_interval` has been
    [removed in Linux 2.6.35][secret]; it was used to trigger an
@@ -178,7 +178,7 @@ cache. You can find them in `/proc/net/stat/rt_cache`. The command
      3097160|   42483|     700|       0|       0|       0|       0|       0|       5|       0|       0|     694|     692|       0|       0|   29506|      12|
 
 Except for the first column, `lnstat` outputs values in units per
-second. Let's review some of those values:
+second. Let's review some of these values:
 
  - `rt_cache_entries` is the number of entries in the route cache. You
    should compare it with `net.ipv4.route.max_size` and ensure that
@@ -197,7 +197,7 @@ second. Let's review some of those values:
    to how often it was finally not run because it has already been
    triggered shortly beforehand (less than
    `net.ipv4.route.gc_min_interval_ms` milliseconds). The difference
-   between those two values should be very small to ensure that the
+   between these two values should be very small to ensure that the
    garbage collector does not run more a handful of times per second.
  - `rt_cache_gc_goal_miss` is how often the garbage collector was not
    able to fulfill its goal. This value should rarely be different of
@@ -208,9 +208,9 @@ second. Let's review some of those values:
  - `rt_cache_in_hlist_search` and `rt_cache_out_hlist_search` is how
    often a lookup in the cache had to look at the next entry in the
    chain for the computed bucket: each time Linux has to follow the
-   `next` pointer in a cache entry, it increments one of those
+   `next` pointer in a cache entry, it increments one of these
    counters. It is a clue on the average length of chains in the route
-   cache hash table. Compare those values with the number of cache
+   cache hash table. Compare these values with the number of cache
    lookups (hit and miss).
 
 As an illustration, here is a plot of the various statistics exposed
@@ -249,7 +249,7 @@ never met:
 
 ## Tuning
 
-Do you need to modify any of those values? You have two questions to
+Do you need to modify any of these values? You have two questions to
 ask yourself:
 
  1. How much efficiency do you want to get from the route cache?
@@ -291,7 +291,7 @@ fast, you may want to double `net.ipv4.route.gc_timeout`.
 
 # In-depth look into the garbage collector
 
-Those different pieces of advice may have puzzled you. We need to
+These different pieces of advice may have puzzled you. We need to
 understand how the garbage collector works to better cope with
 them. The garbage collector is triggered when a new entry needs to be
 added to the cache and the number of entries is superior to

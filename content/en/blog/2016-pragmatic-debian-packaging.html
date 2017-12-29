@@ -22,7 +22,7 @@ constrained tools[^fpm] like [fpm][] or [CheckInstall][].
                beast. However, nowaday, the boilerplate is quite
                reduced.
 
-[^fpm]: The complexity is not the only reason. Those alternative tools
+[^fpm]: The complexity is not the only reason. These alternative tools
         enable the creation of RPM packages, something that Debian
         tools obviously don't.
 
@@ -180,7 +180,7 @@ and build it with `dpkg-buildpackage -us -uc -b`.
 # Pragmatic packages 102
 
 At this point, we can iterate and add several improvements to our
-*memcached* package. **None of those are mandatory** but they are
+*memcached* package. **None of them are mandatory** but they are
 usually worth the additional effort.
 
 ## Build dependencies
@@ -199,8 +199,8 @@ Debian systems. You can easily express that you need them by adding a
 Always specify the `debhelper (>= 9)` dependency as we heavily rely on
 it. We don't require `make` or a C compiler because it is assumed that
 the `build-essential` meta-package is installed and it pulls
-those. `dpkg-buildpackage` will complain if the dependencies are not
-met. If you want to install those packages from your CI system, you
+them. `dpkg-buildpackage` will complain if the dependencies are not
+met. If you want to install these packages from your CI system, you
 can use the following command:[^devscripts]
 
     ::sh
@@ -344,7 +344,7 @@ And you need to modify the default rule in `debian/rules`:
     	dh $@ --with systemd
 
 The extra complexity is a bit unfortunate but *systemd* integration
-was not part of *debhelper*.[^bug822670] Without those additional
+was not part of *debhelper*.[^bug822670] Without these additional
 modifications, the unit will get installed but you won't get a proper
 integration and the service won't be enabled on install or boot.
 
@@ -357,7 +357,7 @@ ship a dedicated user. In the case of *memcached*, we can provide a
 `_memcached` user.[^naming]
 
 [^naming]: The Debian Policy doesn't provide any hint for the naming
-           convention of those system users. A common usage is to
+           convention of these system users. A common usage is to
            prefix the daemon name with an underscore (like
            `_memcached`). Another common usage is to use `Debian-` as
            a prefix. The main drawback of the latter solution is that
@@ -427,7 +427,7 @@ There are **four steps** to build a regular Debian package:
  4. `debian/rules binary` will **pack** the different file trees into
     binary packages.
 
-You don't directly write each of those targets. Instead, you let `dh`,
+You don't directly write each of these targets. Instead, you let `dh`,
 a component of *debhelper*, do most of the work. The following
 `debian/rules` file should do almost everything correctly with many
 source packages:
@@ -448,7 +448,7 @@ with `--no-act` to see what it would do. For example:
        dh_auto_build
        dh_auto_test
 
-Each of those helpers has a manual page. Helpers starting with
+Each of these helpers has a manual page. Helpers starting with
 `dh_auto_` are a bit "magic." For example, `dh_auto_configure` will
 try to automatically configure a package prior to building: it will
 detect the build system and invoke `./configure`, `cmake` or
@@ -461,7 +461,7 @@ by using an override target:
     override_dh_auto_configure:
     	./configure --with-some-grog
 
-Those helpers are also configurable, so you can just alter a bit their
+These helpers are also configurable, so you can just alter a bit their
 behaviour by invoking them with additional options:
 
     ::make
@@ -472,7 +472,7 @@ This way, `./configure` will be called with your custom flag but also
 with a lot of default flags like `--prefix=/usr` for better
 integration.
 
-In the initial *memcached* example, we overrode all those "magic"
+In the initial *memcached* example, we overrode all these "magic"
 targets. `dh_auto_clean`, `dh_auto_configure` and `dh_auto_build` are
 converted to no-ops to avoid any unexpected
 behaviour. `dh_auto_install` is hijacked to do all the build
@@ -576,7 +576,7 @@ copy. Here is an example:
     ::text
     scripts/memcached-tool usr/bin
 
-Using those files make the build process **more declarative**. It is a
+Using these files make the build process **more declarative**. It is a
 matter of taste and you are free to use `cp` in `debian/rules`
 instead. You can review the whole package tree on
 [GitHub][memcached-gh].
@@ -590,7 +590,7 @@ examples. They all follow the same scheme:
  - `dh_gencontrol` is modified to use a computed version
 
 Notably, you'll find daemons in [Java][], [Go][], [Python][] and
-[Node.js][]. The goal of those examples is to demonstrate that using
+[Node.js][]. The goal of these examples is to demonstrate that using
 Debian tools to build Debian packages can be straightforward. Hope
 this helps.
 
