@@ -181,7 +181,6 @@ def build():
         # Subset fonts
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
-                                "--unicodes=20,a0,2000-200a,200b,2019,202f,205f,3000,feff",
                                 "--text-file=../glyphs-{}.txt".format(glyphs)])
             local("pyftsubset media/fonts/{}.woff  --flavor=woff --with-zopfli {}".format(font, options))
             local("pyftsubset media/fonts/{}.woff2 --flavor=woff2 {}".format(font, options))

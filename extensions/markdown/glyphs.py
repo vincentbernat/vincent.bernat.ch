@@ -1,12 +1,23 @@
 # -*- coding: utf-8 -*-
 """Extract glyphs used in code and regular blocks."""
 
+import sys
 import markdown
+import unicodedata
 
 glyphs = {
     'monospace': set(),
-    'regular': set()
+    'regular': set([
+        u"\u2019",              # RIGHT SINGLE QUOTATION MARK
+        u"\u200b",              # ZERO WIDTH SPACE
+        u"\ufeff",              # ZERO WIDTH NO-BREAK SPACE
+    ])
 }
+
+for c in xrange(sys.maxunicode+1):
+    u = unichr(c)
+    if unicodedata.category(u) == 'Zs':
+        glyphs['regular'].add(u)
 
 
 class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
