@@ -11,12 +11,12 @@ luffy.s.push(function() {
     footnote = footnotes.querySelector("li[id=fn-" + footnoteName + "]");
     /* Search for suitable parent and attach the side-note to it */
     var sidenote = document.createElement("aside"),
-    parent = footnoteReference.parentNode;
-    while (parent && parent.tagName !== "P" &&
-           parent.tagName !== "UL" &&
-           parent.tagName !== "OL" &&
-           parent.tagName !== "DL")
+        parent = footnoteReference.parentNode;
+    while (parent &&
+           parent.parentNode &&
+           parent.parentNode.id != "lf-text") {
       parent = parent.parentNode;
+    }
     if (!parent || !footnote) {
       throw new Error("footnote `" + footnoteName + "' not found");
     }
