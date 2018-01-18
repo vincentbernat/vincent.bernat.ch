@@ -319,11 +319,25 @@ habituellement peu significative :
    lorsque cela a lieu, la différence est de l'ordre de plusieurs
    millisecondes, ce qui peut représenter plusieurs ordres de grandeur
    et fausser totalement la moyenne. Il est donc préférable d'utiliser
-   la médiane.
+   la médiane.[^preempt]
 
  - La **distribution** des valeurs peut être asymétrique et avoir
    plusieurs maxima locaux. Calculer plusieurs percentiles ou afficher
    un graphe de distribution est alors utile.
+
+[^preempt]: Il est possible de désactiver la préemption dans le
+    noyau :
+
+        ::c
+        preempt_disable();
+        raw_local_irq_save(flags);
+        /* […] */
+        raw_local_irq_restore(flags);
+        preempt_enable();
+
+    Cependant, sur les machines physiques, le *management* peut toujours
+    voler le CPU et sur les machines virtuelles, il n'est pas possible
+    d'influencer l'hôte.
 
 Pour calculer des statistiques supplémentaires, les résultats sont
 placés dans un tableau.
@@ -438,6 +452,9 @@ supplémentaires :
               mad(results, p50, count));
     }
 
+**MISE À JOUR (01.2018) :** [Intel][] recommende d'utiliser le minimum
+lorsque sa variance est faible.
+
 Enfin, ajoutons un [graphique de la distribution][graph of the
 distribution function] (incluant la fonction de répartition) :
 
@@ -539,6 +556,12 @@ il peut produire des résultats concluants tels que ceux présentés dans
 lookup on Linux] » et « [Fonctionnement de la table de routage IPv6
 sous Linux][IPv6 route lookup on Linux] ».
 
+**MISE À JOUR (01.2018):** [Intel][] recommende de désactiver toutes
+les optimisations liées à l'énergie, notamment le changement dynamique
+de la fréquence (`cpupower frequency-set -g performance`) et le mode
+*turbo* (`echo 1 > /sys/devices/system/cpu/intel_pstate/no_turbo`) car
+le TSC est [indépendant de la fréquence réelle][wfreq].
+
 # Alternative
 
 L'utilisation d'un outil de *tracing* constitue une approche
@@ -595,6 +618,8 @@ deux évènements][inter-event tracing].
 [warmup phase]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L258-L265
 [iterate over a large dataset]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L278-L309
 [simple linear congruential generator]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L113-L116
+[Intel]: https://www.intel.com/content/dam/www/public/us/en/documents/white-papers/ia-32-ia-64-benchmark-code-execution-paper.pdf "How to Benchmark Code Execution Times on Intel ® IA-32 and IA-64 Instruction Set Architectures"
+[wfreq]: https://en.wikipedia.org/wiki/Time_Stamp_Counter#Implementation_in_various_processors "Time Stamp Counter: Implementation in various processors"
 [IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
 [IPv6 route lookup on Linux]: [[fr/blog/2017-ipv6-table-routage-linux.html]] "Fonctionnement de la table de routage IPv6 sous Linux"
 

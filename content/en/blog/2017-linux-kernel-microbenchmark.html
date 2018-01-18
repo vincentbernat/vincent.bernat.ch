@@ -315,11 +315,26 @@ usually inadequate:
    millisecond), but when this happens, the outliers can be off by
    several milliseconds, which is enough to make the average
    inadequate when most values are several order of magnitude
-   smaller. For this reason, the median usually gives a better view.
+   smaller. For this reason, the median usually gives a better
+   view.[^preempt]
 
  - The **distribution** may be asymmetrical or have several local
    maxima. It's better to keep several percentiles or even a
    distribution graph.
+
+[^preempt]: It is possible to disable kernel preemption before running
+    the benchmark:
+
+        ::c
+        preempt_disable();
+        raw_local_irq_save(flags);
+        /* […] */
+        raw_local_irq_restore(flags);
+        preempt_enable();
+
+    However, on physical machines, management code may still steal the CPU
+    and on virtual machines, there is no way to ensure the guest is not
+    preempted.
 
 To be able to extract meaningful statistics, we store the results in
 an array.
@@ -352,7 +367,7 @@ an array.
         return strnlen(buf, PAGE_SIZE);
     }
 
-Then, We need an helper function to be able to compute percentiles:
+Then, we need an helper function to be able to compute percentiles:
 
     ::c
     static unsigned long long percentile(int p,
@@ -431,6 +446,9 @@ With these two functions, we can provide additional statistics:
               p50,
               mad(results, p50, count));
     }
+
+**UPDATED (2018.01):** [Intel][] recommends looking at the minimum if
+its variance is small.
 
 We can also append a [graph of the distribution function][] (and of
 the cumulative distribution function):
@@ -531,6 +549,12 @@ primitive (notably compared to a framework like [JMH][] for Java) but,
 with care, can deliver some conclusive results like in these posts:
 “[IPv4 route lookup on Linux][]” and “[IPv6 route lookup on Linux][].”
 
+**UPDATED (2018.01):** [Intel][] also recommends disabling all power
+optimizations, notably frequency scaling (`cpupower frequency-set -g
+performance`) and turbo mode functionalities (`echo 1 >
+/sys/devices/system/cpu/intel_pstate/no_turbo`) as the TSC is
+[independent of the frequency][wfreq].
+
 # Alternative
 
 Use of a tracing tool is an alternative approach. For example, if we
@@ -587,6 +611,8 @@ for such microbenchmarks.
 [warmup phase]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv4/kbench_mod.c#L258-L265
 [iterate over a large dataset]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L278-L309
 [simple linear congruential generator]: https://github.com/vincentbernat/network-lab/blob/7cd27509497f19250c34f38af90178bf781fc163/lab-routes-ipv6/kbench_mod.c#L113-L116
+[Intel]: https://www.intel.com/content/dam/www/public/us/en/documents/white-papers/ia-32-ia-64-benchmark-code-execution-paper.pdf "How to Benchmark Code Execution Times on Intel ® IA-32 and IA-64 Instruction Set Architectures"
+[wfreq]: https://en.wikipedia.org/wiki/Time_Stamp_Counter#Implementation_in_various_processors "Time Stamp Counter: Implementation in various processors"
 [IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
 [IPv6 route lookup on Linux]: [[en/blog/2017-ipv6-route-lookup-linux.html]] "IPv6 route lookup on Linux"
 
