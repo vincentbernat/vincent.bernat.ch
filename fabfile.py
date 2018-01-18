@@ -166,7 +166,7 @@ Result: {result}""".format(**row)
 @task
 def build():
     """Build production content"""
-    local("git checkout master")
+    local("[ $(git rev-parse --abbrev-ref HEAD) = master ]")
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
