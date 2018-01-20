@@ -100,6 +100,7 @@ def transcode(video):
         video = os.path.relpath(video, base)
         local("ffmpeg -loglevel error -ss 15 -i {video} "
               "-vframes 1 -vcodec png -an "
+              "-vf select=\"eq(pict_type\\,I)\" "
               "-y poster.png".format(
                   video=video))
         local("convert poster.png -quality 10 poster.jpg")
