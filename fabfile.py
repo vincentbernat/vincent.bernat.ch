@@ -10,6 +10,7 @@ import hashlib
 import yaml
 import csv
 import re
+import operator
 
 env.shell = "/bin/sh -c"
 env.command_prefixes = ['export PATH=$HOME/.virtualenvs/hyde/bin:$PATH']
@@ -111,6 +112,8 @@ def transcode(video):
         result = json.loads(result.stdout)
         result = [s for s in result['streams'] if s['codec_type'] == 'video'][0]
         oheight, owidth = result['height'], result['width']
+        fps = operator.div(*[float(x)
+                             for x in result['r_frame_rate'].split('/')])
         cmd = "ffmpeg -loglevel error -i {video} ".format(video=video)
         # See: https://docs.peer5.com/guides/production-ready-hls-vod/
         with open(os.path.join(base, "playlist.m3u8"), "w") as f:
@@ -135,7 +138,7 @@ def transcode(video):
                         "-c:a aac -ar 48000 -c:v h264 "
                         "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
                         "-b:a {arate}k "
-                        "-g 48 -keyint_min 48 "
+                        "-g {key} -keyint_min {key} "
                         "-hls_time 6 -hls_playlist_type vod -hls_list_size 0 "
                         "-hls_segment_type fmp4 "
                         "-hls_fmp4_init_filename {height}p-init.mp4 "
@@ -143,6 +146,7 @@ def transcode(video):
                         "{height}p.m3u8 ").format(
                             video=video,
                             width=width, height=height,
+                            key=int(fps*6.1),
                             vrate=q[1], bufsize=int(q[1]*1.5),
                             arate=q[2], mrate=q[1]+q[2])
                 f.write("#EXT-X-STREAM-INF:"
