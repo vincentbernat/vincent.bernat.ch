@@ -4,6 +4,7 @@ from fabric.contrib.console import confirm, prompt
 import os
 import shutil
 import time
+import json
 import glob
 import hashlib
 import yaml
@@ -88,6 +89,102 @@ def screenshots():
                                                    url=url,
                                                    js=js,
                                                    slug=url.replace("/", "-").replace(".", "-")))
+
+@task
+def transcode(video):
+    """Transcode a video to HLS"""
+    short = os.path.splitext(os.path.basename(video))[0]
+    base = os.path.join(os.path.dirname(video), short)
+    os.makedirs(base)
+    with lcd(base):
+        video = os.path.relpath(video, base)
+        local("ffmpeg -loglevel error -ss 15 -i {video} "
+              "-vframes 1 -vcodec png -an "
+              "-y poster.png".format(
+                  video=video))
+        local("convert poster.png -quality 10 poster.jpg")
+        local("rm poster.png")
+        # Get current format
+        result = local("ffprobe -v quiet -print_format json -show_streams "
+                       "{video}".format(video=video), capture=True)
+        result = json.loads(result.stdout)
+        result = [s for s in result['streams'] if s['codec_type'] == 'video'][0]
+        oheight, owidth = result['height'], result['width']
+        cmd = "ffmpeg -loglevel error -i {video} ".format(video=video)
+        # See: https://docs.peer5.com/guides/production-ready-hls-vod/
+        with open(os.path.join(base, "playlist.m3u8"), "w") as f:
+            f.write("#EXTM3U\n")
+            f.write("#EXT-X-VERSION:3\n")
+            for q in [(1080, 4500, 128),
+                      (720, 2500, 128),
+                      (480, 1250, 96),
+                      (360, 700, 96),
+                      (240, 400, 64)]:
+                height = q[0]
+                width = (height*16/9)/2*2
+                if height > oheight and width > owidth:
+                    continue
+                # We use FMP4. This requires iOS 10 or a browser
+                # supporting media extensions. This is a more
+                # efficient format than old TS format use with iOS <
+                # 10.
+                cmd += ("-f hls "
+                        "-vf scale={width}:-2 "
+                        "-profile:v baseline -level 3.0 "
+                        "-c:a aac -ar 48000 -c:v h264 "
+                        "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
+                        "-b:a {arate}k "
+                        "-g 48 -keyint_min 48 "
+                        "-hls_time 6 -hls_playlist_type vod -hls_list_size 0 "
+                        "-hls_segment_type fmp4 "
+                        "-hls_fmp4_init_filename {height}p-init.mp4 "
+                        "-hls_segment_filename {height}p_%03d.mp4 "
+                        "{height}p.m3u8 ").format(
+                            video=video,
+                            width=width, height=height,
+                            vrate=q[1], bufsize=int(q[1]*1.5),
+                            arate=q[2], mrate=q[1]+q[2])
+                f.write("#EXT-X-STREAM-INF:"
+                        "BANDWIDTH={vrate}000,"
+                        "RESOLUTION={width}x{height},"
+                        "NAME={height}p\n"
+                        "{height}p.m3u8\n".format(height=height,
+                                                  width=width,
+                                                  vrate=q[1]))
+            local(cmd)
+
+@task
+def upload(video):
+    """Upload a transcoded video."""
+    # Bucket needs to exist with CORS configuration:
+    # <CORSConfiguration>
+    #  <CORSRule>
+    #    <AllowedOrigin>https://vincent.bernat.im</AllowedOrigin>
+    #    <AllowedMethod>GET</AllowedMethod>
+    #  </CORSRule>
+    # </CORSConfiguration>
+    short = os.path.splitext(os.path.basename(video))[0]
+    base = os.path.join(os.path.dirname(video), short)
+    with lcd(base):
+        local("s3cmd --no-preserve -F -P --no-check-md5 "
+              " --add-header=Cache-Control:'max-age=259200'" # 3 days
+              " --mime-type=application/vnd.apple.mpegurl"
+              " --encoding=UTF-8"
+              " --exclude=* --include=*.m3u8"
+              " --delete-removed"
+              "   sync . s3://luffy-video/{short}/".format(short=short))
+        local("s3cmd --no-preserve -F -P --no-check-md5 "
+              " --add-header=Cache-Control:'max-age=259200'" # 3 days
+              " --mime-type=image/jpeg"
+              " --exclude=* --include=*.jpg"
+              " --delete-removed"
+              "   sync . s3://luffy-video/{short}/".format(short=short))
+        local("s3cmd --no-preserve -F -P --no-check-md5 "
+              " --add-header=Cache-Control:'max-age=259200'" # 3 days
+              " --mime-type=video/mp4"
+              " --exclude=* --include=*.mp4"
+              " --delete-removed"
+              "   sync . s3://luffy-video/{short}/".format(short=short))
 
 @task
 def linkcheck(remote='yes'):
