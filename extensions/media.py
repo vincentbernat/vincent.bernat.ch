@@ -21,12 +21,16 @@ class MoreMediaPlugin(Plugin):
                            re.UNICODE | re.MULTILINE)
 
         def replace_content(match):
+            # To check exact codec, see:
+            #  https://stackoverflow.com/questions/16363167/html5-video-tag-codecs-attribute
             return """
 <div class="lf-video-outer"><div class="lf-video-inner">
  <video class="lf-video"
-        src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/playlist.m3u8"
         poster="https://luffy-video.sos-ch-dk-2.exo.io/{id}/poster.jpg"
-        controls></video>
+        controls preload="none">
+  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/playlist.m3u8" type="application/vnd.apple.mpegurl">
+  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/720p.mp4" type='video/mp4; codecs="avc1.42c01e, mp4a.40.2"'>
+ </video>
 </div></div>
 """.format(id=match.group(1))
 

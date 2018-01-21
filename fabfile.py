@@ -128,21 +128,18 @@ def transcode(video):
                 width = (height*16/9)/2*2
                 if height > oheight and width > owidth:
                     continue
-                # We use FMP4. This requires iOS 10 or a browser
-                # supporting media extensions. This is a more
-                # efficient format than old TS format use with iOS <
-                # 10.
                 cmd += ("-f hls "
                         "-vf scale={width}:-2 "
-                        "-profile:v baseline -level 3.0 "
-                        "-c:a aac -ar 48000 -c:v h264 "
+                        "-c:v h264 "
+                        "-profile:v baseline -level:v 3.0 "
                         "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
+                        "-c:a aac -ar 48000 "
+                        "-profile:a aac_low "
                         "-b:a {arate}k "
                         "-g {key} -keyint_min {key} "
                         "-hls_time 6 -hls_playlist_type vod -hls_list_size 0 "
-                        "-hls_segment_type fmp4 "
-                        "-hls_fmp4_init_filename {height}p-init.mp4 "
-                        "-hls_segment_filename {height}p_%03d.mp4 "
+                        "-hls_segment_type mpegts "
+                        "-hls_segment_filename {height}p_%03d.ts "
                         "{height}p.m3u8 ").format(
                             video=video,
                             width=width, height=height,
@@ -151,11 +148,25 @@ def transcode(video):
                             arate=q[2], mrate=q[1]+q[2])
                 f.write("#EXT-X-STREAM-INF:"
                         "BANDWIDTH={vrate}000,"
+                        'CODECS="mp4a.40.2,avc1.42c01e",'
                         "RESOLUTION={width}x{height},"
                         "NAME={height}p\n"
                         "{height}p.m3u8\n".format(height=height,
                                                   width=width,
                                                   vrate=q[1]))
+            # 720p version
+            cmd += ("-f mp4 "
+                    "-vf scale={width}:-2 "
+                    "-c:v h264 "
+                    "-profile:v baseline -level:v 3.0 "
+                    "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
+                    "-c:a aac -ar 48000 "
+                    "-profile:a aac_low "
+                    "-b:a {arate}k "
+                    "{height}p.mp4 ").format(
+                        width=1280, height=720,
+                        vrate=1200, bufsize=1200*1.5,
+                        arate=96, mrate=1296)
             local(cmd)
 
 @task
@@ -188,6 +199,12 @@ def upload(video):
               " --add-header=Cache-Control:'max-age=259200'" # 3 days
               " --mime-type=video/mp4"
               " --exclude=* --include=*.mp4"
+              " --delete-removed"
+              "   sync . s3://luffy-video/{short}/".format(short=short))
+        local("s3cmd --no-preserve -F -P --no-check-md5 "
+              " --add-header=Cache-Control:'max-age=259200'" # 3 days
+              " --mime-type=video/mp2t"
+              " --exclude=* --include=*.ts"
               " --delete-removed"
               "   sync . s3://luffy-video/{short}/".format(short=short))
 

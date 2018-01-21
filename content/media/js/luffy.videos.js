@@ -4,15 +4,24 @@ luffy.s.push(function() {
     if (typeof document.querySelectorAll !== "function") return;
 
     // Self-hosted HLS videos
-    var hls_videos = document.querySelectorAll(".lf-video[src$='.m3u8']");
-    if (hls_videos.length > 0) {
-        if(Hls.isSupported()) {
-            for (var i = 0; i < hls_videos.length; i++) {
-                var hls = new Hls();
-                var video = hls_videos[i];
-                hls.loadSource(video.src);
-                hls.attachMedia(video);
+    var hls_videos = document.querySelectorAll(".lf-video source[type='application/vnd.apple.mpegurl']");
+    if(Hls.isSupported()) {
+        for (var i = 0; i < hls_videos.length; i++) {
+            // We assume preload="none"
+            var hls = new Hls({ autoStartLoad: false }),
+                video = hls_videos[i],
+                m3u8 = video.src;
+            // Remove all sources
+            video = video.parentNode;
+            while (video.hasChildNodes()) {
+                video.removeChild(video.lastChild);
             }
+            // Pass control to hls.js
+            hls.attachMedia(video);
+            hls.loadSource(m3u8);
+            video.addEventListener('play',function() {
+                hls.startLoad();
+            });
         }
     }
 });
