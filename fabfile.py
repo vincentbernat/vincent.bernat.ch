@@ -119,11 +119,11 @@ def transcode(video):
         with open(os.path.join(base, "playlist.m3u8"), "w") as f:
             f.write("#EXTM3U\n")
             f.write("#EXT-X-VERSION:3\n")
-            for q in [(1080, 4500, 128),
-                      (720, 2500, 128),
-                      (480, 1250, 96),
-                      (360, 700, 96),
-                      (240, 400, 64)]:
+            for q in [(1080, 4500),
+                      (720, 2500),
+                      (480, 1250),
+                      (360, 700),
+                      (240, 400)]:
                 height = q[0]
                 width = (height*16/9)/2*2
                 if height > oheight and width > owidth:
@@ -145,7 +145,7 @@ def transcode(video):
                             width=width, height=height,
                             key=int(fps*6.1),
                             vrate=q[1], bufsize=int(q[1]*1.5),
-                            arate=q[2])
+                            arate=96)
                 f.write("#EXT-X-STREAM-INF:"
                         "BANDWIDTH={vrate}000,"
                         'CODECS="mp4a.40.2,avc1.42c01e",'
