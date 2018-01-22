@@ -183,26 +183,22 @@ def upload(video):
     base = os.path.join(os.path.dirname(video), short)
     with lcd(base):
         local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --add-header=Cache-Control:'max-age=259200'" # 3 days
               " --mime-type=application/vnd.apple.mpegurl"
               " --encoding=UTF-8"
               " --exclude=* --include=*.m3u8"
               " --delete-removed"
               "   sync . s3://luffy-video/{short}/".format(short=short))
         local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --add-header=Cache-Control:'max-age=259200'" # 3 days
               " --mime-type=image/jpeg"
               " --exclude=* --include=*.jpg"
               " --delete-removed"
               "   sync . s3://luffy-video/{short}/".format(short=short))
         local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --add-header=Cache-Control:'max-age=259200'" # 3 days
               " --mime-type=video/mp4"
               " --exclude=* --include=*.mp4"
               " --delete-removed"
               "   sync . s3://luffy-video/{short}/".format(short=short))
         local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --add-header=Cache-Control:'max-age=259200'" # 3 days
               " --mime-type=video/mp2t"
               " --exclude=* --include=*.ts"
               " --delete-removed"
