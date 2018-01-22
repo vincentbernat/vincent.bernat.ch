@@ -182,27 +182,20 @@ def upload(video):
     short = os.path.splitext(os.path.basename(video))[0]
     base = os.path.join(os.path.dirname(video), short)
     with lcd(base):
-        local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --mime-type=application/vnd.apple.mpegurl"
-              " --encoding=UTF-8"
-              " --exclude=* --include=*.m3u8"
-              " --delete-removed"
-              "   sync . s3://luffy-video/{short}/".format(short=short))
-        local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --mime-type=image/jpeg"
-              " --exclude=* --include=*.jpg"
-              " --delete-removed"
-              "   sync . s3://luffy-video/{short}/".format(short=short))
-        local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --mime-type=video/mp4"
-              " --exclude=* --include=*.mp4"
-              " --delete-removed"
-              "   sync . s3://luffy-video/{short}/".format(short=short))
-        local("s3cmd --no-preserve -F -P --no-check-md5 "
-              " --mime-type=video/mp2t"
-              " --exclude=* --include=*.ts"
-              " --delete-removed"
-              "   sync . s3://luffy-video/{short}/".format(short=short))
+        for extension, mime in (
+                ('m3u8', 'application/vnd.apple.mpegurl'),
+                ('jpg', 'image/jpeg'),
+                ('mp4', 'video/mp4'),
+                ('ts', 'video/mp2t')):
+            local("s3cmd --no-preserve -F -P --no-check-md5 "
+                  " --mime-type={mime}"
+                  " --encoding=UTF-8"
+                  " --exclude=* --include=*.{extension}"
+                  " --delete-removed"
+                  "   sync . s3://luffy-video/{short}/".format(
+                      short=short,
+                      extension=extension,
+                      mime=mime))
 
 @task
 def linkcheck(remote='yes'):
