@@ -132,7 +132,7 @@ def transcode(video):
                         "-vf scale={width}:-2 "
                         "-c:v h264 "
                         "-profile:v baseline -level:v 3.0 "
-                        "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
+                        "-b:v {vrate}k -maxrate:v {vrate}k -bufsize:v {bufsize}k "
                         "-c:a aac -ar 48000 "
                         "-profile:a aac_low "
                         "-b:a {arate}k "
@@ -145,7 +145,7 @@ def transcode(video):
                             width=width, height=height,
                             key=int(fps*6.1),
                             vrate=q[1], bufsize=int(q[1]*1.5),
-                            arate=q[2], mrate=q[1]+q[2])
+                            arate=q[2])
                 f.write("#EXT-X-STREAM-INF:"
                         "BANDWIDTH={vrate}000,"
                         'CODECS="mp4a.40.2,avc1.42c01e",'
@@ -163,6 +163,7 @@ def transcode(video):
                     "-c:a aac -ar 48000 "
                     "-profile:a aac_low "
                     "-b:a {arate}k "
+                    "-movflags +faststart "
                     "{height}p.mp4 ").format(
                         width=1280, height=720,
                         vrate=1200, bufsize=1200*1.5,
