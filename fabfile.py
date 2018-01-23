@@ -91,87 +91,20 @@ def screenshots():
                                                    js=js,
                                                    slug=url.replace("/", "-").replace(".", "-")))
 
-@task
-def transcode(video):
-    """Transcode a video to HLS"""
-    short = os.path.splitext(os.path.basename(video))[0]
-    base = os.path.join(os.path.dirname(video), short)
-    os.makedirs(base)
-    with lcd(base):
-        video = os.path.relpath(video, base)
-        local("ffmpeg -loglevel error -ss 15 -i {video} "
-              "-vframes 1 -vcodec png -an "
-              "-vf select=\"eq(pict_type\\,I)\" "
-              "-y poster.png".format(
-                  video=video))
-        local("convert poster.png -quality 10 poster.jpg")
-        local("rm poster.png")
-        # Get current format
-        result = local("ffprobe -v quiet -print_format json -show_streams "
-                       "{video}".format(video=video), capture=True)
-        result = json.loads(result.stdout)
-        result = [s for s in result['streams'] if s['codec_type'] == 'video'][0]
-        oheight, owidth = result['height'], result['width']
-        fps = operator.div(*[float(x)
-                             for x in result['r_frame_rate'].split('/')])
-        cmd = "ffmpeg -loglevel error -i {video} ".format(video=video)
-        # See: https://docs.peer5.com/guides/production-ready-hls-vod/
-        with open(os.path.join(base, "playlist.m3u8"), "w") as f:
-            f.write("#EXTM3U\n")
-            f.write("#EXT-X-VERSION:3\n")
-            for q in [(1080, 4500),
-                      (720, 2500),
-                      (480, 1250),
-                      (360, 700),
-                      (240, 400)]:
-                height = q[0]
-                width = (height*16/9)/2*2
-                if height > oheight and width > owidth:
-                    continue
-                cmd += ("-f hls "
-                        "-vf scale={width}:-2 "
-                        "-c:v h264 "
-                        "-profile:v baseline -level:v 3.0 "
-                        "-b:v {vrate}k -maxrate:v {vrate}k -bufsize:v {bufsize}k "
-                        "-c:a aac -ar 48000 "
-                        "-profile:a aac_low "
-                        "-b:a {arate}k "
-                        "-g {key} -keyint_min {key} "
-                        "-hls_time 6 -hls_playlist_type vod -hls_list_size 0 "
-                        "-hls_segment_type mpegts "
-                        "-hls_segment_filename {height}p_%03d.ts "
-                        "{height}p.m3u8 ").format(
-                            video=video,
-                            width=width, height=height,
-                            key=int(fps*6.1),
-                            vrate=q[1], bufsize=int(q[1]*1.5),
-                            arate=96)
-                f.write("#EXT-X-STREAM-INF:"
-                        "BANDWIDTH={vrate}000,"
-                        'CODECS="mp4a.40.2,avc1.42c01e",'
-                        "RESOLUTION={width}x{height},"
-                        "NAME={height}p\n"
-                        "{height}p.m3u8\n".format(height=height,
-                                                  width=width,
-                                                  vrate=q[1]))
-            # 720p version
-            cmd += ("-f mp4 "
-                    "-vf scale={width}:-2 "
-                    "-c:v h264 "
-                    "-profile:v baseline -level:v 3.0 "
-                    "-b:v {vrate}k -maxrate {mrate}k -bufsize {bufsize}k "
-                    "-c:a aac -ar 48000 "
-                    "-profile:a aac_low "
-                    "-b:a {arate}k "
-                    "-movflags +faststart "
-                    "{height}p.mp4 ").format(
-                        width=1280, height=720,
-                        vrate=1200, bufsize=1200*1.5,
-                        arate=96, mrate=1296)
-            local(cmd)
+# Encoding of videos needs to be done with video2hls.
+#  video2hls --video-bitrate-factor 0.3 2012-multicast-vxlan.ogv
+#  video2hls --video-bitrate-factor 0.3 2012-network-lab-kvm.ogv
+#  video2hls --video-bitrate-factor 0.3 2013-exabgp-highavailability.ogv
+#  video2hls --video-bitrate-factor 0.7 2014-dashkiosk.ogv
+#  video2hls --video-bitrate-factor 0.5 2014-eudyptula-boot-1.mp4
+#  video2hls --video-bitrate-factor 0.5 2014-eudyptula-boot-2.mp4
+#  video2hls --video-bitrate-factor 0.5 2015-hotfix-qemu-venom.mp4
+#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-1.mp4
+#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-2.mp4
+#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-3.mp4
 
 @task
-def upload(video):
+def upload_videos(video=None):
     """Upload a transcoded video."""
     # Bucket needs to exist with CORS configuration:
     # <CORSConfiguration>
@@ -180,9 +113,12 @@ def upload(video):
     #    <AllowedMethod>GET</AllowedMethod>
     #  </CORSRule>
     # </CORSConfiguration>
-    short = os.path.splitext(os.path.basename(video))[0]
-    base = os.path.join(os.path.dirname(video), short)
-    with lcd(base):
+    path = 'content/media/videos'
+    for directory in os.listdir(path):
+        if not os.path.isfile(os.path.join(path, directory, 'index.m3u8')):
+            continue
+        if video is not None and video != directory:
+            continue
         for extension, mime in (
                 ('m3u8', 'application/vnd.apple.mpegurl'),
                 ('jpg', 'image/jpeg'),
@@ -193,8 +129,9 @@ def upload(video):
                   " --encoding=UTF-8"
                   " --exclude=* --include=*.{extension}"
                   " --delete-removed"
-                  "   sync . s3://luffy-video/{short}/".format(
-                      short=short,
+                  "   sync {directory}/. s3://luffy-video/{short}/".format(
+                      short=directory,
+                      directory=os.path.join(path, directory),
                       extension=extension,
                       mime=mime))
 

@@ -28,8 +28,8 @@ class MoreMediaPlugin(Plugin):
  <video class="lf-video"
         poster="https://luffy-video.sos-ch-dk-2.exo.io/{id}/poster.jpg"
         controls preload="none">
-  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/playlist.m3u8" type="application/vnd.apple.mpegurl">
-  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/720p.mp4" type='video/mp4; codecs="avc1.42c01e, mp4a.40.2"'>
+  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/index.m3u8" type="application/vnd.apple.mpegurl">
+  <source src="https://luffy-video.sos-ch-dk-2.exo.io/{id}/progressive.mp4" type='video/mp4; codecs="avc1.4d401f, mp4a.40.2"'>
  </video>
 </div></div>
 """.format(id=match.group(1))
