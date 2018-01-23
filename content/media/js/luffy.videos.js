@@ -8,7 +8,10 @@ luffy.s.push(function() {
     if(Hls.isSupported()) {
         for (var i = 0; i < hls_videos.length; i++) {
             // We assume preload="none"
-            var hls = new Hls({ autoStartLoad: false }),
+            var hls = new Hls({
+                autoStartLoad: false,
+                capLevelToPlayerSize: true
+            }),
                 video = hls_videos[i],
                 m3u8 = video.src;
             // Remove all sources
