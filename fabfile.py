@@ -134,6 +134,9 @@ def upload_videos(video=None):
                       directory=os.path.join(path, directory),
                       extension=extension,
                       mime=mime))
+            local("cp {directory}/poster.jpg content/media/images/posters/{short}.jpg".format(
+                short=directory,
+                directory=os.path.join(path, directory)))
 
 @task
 def linkcheck(remote='yes'):
