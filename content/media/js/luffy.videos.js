@@ -22,30 +22,11 @@ luffy.s.push(function() {
             // Pass control to hls.js
             hls.attachMedia(video);
             hls.loadSource(m3u8);
-            video.addEventListener('play',function() {
-                hls.startLoad();
-            });
-            hls.on(Hls.Events.ERROR, function (event, data) {
-                if (data.fatal) {
-                    switch(data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                        console.log("HLS: fatal network error encountered, try to recover",
-                                    data.details);
-                        hls.startLoad();
-                        break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                        console.log("HLS: fatal media error encountered, try to recover",
-                                   data.details);
-                        hls.recoverMediaError();
-                        break;
-                    default:
-                        console.log("HLS: unrecoverable fatal media error encountered",
-                                    data.type, data.details);
-                        hls.destroy();
-                        break;
-                    }
-                }
-            });
+            (function (hls) {
+                video.addEventListener('play',function() {
+                    hls.startLoad();
+                });
+            })(hls);
         }
     }
 });
