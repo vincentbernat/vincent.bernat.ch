@@ -264,11 +264,17 @@ def build():
                 if ext in [".png", ".svg", ".woff", ".woff2"]:
                     # Fix CSS
                     local("sed -i 's+%s)+%s)+g' media/css/*.css" % (f, newname))
-                if ext not in [".png", ".svg"]:
+                if ext not in [".png", ".svg", ".woff2"]:
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
                           r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1anonymous\1_g"
+                          '"' % (media, f, media, newname, sha))
+                if ext in [".woff2"]:
+                    # Fix HTML
+                    local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
+                          '"'
+                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1use-credentials\1_g"
                           '"' % (media, f, media, newname, sha))
 
         # Fix permissions
