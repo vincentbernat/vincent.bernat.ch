@@ -10,7 +10,6 @@ luffy.s.push(function() {
         [].forEach.call(videoSources, function(videoSource) {
             // We assume preload="none"
             var hls = new Hls({
-                autoStartLoad: false,
                 capLevelToPlayerSize: true
             }),
                 m3u8 = videoSource.src,
@@ -21,10 +20,9 @@ luffy.s.push(function() {
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
             // Pass control to hls.js
-            hls.attachMedia(newVideo);
-            hls.loadSource(m3u8);
             newVideo.addEventListener('play',function() {
-                hls.startLoad();
+                hls.attachMedia(newVideo);
+                hls.loadSource(m3u8);
             });
         });
     }
