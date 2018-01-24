@@ -8,11 +8,8 @@ luffy.s.push(function() {
     var videoSources = document.querySelectorAll(".lf-video source[type='application/vnd.apple.mpegurl']");
     if(Hls.isSupported()) {
         [].forEach.call(videoSources, function(videoSource) {
-            // We assume preload="none"
-            var hls = new Hls({
-                capLevelToPlayerSize: true
-            }),
-                m3u8 = videoSource.src,
+            var m3u8 = videoSource.src,
+                once = false,
                 oldVideo = videoSource.parentNode,
                 newVideo = oldVideo.cloneNode(false);
 
@@ -21,9 +18,14 @@ luffy.s.push(function() {
 
             // Pass control to hls.js
             newVideo.addEventListener('play',function() {
+                if (once) return;
+                var hls = new Hls({
+                    capLevelToPlayerSize: true
+                });
                 hls.attachMedia(newVideo);
                 hls.loadSource(m3u8);
-            });
+                once = true;
+            }, false);
         });
     }
 });
