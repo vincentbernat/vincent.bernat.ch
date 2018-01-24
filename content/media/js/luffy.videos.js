@@ -6,13 +6,12 @@ luffy.s.push(function() {
     // Self-hosted HLS videos
     var hls_videos = document.querySelectorAll(".lf-video source[type='application/vnd.apple.mpegurl']");
     if(Hls.isSupported()) {
-        for (var i = 0; i < hls_videos.length; i++) {
+        [].forEach.call(hls_videos, function(video) {
             // We assume preload="none"
             var hls = new Hls({
                 autoStartLoad: false,
                 capLevelToPlayerSize: true
             }),
-                video = hls_videos[i],
                 m3u8 = video.src;
             // Remove all sources
             video = video.parentNode;
@@ -22,11 +21,9 @@ luffy.s.push(function() {
             // Pass control to hls.js
             hls.attachMedia(video);
             hls.loadSource(m3u8);
-            (function (hls) {
-                video.addEventListener('play',function() {
-                    hls.startLoad();
-                });
-            })(hls);
-        }
+            video.addEventListener('play',function() {
+                hls.startLoad();
+            });
+        });
     }
 });
