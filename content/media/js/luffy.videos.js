@@ -2,6 +2,7 @@
 
 luffy.s.push(function() {
     if (typeof document.querySelectorAll !== "function") return;
+    if (typeof window.Hls !== "function") return;
 
     // Self-hosted HLS videos
     var hls_videos = document.querySelectorAll(".lf-video source[type='application/vnd.apple.mpegurl']");
