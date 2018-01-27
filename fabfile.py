@@ -126,8 +126,11 @@ def upload_videos(video=None):
                 ('ts', 'video/mp2t', False)):
             more = ""
             if gz:
-                local(r"find %s -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % (
-                    os.path.join(path, directory), extension))
+                local(r"""find %s -type f -name *.%s | while read f; do
+   ! gunzip -t $f 2> /dev/null || continue
+   gzip $f
+   mv $f.gz $f
+done""" % (os.path.join(path, directory), extension))
                 more += "--add-header=Content-Encoding:'gzip'"
             local("s3cmd --no-preserve -F -P"
                   " {more}"
