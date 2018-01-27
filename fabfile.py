@@ -119,17 +119,24 @@ def upload_videos(video=None):
             continue
         if video is not None and video != directory:
             continue
-        for extension, mime in (
-                ('m3u8', 'application/vnd.apple.mpegurl'),
-                ('jpg', 'image/jpeg'),
-                ('mp4', 'video/mp4'),
-                ('ts', 'video/mp2t')):
-            local("s3cmd --no-preserve -F -P --no-check-md5 "
+        for extension, mime, gz in (
+                ('m3u8', 'application/vnd.apple.mpegurl', True),
+                ('jpg', 'image/jpeg', False),
+                ('mp4', 'video/mp4', False),
+                ('ts', 'video/mp2t', False)):
+            more = ""
+            if gz:
+                local(r"find %s -type f -name *.%s -exec gzip {} \; -exec mv {}.gz {} \;" % (
+                    os.path.join(path, directory), extension))
+                more += "--add-header=Content-Encoding:'gzip'"
+            local("s3cmd --no-preserve -F -P"
+                  " {more}"
                   " --mime-type={mime}"
                   " --encoding=UTF-8"
                   " --exclude=* --include=*.{extension}"
                   " --delete-removed"
                   "   sync {directory}/. s3://luffy-video/{short}/".format(
+                      more=more,
                       short=directory,
                       directory=os.path.join(path, directory),
                       extension=extension,
