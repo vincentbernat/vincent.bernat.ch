@@ -287,7 +287,8 @@ class ImageSizerPlugin(PILPlugin):
         if title is not None:
             img = ('<figure>%s'
                    '<figcaption>%s</figcaption>'
-                   '</figure>') % (img, title)
+                   '</figure>') % (re.sub(r"\s*\btitle=([\"']).*?\1", '', img),
+                                   title)
         return img
 
     def text_resource_complete(self, resource, text):
