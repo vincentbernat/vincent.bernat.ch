@@ -1,0 +1,774 @@
+---
+title: "Routage L3 jusqu'à l'hyperviseur avec BGP"
+description: |
+  Afin de faciliter leur configuration, les machines virtuelles
+  sont généralement reliées à un réseau L2. Toutefois, les hyperviseurs
+  peuvent se transformer en routeurs L3 sans changement nécessaire au
+  niveau des machines virtuelles.
+uuid: 6dc8522a-3685-481a-9956-3f466ab48aea
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-l3-hyperv": "Configuration complète"
+tags:
+  - network
+---
+
+
+La mise en haute disponibilité des réseaux L2 peut se faire de
+plusieurs façons :
+
+ - d'antique protocoles tels que le [Spanning Tree Protocol][],
+ - des protocoles propriétaires tels que le [chassis virtuel chez
+   Juniper][Juniper's virtual chassis], le
+   [vPC chez Cisco][Cisco's virtual port channel] ainsi que de [nombreuses][mclag1]
+   [implémentations][mclag2] de [MC-LAG][mclag3],[^mclag]
+ - des protocoles standards tels que [Shortest Path Bridging Protocol][IEEE 802.1Q-2014] ou [TRILL][],
+ - la délégation de cette problématique au réseau sous-jacent (dans le
+   cas des protocoles reposant sur d'autres réseaux, tels que
+   [VXLAN][]).
+
+[^mclag]: Le MC-LAG a été standardisé dans [IEEE
+    802.1AX-2014][]. Toutefois, il est probable que la plupart des
+    vendeurs conservent leurs propres implémentations. La
+    caractéristique essentielle d'un MC-LAG est de garder des plans de
+    contrôle indépendants.
+
+Les réseaux L2 nécessitent très peu de configuration mais sont
+difficile à opérer de manière fiable dans des configurations hautement
+disponibles : un incident risque souvent d'impacter l'ensemble du
+réseau[^incident]. Il est donc préférable de **limiter la portée de
+chaque réseau L2**. Par exemple, il est courant d'avoir un réseau L2
+dans chaque baie et de les connecter entre eux via du routage L3. Un
+incident impacte rarement l'ensemble d'un réseau IP.
+
+[^incident]: Un incident peut se déclencher à la suite d'une erreur
+    humaine mais également à cause de bugs logiciels. Ceux-ci
+    surviennent notamment lors des opérations peu fréquentes, comme
+    une mise à jour.
+
+Dans le schéma ci-dessous, les commutateurs de baie fournissent une
+passerelle par défaut pour les clients. Afin d'assurer une certaine
+redondance, ils utilisent une implémentation de MC-LAG. La portée de
+chaque réseau L2 est alors limitée à une seule baie. Chaque
+sous-réseau IP est lié à une baie et les informations de routage sont
+partagées entre les commutateurs de baie et les routeurs en utilisant
+un protocole tel qu'OSPF.
+
+![Conception classique d'un réseau L2][i1]
+[i1]: [[!!images/l3-routing-legacy.svg]] "Conception classique avec routage au niveau des commutateurs d'accès : chaque paire de commutateurs agit en tant que passerelle. La portée d'un réseau L2 est limitée à une baie. Les hyperviseurs étendent le réseau L2 aux machines virtuelles. Chaque baie gère ses propres sous-réseaux IP."
+
+Il y a deux défauts dans cette conception :
+
+ 1. La **portée de chaque réseau L2 reste très importante**. Une baie peut
+    contenir plusieurs dizaines d'hyperviseurs et plusieurs milliers
+    de machines virtuelles. Un incident réseau a donc un impact
+    majeur.
+
+ 2. Les **sous-réseaux IP sont liés à une baie**. Une machine
+    virtuelle ne peut pas migrer dans une autre baie et les IP non
+    utilisées dans une baie ne peuvent pas être utilisées dans une
+    autre.
+
+Pour résoudre ces deux problèmes, il est possible de pousser le réseau
+L3 encore plus au sud, transformant chaque hyperviseur en routeur. Il
+convient toutefois de cacher ce changement aux machines virtuelles qui
+continuent d'obtenir leur configuration via DHCP (IP, sous-réseau et
+passerelle).
+
+[TOC]
+
+# Hyperviseur comme routeur
+
+En bref, pour une machine virtuelle disposant d'une adresse IPv4 :
+
+ - l'hyperviseur hôte configure une route `/32` sur l'interface virtuelle,
+ - cette route est distribuée aux autres hyperviseurs et routeurs via
+   BGP.
+
+Nous voulons aussi gérer deux domaines de routage : un domaine public
+pour les machines virtuelles de clients connectées à Internet et un
+domaine privé pour notre propre usage, notamment la gestion des
+hyperviseurs. À cet effet, chaque hyperviseur utilise deux tables de
+routage.
+
+L'illustration suivante montre la configuration d'un hyperviseur avec
+cinq machines virtuelles. Notez l'absence de tout pont réseau.
+
+![Routage L3 à l'intérieur d'un hyperviseur][i2]
+[i2]: [[!!images/l3-routing-hypervisor.svg]] "Routage L3 pour un hyperviseur. Chaque hyperviseur est connecté à un réseau « public » et un réseau « privé ». Les machines virtuelles peuvent être rattachées à n'importe lequel de ces réseaux. Chaque table de routage contient des routes directement connectées pour les machines virtuelles locales, des routes pour les machines virtuelles distantes et une route par défaut pour les autres destinations."
+
+La configuration complète décrite dans cet article est également
+disponible sur [GitHub][]. Un agent reste nécessaire pour mettre en
+place la configuration lors d'un changement.
+
+[Calico][] est un projet à l'objectif similaire (routage L3 jusqu'à
+l'hyperviseur) et des idées très proches (à l'exception de
+l'utilisation de *Netfilter* pour assurer l'isolation des domaines de
+routage). Il fournit un agent, *Felix*, qui s'interface avec des
+orchestrateurs (tels qu'*OpenStack* ou *Kubernetes*). C'est une
+alternative possible si on désire une solution clef en main.
+
+## Configuration du routage
+
+À l'aide de règles de routage, chaque interface est « attachée » à une
+table de routage :
+
+    ::console hl_lines="5 6 7 8 9"
+    $ ip rule show
+    0:      from all lookup local
+    20:     from all iif lo lookup main
+    21:     from all iif lo lookup local-out
+    30:     from all iif eth0.private lookup private
+    30:     from all iif eth1.private lookup private
+    30:     from all iif vnet8 lookup private
+    30:     from all iif vnet9 lookup private
+    40:     from all lookup public
+
+Les règles les plus importantes sont surlignées (priorités 30 et 40) :
+tout trafic provenant d'une interface privée utilise la table
+`private`. Tout le trafic restant utilise la table `public`.
+
+Les deux règles en `iif lo` gèrent le routage des paquets émis par
+l'hyperviseur lui-même. La table `local-out` est une combinaison des
+tables `private` et `public`. À première vue, l'hyperviseur n'a besoin
+que de la table `private` mais il doit être capable de contacter les
+machines virtuelles locales (par exemple, pour répondre à un ping) via
+la table `public`. Ces tables contiennent en temps normal une route
+par défaut toutes les deux (pas de chaînage possible). La table
+`local-out` est construite en [copiant toutes les routes][local-out]
+de la table `private` et les routes directement connectées de la table
+`public`.
+
+Pour éviter toute fuite de trafic accidentelle, les tables `public`,
+`private` et `local-out` contiennent une route par défaut avec une
+métrique élevée[^nodistribute]. En temps normal, ces routes sont
+éclipsées par une véritable route par défaut :
+
+    ::sh
+    ip route add blackhole default metric 4294967294 table public
+    ip route add blackhole default metric 4294967294 table private
+    ip route add blackhole default metric 4294967294 table local-out
+
+[^nodistribute]: Ces routes ne doivent pas être distribuées via
+    BGP. Une route par défaut avec une métrique plus faible doit être
+    apprise depuis les routeurs de bordure.
+
+Les choses sont plus simples avec IPv6 car il n'y a qu'un seul domaine
+de routage. Nous gardons cependant une table `public` mais il n'y a
+nul besoin de la table `local-out` :
+
+    ::console
+    $ ip -6 rule show
+    0:      from all lookup local
+    20:     from all lookup main
+    40:     from all lookup public
+
+Une fois cette configuration en place, le routage est activé et le
+nombre maximal de routes IPv6 est augmenté (la valeur par défaut est
+seulement 4096) :
+
+    ::sh
+    sysctl -qw net.ipv4.conf.all.forwarding=1
+    sysctl -qw net.ipv6.conf.all.forwarding=1
+    sysctl -qw net.ipv6.route.max_size=4194304
+
+
+## Routes pour les machines virtuelles
+
+La seconde étape est de configurer les routes pour atteindre chaque
+machine virtuelle. Pour IPv6, l'adresse du lien local (dérivée de
+l'adresse MAC) est utilisée comme prochain saut :
+
+    ::sh
+    ip -6 route add 2001:db8:cb00:7100:5254:33ff:fe00:f/128 \
+        via fe80::5254:33ff:fe00:f dev vnet6 \
+        table public
+
+Ajouter d'autres adresses IP ou sous-réseaux peut se faire en
+spécifiant d'autres routes sur le même modèle :
+
+    ::sh
+    ip -6 route add 2001:db8:cb00:7107::/64 \
+        via fe80::5254:33ff:fe00:f dev vnet6 \
+        table public
+
+
+En IPv4, la route utilise comme prochain saut l'interface à laquelle
+la machine virtuelle est connectée. Linux émettra une requête ARP
+avant de pouvoir router les paquets[^arp] :
+
+    ::sh
+    ip route add 192.0.2.15/32 dev vnet6 \
+      table public
+
+[^arp]: Une entrée ARP statique peut également être ajoutée.
+
+Les IP et sous-réseaux supplémentaires peuvent être ajoutées de la
+même façon. Cela impose toutefois que chaque adresse IP réponde aux
+requêtes ARP. Pour éviter cela, le routage peut se faire via la
+première IP configurée[^onlink] :
+
+    ::sh
+    ip route add 203.0.113.128/28 \
+      via 192.0.2.15 dev vnet6 onlink \
+      table public
+
+[^onlink]: Le mot-clef `onlink` est nécessaire pour que le démon BGP
+    *BIRD* accepte la route. Dans le cas contraire, il considère qu'il
+    n'y a pas de route directement connectée valide pour résoudre le
+    prochain saut.
+
+## Configuration BGP
+
+La troisième étape consiste à partager les routes entre les
+hyperviseurs à l'aide de BGP. Cette partie de la configuration dépend
+du type de réseau connectant les hyperviseurs.
+
+### Fabrique
+
+Les hyperviseurs peuvent être connectés de plusieurs façons. Une
+première possibilité naturelle est d'utiliser un réseau L3 de type
+*leaf-spine* :
+
+![Fabrique routée][i3]
+[i3]: [[!!images/l3-routing-full.svg]] "Fabrique L3 de type leaf-spine. Une session BGP est établie pour chacun des liens. Les routeurs spine doivent apprendre toutes les routes."
+
+Chaque hyperviseur établit une session eBGP vers chaque routeur de
+type *leaf*. Ceux-ci établissent une session iBGP avec leur voisin
+ainsi qu'une session eBGP avec chaque routeurs de type *spine*. Cette
+solution peut s'avérer coûteuse car les routeurs de type *spine*
+doivent être capables de gérer l'intégralité des routes. Avec la
+génération actuelle de routeurs, cela implique une limite sur le
+nombre total de routes en fonction de la densité
+voulue[^current]. Elle nécessite de plus beaucoup de configuration
+pour définir les sessions BGP, à moins d'utiliser certaines
+fonctionnalités d'autoconfiguration actuellement encore peu
+répandues. D'un autre côté, les routeurs de type *leaf* (et les
+hyperviseurs) peuvent apprendre moins de routes et pousser le reste du
+traffic vers le nord.
+
+[^current]: Par exemple, un [Juniper QFX5100][] accepte environ
+    200 000 routes IPv4 (pour environ 10 000 $, avec des puces
+    Broadcom Trident II). Un [Arista 7208SR][] accepte quant à lui
+    plus d'un million de routes IPv4 (pour environ 20 000 $, avec des
+    puces Broadcom Jericho), à travers l'utilisation d'une TCAM
+    externe. Un [Juniper MX240][] peut gérer quant à lui plus de 2
+    millions de routes IPv4 (pour environ 30 000 $ pour un chassis
+    vide et deux cartes de routage, avec des puces Juniper Trio) avec
+    une densité moindre.
+
+Une autre solution est d'utiliser une fabrique de type L2. Cela peut sembler surprenant après avoir critiqué les réseaux L2 pour leur manque de fiabilité mais nous n'avons pas besoin de haute disponibilité. Ils permettent alors d'obtenir une solution peu coûteuse et facile à mettre en place[^scale] :
+
+![Fabrique de type L2][i4]
+[i4]: [[!!images/l3-routing-l2.svg]] "Fabrique L2 de type leaf-spine utilisant 4 réseaux L2 distincts. Chaque hyperviseur établit une session BGP vers au moins un réflecteur de route sur chaque réseau L2."
+
+[^scale]: En ce qui concerne la taille maximale d'une telle fabrique,
+    avec des commutateurs capables de gérer 32 000 adresses MAC, la
+    fabrique peut héberger 8000 hyperviseurs (plus de 5 millions de
+    machines virtuelles). Ainsi, que ce soit pour la partie *leaf* ou
+    pour la partie *spine*, il est possible d'utiliser des
+    commutateurs classiques. Chaque hyperviseur devra savoir gérer
+    toutes les routes, ce qui n'est pas un problème avec Linux.
+
+Chaque hyperviseur est connecté à **4 réseaux L2 distincts**. Si un
+incident survient sur l'un d'eux, nous ne perdons qu'un quart de la
+bande passante disponible. Cette solution repose entièrement sur
+iBGP. Pour éviter de multiplier les connexions BGP entre les
+hyperviseurs, des **réflecteurs de routes** sont utilisés. Chaque
+hyperviseur établit une session iBGP avec un ou plusieurs réflecteurs
+sur chaque réseau L2. Les réflecteurs d'un même réseau L2 se partagent
+également leurs routes via iBGP.
+
+C'est la solution utilisée par la suite. La partie publique et la
+partie privée partagent la même infrastructure sur des VLAN
+différents.
+
+### Réflecteurs de routes
+
+Les réflecteurs de routes centralisent et redistribuent les routes via
+BGP mais ne routent aucun trafic. Il en faut au moins un dans chaque
+réseau L2. Pour une meilleure disponibilité, on peut en utiliser
+plusieurs.
+
+Voici un exemple de configuration avec *JunOS*[^instances] :
+
+    ::junos
+    protocols {
+        bgp {
+            group public-v4 {
+                family inet {
+                    unicast {
+                        no-install; # ❶
+                    }
+                }
+                type internal;
+                cluster 198.51.100.126; # ❷
+                allow 198.51.100.0/25; # ❸
+                neighbor 198.51.100.127;
+            }
+            group public-v6 {
+                family inet6 {
+                    unicast {
+                        no-install;
+                    }
+                }
+                type internal;
+                cluster 198.51.100.126;
+                allow 2001:db8:c633:6401::/64;
+                neighbor 2001:db8:c633:6401::198.51.100.127;
+            }
+            ttl 255;
+            bfd-liveness-detection { # ❹
+                minimum-interval 100;
+                multiplier 5;
+            }
+        }
+    }
+    routing-options {
+        router-id 198.51.100.126;
+        autonomous-system 65000;
+    }
+
+[^instances]: L'utilisation d'instances de routage permettrait de
+    configurer plusieurs réflecteurs sur le même équipement. L'exemple
+    ne montre pas cette possibilité mais elle réduirait les coûts.
+
+Ce réflecteur accepte et redistribue toutes les routes IPv4 et
+IPv6. En ❶, on s'assure que les routes ne sont pas installées dans la
+FIB car un réflecteur n'est pas un routeur.
+
+Chaque réflecteur doit disposer d'un *cluster identifier* qui est
+utilisé pour détecter les boucles. Dans notre cas, nous utilisons
+l'adresse IPv4 à cet effet (en ❷). En utilisant un identifiant
+différent pour chaque réflecteur attaché à un même réseau L2, on
+s'assure qu'ils s'échangeront les routes reçues, apportant ainsi une
+meilleure résilience.
+
+Au lieu de déclarer explicitement chacun des hyperviseurs devant se
+connecter au réflecteur, un sous-réseau entier est autorisé en
+❸[^security]. Nous déclarons aussi le second réflecteur présent sur le
+même réseau L2 afin qu'ils s'échangent leurs routes.
+
+[^security]: Cela interdit généralement d'utiliser un mécanisme
+    d'authentification. BGP utilise habituellement les signatures TCP
+    MD5 ([RFC 2385][]). Sur la plupart des systèmes, cela implique de
+    connaître par avance les pairs. Pour améliorer la sécurité, il est
+    possible d'utiliser le *Generalized TTL Security Mechanism* ([RFC
+    5082][]). Pour *JunOS*, la configuration présentée ici (avec `ttl
+    255`) est incomplère. Un [filtre de firewall est aussi
+    nécessaire][firewall filter is also needed].
+
+Un autre point important est de réagir rapidement en cas
+d'**indisponibilité d'un chemin**. Avec des sessions BGP directement
+connectées, un lien défaillant peut être détecté immédiatement et la
+session BGP est aussitôt invalidée. Cela n'est pas toujours fiable et
+dans notre cas, cela ne fonctionne pas en raison de la présence de
+commutateurs sur les chemins. En ❹, nous activons BFD, un protocole
+qui permet de détecter en moins d'une seconde un problème entre deux
+pairs BGP ([RFC 5880][]).
+
+Un dernier point à prendre en compte est la possibilité de faire du
+**routage anycast** : si une IP est publiée sur plusieurs
+hyperviseurs, deux solutions sont acceptables :
+
+ - envoyer tous les flux vers un seul hyperviseur ou
+ - répartir les flux entre les hyperviseurs.
+
+Le second choix permet d'obtenir un répartiteur de charge L3. Avec la
+configuration ci-dessus, pour chaque préfixe, le réflecteur va choisir
+un seul chemin et redistribuer celui-ci. Ainsi, un seul hyperviseur
+recevra les paquets. Pour obtenir une répartition de charge, il faut
+redistribuer l'ensemble des chemins possibles ([RFC 7911][])[^addpath]
+:
+
+    ::junos
+    set protocols bgp group public-v4 family inet  unicast add-path send path-count 4
+    set protocols bgp group public-v6 family inet6 unicast add-path send path-count 4
+
+[^addpath]: Malheureusement, pour une raison particulièrement
+    mystérieuse, *JunOS* ne supporte pas l'extension BGP *add-path*
+    dans une instance de routage. Une telle configuration est
+    toutefois possible avec Cumulus Linux.
+
+Voici un extrait de `show route` montrant quelques routes « simples »
+ainsi qu'une route *anycast* :
+
+    ::console hl_lines="22 25"
+    > show route protocol bgp
+    inet.0: 6 destinations, 7 routes (7 active, 1 holddown, 0 hidden)
+    + = Active Route, - = Last Active, * = Both
+    
+    0.0.0.0/0          *[BGP/170] 00:09:01, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.1 via em1.90
+    192.0.2.15/32      *[BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.101 via em1.90
+    203.0.113.1/32     *[BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.101 via em1.90
+    203.0.113.6/32     *[BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.102 via em1.90
+    203.0.113.18/32    *[BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.103 via em1.90
+    203.0.113.10/32    *[BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.101 via em1.90
+                        [BGP/170] 00:09:00, localpref 100
+                          AS path: I, validation-state: unverified
+                        > to 198.51.100.102 via em1.90
+
+La configuration complète est disponible sur [GitHub][rr-juniper]. Des
+configurations similaires pour [*GoBGP*][rr-gobgp], [*BIRD*][rr-bird]
+ou [*FRR*][rr-frr] sont également disponibles[^bird]. La configuration
+pour le domaine de routage privé est identique. Pour éviter d'investir
+dans du matériel dédié pour les réflecteurs, il est possible de
+convertir certains commutateurs de baie à cet usage.
+
+[^bird]: Seul *BIRD* implémente BFD mais il ne supporte pas les pairs
+    implicites. *FRR* nécessite d'être couplé à [PTMD][] de
+    Cumulus. Si BFD ne vous intéresse pas, *GoBGP* fait un excellent
+    réflecteur de routes.
+
+### Configuration de l'hyperviseur
+
+Passons maintenant à la dernière étape : la configuration de
+l'hyperviseur. [BIRD][] (1.6.x) est utilisé en tant que démon BGP. Il
+maintient trois tables de routage internes (`public`, `private` and
+`local-out`). Nous définissons un patron avec les propriétés communes
+pour se connecter à un réflecteur :
+
+    ::junos
+    template bgp rr_client {
+      local as 65000;   # ASN local correspond à l'ASN des réflecteurs
+      import all;       # Accepte toutes les routes reçues
+      export all;       # Envoie toutes les routes de la table
+      next hop self;    # Modifie le saut suivant avec l'IP de la session BGP
+      bfd yes;          # Active BFD
+      direct;           # Pair directement connecté
+      ttl security yes; # GTSM activé
+      add paths rx;     # Accepte ADD-PATH en réception
+    
+      # Réétablissement rapide des sessions BGP
+      connect delay time 1;
+      connect retry time 5;
+      error wait time 1,5;
+      error forget time 10;
+    }
+    
+    table public;
+    protocol bgp RR1_public from rr_client {
+      neighbor 198.51.100.126 as 65000;
+      table public;
+    }
+    # […]
+
+Avec la configuration ci-dessus, toutes les routes de la table
+`public` de *BIRD* sont envoyées au réflecteur
+`198.51.100.126`. Toutes les routes reçues sont acceptées. Il nous
+reste à connecter la table `public` de *BIRD* à celle du
+noyau[^rt_tables] :
+
+    ::junos
+    protocol kernel kernel_public {
+      persist;
+      scan time 10;
+      import filter {
+        # Accepte n'importe quelle route du noyau
+        # sauf celle de dernier secours
+        if krt_metric < 4294967294 then accept;
+        reject;
+      };
+      export all;      # Envoie toutes les routes au noyau
+      learn;           # Apprend les routes autres que celles de BIRD
+      merge paths yes; # Utilise des routes ECMP si besoin
+      table public;    # Nom de la table de routage dans BIRD
+      kernel table 90; # Numéro de la table de routage dans le noyau
+    }
+
+[^rt_tables]: Les tables de routage du noyau son numérotées. La
+    commande `ip` peut utiliser les noms déclarés dans le fichier
+    `/etc/iproute2/rt_tables`.
+
+Il faut également activer BFD sur toutes les interfaces :
+
+    ::junos
+    protocol bfd {
+      interface "*" {
+        interval 100ms;
+        multiplier 5;
+      };
+    }
+
+Afin d'éviter qu'un encombrement temporaire de la table de suivi de
+*Netfilter* n'impacte BFD, il est prudent de désactiver le suivi de
+connexions pour ces paquets :
+
+    ::sh
+    ip46tables -t raw -A PREROUTING -p udp --dport 3784 \
+      -m addrtype --dst-type LOCAL -j CT --notrack
+    ip46tables -t raw -A OUTPUT -p udp --dport 3784 \
+      -m addrtype --src-type LOCAL -j CT --notrack
+
+Il faut également ajouter :
+
+ - [la configuration de la table `local-out`][local-out],
+ - [la configuration de la table `private`][private], and
+ - [la configuration pour IPv6][ipv6][^ecmpv6].
+
+[^ecmpv6]: À noter que *BIRD* 1.6.1 est nécessaire pour faire
+    fonctionner l'ECMP avec IPv6. De plus, avec un Linux 4.11 ou plus
+    récent, le [commit 98bb80a243b5][] est également requis.
+
+Une fois les sessions BGP établies, on peut vérifier les routes
+apprises :
+
+    ::console
+    $ ip route show table public proto bird
+    default
+            nexthop via 198.51.100.1 dev eth0.public weight 1
+            nexthop via 198.51.100.254 dev eth1.public weight 1
+    203.0.113.6
+            nexthop via 198.51.100.102 dev eth0.public weight 1
+            nexthop via 198.51.100.202 dev eth1.public weight 1
+    203.0.113.18
+            nexthop via 198.51.100.103 dev eth0.public weight 1
+            nexthop via 198.51.100.203 dev eth1.public weight 1
+
+## Performance
+
+Avec de nombreuses routes, on peut se soucier de la **quantité de
+mémoire utilisée par Linux**. Elle est très raisonnable :
+
+ - 128 MiB permettent de gérer 1 million de routes IPv4,
+ - 512 MiB permettent de gérer 1 million de routes IPv6.
+
+Les chiffres doivent être doublés pour prendre en compte la mémoire
+utilisée par *BIRD*. En ce qui concerne les **temps de recherche d'une
+route**, les performances sont aussi excellentes avec IPv4 et très
+bonnes avec IPv6 :
+
+ - 30 ns par recherche avec 1 million de routes IPv4,
+ - 1.25 µs par recherche avec 1 million de routes IPv6.
+
+Ainsi, l'impact de laisser la gestion d'un très grand nombre de routes
+à Linux est très faible. Pour plus de détails, sur le sujet, voyez
+« [Fonctionnement de la table de routage IPv4 sous Linux][IPv4 route
+lookup on Linux] » et « [Fonctionnement de la table de routage IPv6
+sous Linux][IPv6 route lookup on Linux] ».
+
+## Filtrage par la source
+
+Pour éviter l'usurpation d'adresse IP, le filtrage par la source
+(*reverse-path filtering*) est activé sur chaque interface virtuelle :
+Linux va vérifier la légitimité de chaque IP source en vérifiant
+qu'une réponse serait renvoyée sur la même interface. Cela interdit
+toute tentative d'usurpation de la part d'une machine virtuelle.
+
+Pour IPv4, il est possible d'activer cette fonctionnalité à travers un
+*sysctl*[^sysctl] ou à travers *Netfilter*. Pour IPv6, seula la
+dernière option est disponible.
+
+    ::sh
+    # Pour IPv6, utilise Netfilter
+    ip6tables -t raw -N RPFILTER
+    ip6tables -t raw -A RPFILTER -m rpfilter -j RETURN
+    ip6tables -t raw -A RPFILTER -m rpfilter --accept-local \
+      -m addrtype --dst-type MULTICAST -j DROP
+    ip6tables -t raw -A RPFILTER -m limit --limit 5/s --limit-burst 5 \
+      -j LOG --log-prefix "NF: rpfilter: " --log-level warning
+    ip6tables -t raw -A RPFILTER -j DROP
+    ip6tables -t raw -A PREROUTING -i vnet+ -j RPFILTER
+    
+    # Pour IPv4, utilise les sysctls
+    sysctl -qw net.ipv4.conf.all.rp_filter=0
+    sysctl -qw net.ipv4.conf.all.rp_filter=0
+    for iface in /sys/class/net/vnet*; do
+        sysctl -qw net.ipv4.conf.${iface##*/}.rp_filter=1
+    done
+
+[^sysctl]: Pour une interface donnée, Linux utilise la valeur maximale
+    entre le *sysctl* pour `all` et celui de l'interface.
+
+Il n'est pas utile de s'inquiéter d'une usurpation sur le L2,
+l'attaquant n'y gagnerait aucun avantage.
+
+# Leurrer les machines virtuelles
+
+Un point important est de s'assurer que les machines virtuelles
+continuent de penser qu'elles sont rattachées à un réseau L2 classique
+(une IP, un sous-réseau, une passerelle).
+
+La première étape consiste à leur fournir la passerelle par
+défaut. Sur l'hyperviseur, il suffit d'assigner l'IP associée à
+l'interface virtuelle correspondante :
+
+    ::sh
+    ip addr add 203.0.113.254/32 dev vnet5 scope link
+
+Le but de cette manœuvre est de s'assurer que Linux répondra aux
+requêtes ARP concernant cette IP. La configuration d'un `/32` est
+suffisante et il ne faut pas configurer un sous-réseau plus grand :
+Linux installerait la route correspondante sur cette interface, ce qui
+serait incorrect[^noprefixroute].
+
+[^noprefixroute]: Il est possible d'empêcher Linux d'installer la
+    route connectée en utilisant le drapeau `noprefixroute`. Celui-ci
+    n'est disponible pour IPv4 que depuis Linux 4.4. Il n'est utile
+    que si le serveur DHCP donne du fil à retordre car cela peut
+    entraîner d'autres problèmes liés à la promotion des IP
+    secondaires.
+
+Pour IPv6, ce n'est pas utile car les adresses de lien local sont
+utilisées comme passerelle.
+
+Une machine virtuelle peut également vouloir échanger des paquets avec
+des machines partageant le même sous-réseau IP. L'hyperviseur va
+répondre aux requêtes ARP à leur place. Une fois que le trafic IP est
+reçu, il lui suffira alors de le router normalement. Cela peut se
+faire en activant le proxy ARP sur l'interface virtuelle :
+
+    ::sh
+    sysctl -qw net.ipv4.conf.vnet5.proxy_arp=1
+    sysctl -qw net.ipv4.neigh.vnet5.proxy_delay=0
+
+Pour IPv6, le proxy NDP de Linux est beaucoup moins pratique. À la
+place, le démon [ndppd][] va gérer efficacement cette tâche. Pour
+chaque interface, nous utilisons la configuration suivante :
+
+    ::junos
+    proxy vnet5 {
+      rule 2001:db8:cb00:7100::/64 {
+        static
+      }
+    }
+
+En ce qui concerne le DHCP, certains démons peuvent être contrariés
+par l'adresse en `/32` associée à l'interface. Toutefois, [Dnsmasq][]
+accepte de s'y faire. Si besoin, l'écriture d'un démon DHCP est
+relativement triviale. Pour IPv6, si l'adresse assignée est de type
+[EUI-64][], [radvd][] fonctionne parfaitement avec cette configuration
+:
+
+    ::junos
+    interface vnet5 {
+      AdvSendAdvert on;
+      prefix 2001:db8:cb00:7100::/64 {
+        AdvOnLink on;
+        AdvAutonomous on;
+        AdvRouterAddr on;
+      };
+    };
+
+# Conclusion et avenir
+
+La configuration présentée ici fonctionne avec *BIRD* 1.6.3 et Linux
+3.15 ou plus récent. Elle permet de s'affranchir des limitations
+inhérentes des réseaux L2 en terme de flexibilité ou de disponibilité
+tout en restant transparent du point de vue des machines virtuelles
+hébergées. En faisant reposer l'effort de routage sur Linux, la
+solution est également économique car le matériel existant peut être
+réutilisé. Enfin, l'exploitation d'un tel réseau reste simple après
+avoir compris les bases (règles de routage, tables de routage et
+sessions BGP).
+
+Il existe plusieurs améliorations potentielles :
+
+utilisation des VRF
+: À partir de Linux 4.3, les domaines virtuels de routage L3 (VRF)
+  permettent d'associer des interfaces à des tables de routage. Nous
+  pourrions donc définir trois VRF : `public`, `private` et
+  `local-out`. Cela permettrait d'améliorer les performances en
+  retirant la nécessiter de parcourir plusieurs règles de routage
+  (cependant, avant Linux 4.8, les performances sont dégradées en
+  raison de la non-utilisation des fonctionnalités d'accélération,
+  voir le [commit 7889681f4a6c][]). Pour plus d'informations, reportez
+  vous à la [documentation du noyau][vrf.txt].
+
+routage L3 de bout en bout
+: Plutôt que de reposer sur une fabrique L2, la configuration BGP peut
+  être améliorée et simplifiée en utilisant un certain nombre de
+  mécanismes d'autoconfiguration. Cumulus a publié un livret sur le
+  sujet : « [BGP in the datacenter][] ». Toutefois, cela nécessite que
+  toutes les implémentations BGP utilisées supportent ces
+  fonctionnalités. Sur les hyperviseurs, cela impose l'utilisation de
+  *FRR* et sur les équipements réseau, seul *Cumulus Linux* remplit
+  les critères adéquats.
+
+utilisation de BGP LLGR
+: Utiliser BFD avec des temps de réaction courts permet d'invalider
+  très rapidement un chemin non fonctionnel. En contre-partie, en cas
+  de congestion ou de charge élevée, des paquets BFD peuvent être
+  perdus rendant l'hyperviseur et les machines qu'il héberge
+  indisponibles jusqu'au rétablissement des sessions BGP. Certaines
+  implémentations de BGP supportent le *Long-Lived BGP Graceful
+  Restart*, une extension conservant les routes perdues mais avec une
+  priorité plus faible (voir
+  [draft-uttaro-idr-bgp-persistence-03][]). C'est une solution idéale
+  pour notre problème : les routes perdues ne sont utilisées qu'en
+  dernier secours quand tous les liens sont devenus
+  indisponibles. Actuellement, aucune implémentation libre n'existe.
+
+*[BGP]: Border Gateway Protocol
+*[eBGP]: External Border Gateway Protocol
+*[iBGP]: Internal Border Gateway Protocol
+*[LLGR]: Long-Lived Graceful Restart
+*[OSPF]: Open Shortest Path First
+*[DHCP]: Dynamic Host Configuration Protocol
+*[VRF]: Virtual Routing and Forwarding
+*[RA]: Router Advertisement
+*[NDP]: Neighbor Discovery Protocol
+*[TCAM]: Ternary content-addressable memory
+*[BFD]: Bidirectional Forwarding Detection
+*[MC-LAG]: Multi-Chassis Link Aggregation
+*[ARP]: Address Resolution Protocol
+
+[layer 2 access topology]: https://www.cisco.com/c/en/us/td/docs/solutions/Enterprise/Data_Center/DC_Infra2_5/DCInfra_6.html "Data Center Access Layer Design"
+[Spanning Tree Protocol]: https://fr.wikipedia.org/wiki/Spanning_Tree_Protocol "Spanning Tree Protocol sur Wikipedia"
+[Juniper's virtual chassis]: https://www.juniper.net/documentation/en_US/junos/topics/concept/virtual-chassis-ex4200-overview.html "Juniper: EX Series Virtual Chassis Overview"
+[Cisco's virtual port channel]: https://www.cisco.com/c/en/us/products/collateral/switches/nexus-5000-series-switches/configuration_guide_c07-543563.html "Cisco: Virtual PortChannel Quick Configuration Guide"
+[mclag1]: https://www.juniper.net/documentation/en_US/release-independent/nce/topics/concept/mc-lag-on-core-understanding.html "Juniper: MC-LAG Technical Overview"
+[mclag2]: https://docs.cumulusnetworks.com/display/DOCS/Multi-Chassis+Link+Aggregation+-+MLAG "Cumulus: Multi-Chassis Link Aggregation - MLAG"
+[mclag3]: https://eos.arista.com/mlag-basic-configuration/ "Arista: MLAG"
+[IEEE 802.1Q-2014]: https://sci-hub.la/10.1109/IEEESTD.2014.6991462 "IEEE 802.1Q-2014 on Sci-Hub"
+[IEEE 802.1AX-2014]: https://sci-hub.la/10.1109/IEEESTD.2014.7055197 "IEEE 802.1AX-2014 on Sci-Hub"
+[TRILL]: https://datatracker.ietf.org/wg/trill/charter/ "IETF: Transparent Interconnection of Lots of Links"
+[VXLAN]: [[en/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
+[commit 7889681f4a6c]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7889681f4a6c2148e1245604bac751a1cae8f882 "net: vrf: Update flags and features settings"
+[vrf.txt]: https://www.kernel.org/doc/Documentation/networking/vrf.txt "Virtual Routing and Forwarding (VRF)"
+[BGP in the datacenter]: http://go.cumulusnetworks.com/l/32472/2017-04-14/91d5vj "BGP in the data center: a complete guide to BGP for the modern data center"
+[draft-uttaro-idr-bgp-persistence-03]: https://tools.ietf.org/html/draft-uttaro-idr-bgp-persistence-03 "Support for Long-lived BGP Graceful Restart"
+[ndppd]: https://github.com/DanielAdolfsson/ndppd/ "NDP Proxy Daemon"
+[Dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html "Dnsmasq"
+[radvd]: http://www.litech.org/radvd/ "Linux IPv6 Router Advertisement Daemon (radvd)"
+[ICMP redirect]: http://www.networksorcery.com/enp/protocol/icmp/msg5.htm "ICMP type 5, Redirect"
+[IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
+[IPv6 route lookup on Linux]: [[fr/blog/2017-ipv6-table-routage-linux.html]] "Fonctionnement de la table de routage IPv6 sous Linux"
+[Juniper QFX5100]: https://www.juniper.net/us/en/products-services/switching/qfx-series/qfx5100/ "QFX5100 10/40GbE data center switches"
+[Arista 7208SR]: https://www.arista.com/en/products/7280r-series "Arista 7280R Series"
+[Juniper MX240]: http://www.juniper.net/us/en/products-services/routing/mx-series/mx240/ "MX240 edge router"
+[RFC 2385]: https://tools.ietf.org/html/rfc2385 "RFC 2385: Protection of BGP Sessions via the TCP MD5 Signature Option"
+[RFC 5082]: https://tools.ietf.org/html/rfc5082 "RFC 5082: The Generalized TTL Security Mechanism (GTSM)"
+[RFC 5880]: https://tools.ietf.org/html/rfc5880 "RFC 5880: Bidirectional Forwarding Detection (BFD)"
+[RFC 7911]: https://tools.ietf.org/html/rfc7911 "RFC 7911: Advertisement of Multiple Paths in BGP"
+[firewall filter is also needed]: https://www.juniper.net/documentation/en_US/junos/topics/reference/configuration-statement/ttl-edit-protocols-bgp-mulithop.html "Juniper documentation: ttl (Protocols BGP)"
+[commit 98bb80a243b5]: https://gitlab.labs.nic.cz/labs/bird/commit/98bb80a243b58c43453e9be69d19d0350286549c "KRT: Fix IPv6 ECMP handling with Linux 4.11+"
+[PTMD]: https://github.com/CumulusNetworks/ptm "Prescriptive Topology Manager Daemon"
+[BIRD]: http://bird.network.cz "The BIRD Internet Routing Daemon"
+[Calico]: https://www.projectcalico.org/ "Project Calico: Secure networking for the cloud native era"
+[EUI-64]: https://fr.wikipedia.org/wiki/Adresse_IPv6#Assignation_des_adresses_IPv6_dans_un_r%C3%A9seau_local "Assgnation des adresses IPv6 dans un réseau local sur Wikipedia"
+
+[GitHub]: https://github.com/vincentbernat/network-lab/tree/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv "Fichiers de configuration du labo"
+[local-out]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/hypervisor.conf#L11-L40 "Configuration de la table local-out"
+[ipv6]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/rr-client6.conf "Configuration pour IPv6"
+[private]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/rr-client-private.conf "Configuration pour la table de routage privée"
+[rr-frr]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/RR7/etc/quagga/Quagga.conf "Configuration de FRR en réflecteur"
+[rr-bird]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird.RR1.conf "Configuration de BIRD en réflecteur"
+[rr-gobgp]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/gobgpd.public-ipv4.yaml "Configuration de GoBGP en réflecteur"
+[rr-juniper]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/junos-RR3.conf "Configuration de JunOS en réflecteur"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
