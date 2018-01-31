@@ -291,6 +291,10 @@ def build():
         local(r"find * -type f -print0 | xargs -r0 chmod a+r")
         local(r"find * -type d -print0 | xargs -r0 chmod a+rx")
 
+        # For videos and files, use symlinks
+        local("find media/files media/videos -type f -print0 "
+              "  | xargs -0 -I'{}' ln -sf $PWD/../content/'{}' '{}'")
+
         local("git add *")
         local("git diff --stat HEAD || true")
         if confirm("More diff?", default=True):
@@ -309,7 +313,7 @@ def push():
     local("git push ace.luffy.cx")
 
     # media.luffy.cx
-    local("rsync --exclude=.git -rlc .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
+    local("rsync --exclude=.git --copy-unsafe-links -rc .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
 
     # HTML
-    local("rsync --exclude=.git -rlc .final/ ace.luffy.cx:/srv/www/luffy/")
+    local("rsync --exclude=.git --copy-unsafe-links -rc .final/ ace.luffy.cx:/srv/www/luffy/")
