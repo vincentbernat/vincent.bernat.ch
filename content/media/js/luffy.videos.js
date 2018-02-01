@@ -30,8 +30,10 @@ luffy.s.push(function() {
         });
     };
     script.src = script.dataset.src;
+});
 
-    // Make seek-to links work
+// Make seek-to links work
+luffy.s.push(function() {
     var seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
     [].forEach.call(seekLinks, function(seekLink) {
         seekLink.addEventListener('click', function(event) {
