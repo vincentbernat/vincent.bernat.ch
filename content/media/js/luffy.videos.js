@@ -1,10 +1,9 @@
-/* Change videos to embed them instead of linking to them. */
-
-// Self-hosted HLS videos
+// Self-hosted videos
 luffy.s.push(function() {
     var videoSources = document.querySelectorAll(".lf-video source[type='application/vnd.apple.mpegurl']");
     if (videoSources.length == 0) return;
 
+    // Enable HLS for selected videos
     var script = document.querySelector('script[data-name="hls.js"]');
     script.onload = function() {
         if (!Hls.isSupported()) return;
@@ -19,7 +18,7 @@ luffy.s.push(function() {
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
             // Pass control to hls.js
-            newVideo.addEventListener('play',function() {
+            newVideo.addEventListener('play', function() {
                 if (once) return;
                 var hls = new Hls({
                     capLevelToPlayerSize: true
@@ -31,4 +30,25 @@ luffy.s.push(function() {
         });
     };
     script.src = script.dataset.src;
+
+    // Make seek-to links work
+    var seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
+    [].forEach.call(seekLinks, function(seekLink) {
+        seekLink.addEventListener('click', function(event) {
+            event.preventDefault();
+
+            var seekTo = parseInt(seekLink.hash.substr(12), 10),
+                videos = document.querySelectorAll("video");
+
+            // Look for the nearest video before that
+            for (var i = videos.length - 1; i >= 0; i--) {
+                if (seekLink.compareDocumentPosition(videos[i]) &
+                    Node.DOCUMENT_POSITION_PRECEDING) {
+                    videos[i].currentTime = seekTo;
+                    if (videos[i].paused) videos[i].play();
+                    break;
+                }
+            }
+        });
+    });
 });
