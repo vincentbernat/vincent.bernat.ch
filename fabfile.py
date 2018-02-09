@@ -231,12 +231,9 @@ def build():
     with lcd(".final"):
         # Optimize SVG
         local("find media/images -type f -name '*.svg'"
-              "| sed 's+/[^/]*$++' | sort | uniq"
-              "| grep -v '^media/images/l$'"
               "| grep -v '^media/images/l/'"
-              "| grep -v '^media/images/obj$'"
               "| grep -v '^media/images/obj/'"
-              "| xargs -n1 ../node_modules/svgo/bin/svgo --quiet")
+              "| xargs ../node_modules/svgo/bin/svgo --quiet")
         # Subset fonts
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
