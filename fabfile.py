@@ -231,6 +231,7 @@ def build():
     with lcd(".final"):
         # Optimize SVG
         local("find media/images -type f -name '*.svg'"
+              "| sort"
               "| grep -v '^media/images/l/'"
               "| grep -v '^media/images/obj/'"
               "| xargs -P 3 ../node_modules/svgo/bin/svgo --quiet")
