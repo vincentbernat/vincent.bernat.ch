@@ -233,7 +233,7 @@ def build():
         local("find media/images -type f -name '*.svg'"
               "| grep -v '^media/images/l/'"
               "| grep -v '^media/images/obj/'"
-              "| xargs ../node_modules/svgo/bin/svgo --quiet")
+              "| xargs -P 3 ../node_modules/svgo/bin/svgo --quiet")
         # Subset fonts
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
