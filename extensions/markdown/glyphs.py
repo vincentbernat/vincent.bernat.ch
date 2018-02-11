@@ -6,7 +6,9 @@ import markdown
 import unicodedata
 
 glyphs = {
-    'monospace': set(),
+    'monospace': set([
+        u"\u202f",              # NARROW NO-BREAK SPACE
+    ]),
     'regular': set([
         u"\u2019",              # RIGHT SINGLE QUOTATION MARK
         u"\u200b",              # ZERO WIDTH SPACE
