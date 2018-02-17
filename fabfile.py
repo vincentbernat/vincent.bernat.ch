@@ -290,7 +290,7 @@ def build():
         local(r"find * -type d -print0 | xargs -r0 chmod a+rx")
 
         # For videos and files, use symlinks
-        local("find media/files media/videos -type f -print0 "
+        local("find media/files media/videos media/audio -type f -print0 "
               "  | xargs -0 -I'{}' ln -sf $PWD/../content/'{}' '{}'")
 
         local("git add *")

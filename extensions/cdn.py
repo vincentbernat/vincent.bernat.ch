@@ -18,7 +18,7 @@ NOCDN="//media.luffy.cx/"
 def decorate_media_url(media_url):
     @wraps(media_url)
     def wrapper(site, path, safe=None):
-        if path.startswith("files/") or path.startswith("videos/"):
+        if path.startswith("files/") or path.startswith("videos/") or path.startswith("audio/"):
             # Don't use CDN for those big files
             path = Folder(NOCDN).child(path).replace(os.sep, '/').encode("utf-8")
             if safe is not None:
