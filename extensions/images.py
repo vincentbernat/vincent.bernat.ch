@@ -16,6 +16,7 @@ from PIL import Image
 import new
 import os
 import re
+import urllib
 from functools import partial
 
 class Thumb(object):
@@ -198,6 +199,7 @@ class ImageSizerPlugin(PILPlugin):
             self.logger.warn(
                 "[%s] has an img tag without src attribute" % resource)
             return None
+        src = urllib.unquote(src)
         if src not in self.cache:
             if src.startswith(self.site.config.media_url):
                 path = src[len(self.site.config.media_url):].lstrip("/")
@@ -218,7 +220,7 @@ class ImageSizerPlugin(PILPlugin):
                 image = self.site.content.resource_from_path(path)
             if image is None:
                 self.logger.warn(
-                    "[%s] has an unknown image" % resource)
+                    "[%s] has an unknown image %s" % (resource, src))
                 return None
             self.cache[src] = self._handle_img_size(image)
             self.logger.debug("Image [%s] is %s" % (src,
@@ -264,6 +266,9 @@ class ImageSizerPlugin(PILPlugin):
         if wh is None:
             return original
         width, height = wh
+        if "@2x." in urllib.unquote(src):
+            width /= 2
+            height /= 2
         if paragraph:
             classes += " lf-img"
             classes = classes.lstrip()
@@ -272,7 +277,7 @@ class ImageSizerPlugin(PILPlugin):
             img = '<object data="%s" type="image/svg+xml">' % src
         img = '%s width="%s" height="%s"%s>' % (
             img[:-1],
-            width, height,
+            int(width), int(height),
             classes and (' class="%s"' % classes) or "")
         if "/obj/" in src and src.endswith('.svg'):
             img = '%s&#128444; %s</object>' % (img, alt or "")
