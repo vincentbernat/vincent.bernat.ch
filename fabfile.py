@@ -267,7 +267,8 @@ def build():
               "| grep -v '^media/images/l/'"
               "| grep -v '^media/images/obj/'"
               "| xargs -P 3 ../node_modules/svgo/bin/svgo --quiet")
-        # Subset fonts
+        # Subset fonts. Nice tool to quickly look at the result:
+        #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
                                 "--text-file=../glyphs-{}.txt".format(glyphs)])
