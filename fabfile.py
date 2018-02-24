@@ -110,10 +110,12 @@ done <<EOF
 2017-netops-org-mode-3.mp4       --video-bitrate-factor 0.5
 2018-adlib-opl2lpt-1-indy3.mp4   --video-bitrate-factor 0.5 \
                                  --mp4-width 854 --mp4-bitrate 1000 \
-                                 --audio-bitrate 128 --audio-only
+                                 --audio-bitrate 128 --audio-only \
+                                 --poster-width 854
 2018-adlib-opl2lpt-2-indy4.mp4   --video-bitrate-factor 0.5 \
                                  --mp4-width 854 --mp4-bitrate 1000 \
-                                 --audio-bitrate 128 --audio-only
+                                 --audio-bitrate 128 --audio-only \
+                                 --poster-width 854
 EOF
 """
 
