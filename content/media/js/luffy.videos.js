@@ -21,7 +21,8 @@ luffy.s.push(function() {
             newVideo.addEventListener('play', function() {
                 if (once) return;
                 var hls = new Hls({
-                    capLevelToPlayerSize: true
+                    capLevelToPlayerSize: true,
+                    maxMaxBufferLength: 90
                 });
                 hls.attachMedia(newVideo);
                 hls.loadSource(m3u8);
