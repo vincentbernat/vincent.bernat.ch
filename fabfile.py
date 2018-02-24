@@ -92,16 +92,24 @@ def screenshots():
                                                    slug=url.replace("/", "-").replace(".", "-")))
 
 # Encoding of videos needs to be done with video2hls.
-#  video2hls --video-bitrate-factor 0.3 2012-multicast-vxlan.ogv
-#  video2hls --video-bitrate-factor 0.3 2012-network-lab-kvm.ogv
-#  video2hls --video-bitrate-factor 0.3 2013-exabgp-highavailability.ogv
-#  video2hls --video-bitrate-factor 0.7 2014-dashkiosk.ogv
-#  video2hls --video-bitrate-factor 0.5 2014-eudyptula-boot-1.mp4
-#  video2hls --video-bitrate-factor 0.5 2014-eudyptula-boot-2.mp4
-#  video2hls --video-bitrate-factor 0.5 2015-hotfix-qemu-venom.mp4
-#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-1.mp4
-#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-2.mp4
-#  video2hls --video-bitrate-factor 0.5 2017-netops-org-mode-3.mp4
+"""
+while read video arguments; do
+  video2hls --hls-playlist-prefix https://luffy-video.sos-ch-dk-2.exo.io/${video%.*}/ \
+                                  https://luffy-video.s3.eu-central-1.amazonaws.com/${video%.*}/ \
+    $=arguments $video
+done <<EOF
+2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
+2012-network-lab-kvm.ogv         --video-bitrate-factor 0.3
+2013-exabgp-highavailability.ogv --video-bitrate-factor 0.3
+2014-dashkiosk.ogv               --video-bitrate-factor 0.7
+2014-eudyptula-boot-1.mp4        --video-bitrate-factor 0.5
+2014-eudyptula-boot-2.mp4        --video-bitrate-factor 0.5
+2015-hotfix-qemu-venom.mp4       --video-bitrate-factor 0.5
+2017-netops-org-mode-1.mp4       --video-bitrate-factor 0.5
+2017-netops-org-mode-2.mp4       --video-bitrate-factor 0.5
+2017-netops-org-mode-3.mp4       --video-bitrate-factor 0.5
+EOF
+"""
 
 @task
 def upload_videos(video=None):
@@ -125,6 +133,8 @@ def upload_videos(video=None):
                 ('mp4', 'video/mp4', False),
                 ('ts', 'video/mp2t', False)):
             more = ""
+
+            # If needed, gzip
             if gz:
                 local(r"""find %s -type f -name *.%s | while read f; do
    ! gunzip -t $f 2> /dev/null || continue
@@ -132,7 +142,7 @@ def upload_videos(video=None):
    mv $f.gz $f
 done""" % (os.path.join(path, directory), extension))
                 more += "--add-header=Content-Encoding:'gzip'"
-            local("s3cmd --no-preserve -F -P"
+            local("s3cmd --no-preserve -F -P --rr"
                   " {more}"
                   " --mime-type={mime}"
                   " --encoding=UTF-8"
@@ -144,9 +154,14 @@ done""" % (os.path.join(path, directory), extension))
                       directory=os.path.join(path, directory),
                       extension=extension,
                       mime=mime))
-            local("cp {directory}/poster.jpg content/media/images/posters/{short}.jpg".format(
-                short=directory,
-                directory=os.path.join(path, directory)))
+
+        # Copy poster and index.m3u8
+        local("cp {directory}/poster.jpg content/media/images/posters/{short}.jpg".format(
+            short=directory,
+            directory=os.path.join(path, directory)))
+        local("gunzip -c {directory}/index.m3u8 > content/media/videos/{short}.m3u8".format(
+            short=directory,
+            directory=os.path.join(path, directory)))
 
 @task
 def linkcheck(remote='yes'):
