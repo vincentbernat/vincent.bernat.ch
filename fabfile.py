@@ -108,8 +108,25 @@ done <<EOF
 2017-netops-org-mode-1.mp4       --video-bitrate-factor 0.5
 2017-netops-org-mode-2.mp4       --video-bitrate-factor 0.5
 2017-netops-org-mode-3.mp4       --video-bitrate-factor 0.5
+2018-adlib-opl2lpt-1-indy3.mp4   --video-bitrate-factor 0.5 \
+                                 --mp4-width 854 --mp4-bitrate 1000 \
+                                 --audio-bitrate 128 --audio-only
+2018-adlib-opl2lpt-2-indy4.mp4   --video-bitrate-factor 0.5 \
+                                 --mp4-width 854 --mp4-bitrate 1000 \
+                                 --audio-bitrate 128 --audio-only
 EOF
 """
+
+# For 2018-adlib-opl2lpt.mp4, chapters have been included with
+# "mp4chaps -i 2018-adlib-opl2lpt.mp4". It's not that useful (as we
+# don't have support for them, but maybe at some point...)
+
+# When possible, normalize videos to -2.0dB for peaks. Use the
+# following command to get the peak volume:
+#  ffmpeg -loglevel info -i indy3-dosbox-opl2lpt.mkv -af "volumedetect" -vn -sn -dn -f null /dev/null
+#
+# Then, in Blender, you can increase the volume (use
+# http://www.redwirez.com/pcalc.jsp to convert dB to percents).
 
 @task
 def upload_videos(video=None):

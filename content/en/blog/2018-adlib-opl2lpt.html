@@ -1,0 +1,234 @@
+---
+title: "OPL2LPT: an AdLib sound card for the parallel port"
+description: |
+  The OPL2LPT is a sound card powered by an OPL2 chip (as found on the
+  AdLib) and operated by parallel port. It can also be used on Linux.
+uuid: 374e2888-56e7-4f74-b75f-9c1b65f26cad
+cover: opl2lpt@2x.jpg
+---
+
+The [AdLib sound card][] was the first popular sound card for IBM
+PC—prior to that, we were pampered by the sound of the PC
+speaker. Connected to an 8-bit ISA slot, it is powered by a [Yamaha
+YM3812][] chip, also known as *OPL2*. This chip can drive 9 sound
+channels whose characteristics can be fine tuned through 244
+write-only registers.
+
+![AdLib sound card]([[!!images/adlib-board.jpg]] "An AdLib sound card. The OPL2 chip is in the lower right part.")
+
+I had one but I am unable to locate it anymore. Models on eBay are
+quite rare and expensive. It is possible to build one yourself (either
+[Sergey's one][] or this [faithful reproduction][]). However, you
+still need an ISA port. The limitless imagination of some hackers can
+still help here. For example, you can combine [Sergey's Xi 8088
+processor board][], with his [ISA 8-bit backplane][], his [Super VGA
+card][] and his [XT-CF-Lite card][] to get your very own modernish IBM
+PC compatible. Alternatively, you can look at the [AdLib sound card on
+a parallel port][] from Raphaël Assénat.
+
+# The OPL2LPT sound card
+
+Recently, the [8-Bit Guy][] released a video about an [AdLib sound
+card for the parallel port][], the [OPL2LPT][]. While current
+motherboards don't have a parallel port anymore, it's easy to add a
+[PCI-Express one][]. So, I bought a pre-soldered *OPL2LPT* and a few
+days later, it was at my doorstep:
+
+![OPL2LPT sound card]([[!!images/opl2lpt@2x.jpg]] "The OPL2LPT sound card on an original “Day of the Tentacle” box to indicate scale.")
+
+The expected mode of operation for such a device is to plug it to an
+ISA parallel port (accessible through I/O port 0x378), load a [DOS
+driver][] to intercept calls to AdLib's address and run some
+AdLib-compatible game. While correctly supported by Linux, the
+PCI-Express parallel port doesn't operate like an ISA one. [QEMU][]
+comes with a parallel port emulation but, due to [timing issues][],
+cannot correctly drive the *OPL2LPT*. However, [VirtualBox][]
+emulation is good enough.[^vbox]
+
+[^vbox]: There is no dialog to configure a parallel port. This needs
+    to be done from the command-line after the instance creation:
+    
+        ::console
+        $ VBoxManage modifyvm "FreeDOS (games)" --lptmode1 /dev/parport0
+        $ VBoxManage modifyvm "FreeDOS (games)" --lpt1 0x378 7
+
+On Linux, the *OPL2LPT* can be programmed almost like an [actual
+AdLib][prog]. The following code writes a value to a register:
+
+    ::c
+    static void lpt_write(uint8_t data, uint8_t ctrl) {
+      ieee1284_write_data(port, data);
+      ieee1284_write_control(port, (ctrl | C1284_NINIT) ^ C1284_INVERTED);
+      ieee1284_write_control(port,  ctrl                ^ C1284_INVERTED);
+      ieee1284_write_control(port, (ctrl | C1284_NINIT) ^ C1284_INVERTED);
+    }
+    
+    void opl_write(uint8_t reg, uint8_t value) {
+      lpt_write(reg, C1284_NSELECTIN | C1284_NSTROBE);
+      usleep(4); // 3.3 microseconds
+    
+      lpt_write(value, C1284_NSELECTIN);
+      usleep(23);
+    }
+
+To "natively" use the *OPL2LPT*, I have modified the following
+applications:
+
+ - [ScummVM][], an emulator for classic point-and-click adventure games, including
+   many Lucas­Arts games—[patch][scummvm-patch]
+ - [QEMU][], a quick generic emulator—[patch][qemu-patch] with a minimal emulation
+   for timers and hard-coded sleep delays 🙄
+ - [DOSBox][], an x86 emulator bundled with DOS—[patch][dosbox-patch]
+   with a complete emulation for timers and a dedicated working thread[^delays]
+
+[^delays]: With *QEMU* or *DOSBox*, it should be the responsability of
+    the executing game to respect the required delays for the OPL2 to
+    process the received bytes. However, *QEMU* doesn't seem to try to
+    emulate I/O delays while *DOSBox* seems to not be precise
+    enough. For the later, to overcome this shortcoming, the *OPL2LPT*
+    is managed from a dedicated thread receiving the writes and
+    ensuring the required delays are met.
+
+You can compare the results in the following video, with the
+introduction of [Indiana Jones and the Last Crusade][], released in
+1989:[^nostalgia]
+
+![](video:2018-adlib-opl2lpt-1-indy3)
+
+ - [0:00](#video-seek-0), **DOSBox** with an emulated **PC speaker**
+ - [0:58](#video-seek-58), **DOSBox** with an emulated **AdLib**
+ - [1:51](#video-seek-111), **VirtualBox** with the **OPL2LPT** (on an emulated parallel port)
+ - [2:42](#video-seek-162), patched **ScummVM** with the **OPL2LPT** (native)
+ - [3:33](#video-seek-213), patched **QEMU** with the **OPL2LPT** (native)
+ - [4:24](#video-seek-264), patched **DOSBox** with the **OPL2LPT** (native)
+ - [5:17](#video-seek-317), patched **DOSBox** with an improved **OPL3 emulator** ([Nuked OPL3][])
+ - [6:10](#video-seek-370), **ScummVM** with the **CD track** ([FM Towns][] version)
+
+[^nostalgia]: *Indiana Jones and the Last Crusade* was the first game
+    I tried after plugging in the brand new AdLib sound card I
+    compelled my parents to buy on a trip to Canada in 1992. At the
+    time, no brick and mortar retailer sold this card in my French
+    city and online purchases (through the [Minitel][]) were limited
+    to consumer goods (like a VHS player). Hard times. 😏
+
+I let you judge how good is each option! There are two ways to buy an
+*OPL2LPT*: in Europe, from [Serdashop][OPL2LPT] or in North America,
+from the [8-Bit Guy][shop-usa].
+
+# Addendum: Indiana Jones and the Fate of Atlantis
+
+Here is another video featuring [Indiana Jones and the Fate of
+Atlantis][], released in 1992, running in the patched *DOSBox* with
+the *OPL2LPT*. It's the second game using the [iMUSE][] sound system:
+music is synchronized with actions and transitions are done
+seamlessly. Quite a feat at the time!
+
+![](video:2018-adlib-opl2lpt-2-indy4)
+
+# Addendum: how the videos were recorded
+
+With a VGA adapter, many games use [Mode 13h][], a 256-color mode with
+a 320×200 resolution. On a 4:3 display, this mode doesn't feature
+square pixels: they are stretched vertically by a factor of 1.2.
+
+The above videos were recorded with [FFmpeg][] (and edited with
+[Blender][]). It packs a lot of [useful filters][] making it easy to
+automate video capture. Here is an example:
+
+    ::shell
+    FONT="font=Monkey Island 1991 refined:
+          fontcolor=OrangeRed:
+          fontsize=16:
+          x=w-text_w-10"
+    ffmpeg -y \
+     -thread_queue_size 64 \
+     -f x11grab -draw_mouse 0 -r 30 -s 640x400 -i :0+844,102 \
+     -thread_queue_size 64 \
+     -f pulse -ac 1 -i default \
+     -filter_complex "[0:v]pad=854:400:0:0,
+          drawtext=${FONT}:y= 10:text=Indiana Jones 3,
+          drawtext=${FONT}:y= 34:text=Intro,
+          drawtext=${FONT}:y=100:text=DOSBox,
+          drawtext=${FONT}:y=124:text=VGA,
+          drawtext=${FONT}:y=148:text=PC speaker,
+          scale=854:480[game];
+          [1:a]showwaves=s=214x100:colors=OrangeRed:scale=lin[waves];
+          [1:a]showcqt=s=214x100[spectrum];
+          [waves][spectrum]vstack[vis];
+          [game][vis]overlay=x=640:y=280" \
+     -pix_fmt yuv420p -c:v libx264 -qp 0 -preset ultrafast \
+     indy3-dosbox-pcspkr.mkv
+
+The interesting part is the `filter_complex` argument. The input video
+is [padded][ffmpeg-pad] from 640×400 to 854×400 as a first step to a
+16:9 aspect ratio.[^blur] Using [The Secret Font of Monkey
+Island][sfomi], some [text][ffmpeg-drawtext] is added to the right of
+the video. The result is then [scaled][ffmpeg-scale] to 854×480 to get
+the final aspect ratio while stretching pixels to the expected 1.2
+factor. The video up to this point is sent to a stream named
+`game`. As a second step, from the input audio, we build two
+visualisations: a [waveform][ffmpeg-showwaves] and a
+[spectrum][ffmpeg-showcqt]. They are [stacked
+vertically][ffmpeg-vstack] and the result is a stream named `vis`. The
+last step is to [overlay][ffmpeg-overlay] the visualisation stream
+over the gameplay stream.
+
+[^blur]: A common method to extend a 4:3 video to a 16:9 aspect ratio
+    without adding black bars is to add a blurred background using the
+    same video as a source. I didn't do this here but it is also
+    [possible with FFmpeg][so-blurred]!
+
+*[DOS]: Disk Operating System
+
+[AdLib sound card]: https://en.wikipedia.org/wiki/Ad_Lib,_Inc.#AdLib_Music_Synthesizer_Card_(1987) "AdLib Music Synthesizer Card on Wikipedia"
+[Yamaha YM3812]: https://en.wikipedia.org/wiki/Yamaha_YM3812 "Yamaha YM3812 on Wikipedia"
+[8-Bit Guy]: http://www.the8bitguy.com/ "The 8-Bit Guy"
+[informative video about the OPL2]: https://www.youtube.com/watch?v=QLJSdNYcdpk "The 8-Bit Guy: Meet the little-known Soundblaster Keyboards"
+[AdLib sound card for the parallel port]: https://www.youtube.com/watch?v=z3DU2mNBa6M "The 8-Bit Guy: Ad-Lib Sound Card for the Parallel Port"
+[Sergey's one]: http://www.malinov.com/Home/sergeys-projects/isa-opl2-card "ISA OPL2 Card"
+[faithful reproduction]: http://tubetime.us/index.php/2016/07/22/a-reproduction-adlib-sound-card/ "A Reproduction AdLib Sound Card"
+[Sergey's Xi 8088 processor board]: http://www.malinov.com/Home/sergeys-projects/xi-8088 "Sergey's projects: Xi 8088"
+[ISA 8-bit backplane]: https://github.com/skiselev/isa8_backplane "Sergey's projects: ISA 8-bit backplane"
+[Super VGA card]: http://www.malinov.com/Home/sergeys-projects/isa-supervga "Sergey's projects: ISA Super VGA"
+[XT-CF-Lite card]: http://www.malinov.com/Home/sergeys-projects/xt-cf-lite "Sergey's projects: XT-CF-Lite v4"
+[AdLib sound card on a parallel port]: http://www.raphnet.net/electronique/adlib/adlib_en.php "AdLib sound card on a parallel port"
+[OPL2LPT]: http://www.serdashop.com/OPL2LPT "OPL2LPT on Serdashop"
+[shop-usa]: http://www.the8bitguy.com/product/opl2lpt-ad-lib-compatible-parallel-sound-card/ "OPL2LPT (Ad-Lib compatible Parallel Sound Card)"
+[PCI-Express one]: http://amzn.eu/c6Gg3wW "SIENOC PCI (PCI-E TO RS232+DB25 Adapter) on Amazon"
+[DOS driver]: https://github.com/pdewacht/adlipt/tree/master/adlipt "ADLiPT: DOS driver for the OPL2LPT"
+[QEMU]: https://qemu.org/ "QEMU: generic and open source machine emulator and virtualizer"
+[timing issues]: https://github.com/pdewacht/adlipt/issues/3 "OPL2LPT: Not working with QEMU parallel port emulation"
+[VirtualBox]: https://www.virtualbox.org/ "Oracle VM VirtualBox"
+[prog]: http://shipbrook.net/jeff/sb.html "Programming the AdLib/Sound Blaster FM Music Chips"
+[opl2test]: https://github.com/pdewacht/adlipt/tree/master/opl2test "OPL2TEST: stand-alone test program"
+[opl2test-patch]: https://github.com/pdewacht/adlipt/pull/4 "opl2test: adapt for Linux"
+[ScummVM]: https://www.scummvm.org/ "ScummVM"
+[scummvm-patch]: https://github.com/scummvm/scummvm/pull/1137 "AUDIO: add support for OPL2LPT"
+[qemu-patch]: https://patchwork.ozlabs.org/patch/874876/ "[RFC,v1] hw/audio/opl2lpt: add support for OPL2LPT"
+[DOSBox]: https://www.dosbox.com/ "DOSBox, an x86 emulator with DOS"
+[dosbox-patch]: https://github.com/vincentbernat/dosbox/compare/feature/opl2lpt "Add OPL2LPT support"
+[Indiana Jones and the Last Crusade]: https://en.wikipedia.org/wiki/Indiana_Jones_and_the_Last_Crusade:_The_Graphic_Adventure "Indiana Jones and the Last Crusade: The Graphic Adventure on Wikipedia"
+[FM Towns]: https://en.wikipedia.org/wiki/FM_Towns "FM Towns on Wikipedia"
+[Nuked OPL3]: https://sourceforge.net/p/dosbox/patches/270/ "Nuked OPL3 patch for DOSBox"
+[Minitel]: https://en.wikipedia.org/wiki/Minitel "Minitel on Wikipedia"
+[Mode 13h]: https://en.wikipedia.org/wiki/Mode_13h "Mode 13h on Wikipedia"
+[FFmpeg]: https://ffmpeg.org/ "FFmpeg: cross-platform solution to record, convert and stream audio and video"
+[useful filters]: https://ffmpeg.org/ffmpeg-filters.html "FFmpeg Filters Documentation"
+[ffmpeg-pad]: https://ffmpeg.org/ffmpeg-filters.html#pad-1 "FFmpeg pad filter"
+[ffmpeg-drawtext]: https://ffmpeg.org/ffmpeg-filters.html#drawtext "FFmpeg drawtext filter"
+[ffmpeg-asplit]: https://ffmpeg.org/ffmpeg-filters.html#asplit "FFmpeg asplit filter"
+[ffmpeg-showwaves]: https://ffmpeg.org/ffmpeg-filters.html#showwaves "FFmpeg showwaves filter"
+[ffmpeg-showcqt]: https://ffmpeg.org/ffmpeg-filters.html#showcqt "FFmpeg showcqt filter"
+[ffmpeg-vstack]: https://ffmpeg.org/ffmpeg-filters.html#vstack "FFmpeg vstack filter"
+[ffmpeg-overlay]: https://ffmpeg.org/ffmpeg-filters.html#overlay "FFmpeg overlay filter"
+[ffmpeg-scale]: https://ffmpeg.org/ffmpeg-filters.html#scale "FFmpeg scale filter"
+[so-blurred]: https://stackoverflow.com/questions/30789367/ffmpeg-how-to-convert-vertical-video-with-black-sides-to-video-169-with-blur "Stack Overflow: FFmpeg: How to convert vertical video with black sides, to video 16:9, with blurred background sides"
+[sfomi]: http://ptless.org/sfomi/ "The Secret Font of Monkey Island"
+[Blender]: https://www.blender.org/ "Free and Open 3D creation software"
+[Indiana Jones and the Fate of Atlantis]: https://en.wikipedia.org/wiki/Indiana_jones_and_the_fate_of_atlantis "Indiana Jones and the Fate of Atlantis on Wikipedia"
+[iMUSE]: https://en.wikipedia.org/wiki/IMUSE "iMUSE on Wikipedia"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
