@@ -11,6 +11,8 @@ from hyde.ext.plugins.images import PILPlugin
 from fswrap import File, Folder
 
 import xml.etree.ElementTree as ET
+from pyquery import PyQuery as pq
+from lxml.html import tostring as html2str
 
 from PIL import Image
 import new
@@ -234,68 +236,6 @@ class ImageSizerPlugin(PILPlugin):
             return (int(height) * new_width / new_height, height)
         return (new_width, new_height)
 
-    def _handle_img_str(self, resource, mo):
-        width, height, src, title, alt = None, None, None, None, None
-        classes = ""
-        original = mo.group(0)
-        paragraph = mo.group("popening") is not None
-        atag = mo.group("aopening") or ""
-        img = mo.group("img")
-        mo = re.search(r"\bwidth=([\"'])(?P<value>\d+)\1", img)
-        if mo:
-            width = int(mo.group("value"))
-            img = img[:mo.start()] + img[mo.end():]
-        mo = re.search(r"\bheight=([\"'])(?P<value>\d+)\1", img)
-        if mo:
-            height = int(mo.group("value"))
-            img = img[:mo.start()] + img[mo.end():]
-        mo = re.search(r"\bclass=([\"'])(?P<value>.*?)\1", img)
-        if mo:
-            classes = mo.group("value")
-            img = img[:mo.start()] + img[mo.end():]
-        mo = re.search(r"\bsrc=([\"'])(?P<value>.*?)\1", img)
-        if mo:
-            src = mo.group("value")
-        mo = re.search(r"\btitle=([\"'])(?P<value>.*?)\1", img)
-        if mo:
-            title = mo.group("value")
-        mo = re.search(r"\balt=([\"'])(?P<value>.*?)\1", img)
-        if mo:
-            alt = mo.group("value")
-        wh = self._handle_img(resource, src, width, height)
-        if wh is None:
-            return original
-        width, height = wh
-        if "@2x." in urllib.unquote(src):
-            width /= 2
-            height /= 2
-        if paragraph:
-            classes += " lf-img"
-            classes = classes.lstrip()
-        # SVG are converted to object
-        if "/obj/" in src and src.endswith('.svg'):
-            img = '<object data="%s" type="image/svg+xml">' % src
-        img = '%s width="%s" height="%s"%s>' % (
-            img[:-1],
-            int(width), int(height),
-            classes and (' class="%s"' % classes) or "")
-        if "/obj/" in src and src.endswith('.svg'):
-            img = '%s&#128444; %s</object>' % (img, alt or "")
-        if atag:
-            img = "%s%s</a>" % (atag, img)
-        if not paragraph:
-            return img
-        img = '<span class="lf-img-inner" style="padding-bottom: %.3f%%;">%s</span>' % (
-            float(height)*100./width, img)
-        img = '<div class="lf-img-outer" style="width: %dpx;">%s</div>' % (
-            width, img)
-        if title is not None:
-            img = ('<figure>%s'
-                   '<figcaption>%s</figcaption>'
-                   '</figure>') % (re.sub(r"\s*\btitle=([\"']).*?\1", '', img),
-                                   title)
-        return img
-
     def text_resource_complete(self, resource, text):
         """
         When the resource is generated, search for img tag and specify
@@ -306,11 +246,72 @@ class ImageSizerPlugin(PILPlugin):
         if not resource.source_file.kind == 'html':
             return
 
-        # This is quite hacky, but rely on a regex.
-        return re.sub(r'(?P<popening><p>)?'
-                      r'(?P<aopening><a\s+[^>]*>)?'
-                      r'(?P<img><img\s+[^>]*>)'
-                      r'(?P<aclosing></a>)?'
-                      r'(?P<pclosing></p>)?',
-                      partial(self._handle_img_str, resource),
-                      text, flags=re.DOTALL)
+        d = pq(text)
+        for img in d.items('img'):
+            width = img.attr.width
+            height = img.attr.height
+            src = img.attr.src
+            wh = self._handle_img(resource, src, width, height)
+            if wh is None:
+                continue
+            width, height = wh
+
+            # Adapt width/height if this is a scaled image (something@2x.jpg)
+            mo = re.match(r'.*@(\d+)x\.[^.]*$', urllib.unquote(src))
+            if mo:
+                factor = int(mo.group(1))
+                width /= factor
+                height /= factor
+
+            # Put new width/height
+            img.attr.width = '{}'.format(width)
+            img.attr.height = '{}'.format(height)
+
+            # If image is a SVG in /obj/, turns into an object
+            if "/obj/" in src and src.endswith(".svg"):
+                img[0].tag = 'object'
+                img.attr("type", "image/svg+xml")
+                img.attr("data", src)
+                del img.attr.src
+                img.text('&#128444; {}'.format(img.attr.alt or ""))
+
+            # If image is contained in a paragraph, enclose into a
+            # responsive structure.
+            parent = None
+            parents = [p.tag for p in img.parents()]
+            if parents[-1] == 'p':
+                parent = img.parent()
+            elif parents[-2:] == ['p', 'a']:
+                parent = img.parent().parent()
+            if parent:
+                img.addClass('lf-img')
+                inner = pq('<span />')
+                outer = pq('<div />')
+                inner.addClass('lf-img-inner')
+                inner.css.padding_bottom = '{:.3f}%'.format(
+                    float(height)*100./width)
+                outer.addClass('lf-img-outer')
+                outer.css.width = '{}px'.format(width)
+                outer.append(inner)
+
+                # If we have a title, also enclose in a figure
+                if img.attr.title:
+                    figure = pq('<figure />')
+                    figcaption = pq('<figcaption />')
+                    figcaption.text(img.attr.title)
+                    del img.attr.title
+                    figure.append(outer)
+                    figure.append(figcaption)
+                    enclosure = figure
+                else:
+                    enclosure = outer
+
+                # Put image in inner tag
+                if img.parent()[0].tag == 'a':
+                    inner.append(img.parent())
+                else:
+                    inner.append(img)
+                # Replace parent with our enclosure
+                parent.replace_with(enclosure)
+
+        return html2str(d.root, encoding='unicode')
