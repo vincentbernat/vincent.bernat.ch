@@ -26,5 +26,6 @@ def footnotes2asides(html):
         sidenote.attr.class_ = "lf-sidenote"
         sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
             ref.text(), fn.html()))
+        sidenote("a.footnote-backref").remove()
         sidenote.insert_before(parent)
     return html2str(d[0], encoding='unicode')[5:-6]
