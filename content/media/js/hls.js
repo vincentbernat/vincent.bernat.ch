@@ -1,1 +1,1 @@
-../../../node_modules/hls.js/dist/hls.js
+../../../node_modules/hls.js/dist/hls.light.js
