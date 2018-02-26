@@ -1,3 +1,7 @@
+# -*- encoding: utf-8 -*-
+import re
+import subprocess
+import HTMLParser
 from babel.dates import format_date
 from pyquery import PyQuery as pq
 from lxml.html import tostring as html2str
@@ -29,3 +33,41 @@ def footnotes2asides(html):
         sidenote("a.footnote-backref").remove()
         sidenote.insert_before(parent)
     return html2str(d[0], encoding='unicode')[5:-6]
+
+
+katex_re = re.compile(ur'(?<!\\)·(.+?)·', re.DOTALL)
+katex_pr = [None]
+katex_js = """
+var katex = require('katex');
+var split = require('split');
+process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(latex) {
+  process.stdout.write(katex.renderToString(latex));
+  process.stdout.write('\\0');
+});
+"""
+
+def katex(html):
+    """Extract LaTeX snippets and run them through KaTeX."""
+    return katex_re.sub(katex_render, html)
+
+def katex_render(mo):
+    formula = HTMLParser.HTMLParser().unescape(mo.group(1))
+    if katex_pr[0] is None:
+        katex_pr[0] = subprocess.Popen(['node', '-e', katex_js],
+                                       stdin=subprocess.PIPE,
+                                       stdout=subprocess.PIPE)
+    # Assume input is small enough
+    katex_pr[0].stdin.write(formula.encode('utf-8'))
+    katex_pr[0].stdin.write('\0')
+    katex_pr[0].stdin.flush()
+    # Get answer
+    answer = ""
+    while True:
+        char = katex_pr[0].stdout.read(1)
+        if char == '':
+            raise RuntimeError('unexpected stream end')
+        if char == '\0':
+            break
+        answer += char
+    answer = answer.decode('utf-8')
+    return answer
