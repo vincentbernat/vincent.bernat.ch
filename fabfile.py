@@ -286,8 +286,6 @@ def build():
                   'media/css/*.css']:
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
-                if 'fonts/KaTeX' in f:
-                    continue
                 # Compute hash
                 md5 = local("md5sum %s" % f, capture=True).split(" ")[0][:14]
                 sha = local("openssl dgst -sha256 -binary %s | openssl enc -base64 -A" % f,
@@ -308,13 +306,13 @@ def build():
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1anonymous\1_g"
+                          r"s,\([\"']\)%s%s\1,\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1anonymous\1,g"
                           '"' % (media, f, media, newname, sha))
                 if ext in [".woff2"]:
                     # Fix HTML
                     local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
                           '"'
-                          r"s_\([\"']\)%s%s\1_\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1use-credentials\1_g"
+                          r"s,\([\"']\)%s%s\1,\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1use-credentials\1,g"
                           '"' % (media, f, media, newname, sha))
 
         # Fix permissions
