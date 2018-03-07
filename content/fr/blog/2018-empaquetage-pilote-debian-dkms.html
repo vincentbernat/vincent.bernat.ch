@@ -1,0 +1,227 @@
+---
+title: "Empaquetage d'un module tierce pour Debian avec DKMS"
+description: |
+  DKMS facilite l'installation de modules tierces pour Linux.
+  Empaqueter un pilote avec DKMS est relativement simple.
+uuid: 239cbd4f-4f37-42d5-af20-e39a8c3dfff4
+tags:
+  - debian
+---
+
+> [DKMS][] est un système conçu pour permettre la mise à jour
+> individuelle de modules noyau sans changer le noyau en entier. Il
+> est également très facile de reconstruire des modules lorsque vous
+> mettez à jour le noyau.
+
+Sur les systèmes de type Debian[^rpm], *DKMS* permet l'installation de
+différents pilotes, de [ZFS][ZFS on Linux] aux modules
+[VirtualBox][VirtualBox kernel modules] ou [NVIDIA][NVIDIA
+drivers]. Ces modules externes ne sont pas distribués sous forme
+binaire : une fois installés, ils doivent être compilés pour votre
+noyau actuel. Tout se fait automatiquement :
+
+    ::console
+    # apt install zfs-dkms
+    Reading package lists... Done
+    Building dependency tree
+    Reading state information... Done
+    The following additional packages will be installed:
+      binutils cpp cpp-6 dkms fakeroot gcc gcc-6 gcc-6-base libasan3 libatomic1 libc-dev-bin libc6-dev
+      libcc1-0 libcilkrts5 libfakeroot libgcc-6-dev libgcc1 libgomp1 libisl15 libitm1 liblsan0 libmpc3
+      libmpfr4 libmpx2 libnvpair1linux libquadmath0 libstdc++6 libtsan0 libubsan0 libuutil1linux libzfs2linux
+      libzpool2linux linux-compiler-gcc-6-x86 linux-headers-4.9.0-6-amd64 linux-headers-4.9.0-6-common
+      linux-headers-amd64 linux-kbuild-4.9 linux-libc-dev make manpages manpages-dev patch spl spl-dkms
+      zfs-zed zfsutils-linux
+    […]
+    3 upgraded, 44 newly installed, 0 to remove and 3 not upgraded.
+    Need to get 42.1 MB of archives.
+    After this operation, 187 MB of additional disk space will be used.
+    Do you want to continue? [Y/n]
+    […]
+    # dkms status
+    spl, 0.6.5.9, 4.9.0-6-amd64, x86_64: installed
+    zfs, 0.6.5.9, 4.9.0-6-amd64, x86_64: installed
+    # modinfo zfs | head
+    filename:       /lib/modules/4.9.0-6-amd64/updates/dkms/zfs.ko
+    version:        0.6.5.9-5
+    license:        CDDL
+    author:         OpenZFS on Linux
+    description:    ZFS
+    srcversion:     42C4AB70887EA26A9970936
+    depends:        spl,znvpair,zcommon,zunicode,zavl
+    retpoline:      Y
+    vermagic:       4.9.0-6-amd64 SMP mod_unload modversions
+    parm:           zvol_inhibit_dev:Do not create zvol device nodes (uint)
+
+[^rpm]: *DKMS* est également compatible avec les distributions à base
+    de RPM mais le contenu de cet article ne s'applique pas à
+    celles-ci.
+
+Lors de l'installation d'un nouveau noyau, la compilation du module
+est automatiquement déclenchée.
+
+# Construction d'un paquet compatible DKMS
+
+Supposons que vous avez mis la main sur un serveur avec une carte
+réseau [Intel XXV710-DA2][]. Cette carte est gérée par le pilote
+`i40e`. Malheureusement, elle n'est prise en charge que depuis Linux
+4.10 et vous utilisez un noyau 4.9 issu de Debian Stretch. *DKMS*
+fournit ici une solution simple !
+
+Téléchargez les [sources du pilote chez Intel][driver from Intel],
+décompressez-les dans un répertoire et ajoutez un sous-répertoire
+`debian/` avec les fichiers suivants :
+
+ - `debian/changelog`:
+
+        ::text hl_lines="1"
+        i40e-dkms (2.4.6-0) stretch; urgency=medium
+        
+          * Initial package.
+        
+         -- Vincent Bernat <bernat@debian.org>  Tue, 27 Feb 2018 17:20:58 +0100
+
+ - `debian/control`:
+
+        ::control
+        Source: i40e-dkms
+        Maintainer: Vincent Bernat <bernat@debian.org>
+        Build-Depends: debhelper (>= 9), dkms
+        
+        Package: i40e-dkms
+        Architecture: all
+        Depends: ${misc:Depends}
+        Description: DKMS source for the Intel i40e network driver
+
+ - `debian/rules`:
+
+        ::make hl_lines="9"
+        #!/usr/bin/make -f
+        
+        include /usr/share/dpkg/pkg-info.mk
+        
+        %:
+                dh $@ --with dkms
+        
+        override_dh_install:
+                dh_install src/* usr/src/i40e-$(DEB_VERSION_UPSTREAM)/
+        
+        override_dh_dkms:
+                dh_dkms -V $(DEB_VERSION_UPSTREAM)
+        
+        override_dh_auto_configure:
+        override_dh_auto_build:
+        override_dh_auto_test:
+        override_dh_auto_install:
+        override_dh_auto_clean:
+
+ - `debian/i40e-dkms.dkms`:
+
+        ::ini
+        PACKAGE_NAME="i40e"
+        PACKAGE_VERSION="#MODULE_VERSION#"
+        BUILT_MODULE_NAME[0]="$PACKAGE_NAME"
+        DEST_MODULE_LOCATION[0]="/updates/dkms"
+        AUTOINSTALL="YES"
+        REMAKE_INITRD="YES"
+
+ - `debian/compat`:
+
+        ::text
+        9
+
+Le fichier `debian/changelog` permet essentiellement de spécifier la
+version du paquet. Celle du pilote est 2.4.6. Par conséquent, nous
+utilisons `2.4.6-0` comme version de paquet. Dans `debian/rules`, nous
+copions les sources du pilote dans `/usr/src/i40e-2.4.6` (la version
+est extraite de `debian/changelog`).
+
+Le contenu de `debian/i40e-dkms.dkms` est décrit en détail dans la
+[page de manuel `dkms(8)`][dkms.conf]. Le pilote `i40e` est assez
+standard et `dkms` sait comment le compiler. Cependant, si un module
+noyau ne suit pas les conventions habituelles, c'est le bon endroit
+pour remplacer la commande de construction.
+
+Une fois tous les fichiers en place, vous pouvez transformer le
+répertoire en un paquet Debian à l'aide, par exemple, de la commande
+`dpkg-buildpackage` command[^apt]. Vous obtenez un paquet compatible
+*DKMS* : `i40e-dkms_2.4.6-0_all.deb`. Placez le dans votre [dépôt
+interne][internal repository] et installez-le sur le serveur cible.
+
+[^apt]: Quelques paquets additionels sont nécessaires :
+    `build-essential`, `fakeroot` et `debhelper`.
+
+# Éviter la phase de compilation
+
+Si la présence d'outils de développement sur un serveur en production
+vous rend nerveux, il y a une solution ! Depuis la version
+2.2.0.3-5[^version], grâce à [Thijs Kinkhorst][], `dkms` peut
+construire des paquets contenant uniquement les modules
+précompilés. Pour chaque version du noyau, un tel paquet peut être
+construit via votre système d'intégration :
+
+    ::sh hl_lines="8"
+    KERNEL_VERSION=4.9.0-6-amd64 # could be a Jenkins parameter
+    apt -qyy install \
+          i40e-dkms \
+          linux-image-${KERNEL_VERSION} \
+          linux-headers-${KERNEL_VERSION}
+    
+    DRIVER_VERSION=$(dkms status i40e | awk -F', ' '{print $2}')
+    dkms mkbmdeb i40e/${DRIVER_VERSION} -k ${KERNEL_VERSION}
+    
+    cd /var/lib/dkms/i40e/${DRIVER_VERSION}/bmdeb/
+    dpkg -c i40e-modules-${KERNEL_VERSION}_*
+    dpkg -I i40e-modules-${KERNEL_VERSION}_*
+
+[^version]: Disponible pour Debian Stretch ainsi que pour Debian
+    Jessie, via un rétroportage. Toutefois, la version dans Ubuntu
+    Xenial est trop ancienne.
+
+Voici la sortie abbrégée des deux dernières commandes :
+
+    ::console hl_lines="3 14"
+    # dpkg -c i40e-modules-${KERNEL_VERSION}_*
+    […]
+    -rw-r--r-- root/root    551664 2018-03-01 19:16 ./lib/modules/4.9.0-6-amd64/updates/dkms/i40e.ko
+    […]
+    # dpkg -I i40e-modules-${KERNEL_VERSION}_*
+     new debian package, version 2.0.
+    […]
+     Package: i40e-modules-4.9.0-6-amd64
+     Source: i40e-dkms-bin
+     Version: 2.4.6
+     Architecture: amd64
+     Maintainer: Dynamic Kernel Modules Support Team <pkg-dkms-maint@lists.alioth.debian.org>
+     Installed-Size: 555
+     Depends: linux-image-4.9.0-6-amd64
+     Provides: i40e-modules
+     Section: misc
+     Priority: optional
+     Description: i40e binary drivers for linux-image-4.9.0-6-amd64
+      This package contains i40e drivers for the 4.9.0-6-amd64 Linux kernel,
+      built from i40e-dkms for the amd64 architecture.
+
+Le paquet Debian ainsi créé contient le pilote précompilé et ne dépend
+que du noyau associé. Vous pouvez l'installer sans tirer des dizaines
+de dépendances supplémentaires.
+
+*[DKMS]: Dynamic Kernel Module Support
+*[CI]: Continuous Integration
+
+[Source]: https://packages.debian.org/sid/dkms "Paquet dkms pour Debian Sid"
+[DKMS]: https://github.com/dell/dkms "Dynamic Kernel Module Support sur GitHub"
+[ZFS on Linux]: https://packages.debian.org/sid/zfs-dkms "Paquet pour le module ZFS on Linux pour Debian"
+[VirtualBox kernel modules]: https://packages.debian.org/sid/virtualbox-dkms "Module noyau VirtualBox kernel pour Debian"
+[NVIDIA drivers]: https://packages.debian.org/sid/nvidia-kernel-dkms "Pilote NVIDIA pour Debian"
+[Intel XXV710-DA2]: https://ark.intel.com/products/95260/Intel-Ethernet-Network-Adapter-XXV710-DA2 "Intel Ethernet Network Adapter XXV710-DA2"
+[driver from Intel]: https://downloadcenter.intel.com/download/24411/?product=95260 "Intel Network Adapter Driver for PCIe 40 Gigabit Ethernet Network Connections Under Linux"
+[dkms.conf]: https://manpages.debian.org/stretch/dkms/dkms.8.en.html#DKMS.CONF "dkms(8): dkms.conf"
+[internal repository]: [[en/blog/2014-depots-apt-locaux.html]] "Dépôts APT locaux en entreprise"
+[backport]: https://github.com/exoscale/pkg-dkms/tree/xenial "Backport of dkms for Ubuntu Xenial"
+[Thijs Kinkhorst]: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=554843#92 "Debian bug #554843"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

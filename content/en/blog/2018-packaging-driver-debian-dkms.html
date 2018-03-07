@@ -1,0 +1,222 @@
+---
+title: "Packaging an out-of-tree module for Debian with DKMS"
+description: |
+  DKMS helps install of out-of-tree Linux modules. Packaging a
+  driver for DKMS, including precompiled, is usually easy.
+uuid: 239cbd4f-4f37-42d5-af20-e39a8c3dfff4
+tags:
+  - debian
+---
+
+> [DKMS][] is a framework designed to allow individual kernel modules to
+> be upgraded without changing the whole kernel. It is also very easy
+> to rebuild modules as you upgrade kernels.
+
+On Debian-like systems,[^rpm] *DKMS* enables the installation of
+various drivers, from [ZFS on Linux][] to [VirtualBox kernel
+modules][] or [NVIDIA drivers][]. These out-of-tree modules are not
+distributed as binaries: once installed, they need to be compiled for
+your current kernel. Everything is done automatically:
+
+    ::console
+    # apt install zfs-dkms
+    Reading package lists... Done
+    Building dependency tree
+    Reading state information... Done
+    The following additional packages will be installed:
+      binutils cpp cpp-6 dkms fakeroot gcc gcc-6 gcc-6-base libasan3 libatomic1 libc-dev-bin libc6-dev
+      libcc1-0 libcilkrts5 libfakeroot libgcc-6-dev libgcc1 libgomp1 libisl15 libitm1 liblsan0 libmpc3
+      libmpfr4 libmpx2 libnvpair1linux libquadmath0 libstdc++6 libtsan0 libubsan0 libuutil1linux libzfs2linux
+      libzpool2linux linux-compiler-gcc-6-x86 linux-headers-4.9.0-6-amd64 linux-headers-4.9.0-6-common
+      linux-headers-amd64 linux-kbuild-4.9 linux-libc-dev make manpages manpages-dev patch spl spl-dkms
+      zfs-zed zfsutils-linux
+    […]
+    3 upgraded, 44 newly installed, 0 to remove and 3 not upgraded.
+    Need to get 42.1 MB of archives.
+    After this operation, 187 MB of additional disk space will be used.
+    Do you want to continue? [Y/n]
+    […]
+    # dkms status
+    spl, 0.6.5.9, 4.9.0-6-amd64, x86_64: installed
+    zfs, 0.6.5.9, 4.9.0-6-amd64, x86_64: installed
+    # modinfo zfs | head
+    filename:       /lib/modules/4.9.0-6-amd64/updates/dkms/zfs.ko
+    version:        0.6.5.9-5
+    license:        CDDL
+    author:         OpenZFS on Linux
+    description:    ZFS
+    srcversion:     42C4AB70887EA26A9970936
+    depends:        spl,znvpair,zcommon,zunicode,zavl
+    retpoline:      Y
+    vermagic:       4.9.0-6-amd64 SMP mod_unload modversions
+    parm:           zvol_inhibit_dev:Do not create zvol device nodes (uint)
+
+[^rpm]: *DKMS* is also compatible with RPM-based distributions but the
+    content of this article is not suitable for these.
+
+If you install a new kernel, a compilation of the module is
+automatically triggered.
+
+# Building your own DKMS-enabled package
+
+Suppose you've gotten your hands on an [Intel XXV710-DA2][] NIC. This
+card is handled by the `i40e` driver. Unfortunately, it only got
+support from Linux 4.10 and you are using a stock 4.9 Debian Stretch
+kernel. *DKMS* provides here an easy solution!
+
+Download the [driver from Intel][], unpack it in some directory and
+add a `debian/` subdirectory with the following files:
+
+ - `debian/changelog`:
+
+        ::text hl_lines="1"
+        i40e-dkms (2.4.6-0) stretch; urgency=medium
+        
+          * Initial package.
+        
+         -- Vincent Bernat <bernat@debian.org>  Tue, 27 Feb 2018 17:20:58 +0100
+
+ - `debian/control`:
+
+        ::control
+        Source: i40e-dkms
+        Maintainer: Vincent Bernat <bernat@debian.org>
+        Build-Depends: debhelper (>= 9), dkms
+        
+        Package: i40e-dkms
+        Architecture: all
+        Depends: ${misc:Depends}
+        Description: DKMS source for the Intel i40e network driver
+
+ - `debian/rules`:
+
+        ::make hl_lines="9"
+        #!/usr/bin/make -f
+        
+        include /usr/share/dpkg/pkg-info.mk
+        
+        %:
+                dh $@ --with dkms
+        
+        override_dh_install:
+                dh_install src/* usr/src/i40e-$(DEB_VERSION_UPSTREAM)/
+        
+        override_dh_dkms:
+                dh_dkms -V $(DEB_VERSION_UPSTREAM)
+        
+        override_dh_auto_configure:
+        override_dh_auto_build:
+        override_dh_auto_test:
+        override_dh_auto_install:
+        override_dh_auto_clean:
+
+ - `debian/i40e-dkms.dkms`:
+
+        ::ini
+        PACKAGE_NAME="i40e"
+        PACKAGE_VERSION="#MODULE_VERSION#"
+        BUILT_MODULE_NAME[0]="$PACKAGE_NAME"
+        DEST_MODULE_LOCATION[0]="/updates/dkms"
+        AUTOINSTALL="YES"
+        REMAKE_INITRD="YES"
+
+ - `debian/compat`:
+
+        ::text
+        9
+
+In `debian/changelog`, pay attention to the version. The version of
+the driver is 2.4.6. Therefore, we use `2.4.6-0` for the package. In
+`debian/rules`, we install the source of the driver in
+`/usr/src/i40e-2.4.6`—the version is extracted from
+`debian/changelog`.
+
+The content of `debian/i40e-dkms.dkms` is described in details in the
+[`dkms(8)` manual page][dkms.conf]. The `i40e` driver is fairly
+standard and `dkms` is able to figure out how to compile it. However,
+if your kernel module does not follow the usual conventions, it is the
+right place to override the build command.
+
+Once all the files are in place, you can turn the directory into a
+Debian package with, for example, the `dpkg-buildpackage`
+command.[^apt] At the end of this operation, you get your DKMS-enabled
+package, `i40e-dkms_2.4.6-0_all.deb`. Put it in your [internal
+repository][] and install it on the target.
+
+[^apt]: You may need to install some additional packages:
+    `build-essential`, `fakeroot` and `debhelper`.
+
+# Avoiding compilation on target
+
+If you feel uncomfortable installing compilation tools on the target
+servers, there is a simple solution. Since version
+2.2.0.3-5,[^version] thanks to [Thijs Kinkhorst][], `dkms` can build
+lean binary packages with only the built modules. For each kernel
+version, you build such a package in your CI system:
+
+    ::sh hl_lines="8"
+    KERNEL_VERSION=4.9.0-6-amd64 # could be a Jenkins parameter
+    apt -qyy install \
+          i40e-dkms \
+          linux-image-${KERNEL_VERSION} \
+          linux-headers-${KERNEL_VERSION}
+    
+    DRIVER_VERSION=$(dkms status i40e | awk -F', ' '{print $2}')
+    dkms mkbmdeb i40e/${DRIVER_VERSION} -k ${KERNEL_VERSION}
+    
+    cd /var/lib/dkms/i40e/${DRIVER_VERSION}/bmdeb/
+    dpkg -c i40e-modules-${KERNEL_VERSION}_*
+    dpkg -I i40e-modules-${KERNEL_VERSION}_*
+
+[^version]: Available in Debian Stretch and in the backports for
+    Debian Jessie. However, for Ubuntu Xenial, you need to
+    [backport][] a more recent version of `dkms`.
+
+Here is the shortened output of the two last commands:
+
+    ::console hl_lines="3 14"
+    # dpkg -c i40e-modules-${KERNEL_VERSION}_*
+    […]
+    -rw-r--r-- root/root    551664 2018-03-01 19:16 ./lib/modules/4.9.0-6-amd64/updates/dkms/i40e.ko
+    […]
+    # dpkg -I i40e-modules-${KERNEL_VERSION}_*
+     new debian package, version 2.0.
+    […]
+     Package: i40e-modules-4.9.0-6-amd64
+     Source: i40e-dkms-bin
+     Version: 2.4.6
+     Architecture: amd64
+     Maintainer: Dynamic Kernel Modules Support Team <pkg-dkms-maint@lists.alioth.debian.org>
+     Installed-Size: 555
+     Depends: linux-image-4.9.0-6-amd64
+     Provides: i40e-modules
+     Section: misc
+     Priority: optional
+     Description: i40e binary drivers for linux-image-4.9.0-6-amd64
+      This package contains i40e drivers for the 4.9.0-6-amd64 Linux kernel,
+      built from i40e-dkms for the amd64 architecture.
+
+The generated Debian package contains the pre-compiled driver and only
+depends on the associated kernel. You can safely install it without
+pulling dozens of packages.
+
+*[DKMS]: Dynamic Kernel Module Support
+*[CI]: Continuous Integration
+*[NIC]: Network Interface Card
+
+[Source]: https://packages.debian.org/sid/dkms "dkms package in Debian Sid"
+[DKMS]: https://github.com/dell/dkms "Dynamic Kernel Module Support on GitHub"
+[ZFS on Linux]: https://packages.debian.org/sid/zfs-dkms "ZFS on Linux module package for Debian"
+[VirtualBox kernel modules]: https://packages.debian.org/sid/virtualbox-dkms "VirtualBox kernel module package for Debian"
+[NVIDIA drivers]: https://packages.debian.org/sid/nvidia-kernel-dkms "NVIDIA kernel module package for Debian"
+[Intel XXV710-DA2]: https://ark.intel.com/products/95260/Intel-Ethernet-Network-Adapter-XXV710-DA2 "Intel Ethernet Network Adapter XXV710-DA2"
+[driver from Intel]: https://downloadcenter.intel.com/download/24411/?product=95260 "Intel Network Adapter Driver for PCIe 40 Gigabit Ethernet Network Connections Under Linux"
+[dkms.conf]: https://manpages.debian.org/stretch/dkms/dkms.8.en.html#DKMS.CONF "dkms(8): dkms.conf"
+[internal repository]: [[en/blog/2014-local-apt-repositories.html]] "Local corporate APT repositories"
+[backport]: https://github.com/exoscale/pkg-dkms/tree/xenial "Backport of dkms for Ubuntu Xenial"
+[Thijs Kinkhorst]: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=554843#92 "Debian bug #554843"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
