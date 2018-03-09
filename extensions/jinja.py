@@ -1,4 +1,4 @@
-# -*- encoding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import re
 import subprocess
 import HTMLParser
@@ -27,6 +27,7 @@ def footnotes2asides(html):
         parent = ref.parents().eq(3)  # html, body, div, HERE
         sidenote = pq('<aside/>')
         sidenote.attr.role = "note"
+        sidenote.attr['aria-hidden'] = "true"
         sidenote.attr.class_ = "lf-sidenote"
         sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
             ref.text(), fn.html()))
