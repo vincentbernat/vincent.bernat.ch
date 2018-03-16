@@ -21,10 +21,7 @@ class CodeHiliteLangExtension(Extension):
             result = pygments_highlight(src, lexer, formatter)
             if isinstance(formatter, HtmlFormatter):
                 d = pq(result)
-                d('pre').wrap('<pre/>')
-                code = d('pre > pre')
-                code[0].tag = 'code'
-                code.attr.class_ = 'language-{}'.format(lang)
+                d.add_class('language-{}'.format(lang))
                 result = html2str(d[0], encoding='unicode')
             return result
 
