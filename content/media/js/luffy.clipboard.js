@@ -13,32 +13,42 @@ luffy.s.push(function() {
   function copy(e) {
     var t = e.target;
     if (t.className === 'lf-sprite-copy') {
-      // Find the sibling pre element
-      var sibling = t.parentNode.childNodes[0];
-      if (sibling.tagName === 'PRE') {
+      // Find the el pre element
+      var el = t.parentNode.childNodes[0];
+      if (el.tagName === 'PRE') {
         try {
           // Ask to copy to clipboard and intercept event to force
           // text.
           function listener(e) {
-            e.clipboardData.setData('text/plain', sibling.innerText);
+            e.clipboardData.setData('text/plain', el.innerText);
             e.preventDefault();
           }
           document.addEventListener('copy', listener);
           try {
-            document.execCommand('copy');
+            // Try to select the text first
+            if (window.getSelection) {
+              el.contentEditable = true;
+              el.readOnly = false;
+              var selection = window.getSelection()
+              var range = document.createRange();
+              range.selectNodeContents(el);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              el.contentEditable = false;
+              el.readOnly = false;
+            }
+            if (document.queryCommandEnabled("copy")) {
+              document.execCommand('copy');
+            } else {
+              throw "Cannot copy (maybe iOS)";
+            }
+            selection.removeAllRanges();
+            el.blur();
           } finally {
             document.removeEventListener('copy', listener);
           }
           t.className = 'lf-sprite-copy lf-copy-ok';
         } catch (err) {
-          // Try to select the text instead
-          if (window.getSelection) {
-            var selection = window.getSelection()
-            var range = document.createRange();
-            range.selectNodeContents(sibling);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
           // Hint to use OS to copy
           t.className = 'lf-sprite-copy lf-copy-failed';
         }
