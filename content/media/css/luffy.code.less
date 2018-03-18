@@ -127,7 +127,73 @@ pre, code, code .amp, pre .amp {
                 &, * { color: black; }
                 .go { color: #555555 } /* Generic.Output */
             }
+            & > .lf-sprite-copy {
+                display: none;
+            }
+        }
+
+        /* Clipboard handling */
+        position: relative;
+        & > .lf-sprite-copy {
+            position: absolute;
+            top: 0;
+            right: 0;
+            transition: opacity .4s;
+            opacity: 0.4;
+            cursor: pointer;
+            &:hover {
+                opacity: 1;
+            }
+            &::after {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                right: 0;
+                height: 100%;
+                display: none;
+                font-size: 0.75em;
+                padding: 2px 5px;
+                border-radius: 2px;
+                white-space: nowrap;
+                vertical-align: middle;
+                font-family: @font-headings;
+                color: #fff;
+                background-color: #222;
+                transform: translateX(-30px);
+            }
+            &:hover::after {
+                display: block;
+                content: "Copy to clipboard";
+            }
+            &:hover:lang(fr)::after {
+                content: "Copier vers le presse-papier";
+            }
+            &.lf-copy-ok::after, &.lf-copy-failed::after {
+                display: block;
+                animation: showcopied 1.5s ease;
+            }
+            &.lf-copy-ok::after {
+                content: "Copied!";
+            }
+            &.lf-copy-ok:lang(fr)::after {
+                content: "Copié!";
+            }
+            &.lf-copy-failed::after {
+                content: "Ctrl/⌘+C to copy";
+            }
+            &.lf-copy-failed:lang(fr)::after {
+                content: "Ctrl/⌘+C pour copier";
+            }
+            @keyframes showcopied {
+                0% {
+                    opacity: 0;
+                    transform: translateX(0);
+                }
+                50%,100% {
+                    opacity: 1;
+                    transform: translateX(-30px);
+                }
+            }
         }
     }
-
 }
