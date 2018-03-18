@@ -13,44 +13,33 @@ luffy.s.push(function() {
   function copy(e) {
     var t = e.target;
     if (t.className === 'lf-sprite-copy') {
-      // Find the el pre element
+      // Find the sibling pre element
       var el = t.parentNode.childNodes[0];
       if (el.tagName === 'PRE') {
         try {
-          // Ask to copy to clipboard and intercept event to force
-          // text.
-          function listener(e) {
-            e.clipboardData.setData('text/plain', el.innerText);
-            e.preventDefault();
-          }
-          document.addEventListener('copy', listener);
-          try {
-            // Try to select the text first
-            if (window.getSelection) {
-              el.contentEditable = true;
-              el.readOnly = false;
-              var selection = window.getSelection()
-              var range = document.createRange();
-              range.selectNodeContents(el);
-              selection.removeAllRanges();
-              selection.addRange(range);
-              el.contentEditable = false;
-              el.readOnly = false;
-            }
-            if (document.queryCommandEnabled("copy")) {
-              document.execCommand('copy');
-            } else {
-              throw "Cannot copy (maybe iOS)";
-            }
+          // Select text
+          if (window.getSelection) {
+            el.contentEditable = true;
+            el.readOnly = false;
+            var selection = window.getSelection()
+            var range = document.createRange();
+            range.selectNodeContents(el);
             selection.removeAllRanges();
-            el.blur();
-          } finally {
-            document.removeEventListener('copy', listener);
+            selection.addRange(range);
+            el.contentEditable = false;
+            el.readOnly = false;
           }
-          t.className = 'lf-sprite-copy lf-copy-ok';
+          if (document.queryCommandEnabled("copy")) {
+            document.execCommand('copy');
+          } else {
+            throw "Cannot copy (maybe iOS)";
+          }
+          selection.removeAllRanges();
+          el.blur();
+          t.className = 'msg-copy-ok lf-sprite-copy';
         } catch (err) {
           // Hint to use OS to copy
-          t.className = 'lf-sprite-copy lf-copy-failed';
+          t.className = 'msg-copy-failed lf-sprite-copy';
         }
 
         // Remove the message after a timeout
