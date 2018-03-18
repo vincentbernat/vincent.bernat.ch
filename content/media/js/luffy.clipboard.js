@@ -32,17 +32,14 @@ luffy.s.push(function() {
           t.className = 'lf-sprite-copy lf-copy-ok';
         } catch (err) {
           // Try to select the text instead
-          if (document.body.createTextRange) {
-            var range = document.body.createTextRange();
-            range.moveToElementText(sibling);
-            range.select();
-          } else if (window.getSelection) {
+          if (window.getSelection) {
             var selection = window.getSelection()
-            range = document.createRange();
+            var range = document.createRange();
             range.selectNodeContents(sibling);
             selection.removeAllRanges();
             selection.addRange(range);
           }
+          // Hint to use OS to copy
           t.className = 'lf-sprite-copy lf-copy-failed';
         }
 
