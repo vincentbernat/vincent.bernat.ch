@@ -1,6 +1,10 @@
 /* Add a copy to clipboard button for code blocks */
 
 luffy.s.push(function() {
+  if (!window.getSelection) {
+    return;
+  }
+
   var codeBlocks = document.querySelectorAll('main .codehilite');
   for (var i = 0; i < codeBlocks.length; i++) {
     var copyIcon = document.createElement('span');
@@ -18,24 +22,28 @@ luffy.s.push(function() {
       if (el.tagName === 'PRE') {
         try {
           // Select text
-          if (window.getSelection) {
-            el.contentEditable = true;
-            el.readOnly = false;
-            var selection = window.getSelection()
-            var range = document.createRange();
-            range.selectNodeContents(el);
-            selection.removeAllRanges();
-            selection.addRange(range);
-            el.contentEditable = false;
-            el.readOnly = false;
-          }
+          el.contentEditable = true;
+          el.readOnly = false;
+          var selection = window.getSelection()
+          var range = document.createRange();
+          range.selectNodeContents(el);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          el.contentEditable = false;
+          el.readOnly = false;
+
+          // Copy
           if (document.queryCommandEnabled("copy")) {
             document.execCommand('copy');
           } else {
             throw "Cannot copy (maybe iOS)";
           }
+
+          // Unselect
           selection.removeAllRanges();
           el.blur();
+
+          // Inform user
           t.className = 'msg-copy-ok lf-sprite-copy';
         } catch (err) {
           // Hint to use OS to copy
