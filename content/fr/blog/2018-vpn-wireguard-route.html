@@ -1,0 +1,190 @@
+---
+title: "VPN routé avec Linux et WireGuard"
+description: |
+  Implémentation de VPN site-à-site redondants sous Linux à l'aide de
+  WireGuard (plutôt qu'IPsec) et BGP.
+uuid: 9c77c0f3-f5ab-4403-b2e9-666dfa56ea02
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routed-vpn-wireguard": "Dépôt GitHub"
+tags:
+  - network
+---
+
+Dans un [article précédent][previous article], j'ai décrit l'implémentation de
+VPN site-à-site redondants avec IPsec (en utilisant [strongSwan][] comme démon
+IKE) et BGP (avec [BIRD][]) pour réaliser ceci : 🦑
+
+![VPN redondants entre trois sites]([[!!images/vpn-routed.svg]] "Trois sites reliés de manière redondante à l'aide de VPN IPsec.")
+
+Les deux forces principales d'une telle installation sont :
+
+1. Les **démons de routage** distribuent les routes à protéger sur chaque
+   site. Ils apportent la haute disponibilité et facilitent grandement la
+   configuration quand de nombreux sous-réseaux sont présents.
+2. L'encapsulation et la décapsulation sont exécutés dans un **espace de noms
+   réseau différent**. Cela permet de cloisonner efficacement le routage privé
+   (où les utilisateurs du VPN se trouvent) du routage public (où les
+   terminaisons VPN se trouvent).
+
+En alternative à IPsec, [WireGuard][] un VPN extrêmement simple (moins de 5 000
+lignes de code) mais rapide et moderne qui utilise la dernière génération
+d'algorithmes cryptographiques ([Curve25519][], [ChaCha20][], [Poly1305][]) et
+dont le protocole, basé sur [Noise][], a été [formellement vérifié][formally
+verified]. Il est disponible comme un module externe pour Linux mais sera
+probablement intégré une fois que le protocole sera définitif. Par rapport à
+IPsec, sa faiblesse majeure est son manque d'interopérabilité.
+
+Il peut aisément remplacer *strongSwan* dans notre installation VPN
+site-à-site. Sous Linux, il se base sur des interfaces virtuelles et du
+routage. La première étape consiste à créer, pour chaque VPN, une clef privée et
+d'en extraire la clef publique associée :
+
+    ::console
+    $ wg genkey
+    oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs=
+    $ echo oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs= | wg pubkey
+    hV1StKWfcC6Yx21xhFvoiXnWONjGHN1dFeibN737Wnc=
+
+Ensuite, pour chaque VPN distant, nous créons un court fichier de
+configuration[^simplicity] :
+
+    ::ini
+    [Interface]
+    PrivateKey = oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs=
+    ListenPort = 5803
+    
+    [Peer]
+    PublicKey  = Jixsag44W8CFkKCIvlLSZF86/Q/4BovkpqdB9Vps5Sk=
+    EndPoint   = [2001:db8:2::1]:5801
+    AllowedIPs = 0.0.0.0/0,::/0
+
+[^simplicity]: Par rapport à IPsec, les algorithmes cryptographiques utilisés ne
+    peuvent pas être modifiés. Cela évite l'utilisation d'algorithmes trop
+    faibles.
+
+Une valeur différente pour `ListenPort` est choisie pour chaque VPN
+distant. *WireGuard* peut communiquer avec plusieurs passerelles sur le même
+port UDP mais cela n'est pas possible ici en raison du routage dynamique. La
+directive `AllowedIPs` indique d'accepter n'importe quel trafic.
+
+L'étape suivante consiste à configurer les interfaces tunnel pour chaque VPN
+distant :
+
+    ::console
+    $ ip link add dev wg3 type wireguard
+    $ wg setconf wg3 wg3.conf
+
+*WireGuard* négocie alors des clefs symétriques avec chaque pair :
+
+    ::console hl_lines="10"
+    $ wg show wg3
+    interface: wg3
+      public key: hV1StKWfcC6Yx21xhFvoiXnWONjGHN1dFeibN737Wnc=
+      private key: (hidden)
+      listening port: 5803
+    
+    peer: Jixsag44W8CFkKCIvlLSZF86/Q/4BovkpqdB9Vps5Sk=
+      endpoint: [2001:db8:2::1]:5801
+      allowed ips: 0.0.0.0/0, ::/0
+      latest handshake: 55 seconds ago
+      transfer: 49.84 KiB received, 49.89 KiB sent
+
+Comme les interfaces VTI, les interfaces tunnel de *WireGuard* prennent en
+compte les espaces de noms : une fois créées, elles peuvent être déplacées dans
+un espace de noms différent dans lequel le trafic en clair sera encapsulé et
+décapsulé. Le trafic chiffré est routé dans l'espace de noms
+d'origine. Déplaçons chaque interface dans l'espace de noms `private` et
+assignons leur une adresse IP :
+
+    ::console
+    $ ip link set netns private dev wg3
+    $ ip -n private addr add 2001:db8:ff::/127 dev wg3
+    $ ip -n private link set wg3 up
+
+Le VPN distant correspondant utilise l'adresse `2001:db8:ff::1/127`. Une fois
+que tout est en place, il devient possible depuis un VPN d'atteindre ses
+voisins :
+
+    ::console
+    $ ip netns exec private fping 2001:db8:ff::{1,3,5,7}
+    2001:db8:ff::1 is alive
+    2001:db8:ff::3 is alive
+    2001:db8:ff::5 is alive
+    2001:db8:ff::7 is alive
+
+La configuration de *BIRD* est inchangée par rapport à la [précédente
+installation][previous article] et les sessions BGP doivent s'établir
+rapidement :
+
+    ::console
+    $ birdc6 -s /run/bird6.private.ctl show proto | grep IBGP_
+    IBGP_V2_1 BGP      master   up     20:16:31    Established
+    IBGP_V2_2 BGP      master   up     20:16:31    Established
+    IBGP_V3_1 BGP      master   up     20:16:31    Established
+    IBGP_V3_2 BGP      master   up     20:16:29    Established
+
+Les routes distantes sont apprises à travers les interfaces tunnel :
+
+    ::console
+    $ ip -6 -n private route show proto bird
+    2001:db8:a1::/64 via fe80::5254:33ff:fe00:13 dev eth2 metric 1024 pref medium
+    2001:db8:a2::/64 metric 1024
+            nexthop via 2001:db8:ff::1 dev wg3 weight 1
+            nexthop via 2001:db8:ff::3 dev wg4 weight 1
+    2001:db8:a3::/64 metric 1024
+            nexthop via 2001:db8:ff::5 dev wg5 weight 1
+            nexthop via 2001:db8:ff::7 dev wg6 weight 1
+
+Depuis un site, il devient possible d'atteindre un hôte d'un autre site à
+travers les VPN :
+
+    ::console
+    $ ping -c 2 2001:db8:a3::1
+    PING 2001:db8:a3::1(2001:db8:a3::1) 56 data bytes
+    64 bytes from 2001:db8:a3::1: icmp_seq=1 ttl=62 time=1.54 ms
+    64 bytes from 2001:db8:a3::1: icmp_seq=2 ttl=62 time=1.67 ms
+    
+    --- 2001:db8:a3::1 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+    rtt min/avg/max/mdev = 1.542/1.607/1.672/0.065 ms
+
+Comme avec IPsec, vous pouvez observer le trafic en clair avec `tcpdump` :
+
+    ::console
+    $ ip netns exec private tcpdump -c3 -pni wg5 icmp6
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on wg5, link-type RAW (Raw IP), capture size 262144 bytes
+    08:34:34 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 40
+    08:34:35 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 41
+    08:34:36 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 42
+    3 packets captured
+    3 packets received by filter
+    0 packets dropped by kernel
+
+Tous les fichiers de configuration sont disponibles sur [GitHub][].
+
+*[IKE]: Internet Key Exchange
+*[ESP]: Encapsulating Security Payload
+*[SPI]: Security Parameters Index
+*[VRF]: Virtual routing and forwarding
+*[VTI]: Virtual Tunnel Interface
+*[GRE]: Generic Routing Encapsulation
+*[MTU]: Maximum Transmission Unit
+*[PMTUD]: Path MTU discovery
+
+[previous article]: [[fr/blog/2017-vpn-ipsec-route.html]] "VPN IPsec routé avec Linux et strongSwan"
+[strongSwan]: https://strongswan.org/ "strongSwan: the OpenSource IPsec-based VPN Solution"
+[GitHub]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn-wireguard "Configuration files for route-based VPNs with WireGuard"
+[BIRD]: http://bird.network.cz/ "The BIRD Internet Routing Daemon"
+[WireGuard]: https://www.wireguard.com/ "WireGuard: fast, modern, secure VPN tunnel"
+[Noise]: http://www.noiseprotocol.org/ "Noise Protocol Framework"
+[Curve25519]: http://cr.yp.to/ecdh.html "Curve25519: high-speed ellipitic-curve cryptography"
+[ChaCha20]: http://cr.yp.to/chacha.html "The ChaCha family of stream ciphers"
+[Poly1305]: http://cr.yp.to/mac.html "Poly1305-AES: a state-of-the-art message-authentication code"
+[formally verified]: https://www.wireguard.com/formal-verification/ "WireGuard: formal verification using Tamarin"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}

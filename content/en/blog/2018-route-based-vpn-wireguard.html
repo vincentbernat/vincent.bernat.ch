@@ -1,0 +1,184 @@
+---
+title: "Route-based VPN on Linux with WireGuard"
+description: |
+  Implementation of redundant site-to-site VPNs on Linux with
+  WireGuard (instead of IPsec) and BGP.
+uuid: 9c77c0f3-f5ab-4403-b2e9-666dfa56ea02
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-routed-vpn-wireguard": "GitHub repository"
+tags:
+  - network
+---
+
+In a [previous article][], I described an implementation of redundant
+site-to-site VPNs using IPsec (with [strongSwan][] as an IKE daemon) and BGP
+(with [BIRD][]) to achieve this: 🦑
+
+![Redundant VPNs between 3 sites]([[!!images/vpn-routed.svg]] "Three sites using redundant IPsec VPNs to protect some subnets.")
+
+The two strengths of such a setup are:
+
+1. **Routing daemons** distribute routes to be protected by the VPNs. They
+   provide high availability and decrease the administrative burden when many
+   subnets are present on each side.
+2. Encapsulation and decapsulation are executed in a **different network
+   namespace**. This enables a clean separation between a private routing
+   instance (where VPN users are) and a public routing instance (where VPN
+   endpoints are).
+
+As an alternative to IPsec, [WireGuard][] is an extremely simple (less than
+5,000 lines of code) yet fast and modern VPN that utilizes state-of-the-art and
+opinionated cryptography ([Curve25519][], [ChaCha20][], [Poly1305][]) and whose
+protocol, based on [Noise][], has been [formally verified][]. It is currently
+available as an out-of-tree module for Linux but is likely to be merged when the
+protocol is not subject to change anymore. Compared to IPsec, its major weakness
+is its lack of interoperability.
+
+It can easily replce *strongSwan* in our site-to-site setup. On Linux, it
+already acts as a route-based VPN. As a first step, for each VPN, we create a
+private key and extract the associated public key:
+
+    ::console
+    $ wg genkey
+    oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs=
+    $ echo oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs= | wg pubkey
+    hV1StKWfcC6Yx21xhFvoiXnWONjGHN1dFeibN737Wnc=
+
+Then, for each remote VPN, we create a short configuration file:[^simplicity]
+
+    ::ini
+    [Interface]
+    PrivateKey = oM3PZ1Htc7FnACoIZGhCyrfeR+Y8Yh34WzDaulNEjGs=
+    ListenPort = 5803
+    
+    [Peer]
+    PublicKey  = Jixsag44W8CFkKCIvlLSZF86/Q/4BovkpqdB9Vps5Sk=
+    EndPoint   = [2001:db8:2::1]:5801
+    AllowedIPs = 0.0.0.0/0,::/0
+
+[^simplicity]: Compared to IPsec, the cryptography is not configurable and you
+    have to use the strong provided defaults.
+
+A new `ListenPort` value should be used for each remote VPN. *WireGuard* can
+multiplex several peers over the same UDP port but this is not applicable here,
+as the routing is dynamic. The `AllowedIPs` directive tells to accept and send
+any traffic.
+
+The next step is to create and configure the tunnel interface for each remote
+VPN:
+
+    ::console
+    $ ip link add dev wg3 type wireguard
+    $ wg setconf wg3 wg3.conf
+
+*WireGuard* initiates an handshake to establish symmetric keys:
+
+    ::console hl_lines="10"
+    $ wg show wg3
+    interface: wg3
+      public key: hV1StKWfcC6Yx21xhFvoiXnWONjGHN1dFeibN737Wnc=
+      private key: (hidden)
+      listening port: 5803
+    
+    peer: Jixsag44W8CFkKCIvlLSZF86/Q/4BovkpqdB9Vps5Sk=
+      endpoint: [2001:db8:2::1]:5801
+      allowed ips: 0.0.0.0/0, ::/0
+      latest handshake: 55 seconds ago
+      transfer: 49.84 KiB received, 49.89 KiB sent
+
+Like VTI interfaces, *WireGuard* tunnel interfaces are namespace-aware: once
+created, they can be moved into another network namespace where clear traffic is
+encapsulated and decapsulated. Encrypted traffic is routed in its original
+namespace. Let's move each interface into the `private` namespace and assign it
+a point-to-point IP address:
+
+    ::console
+    $ ip link set netns private dev wg3
+    $ ip -n private addr add 2001:db8:ff::/127 dev wg3
+    $ ip -n private link set wg3 up
+
+The remote end uses `2001:db8:ff::1/127`. Once everything is setup, from one
+VPN, we should be able to ping each remote host:
+
+    ::console
+    $ ip netns exec private fping 2001:db8:ff::{1,3,5,7}
+    2001:db8:ff::1 is alive
+    2001:db8:ff::3 is alive
+    2001:db8:ff::5 is alive
+    2001:db8:ff::7 is alive
+
+*BIRD* configuration is unmodified compared to our [previous setup][previous
+article] and the BGP sessions should establish quickly:
+
+    ::console
+    $ birdc6 -s /run/bird6.private.ctl show proto | grep IBGP_
+    IBGP_V2_1 BGP      master   up     20:16:31    Established
+    IBGP_V2_2 BGP      master   up     20:16:31    Established
+    IBGP_V3_1 BGP      master   up     20:16:31    Established
+    IBGP_V3_2 BGP      master   up     20:16:29    Established
+
+Remote routes are learnt over the different tunnel interfaces:
+
+    ::console
+    $ ip -6 -n private route show proto bird
+    2001:db8:a1::/64 via fe80::5254:33ff:fe00:13 dev eth2 metric 1024 pref medium
+    2001:db8:a2::/64 metric 1024
+            nexthop via 2001:db8:ff::1 dev wg3 weight 1
+            nexthop via 2001:db8:ff::3 dev wg4 weight 1
+    2001:db8:a3::/64 metric 1024
+            nexthop via 2001:db8:ff::5 dev wg5 weight 1
+            nexthop via 2001:db8:ff::7 dev wg6 weight 1
+
+From one site, you can ping an host on the other site through the VPNs:
+
+    ::console
+    $ ping -c 2 2001:db8:a3::1
+    PING 2001:db8:a3::1(2001:db8:a3::1) 56 data bytes
+    64 bytes from 2001:db8:a3::1: icmp_seq=1 ttl=62 time=1.54 ms
+    64 bytes from 2001:db8:a3::1: icmp_seq=2 ttl=62 time=1.67 ms
+    
+    --- 2001:db8:a3::1 ping statistics ---
+    2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+    rtt min/avg/max/mdev = 1.542/1.607/1.672/0.065 ms
+
+As with the *strongSwan* setup, you can easily snoop unencrypted traffic with
+`tcpdump`:
+
+    ::console
+    $ ip netns exec private tcpdump -c3 -pni wg5 icmp6
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on wg5, link-type RAW (Raw IP), capture size 262144 bytes
+    08:34:34 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 40
+    08:34:35 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 41
+    08:34:36 IP6 2001:db8:a3::1 > 2001:db8:a1::1: ICMP6, echo reply, seq 42
+    3 packets captured
+    3 packets received by filter
+    0 packets dropped by kernel
+
+You can find all the configuration files for this example on [GitHub][].
+
+*[IKE]: Internet Key Exchange
+*[ESP]: Encapsulating Security Payload
+*[SPI]: Security Parameters Index
+*[VRF]: Virtual routing and forwarding
+*[VTI]: Virtual Tunnel Interface
+*[GRE]: Generic Routing Encapsulation
+*[MTU]: Maximum Transmission Unit
+*[PMTUD]: Path MTU discovery
+
+[previous article]: [[en/blog/2017-route-based-vpn.html]] "Route-based IPsec VPN on Linux with strongSwan"
+[strongSwan]: https://strongswan.org/ "strongSwan: the OpenSource IPsec-based VPN Solution"
+[GitHub]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn-wireguard "Configuration files for route-based VPNs with WireGuard"
+[BIRD]: http://bird.network.cz/ "The BIRD Internet Routing Daemon"
+[WireGuard]: https://www.wireguard.com/ "WireGuard: fast, modern, secure VPN tunnel"
+[Noise]: http://www.noiseprotocol.org/ "Noise Protocol Framework"
+[Curve25519]: http://cr.yp.to/ecdh.html "Curve25519: high-speed ellipitic-curve cryptography"
+[ChaCha20]: http://cr.yp.to/chacha.html "The ChaCha family of stream ciphers"
+[Poly1305]: http://cr.yp.to/mac.html "Poly1305-AES: a state-of-the-art message-authentication code"
+[formally verified]: https://www.wireguard.com/formal-verification/ "WireGuard: formal verification using Tamarin"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}
