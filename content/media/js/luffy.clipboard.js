@@ -22,6 +22,7 @@ luffy.s.push(function() {
       if (el.tagName === 'PRE') {
         try {
           // Select text
+          t.blur();
           el.contentEditable = true;
           el.readOnly = false;
           var selection = window.getSelection()
