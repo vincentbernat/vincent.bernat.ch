@@ -400,18 +400,16 @@ linked to the same `404.service` job:
     WantedBy=sockets.target
 
 Unless overridden with `FileDescriptorName`, the name of the socket is
-the name of the unit: `403.socket`. Currently, *go-systemd* does not
-expose these names [yet][]. However, they can be extracted from the
-`LISTEN_FDNAMES` environment variable:
+the name of the unit: `403.socket`. *go-systemd* provides the
+`ListenersWithNames()` function to fetch a map from names to listening
+sockets:
 
-    ::go hl_lines="26"
+    ::go hl_lines="24"
     package main
     
     import (
         "log"
         "net/http"
-        "os"
-        "strings"
         "sync"
     
         "github.com/coreos/go-systemd/activation"
@@ -419,7 +417,7 @@ expose these names [yet][]. However, they can be extracted from the
     
     func main() {
         var wg sync.WaitGroup
-
+    
         // Map socket names to handlers.
         handlers := map[string]http.HandlerFunc{
             "404.socket": http.NotFound,
@@ -429,27 +427,26 @@ expose these names [yet][]. However, they can be extracted from the
             },
         }
     
-        // Get socket names.
-        names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
-        
         // Get listening sockets.
-        listeners, err := activation.Listeners(true)
+        listeners, err := activation.ListenersWithNames(true)
         if err != nil {
             log.Panicf("cannot retrieve listeners: %s", err)
         }
-        
+    
         // For each listening socket, spawn a goroutine
         // with the appropriate handler.
-        for idx := range names {
-            wg.Add(1)
-            go func(idx int) {
-                defer wg.Done()
-                http.Serve(
-                    listeners[idx],
-                    handlers[names[idx]])
-            }(idx)
+        for name := range listeners {
+            for idx := range listeners[name] {
+                wg.Add(1)
+                go func(name string, idx int) {
+                    defer wg.Done()
+                    http.Serve(
+                        listeners[name][idx],
+                        handlers[name])
+                }(name, idx)
+            }
         }
-        
+    
         // Wait for all goroutines to terminate.
         wg.Wait()
     }

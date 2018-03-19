@@ -431,19 +431,15 @@ définition de socket supplémentaire, `403.socket`, liée à la tâche
 
 À moins de le spécifier explicitement avec la directive
 `FileDescriptorName`, le nom de la socket est le nom de l'unité :
-`403.socket`. Actuellement, *go-systemd* n'offre pas [encore][yet] de
-fonction pour récupérer le nom des sockets. Toutefois, il est
-possible de les extraire via la variable d'environnement
-`LISTEN_FDNAMES` :
+`403.socket`. *go-systemd* fournit la fonction `ListenersWithName()`
+pour récupérer une correspondance entre les noms et les sockets :
 
-    ::go hl_lines="26"
+    ::go hl_lines="24"
     package main
     
     import (
         "log"
         "net/http"
-        "os"
-        "strings"
         "sync"
     
         "github.com/coreos/go-systemd/activation"
@@ -461,27 +457,26 @@ possible de les extraire via la variable d'environnement
             },
         }
     
-        // Récupère les noms de socket en écoute.
-        names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
-        
         // Récupère les sockets en écoute.
-        listeners, err := activation.Listeners(true)
+        listeners, err := activation.ListenersWithNames(true)
         if err != nil {
             log.Panicf("cannot retrieve listeners: %s", err)
         }
-        
+    
         // Pour chaque socket, invoque une goroutine en utilisant
         // la fonction de gestion adéquate.
-        for idx := range names {
-            wg.Add(1)
-            go func(idx int) {
-                defer wg.Done()
-                http.Serve(
-                    listeners[idx],
-                    handlers[names[idx]])
-            }(idx)
+        for name := range listeners {
+            for idx := range listeners[name] {
+                wg.Add(1)
+                go func(name string, idx int) {
+                    defer wg.Done()
+                    http.Serve(
+                        listeners[name][idx],
+                        handlers[name])
+                }(name, idx)
+            }
         }
-        
+    
         // Attend que toutes les goroutines terminent.
         wg.Wait()
     }
