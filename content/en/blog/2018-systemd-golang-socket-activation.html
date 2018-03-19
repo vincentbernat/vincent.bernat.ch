@@ -1,0 +1,497 @@
+---
+title: "Integration of a Go service with systemd: socket activation"
+description: |
+  Using systemd's socket activation, you can achieve zero-downtime
+  deployment for your Go service with a few lines of code.
+uuid: 5463b0ca-6eb9-48e8-a36e-ed8a829fdb8d
+tags:
+  - golang
+---
+
+In a [previous post][], I highlighted some useful features of
+*systemd* when writing a service in Go, notably to signal *readiness*
+and prove *liveness*. Another interesting bit is **socket
+activation**: *systemd* listens on behalf of the application and, on
+incoming traffic, starts the service with a copy of the listening
+socket. Lennart Poettering [details in a blog post][]:
+
+> If a service dies, its listening socket stays around, not losing a
+> single message. After a restart of the crashed service it can
+> continue right where it left off. If a service is upgraded we can
+> restart the service while keeping around its sockets, thus ensuring
+> the service is continously responsive. Not a single connection is
+> lost during the upgrade.
+
+This is one solution to get **zero-downtime deployment** for your
+application. Another upside is you can run your daemon with less
+privileges—loosing rights is a difficult task in Go.[^system]
+
+[^system]: Many process characteristics in Linux are attached to
+    threads. Go runtime transparently manages them without much user
+    control. Until [recently][], this made some features, like
+    `setuid()` or `setns()`, unusable.
+
+[TOC]
+
+# The basics
+
+Let's take back our nifty 404-only web server:
+
+    ::go
+    package main
+    
+    import (
+        "log"
+        "net"
+        "net/http"
+    )
+    
+    func main() {
+        listener, err := net.Listen("tcp", ":8081")
+        if err != nil {
+            log.Panicf("cannot listen: %s", err)
+        }
+        http.Serve(listener, nil)
+    }
+
+Here is the socket-activated version, using [go-systemd][]:
+
+    ::go hl_lines="11 19"
+    package main
+    
+    import (
+        "log"
+        "net/http"
+    
+        "github.com/coreos/go-systemd/activation"
+    )
+    
+    func main() {
+        listeners, err := activation.Listeners(true) // ❶
+        if err != nil {
+            log.Panicf("cannot retrieve listeners: %s", err)
+        }
+        if len(listeners) != 1 {
+            log.Panicf("unexpected number of socket activation (%d != 1)",
+                len(listeners))
+        }
+        http.Serve(listeners[0], nil) // ❷
+    }
+
+In ❶, we retrieve the listening sockets provided by *systemd*. In ❷,
+we use the first one to serve HTTP requests. Let's test the result
+with `systemd-socket-activate`:
+
+    ::console
+    $ go build 404.go
+    $ systemd-socket-activate -l 8000 ./404
+    Listening on [::]:8000 as 3.
+
+In another terminal, we can make some requests to the service:
+
+    ::console
+    $ curl '[::1]':8000
+    404 page not found
+    $ curl '[::1]':8000
+    404 page not found
+
+For a proper integration with *systemd*, you need two files:
+
+ - a **socket unit** for the listening socket, and
+ - a **service unit** for the associated service.
+
+We can use the following socket unit, `404.socket`:
+
+    ::ini
+    [Socket]
+    ListenStream = 8000
+    BindIPv6Only = both
+    
+    [Install]
+    WantedBy = sockets.target
+
+The [`systemd.socket(5)`][systemd.socket] manual page describes the
+available options. `BindIPv6Only = both` is explicitely specified
+because the default value is distribution-dependent. As for the
+service unit, we can use the following one, `404.service`:
+
+    ::ini
+    [Unit]
+    Description = 404 micro-service
+    
+    [Service]
+    ExecStart = /usr/bin/404
+
+*systemd* knows the two files work together because they share the
+same prefix.  Once the files are in `/etc/systemd/system`, execute
+`systemctl daemon-reload` and `systemctl start 404.​socket`. Your
+service is ready to accept connections!
+
+# Handling of existing connections
+
+Our 404 service has a major shortcoming: existing connections are
+abruptly killed when the daemon is stopped or restarted. Let's fix that!
+
+## Waiting a few seconds for existing connections
+
+We can include a short grace period for connections to terminate, then
+kill remaining ones:
+
+    ::go hl_lines="15 22"
+    // On signal, gracefully shut down the server and wait 5
+    // seconds for current connections to stop.
+    done := make(chan struct{})
+    quit := make(chan os.Signal, 1)
+    server := &http.Server{}
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    
+    go func() {
+        <-quit
+        log.Println("server is shutting down")
+        ctx, cancel := context.WithTimeout(context.Background(),
+            5*time.Second)
+        defer cancel()
+        server.SetKeepAlivesEnabled(false)
+        if err := server.Shutdown(ctx); err != nil {
+            log.Panicf("cannot gracefully shut down the server: %s", err)
+        }
+        close(done)
+    }()
+
+    // Start accepting connections.
+    server.Serve(listeners[0])
+    
+    // Wait for existing connections before exiting.
+    <-done
+
+Upon reception of a termination signal, the goroutine would resume and
+[schedule a shutdown of the service][]:
+
+> `Shutdown()` gracefully shuts down the server without interrupting
+> any active connections. `Shutdown()` works by first closing all open
+> listeners, then closing all idle connections, and then waiting
+> indefinitely for connections to return to idle and then shut down.
+
+While restarting, new connections are not accepted: they sit in the
+listen queue associated to the socket. This queue is bounded and its
+size can be configured with the `Backlog` directive in the socket
+unit. Its default value is 128. You may keep this value, even when
+your service is expecting to receive many connections by second. When
+this value is exceeded, incoming connections are silently dropped. The
+client should automatically retry to connect. On Linux, by default, it
+will retry 5 times (`tcp_syn_retries`) in about 3 minutes. This is a
+nice way to avoid the herd effect you would experience on restart if
+you increased the listen queue to some high value.
+
+## Waiting longer for existing connections
+
+If you want to wait for a very long time for existing connections to
+stop, you do not want to ignore new connections for several
+minutes. There is a very simple trick: **ask *systemd* to not kill any
+process on stop**. With `KillMode = none`, only the stop command is
+executed and all existing processes are left undisturbed:
+
+    ::ini hl_lines="6 7"
+    [Unit]
+    Description = slow 404 micro-service
+    
+    [Service]
+    ExecStart = /usr/bin/404
+    ExecStop  = /bin/kill $MAINPID
+    KillMode  = none
+
+If you restart the service, the current process gracefully shuts down
+for as long as needed and *systemd* spawns immediately a new instance
+ready to serve incoming requests with its own copy of the listening
+socket. On the other hand, we loose the ability to wait for the
+service to come to a full stop—either by itself or forcefully after a
+timeout with `SIGKILL`.
+
+## Waiting longer for existing connections (alternative)
+
+An alternative to the previous solution is to **make *systemd* believe
+your service died** during reload.
+
+    ::go hl_lines="26 27"
+    done := make(chan struct{})
+    quit := make(chan os.Signal, 1)
+    server := &http.Server{}
+    signal.Notify(quit,
+        // for reload:
+        syscall.SIGHUP,
+        // for stop or full restart:
+        syscall.SIGINT, syscall.SIGTERM)
+    go func() {
+        sig := <-quit
+        switch sig {
+        case syscall.SIGINT, syscall.SIGTERM:
+            // Shutdown with a time limit.
+            log.Println("server is shutting down")
+            ctx, cancel := context.WithTimeout(context.Background(),
+                15*time.Second)
+            defer cancel()
+            server.SetKeepAlivesEnabled(false)
+            if err := server.Shutdown(ctx); err != nil {
+                log.Panicf("cannot gracefully shut down the server: %s", err)
+            }
+        case syscall.SIGHUP: // ❶
+            // Execute a short-lived process and asks systemd to
+            // track it instead of us.
+            log.Println("server is reloading")
+            pid := daemonizeSleep()
+            daemon.SdNotify(false, fmt.Sprintf("MAINPID=%d", pid))
+            time.Sleep(time.Second) // Wait a bit for systemd to check the PID
+
+            // Wait without a limit for current connections to stop.
+            server.SetKeepAlivesEnabled(false)
+            if err := server.Shutdown(context.Background()); err != nil {
+                log.Panicf("cannot gracefully shut down the server: %s", err)
+            }
+        }
+        close(done)
+    }()
+
+    // Serve requests with a slow handler.
+    server.Handler = http.HandlerFunc(
+        func(w http.ResponseWriter, r *http.Request) {
+            time.Sleep(10 * time.Second)
+            http.Error(w, "404 not found", http.StatusNotFound)
+        })
+    server.Serve(listeners[0])
+
+    // Wait for all connections to terminate.
+    <-done
+    log.Println("server terminated")
+
+The main difference is the handling of the `SIGHUP` signal in ❶: a
+short-lived decoy process is spawned and *systemd* is told to track
+it. When it dies, *systemd* will start a new instance. This method is
+a bit hacky: *systemd* needs the decoy process to be a child of PID 1
+but Go [cannot daemonize][] on its own. Therefore, we leverage a short
+Python helper, wrapped in a `daemonizeSleep()` function:[^python]
+
+    ::go
+    // daemonizeSleep spawns a daemon process sleeping
+    // one second and returns its PID.
+    func daemonizeSleep() uint64 {
+        py := `
+    import os
+    import time
+    
+    r, w = os.pipe()
+    pid1 = os.fork()
+    if pid1 == 0:
+        os.close(r)
+        pid2 = os.fork()
+        if pid2 == 0:
+            for fd in {w, 0, 1, 2}:
+                os.close(fd)
+            time.sleep(1)
+        else:
+            os.write(w, str(pid2).encode("ascii"))
+            os.close(w)
+    else:
+        os.close(w)
+        print(os.read(r, 64).decode("ascii"))
+    `
+        cmd := exec.Command("/usr/bin/python3", "-c", py)
+        out, err := cmd.Output()
+        if err != nil {
+            log.Panicf("cannot execute sleep command: %s", err)
+        }
+        pid, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64)
+        if err != nil {
+            log.Panicf("cannot parse PID of sleep command: %s", err)
+        }
+        return pid
+    }
+
+[^python]: Python is a good candidate: it's likely to be available on
+    the system, it is low-level enough to easily implement the
+    functionality and, as an interpreted language, it doesn't require
+    a specific build step.
+
+During reload, there may be a small period during which both the new
+and the old processes accept incoming requests. If you don't want
+that, you can move the creation of the short-lived process outside the
+goroutine, after `server.Serve()`, or implement some synchronization
+mechanism. There is also a possible race-condition when we tell
+*systemd* to track another PID—see [PR #7816][].
+
+The `404.service` unit needs an update:
+
+    ::ini
+    [Unit]
+    Description = slow 404 micro-service
+    
+    [Service]
+    ExecStart    = /usr/bin/404
+    ExecReload   = /bin/kill -HUP $MAINPID
+    Restart      = always
+    NotifyAccess = main
+    KillMode     = process
+
+Each additional directive is significant:
+
+ - `ExecReload` tells how to reload the process—by sending `SIGHUP`.
+ - `Restart` tells to restart the process if it stops "unexpectedly",
+   notably on reload.[^socket]
+ - `NotifyAccess` specifies which process can send notifications, like
+   a PID change.
+ - `KillMode` tells to only kill the main identified process—others
+   are left untouched.
+
+[^socket]: This is not an essential directive as the process is also
+    restarted through socket-activation.
+
+## Zero-downtime deployment?
+
+Zero-downtime deployment is a difficult endeavor on Linux. For
+example, [HAProxy][] had a [long][hack1] [list][hack2] of
+[hacks][hack3] until a [proper—and complex—solution][] was implemented
+in *HAproxy* 1.8. How do we fare with our simple implementation?
+
+From the kernel point of view, there is a **only one socket** with a
+**unique listen queue**. This socket is associated to several file
+descriptors: one in *systemd* and one in the current process. The
+socket stays alive as long as there is at least one file
+descriptor. An incoming connection is put by the kernel in the listen
+queue and can be dequeued from any file descriptor with the `accept()`
+syscall. Therefore, this approach actually achieves zero-downtime
+deployment: no incoming connection is rejected.
+
+By contrast, *HAProxy* was using several different sockets listening
+to the same addresses, thanks to the [`SO_REUSEPORT`
+option][SO_REUSEPORT].[^why] Each socket gets its own listening queue
+and the kernel balances incoming connections between each queue. When
+a socket gets closed, the content of its queue is lost. If an incoming
+connection was sitting here, it would receive a reset. An elegant
+patch for Linux to [signal a socket should not receive new
+connections][] was rejected. *HAProxy* 1.8 is now recycling existing
+sockets to the new processes through an Unix socket.
+
+[^why]: This approach is more convenient when reloading since you
+    don't have to figure out which sockets to reuse and which ones to
+    create from scratch. Moreover, when several processes need to
+    accept connections, using multiple sockets is more scalable as the
+    different processes won't fight over a shared lock to accept
+    connections.
+
+I hope this post and the [previous one][previous post] show how
+*systemd* is a good sidekick for a Go service: *readiness*, *liveness*
+and *socket activation* are some of the useful features you can get to
+build a more reliable application.
+
+# Addendum: identifying sockets by name
+
+For a given service, *systemd* can provide several sockets. To
+identify them, it is possible to name them. Let's suppose we also want
+to return 403 error codes from the same service but on a different
+port. We add an additional socket unit definition, `403.socket`,
+linked to the same `404.service` job:
+
+    ::ini hl_lines="4"
+    [Socket]
+    ListenStream = 8001
+    BindIPv6Only = both
+    Service      = 404.service
+    
+    [Install]
+    WantedBy=sockets.target
+
+Unless overridden with `FileDescriptorName`, the name of the socket is
+the name of the unit: `403.socket`. Currently, *go-systemd* does not
+expose these names [yet][]. However, they can be extracted from the
+`LISTEN_FDNAMES` environment variable:
+
+    ::go hl_lines="26"
+    package main
+    
+    import (
+        "log"
+        "net/http"
+        "os"
+        "strings"
+        "sync"
+    
+        "github.com/coreos/go-systemd/activation"
+    )
+    
+    func main() {
+        var wg sync.WaitGroup
+
+        // Map socket names to handlers.
+        handlers := map[string]http.HandlerFunc{
+            "404.socket": http.NotFound,
+            "403.socket": func(w http.ResponseWriter, r *http.Request) {
+                http.Error(w, "403 forbidden",
+                    http.StatusForbidden)
+            },
+        }
+    
+        // Get socket names.
+        names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
+        
+        // Get listening sockets.
+        listeners, err := activation.Listeners(true)
+        if err != nil {
+            log.Panicf("cannot retrieve listeners: %s", err)
+        }
+        
+        // For each listening socket, spawn a goroutine
+        // with the appropriate handler.
+        for idx := range names {
+            wg.Add(1)
+            go func(idx int) {
+                defer wg.Done()
+                http.Serve(
+                    listeners[idx],
+                    handlers[names[idx]])
+            }(idx)
+        }
+        
+        // Wait for all goroutines to terminate.
+        wg.Wait()
+    }
+
+Let's build the service and run it with `systemd-socket-activate`:
+
+    ::console
+    $ go build 404.go
+    $ systemd-socket-activate -l 8000 -l 8001 \
+    >                         --fdname=404.socket:403.socket \
+    >                         ./404
+    Listening on [::]:8000 as 3.
+    Listening on [::]:8001 as 4.
+
+In another console, we can make a request for each endpoint:
+
+    ::console
+    $ curl '[::1]':8000
+    404 page not found
+    $ curl '[::1]':8001
+    403 forbidden
+
+[previous post]: [[en/blog/2017-systemd-golang.html]] "Integration of a Go service with systemd: readiness & liveness"
+[details in a blog post]: http://0pointer.de/blog/projects/socket-activation.html "systemd for Developers I: socket activation"
+[go-systemd]: https://github.com/coreos/go-systemd/ "Go bindings for systemd"
+[systemd.socket]: https://manpages.debian.org/stretch/systemd/systemd.socket.5.en.html "systemd.socket(5) manual page"
+[schedule a shutdown of the service]: https://godoc.org/net/http#Server.Shutdown "godoc: net/http Server Shutdown"
+[endless]: https://github.com/fvbock/endless "Zero downtime restarts for go servers"
+[yet]: https://github.com/coreos/go-systemd/pull/251 "activation: add two functions to provide listeners with names"
+[HAProxy]: https://www.haproxy.org/ "HAProxy: The Reliable, High Performance TCP/HTTP Load Balancer"
+[hack1]: https://engineeringblog.yelp.com/2015/04/true-zero-downtime-haproxy-reloads.html "True Zero Downtime HAProxy Reload"
+[hack2]: https://medium.com/@Drew_Stokes/actual-zero-downtime-with-haproxy-18318578fde6 "Actual Zero-Downtime with HAProxy"
+[hack3]: https://githubengineering.com/glb-part-2-haproxy-zero-downtime-zero-delay-reloads-with-multibinder/ "GLB part 2: HAProxy zero-downtime, zero-delay reloads with multibinder"
+[proper—and complex—solution]: https://www.haproxy.com/blog/truly-seamless-reloads-with-haproxy-no-more-hacks/ "Truly Seamless Reloads with HAProxy – No More Hacks!"
+[SO_REUSEPORT]: https://manpages.debian.org/stretch/manpages/socket.7.en.html "socket - Linux socket interface"
+[signal a socket should not receive new connections]: https://www.mail-archive.com/netdev@vger.kernel.org/msg91809.html "Re: [PATCH 1/1] net: Add SO_REUSEPORT_LISTEN_OFF socket option as drain mode"
+[dup2]: https://manpages.debian.org/stretch/manpages-dev/dup2.2.en.html "dup, dup2, dup3 - duplicate a file descriptor"
+[PR #7816]: https://github.com/systemd/systemd/pull/7816 "Make MAINPID= and PIDFile= handling more restrictive"
+[cannot daemonize]: https://github.com/golang/go/issues/227 "runtime: support for daemonize"
+[recently]: https://golang.org/doc/go1.10#runtime "Go 1.10 Release Notes: Runtime"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
