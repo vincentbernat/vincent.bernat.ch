@@ -751,7 +751,28 @@ Quagga*.[^whypatch]
 
 [^whypatch]: The encoding of the VNI into the route target is being
     standardized in [draft-ietf-bess-evpn-overlay][]. Juniper already
-    implements this draft.
+    implements this draft. You can also workaround this issue by
+    specifying explicitely `vrf-target` for each VNI in `protocols
+    evpn`. For example, for compatibility with unpatched *Cumulus
+    Quagga*:
+    
+        ::junos
+        protocols evpn {
+          encapsulation vxlan;
+          multicast-mode ingress-replication;
+          extended-vni-list [ 100 200 ];
+          vni-options {
+            vni 100 {
+              vrf-target target:65000:100;
+            }
+            vni 200 {
+              vrf-target target:65000:200;
+            }
+          }
+        }
+    
+    You also need to unset `routing-instance switch vrf-target auto`.
+
 
 The routes sent by this configuration are very similar to the routes
 sent by Quagga. The main differences are:
