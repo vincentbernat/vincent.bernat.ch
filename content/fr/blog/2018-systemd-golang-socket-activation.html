@@ -257,7 +257,7 @@ Une alternative à la solution précédente consiste à **faire croire à
             // Exécute un processus éphémère et demande à systemd de
             // le suivre au lieu de nous.
             log.Println("server is reloading")
-            pid := daemonizeSleep()
+            pid := detachedSleep()
             daemon.SdNotify(false, fmt.Sprintf("MAINPID=%d", pid))
             time.Sleep(time.Second)
 
@@ -286,34 +286,26 @@ La principale différence est le traitement du signal `SIGHUP` en ❶ :
 un processus leurre de courte durée est exécuté et *systemd* est
 invité à le suivre. Quand il meurt, *systemd* lancera une nouvelle
 instance du service. Cette méthode nécessite quelques bricolages :
-*systemd* a besoin que le leurre soit son fils mais Go [ne peut pas se
-mettre en arrière plan][cannot daemonize] seul. Par conséquent, nous
-utilisons un court script Python inclu dans la fonction
-`daemonizeSleep()`[^python] :
+*systemd* a besoin que le leurre soit son fils mais Go [ne peut pas
+facilement se mettre en arrière plan][cannot daemonize] seul. Par
+conséquent, nous utilisons un court script Python inclu dans la
+fonction `detachedSleep()`[^python] :
 
     ::go
-    // daemonizeSleep exécute un processus dormant une seconde
+    // detachedSleep exécute un processus dormant une seconde
     // en arrière plan et retourne son PID.
-    func daemonizeSleep() uint64 {
+    func detachedSleep() uint64 {
         py := `
     import os
     import time
     
-    r, w = os.pipe()
-    pid1 = os.fork()
-    if pid1 == 0:
-        os.close(r)
-        pid2 = os.fork()
-        if pid2 == 0:
-            for fd in {w, 0, 1, 2}:
-                os.close(fd)
-            time.sleep(1)
-        else:
-            os.write(w, str(pid2).encode("ascii"))
-            os.close(w)
+    pid = os.fork()
+    if pid == 0:
+        for fd in {0, 1, 2}:
+            os.close(fd)
+        time.sleep(1)
     else:
-        os.close(w)
-        print(os.read(r, 64).decode("ascii"))
+        print(pid)
     `
         cmd := exec.Command("/usr/bin/python3", "-c", py)
         out, err := cmd.Output()
@@ -331,6 +323,10 @@ utilisons un court script Python inclu dans la fonction
     sur le système, il est d'assez bas niveau pour implémenter
     facilement la fonctionnalité et, en tant que langage interprété,
     il ne nécessite pas d'étape de compilation.
+    
+    **MISE À JOUR (03.2018):** Il n'y a pas besoin d'appeler `fork()`
+    deux fois car il faut uniquement détacher le leurre du processus
+    courant. Cela simplifie sensiblement le code Python.
 
 Pendant le rechargement, il peut y avoir une courte période pendant
 laquelle le nouveau et l'ancien processus acceptent les requêtes

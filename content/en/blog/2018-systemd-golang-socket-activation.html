@@ -238,7 +238,7 @@ your service died** during reload.
             // Execute a short-lived process and asks systemd to
             // track it instead of us.
             log.Println("server is reloading")
-            pid := daemonizeSleep()
+            pid := detachedSleep()
             daemon.SdNotify(false, fmt.Sprintf("MAINPID=%d", pid))
             time.Sleep(time.Second) // Wait a bit for systemd to check the PID
 
@@ -267,32 +267,24 @@ The main difference is the handling of the `SIGHUP` signal in ❶: a
 short-lived decoy process is spawned and *systemd* is told to track
 it. When it dies, *systemd* will start a new instance. This method is
 a bit hacky: *systemd* needs the decoy process to be a child of PID 1
-but Go [cannot daemonize][] on its own. Therefore, we leverage a short
-Python helper, wrapped in a `daemonizeSleep()` function:[^python]
+but Go [cannot easily detach][] on its own. Therefore, we leverage a
+short Python helper, wrapped in a `detachedSleep()` function:[^python]
 
     ::go
-    // daemonizeSleep spawns a daemon process sleeping
+    // detachedSleep spawns a detached process sleeping
     // one second and returns its PID.
-    func daemonizeSleep() uint64 {
+    func detachedSleep() uint64 {
         py := `
     import os
     import time
     
-    r, w = os.pipe()
-    pid1 = os.fork()
-    if pid1 == 0:
-        os.close(r)
-        pid2 = os.fork()
-        if pid2 == 0:
-            for fd in {w, 0, 1, 2}:
-                os.close(fd)
-            time.sleep(1)
-        else:
-            os.write(w, str(pid2).encode("ascii"))
-            os.close(w)
+    pid = os.fork()
+    if pid == 0:
+        for fd in {0, 1, 2}:
+            os.close(fd)
+        time.sleep(1)
     else:
-        os.close(w)
-        print(os.read(r, 64).decode("ascii"))
+        print(pid)
     `
         cmd := exec.Command("/usr/bin/python3", "-c", py)
         out, err := cmd.Output()
@@ -310,6 +302,10 @@ Python helper, wrapped in a `daemonizeSleep()` function:[^python]
     the system, it is low-level enough to easily implement the
     functionality and, as an interpreted language, it doesn't require
     a specific build step.
+    
+    **UPDATED (2018.03):** There is no need to fork twice as we only
+    need to detach the decoy from the current process. This simplify
+    a bit the Python code.
 
 During reload, there may be a small period during which both the new
 and the old processes accept incoming requests. If you don't want
@@ -485,7 +481,7 @@ In another console, we can make a request for each endpoint:
 [signal a socket should not receive new connections]: https://www.mail-archive.com/netdev@vger.kernel.org/msg91809.html "Re: [PATCH 1/1] net: Add SO_REUSEPORT_LISTEN_OFF socket option as drain mode"
 [dup2]: https://manpages.debian.org/stretch/manpages-dev/dup2.2.en.html "dup, dup2, dup3 - duplicate a file descriptor"
 [PR #7816]: https://github.com/systemd/systemd/pull/7816 "Make MAINPID= and PIDFile= handling more restrictive"
-[cannot daemonize]: https://github.com/golang/go/issues/227 "runtime: support for daemonize"
+[cannot easily detach]: https://github.com/golang/go/issues/227 "runtime: support for daemonize"
 [recently]: https://golang.org/doc/go1.10#runtime "Go 1.10 Release Notes: Runtime"
 
 {# Local Variables:      #}
