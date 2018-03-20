@@ -378,6 +378,74 @@ I hope this post and the [previous one][previous post] show how
 and *socket activation* are some of the useful features you can get to
 build a more reliable application.
 
+# Addendum: decoy process using Go
+
+**UPDATED (2018.03):** On [/r/golang][], it was pointed out to me
+that, in the version where *systemd* is tracking a decoy, the helper
+can be replaced by invoking the main executable. By relying on a
+change of environment, it takes the role of the decoy. Here is such an
+implementation replacing the `detachedSleep()` function:
+
+    ::go
+    func init() {
+        // As early as possible, check if we should be the decoy.
+        state := os.Getenv("__SLEEPY")
+        os.Unsetenv("__SLEEPY")
+        switch state {
+        case "1":
+            // First step, fork again.
+            execPath := self()
+            child, err := os.StartProcess(
+                execPath,
+                []string{execPath},
+                &os.ProcAttr{
+                    Env: append(os.Environ(), "__SLEEPY=2"),
+                })
+            if err != nil {
+                log.Panicf("cannot execute sleep command: %s", err)
+            }
+    
+            // Advertise child's PID and exit. Child will be
+            // orphaned and adopted by PID 1.
+            fmt.Printf("%d", child.Pid)
+            os.Exit(0)
+        case "2":
+            // Sleep and exit.
+            time.Sleep(time.Second)
+            os.Exit(0)
+        }
+        // Not the sleepy helper. Business as usual.
+    }
+    
+    // self returns the absolute path to ourselves. This relies on
+    // /proc/self/exe which may be a symlink to a deleted path (for
+    // example, during an upgrade).
+    func self() string {
+        execPath, err := os.Readlink("/proc/self/exe")
+        if err != nil {
+            log.Panicf("cannot get self path: %s", err)
+        }
+        execPath = strings.TrimSuffix(execPath, " (deleted)")
+        return execpath
+    }
+    
+    // detachedSleep spawns a detached process sleeping one second and
+    // returns its PID. A full daemonization is not needed as the process
+    // is short-lived.
+    func detachedSleep() uint64 {
+        cmd := exec.Command(self())
+        cmd.Env = append(os.Environ(), "__SLEEPY=1")
+        out, err := cmd.Output()
+        if err != nil {
+            log.Panicf("cannot execute sleep command: %s", err)
+        }
+        pid, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64)
+        if err != nil {
+            log.Panicf("cannot parse PID of sleep command: %s", err)
+        }
+        return pid
+    }
+
 # Addendum: identifying sockets by name
 
 For a given service, *systemd* can provide several sockets. To
@@ -483,6 +551,7 @@ In another console, we can make a request for each endpoint:
 [PR #7816]: https://github.com/systemd/systemd/pull/7816 "Make MAINPID= and PIDFile= handling more restrictive"
 [cannot easily detach]: https://github.com/golang/go/issues/227 "runtime: support for daemonize"
 [recently]: https://golang.org/doc/go1.10#runtime "Go 1.10 Release Notes: Runtime"
+[/r/golang]: https://www.reddit.com/r/golang/comments/85sm59/integration_of_a_go_service_with_systemd_socket/ "/r/golang: Integration of a Go service with systemd: socket activation"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
