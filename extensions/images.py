@@ -7,7 +7,6 @@ Contains classes to handle images related things
 
 from hyde.plugin import Plugin
 from hyde.plugin import CLTransformer
-from hyde.ext.plugins.images import PILPlugin
 from fswrap import File, Folder
 
 import xml.etree.ElementTree as ET
@@ -15,6 +14,7 @@ from pyquery import PyQuery as pq
 from lxml.html import tostring as html2str
 
 from PIL import Image
+from pymediainfo import MediaInfo
 import new
 import os
 import re
@@ -27,7 +27,7 @@ class Thumb(object):
         for arg in kwargs:
             setattr(self, arg, kwargs[arg])
     def __str__(self):
-        return self.path       
+        return self.path
 
 def thumb(self, defaults={}, width=None, height=None):
     """
@@ -152,56 +152,51 @@ class JPEGTranPlugin(CLTransformer):
         target.delete()
 
 
-class ImageSizerPlugin(PILPlugin):
-    """Each HTML page is modified to add width and height for images if
-    they are not already specified. Moreover, images are embedded into
-    a container to ensure their aspect ratio is conserved if their
-    width is constrained.
+class ImageFixerPlugin(Plugin):
+    """Fix images in various ways:
+
+      - add width/height attributes
+      - make them responsive
+      - turn them into object if they are interactive
+      - turn them into video if they are video
     """
 
     def __init__(self, site):
-        super(ImageSizerPlugin, self).__init__(site)
+        super(ImageFixerPlugin, self).__init__(site)
         self.cache = {}
 
     def _topx(self, x):
+        """Convert a size to pixels."""
         mo = re.match(r'(?P<size>\d+(?:\.\d*)?)(?P<unit>.*)', x)
         if not mo:
             raise ValueError("cannot convert {} to pixel".format(x))
         unit = mo.group("unit")
         size = float(mo.group("size"))
-        if unit in ["", "px"]:
+        if unit in {"", "px"}:
             return int(size)
         if unit == "pt":
             return int(size*4/3)
         raise ValueError("unknown unit {}".format(unit))
 
-    def _handle_img_size(self, image):
-        if image.source_file.kind not in ['png', 'jpg', 'jpeg', 'gif', 'svg']:
-            self.logger.warn(
-                "[%s] has an img tag not linking to an image" % resource)
-            return (None, None)
-        # Now, get the size of the image
-        try:
-            if image.source_file.kind == 'svg':
-                svg = ET.parse(image.path).getroot()
-                return tuple(x and self._topx(x) or None
-                             for x in (svg.attrib.get('width', None),
-                                       svg.attrib.get('height', None)))
-            return self.Image.open(image.path).size
-        except IOError:
-            self.logger.warn(
-                "Unable to process image [%s]" % image)
-            return (None, None)
+    def _size(self, image):
+        """Get size for an object."""
+        if image.source_file.kind in {'png', 'jpg', 'jpeg', 'gif'}:
+            return Image.open(image.path).size
+        if image.source_file.kind in {'svg'}:
+            svg = ET.parse(image.path).getroot()
+            return tuple(x and self._topx(x) or None
+                         for x in (svg.attrib.get('width', None),
+                                   svg.attrib.get('height', None)))
+        if image.source_file.kind in {'mp4', 'ogv'}:
+            mi = MediaInfo.parse(image.path)
+            track = [t for t in mi.tracks if t.track_type == 'Video'][0]
+            return (track.width, track.height)
+        self.logger.warn(
+            "[%s] has an img tag not linking to an image" % resource)
+        return (None, None)
 
-    def _handle_img(self, resource, src, width, height):
-        """Determine what should be added to an img tag."""
-        if height is not None and width is not None:
-            return None
-        if src is None:
-            self.logger.warn(
-                "[%s] has an img tag without src attribute" % resource)
-            return None
-        src = urllib.unquote(src)
+    def _resize(self, resource, src, width, height):
+        """Determine size of an img tag."""
         if src not in self.cache:
             if src.startswith(self.site.config.media_url):
                 path = src[len(self.site.config.media_url):].lstrip("/")
@@ -224,7 +219,7 @@ class ImageSizerPlugin(PILPlugin):
                 self.logger.warn(
                     "[%s] has an unknown image %s" % (resource, src))
                 return None
-            self.cache[src] = self._handle_img_size(image)
+            self.cache[src] = self._size(image)
             self.logger.debug("Image [%s] is %s" % (src,
                                                     self.cache[src]))
         new_width, new_height = self.cache[src]
@@ -238,10 +233,7 @@ class ImageSizerPlugin(PILPlugin):
 
     def text_resource_complete(self, resource, text):
         """
-        When the resource is generated, search for img tag and specify
-        their sizes.
-
-        Some img tags may be missed, this is not a perfect parser.
+        When the resource is generated, search for img tag and fix them.
         """
         if not resource.source_file.kind == 'html':
             return
@@ -251,21 +243,29 @@ class ImageSizerPlugin(PILPlugin):
             width = img.attr.width
             height = img.attr.height
             src = img.attr.src
-            wh = self._handle_img(resource, src, width, height)
-            if wh is None:
+            src = urllib.unquote(src)
+            if src is None:
+                self.logger.warn(
+                    "[%s] has an img tag without src attribute" % resource)
                 continue
-            width, height = wh
+            if width is None or height is None:
+                wh = self._resize(resource, src, width, height)
+                if wh is not None:
+                    width, height = wh
+                else:
+                    width, height = None, None
 
             # Adapt width/height if this is a scaled image (something@2x.jpg)
-            mo = re.match(r'.*@(\d+)x\.[^.]*$', urllib.unquote(src))
+            mo = re.match(r'.*@(\d+)x\.[^.]*$', src)
             if mo:
                 factor = int(mo.group(1))
                 width /= factor
                 height /= factor
 
             # Put new width/height
-            img.attr.width = '{}'.format(width)
-            img.attr.height = '{}'.format(height)
+            if width is not None:
+                img.attr.width = '{}'.format(width)
+                img.attr.height = '{}'.format(height)
 
             # If image is a SVG in /obj/, turns into an object
             if "/obj/" in src and src.endswith(".svg"):
@@ -274,6 +274,39 @@ class ImageSizerPlugin(PILPlugin):
                 img.attr("data", src)
                 del img.attr.src
                 img.text('&#128444; {}'.format(img.attr.alt or ""))
+
+            # If image is a video in /videos/, turns into an on-demand
+            # HLS video.
+            elif "/videos/" in src:
+                id = os.path.splitext(os.path.basename(src))[0]
+                img[0].tag = 'video'
+                img.attr("controls", "controls")
+                img.attr("preload", "none")
+                img.attr("poster", self.site.media_url(
+                    'images/posters/{}.jpg'.format(id)))
+                # Add sources
+                m3u8 = pq('<source/>')
+                m3u8.attr.src = self.site.media_url(
+                    'videos/{}.m3u8'.format(id))
+                m3u8.attr.type = 'application/vnd.apple.mpegurl'
+                img.append(m3u8)
+                progressive = pq('<source/>')
+                progressive.attr.src = 'https://luffy-video.sos-ch-dk-2.exo.io/{}/progressive.mp4'.format(id)
+                progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
+                img.append(progressive)
+
+                # Moreover, if we don't have the width/height, enforce 16/9
+                if width is None:
+                    width = 1920
+                    height = 1080
+
+            # If image is a video not in /videos/ turn into a simple
+            # video tag like an animated GIF.
+            elif src.endswith(".mp4") or src.endswith(".ogv"):
+                img[0].tag = 'video'
+                img.muted = 'muted'
+                img.loop = 'loop'
+                img.autoplay = 'autoplay'
 
             # If image is contained in a paragraph, enclose into a
             # responsive structure.
@@ -284,14 +317,15 @@ class ImageSizerPlugin(PILPlugin):
             elif parents[-2:] == ['p', 'a']:
                 parent = img.parent().parent()
             if parent:
-                img.addClass('lf-img')
+                img.addClass('lf-media')
                 inner = pq('<span />')
                 outer = pq('<div />')
-                inner.addClass('lf-img-inner')
-                inner.css.padding_bottom = '{:.3f}%'.format(
-                    float(height)*100./width)
-                outer.addClass('lf-img-outer')
-                outer.css.width = '{}px'.format(width)
+                inner.addClass('lf-media-inner')
+                outer.addClass('lf-media-outer')
+                if width is not None:
+                    inner.css.padding_bottom = '{:.3f}%'.format(
+                        float(height)*100./width)
+                    outer.css.width = '{}px'.format(width)
                 outer.append(inner)
 
                 # If we have a title, also enclose in a figure
