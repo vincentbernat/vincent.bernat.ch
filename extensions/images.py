@@ -284,13 +284,14 @@ class ImageFixerPlugin(Plugin):
                 img.attr("preload", "none")
                 img.attr("poster", self.site.media_url(
                     'images/posters/{}.jpg'.format(id)))
+                del img.attr.src
                 # Add sources
-                m3u8 = pq('<source/>')
+                m3u8 = pq('<source>')
                 m3u8.attr.src = self.site.media_url(
                     'videos/{}.m3u8'.format(id))
                 m3u8.attr.type = 'application/vnd.apple.mpegurl'
                 img.append(m3u8)
-                progressive = pq('<source/>')
+                progressive = pq('<source>')
                 progressive.attr.src = 'https://luffy-video.sos-ch-dk-2.exo.io/{}/progressive.mp4'.format(id)
                 progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
                 img.append(progressive)
