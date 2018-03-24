@@ -297,6 +297,7 @@ class ImageFixerPlugin(Plugin):
                 img.attr("poster", self.site.media_url(
                     'images/posters/{}.jpg'.format(id)))
                 del img.attr.src
+                del img.attr.alt
                 # Add sources
                 m3u8 = pq('<source>')
                 m3u8.attr.src = self.site.media_url(
@@ -315,6 +316,7 @@ class ImageFixerPlugin(Plugin):
                 img.muted = 'muted'
                 img.loop = 'loop'
                 img.autoplay = 'autoplay'
+                del img.attr.alt
 
             # If image is contained in a paragraph, enclose into a
             # responsive structure.
