@@ -194,6 +194,12 @@ class ImageFixerPlugin(Plugin):
             return tuple(x and self._topx(x) or None
                          for x in (svg.attrib.get('width', None),
                                    svg.attrib.get('height', None)))
+        if image.source_file.kind in {'m3u8'}:
+            with open(image.path) as f:
+                w, h = max([(int(w), int(h))
+                            for w, h in re.findall('RESOLUTION=(\d+)x(\d+)(?:$|,)',
+                                                   f.read())])
+                return (w, h)
         if image.source_file.kind in {'mp4', 'ogv'}:
             mi = MediaInfo.parse(image.path)
             track = [t for t in mi.tracks if t.track_type == 'Video'][0]
@@ -282,9 +288,8 @@ class ImageFixerPlugin(Plugin):
                 del img.attr.src
                 img.text('&#128444; {}'.format(img.attr.alt or ""))
 
-            # If image is a video in /videos/, turns into an on-demand
-            # HLS video.
-            elif "/videos/" in src:
+            # On-demand videos (should be in /videos)
+            elif src.endswith('.m3u8'):
                 id = os.path.splitext(os.path.basename(src))[0]
                 img[0].tag = 'video'
                 img.attr("controls", "controls")
@@ -303,12 +308,7 @@ class ImageFixerPlugin(Plugin):
                 progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
                 img.append(progressive)
 
-                # Moreover, if we don't have the width/height, enforce 16/9
-                if width is None:
-                    width = 1920
-                    height = 1080
-
-            # If image is a video not in /videos/ turn into a simple
+            # If image is a video not in /videos turn into a simple
             # video tag like an animated GIF.
             elif src.endswith(".mp4") or src.endswith(".ogv"):
                 img[0].tag = 'video'
