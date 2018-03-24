@@ -329,16 +329,15 @@ class ImageFixerPlugin(Plugin):
                 outer.append(inner)
 
                 # If we have a title, also enclose in a figure
+                figure = pq('<figure />')
                 if img.attr.title:
-                    figure = pq('<figure />')
                     figcaption = pq('<figcaption />')
                     figcaption.text(img.attr.title)
                     del img.attr.title
                     figure.append(outer)
                     figure.append(figcaption)
-                    enclosure = figure
                 else:
-                    enclosure = outer
+                    figure.append(outer)
 
                 # Put image in inner tag
                 if img.parent()[0].tag == 'a':
@@ -346,6 +345,6 @@ class ImageFixerPlugin(Plugin):
                 else:
                     inner.append(img)
                 # Replace parent with our enclosure
-                parent.replace_with(enclosure)
+                parent.replace_with(figure)
 
         return html2str(d.root, encoding='unicode')
