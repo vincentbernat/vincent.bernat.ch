@@ -12,6 +12,7 @@ from fswrap import File, Folder
 import xml.etree.ElementTree as ET
 from pyquery import PyQuery as pq
 from lxml.html import tostring as html2str
+import lxml.html
 
 from PIL import Image
 from pymediainfo import MediaInfo
@@ -20,6 +21,12 @@ import os
 import re
 import urllib
 from functools import partial
+
+# Patch lxml.html to consider "source" and "track" as void elements
+# (doesn't work).
+#lxml.html.defs.empty_tags = frozenset(
+#    list(lxml.html.defs.empty_tags) +
+#    ['track', 'source'])
 
 class Thumb(object):
     def __init__(self, path, **kwargs):
