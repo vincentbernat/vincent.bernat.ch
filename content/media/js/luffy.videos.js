@@ -24,8 +24,11 @@ luffy.s.push(function() {
                     capLevelToPlayerSize: true,
                     maxMaxBufferLength: 90
                 });
-                hls.attachMedia(newVideo);
                 hls.loadSource(m3u8);
+                hls.attachMedia(newVideo);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    newVideo.play();
+                });
                 once = true;
             }, false);
         });
