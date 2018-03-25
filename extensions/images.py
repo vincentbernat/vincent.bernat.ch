@@ -305,6 +305,7 @@ class ImageFixerPlugin(Plugin):
                                         '@{}x.'.format(f))
                     self._resize(src, os.path.basename(tname), float(f)/factor)
                     srcset.append('{} {}x'.format(tname, f))
+                srcset = srcset[:-1]
                 img.attr.src = tname
                 img.attr.srcset = ','.join(srcset)
 
