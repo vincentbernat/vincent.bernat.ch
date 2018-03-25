@@ -268,13 +268,13 @@ def build():
               "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo --quiet")
         # Optimize JPG
         local("find media/images -type f -name '*.jpg' -print0"
-              " | xargs -0 -P4 jpegoptim --max=80 --strip-all")
+              " | xargs -0 -n10 -P4 jpegoptim --max=80 --strip-all")
         local("find media/images -type f -name '*.jpg' -print0"
               " | xargs -0 -n1 -I'{}' -P4 jpegtran -optimize -progressive "
               "                                    -copy none -outfile '{}' '{}'")
         # Optimize PNG
         local("find media/images -type f -name '*.png' -print0"
-              " | xargs -0 -P4 optipng -quiet")
+              " | xargs -0 -n10 -P4 optipng -quiet")
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs):
@@ -324,11 +324,11 @@ def build():
                          "").format(media, f, media, newname, sha))
             if sed_css:
                 local("find . -name '*.css' -type f -print0 | "
-                      "xargs -r0 -P5 sed -i {}".format(
+                      "xargs -r0 -n10 -P5 sed -i {}".format(
                           " ".join(("-e '{}'".format(x) for x in sed_css))))
             if sed_html:
                 local("find . -name '*.html' -type f -print0 | "
-                      "xargs -r0 -P5 sed -i {}".format(
+                      "xargs -r0 -n10 -P5 sed -i {}".format(
                           " ".join(('-e "{}"'.format(x) for x in sed_html))))
 
 
