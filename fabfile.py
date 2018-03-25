@@ -268,7 +268,7 @@ def build():
               "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo --quiet")
         # Optimize JPG
         local("find media/images -type f -name '*.jpg' -print0"
-              " | xargs -0 -n10 -P4 jpegoptim --max=80 --strip-all")
+              " | xargs -0 -n10 -P4 jpegoptim --max=84 --strip-all")
         local("find media/images -type f -name '*.jpg' -print0"
               " | xargs -0 -n1 -I'{}' -P4 jpegtran -optimize -progressive "
               "                                    -copy none -outfile '{}' '{}'")
