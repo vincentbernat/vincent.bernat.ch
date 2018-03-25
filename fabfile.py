@@ -284,6 +284,8 @@ def build():
                   'media/fonts/*',
                   'media/js/*.js',
                   'media/css/*.css']:
+            sed_html = []
+            sed_css = []
             files = local("echo %s" % p, capture=True).split(" ")
             for f in files:
                 # Compute hash
@@ -294,26 +296,32 @@ def build():
                 # New name
                 root, ext = os.path.splitext(f)
                 newname = "%s.%s%s" % (root, md5, ext)
-                # Symlink
                 local("cp %s %s" % (f, newname))
                 # Remove deploy/media
                 f = f[len('media/'):]
                 newname = newname[len('media/'):]
                 if ext in [".png", ".svg", ".woff", ".woff2"]:
                     # Fix CSS
-                    local("sed -i 's+%s)+%s)+g' media/css/*.css" % (f, newname))
+                    sed_css.append('s+{})+{})+g'.format(f, newname))
                 if ext not in [".png", ".svg", ".woff2"]:
                     # Fix HTML
-                    local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
-                          '"'
-                          r"s,\([\"']\)%s%s\1,\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1anonymous\1,g"
-                          '"' % (media, f, media, newname, sha))
+                    sed_html.append(
+                        (r"s,\([\"']\){}{}\1,\1{}{}\1 integrity=\1sha256-{}\1 crossorigin=\1anonymous\1,g"
+                         "").format(media, f, media, newname, sha))
                 if ext in [".woff2"]:
                     # Fix HTML
-                    local(r"find . -name '*.html' -type f -print0 | xargs -r0 sed -i "
-                          '"'
-                          r"s,\([\"']\)%s%s\1,\1%s%s\1 integrity=\1sha256-%s\1 crossorigin=\1use-credentials\1,g"
-                          '"' % (media, f, media, newname, sha))
+                    sed_html.append(
+                        (r"s,\([\"']\){}{}\1,\1{}{}\1 integrity=\1sha256-{}\1 crossorigin=\1use-credentials\1,g"
+                         "").format(media, f, media, newname, sha))
+            if sed_css:
+                local("find . -name '*.css' -type f -print0 | "
+                      "xargs -r0 -P5 sed -i {}".format(
+                          " ".join(("-e '{}'".format(x) for x in sed_css))))
+            if sed_html:
+                local("find . -name '*.html' -type f -print0 | "
+                      "xargs -r0 -P5 sed -i {}".format(
+                          " ".join(('-e "{}"'.format(x) for x in sed_html))))
+
 
         # Fix permissions
         local(r"find * -type f -print0 | xargs -r0 chmod a+r")
