@@ -185,8 +185,8 @@ class ImageFixerPlugin(Plugin):
             return int(size*4/3)
         raise ValueError("unknown unit {}".format(unit))
 
-    def _size(self, image):
-        """Get size for an object."""
+    def __size(self, image):
+        """Get size for an image."""
         if image.source_file.kind in {'png', 'jpg', 'jpeg', 'gif'}:
             return Image.open(image.path).size
         if image.source_file.kind in {'svg'}:
@@ -208,8 +208,8 @@ class ImageFixerPlugin(Plugin):
             "[%s] has an img tag not linking to an image" % resource)
         return (None, None)
 
-    def _resize(self, resource, src, width, height):
-        """Determine size of an img tag."""
+    def _size(self, resource, src, width, height):
+        """Determine size of an image (with cache)."""
         if src not in self.cache:
             if src.startswith(self.site.config.media_url):
                 path = src[len(self.site.config.media_url):].lstrip("/")
@@ -232,7 +232,7 @@ class ImageFixerPlugin(Plugin):
                 self.logger.warn(
                     "[%s] has an unknown image %s" % (resource, src))
                 return None
-            self.cache[src] = self._size(image)
+            self.cache[src] = self.__size(image)
             self.logger.debug("Image [%s] is %s" % (src,
                                                     self.cache[src]))
         new_width, new_height = self.cache[src]
@@ -244,7 +244,32 @@ class ImageFixerPlugin(Plugin):
             return (int(height) * new_width / new_height, height)
         return (new_width, new_height)
 
+    def _resize(self, source, destination, factor):
+        """Resize provided image from source to destination with the provided
+        factor. Check for latest modification time.
+        """
+        if not source.startswith(self.site.config.media_url):
+            raise ValueError('[%s] cannot be resized' % source)
+        source = source[len(self.site.config.media_url):].lstrip("/")
+        source = self.site.config.media_root_path.child(source)
+        source = self.site.content.resource_from_relative_deploy_path(source)
+        destination = os.path.join(
+            os.path.dirname(self.site.config.deploy_root_path.child(source.relative_deploy_path)),
+            destination)
+        source = source.path
+        if os.path.exists(destination) and os.stat(source).st_mtime < os.stat(destination).st_mtime:
+            # Destination is more recent, assume size is correct
+            return
+        im = Image.open(source)
+        im = im.resize((int(im.width*factor), int(im.height*factor)),
+                       Image.ANTIALIAS)
+        if source.endswith(".jpg"):
+            im.save(destination, "JPEG", optimize=True, quality=75)
+        else:
+            im.save(destination, "PNG", optimize=True)
+
     def text_resource_complete(self, resource, text):
+
         """
         When the resource is generated, search for img tag and fix them.
         """
@@ -262,7 +287,7 @@ class ImageFixerPlugin(Plugin):
                     "[%s] has an img tag without src attribute" % resource)
                 continue
             if width is None or height is None:
-                wh = self._resize(resource, src, width, height)
+                wh = self._size(resource, src, width, height)
                 if wh is not None:
                     width, height = wh
                 else:
@@ -274,6 +299,14 @@ class ImageFixerPlugin(Plugin):
                 factor = int(mo.group(1))
                 width /= factor
                 height /= factor
+                srcset = ['{} {}x'.format(src, factor)]
+                for f in reversed(range(1, factor)):
+                    tname = src.replace('@{}x.'.format(factor),
+                                        '@{}x.'.format(f))
+                    self._resize(src, os.path.basename(tname), float(f)/factor)
+                    srcset.append('{} {}x'.format(tname, f))
+                img.attr.src = tname
+                img.attr.srcset = ','.join(srcset)
 
             # Put new width/height
             if width is not None:
