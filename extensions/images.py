@@ -264,7 +264,7 @@ class ImageFixerPlugin(Plugin):
         im = im.resize((int(im.width*factor), int(im.height*factor)),
                        Image.ANTIALIAS)
         if source.endswith(".jpg"):
-            im.save(destination, "JPEG", optimize=True, quality=75)
+            im.save(destination, "JPEG", optimize=True, quality=95)
         else:
             im.save(destination, "PNG", optimize=True)
 
