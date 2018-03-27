@@ -162,12 +162,15 @@ for IPv6 is increased (default is only 4096):
 
 The second step is to configure routes to each guest. For IPv6, we use
 the link-local address, derived from the remote MAC address, as
-next-hop:
+next-hop:[^privacy]
 
     ::sh
     ip -6 route add 2001:db8:cb00:7100:5254:33ff:fe00:f/128 \
         via fe80::5254:33ff:fe00:f dev vnet6 \
         table public
+
+[^privacy]: This example assumes the guest does not use privacy
+    extensions ([RFC 3041][]).
 
 Assigning several IP addresses (or subnets) to each
 guest can be done by adding more routes:
@@ -708,6 +711,7 @@ BGP resiliency with BGP LLGR
 [RFC 5082]: https://tools.ietf.org/html/rfc5082 "RFC 5082: The Generalized TTL Security Mechanism (GTSM)"
 [RFC 5880]: https://tools.ietf.org/html/rfc5880 "RFC 5880: Bidirectional Forwarding Detection (BFD)"
 [RFC 7911]: https://tools.ietf.org/html/rfc7911 "RFC 7911: Advertisement of Multiple Paths in BGP"
+[RFC 3041]: https://tools.ietf.org/html/rfc3041 "RFC 7911: Privacy Extensions for Stateless Address Autoconfiguration in IPv6"
 [firewall filter is also needed]: https://www.juniper.net/documentation/en_US/junos/topics/reference/configuration-statement/ttl-edit-protocols-bgp-mulithop.html "Juniper documentation: ttl (Protocols BGP)"
 [commit 98bb80a243b5]: https://gitlab.labs.nic.cz/labs/bird/commit/98bb80a243b58c43453e9be69d19d0350286549c "KRT: Fix IPv6 ECMP handling with Linux 4.11+"
 [PTMD]: https://github.com/CumulusNetworks/ptm "Prescriptive Topology Manager Daemon"
