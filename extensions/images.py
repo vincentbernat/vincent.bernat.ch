@@ -227,9 +227,23 @@ class ImageFixerPlugin(Plugin):
         """
         When the resource is generated, search for img tag and fix them.
         """
+        if resource.source_file.name == 'atom.xml':
+            root = ET.fromstring(text.encode('utf-8'))
+            ET.register_namespace('', 'http://www.w3.org/2005/Atom')
+            for c in root.findall('atom:entry/atom:content',
+                                  {'atom': 'http://www.w3.org/2005/Atom'}):
+                d = self._process(resource,
+                                  u'<div>{}</div>'.format(c.text))
+                c.text = d.html()
+            return u'<?xml version="1.0" encoding="utf-8"?>\n{}'.format(
+                ET.tostring(root, encoding='utf-8').decode('utf-8'))
         if not resource.source_file.kind == 'html':
             return
 
+        d = self._process(resource, text)
+        return html2str(d.root, encoding='unicode')
+
+    def _process(self, resource, text):
         d = pq(text)
         for img in d.items('img'):
             width = img.attr.width
@@ -345,4 +359,4 @@ class ImageFixerPlugin(Plugin):
                 # Replace parent with our enclosure
                 parent.replace_with(figure)
 
-        return html2str(d.root, encoding='unicode')
+        return d
