@@ -8,7 +8,6 @@ from pygments.formatters.html import HtmlFormatter
 from pyquery import PyQuery as pq
 from markdown import Extension
 from markdown.extensions import codehilite
-from lxml.html import tostring as html2str
 
 
 class CodeHiliteLangExtension(Extension):
@@ -22,7 +21,7 @@ class CodeHiliteLangExtension(Extension):
             if isinstance(formatter, HtmlFormatter):
                 d = pq(result)
                 d.add_class('language-{}'.format(lang))
-                result = html2str(d[0], encoding='unicode')
+                result = d.outer_html()
             return result
 
         codehilite.highlight = new_codehilite_highlight

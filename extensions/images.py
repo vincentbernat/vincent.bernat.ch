@@ -11,8 +11,6 @@ from fswrap import File, Folder
 
 import xml.etree.ElementTree as ET
 from pyquery import PyQuery as pq
-from lxml.html import tostring as html2str
-import lxml.html
 
 from PIL import Image
 from pymediainfo import MediaInfo
@@ -241,7 +239,7 @@ class ImageFixerPlugin(Plugin):
             return
 
         d = self._process(resource, text)
-        return html2str(d.root, encoding='unicode')
+        return u'<!DOCTYPE html>\n' + d.outer_html()
 
     def _process(self, resource, text):
         d = pq(text)

@@ -4,7 +4,6 @@ import subprocess
 import HTMLParser
 
 from pyquery import PyQuery as pq
-from lxml.html import tostring as html2str
 from hyde.plugin import Plugin
 
 
@@ -32,7 +31,7 @@ class FootnotesPlugin(Plugin):
                 ref.text(), fn.html()))
             sidenote("a.footnote-backref").remove()
             sidenote.insert_before(parent)
-        return html2str(d.root, encoding='unicode')
+        return u'<!DOCTYPE html>\n' + d.outer_html()
 
 
 class LatexPlugin(Plugin):
