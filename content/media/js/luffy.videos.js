@@ -52,6 +52,14 @@ luffy.s.push(function() {
                     Node.DOCUMENT_POSITION_PRECEDING) {
                     videos[i].currentTime = seekTo;
                     if (videos[i].paused) videos[i].play();
+
+                    // Scroll element into view if needed
+                    var rect = videos[i].getBoundingClientRect();
+                    if (rect.top >= 0 &&
+                        rect.bottom <= (window.innerHeight ||
+                                       document.documentElement.clientHeight))
+                        break;
+                    videos[i].scrollIntoView();
                     break;
                 }
             }
