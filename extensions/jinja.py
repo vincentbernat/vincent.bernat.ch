@@ -2,7 +2,7 @@
 from babel.dates import format_date
 
 
-def humandate(dt, locale='en', format=None):
+def human_date(dt, locale='en', format=None):
     """Convert an ISO 8601 date to a more readable version."""
     if format is None:
         return format_date(dt, 'MMMM yyyy', locale=locale)
@@ -10,9 +10,10 @@ def humandate(dt, locale='en', format=None):
         return format_date(dt, format=format, locale=locale)
 
 
-def samecategory(resource, attribute, skip=0):
-    """Returns the next resource in the same category using the provided
-    attribute to iterate over resources."""
+def same_tag(resource, attribute, skip=0):
+    """Returns the next resource with at least a common tag using the
+    provided attribute to iterate over resources.
+    """
     tags = {t.name
             for t in getattr(resource, 'tags', [])
             if t.name != 'outdated'}
