@@ -1,7 +1,6 @@
 {# -*- web -*- #}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
-{% if previous or next or resource.meta.comments %}
 <ul id="lf-bottomlinks">
 {% if resource.meta.comments %}
     <li>
@@ -10,18 +9,29 @@
         <span class="when-js">{{ resource.meta.l10n.comments }}</span>
     </li>
 {% endif %}
-{% if previous %}
-    <li><span class="lf-sym">«</span>
-        <a rel="prev" href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a></li>
-{% endif %}
 {% if next %}
     <li><span class="lf-sym">»</span>
         <a rel="next" href="{{ content_url(next.url) }}">{{ next.meta.title|amp|e }}</a></li>
 {% endif %}
+{% if previous %}
+    <li><span class="lf-sym">«</span>
+        <a rel="prev" href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a></li>
+{% endif %}
+{% set next = resource|same_category("prev_by_time_" + resource.meta.language, 1) %}
+{% if next %}
+    <li><span class="lf-sym">💡</span>
+        <span>{{ resource.meta.l10n.related }}<a href="{{ content_url(next.url) }}">{{ next.meta.title|amp|e }}</a></span></li>
+{% endif %}
+{% set previous = resource|same_category("next_by_time_" + resource.meta.language, 1) %}
+{% if previous %}
+    <li><span class="lf-sym">💡</span>
+        <span>{{ resource.meta.l10n.related }}<a href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a></span></li>
+{% endif %}
+{% if next or previous and ('/blog/' in resource.url) %}
     <li><span class="lf-sym">📨</span>
         <a href="{{ content_url( resource.meta.language + '/blog/subscribe.html') }}">{{ resource.meta.l10n.subscribe }}</a></li>
-</ul>
 {% endif %}
+</ul>
 {% if resource.meta.comments %}
 <div id="disqus_thread" class="when-js"
      data-disqus-shortname="{{ resource.meta.disqus }}">
