@@ -1,4 +1,5 @@
 {# -*- web -*- #}
+{% from "macros.j2" import tag_link with context %}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
 <ul id="lf-bottomlinks" role="navigation">
@@ -17,15 +18,25 @@
     <li><span class="lf-sym">«</span>
         <a rel="prev" href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a></li>
 {% endif %}
-{% set next = resource|same_category("prev_by_time_" + resource.meta.language, 1) %}
+{% set next = resource|same_tag("prev_by_time_" + resource.meta.language, 1) %}
 {% if next %}
     <li><span class="lf-sym">💡</span>
-        <span>{{ resource.meta.l10n.related }}<a href="{{ content_url(next.url) }}">{{ next.meta.title|amp|e }}</a></span></li>
+        <span><a href="{{ content_url(next.url) }}">{{ next.meta.title|amp|e }}</a>
+            ({{ resource.meta.l10n.in }}
+{% for tag in resource|common_tags(next) %}
+    {{ tag_link(resource, tag) }}{% if not loop.last %}, {% endif %}
+{% endfor %})
+        </span></li>
 {% endif %}
-{% set previous = resource|same_category("next_by_time_" + resource.meta.language, 1) %}
+{% set previous = resource|same_tag("next_by_time_" + resource.meta.language, 1) %}
 {% if previous %}
     <li><span class="lf-sym">💡</span>
-        <span>{{ resource.meta.l10n.related }}<a href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a></span></li>
+        <span><a href="{{ content_url(previous.url) }}">{{ previous.meta.title|amp|e }}</a>
+            ({{ resource.meta.l10n.in }}
+{% for tag in resource|common_tags(previous) %}
+    {{ tag_link(resource, tag) }}{% if not loop.last %}, {% endif %}
+{% endfor %})
+        </span></li>
 {% endif %}
 {% if next or previous and ('/blog/' in resource.url) %}
     <li><span class="lf-sym">📨</span>
