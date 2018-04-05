@@ -680,6 +680,9 @@ implémentations d'autres constructeurs. Pour montrer qu'il s'agit
 d'une réalité, nous allons configurer un [Juniper vMX][] 16.1R1.7 pour
 agir en tant que VTEP.
 
+**MISE À JOUR (2018.04) :** Il existe d'autres problèmes non abordés
+ici qui peuvent nuire à l'interopérabilité.
+
 Tout d'abord, nous devons le configurer en tant que pont. La
 configuration ci-dessous est équivalente à l'utilisation de `ip link`
 et `brctl` avec Linux. Nous ne configurons qu'une seule interface
@@ -797,6 +800,12 @@ nécessaire[^whypatch] pour *Cumulus Quagga*.
         }
     
     Il est aussi nécessaire de retirer la directive `routing-instance switch vrf-target auto`.
+    
+    **MISE À JOUR (04.2018):** Ce patch n'est en fait pas suffisant.
+    Lorsque plusieurs VNI sont hébergés sur le même équipement, *JunOS* utilise
+    un unique *route distinguisher*. Afin d'assurer que chaque route est unique,
+    l'*Ethernet tag ID* est également renseigné correctement. Toutefois, *Quagga*
+    ignore cette information et ne garde qu'une seule route de type 3.
 
 Les routes générées sont très similaires à celles de Quagga. Il y a
 toutefois ces deux différences :

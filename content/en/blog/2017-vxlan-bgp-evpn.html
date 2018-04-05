@@ -657,6 +657,9 @@ One of the strength of BGP EVPN is the interoperability with other
 network vendors. To demonstrate it works as expected, we will
 configure a [Juniper vMX][] 16.1R1.7 to act as a VTEP.
 
+**UPDATED (2018.04):** There are other issues not covered here that
+could prevent proper interoperability.
+
 First, we need to configure the physical
 bridge.[^routinginstance] This is similar to the use of `ip link` and
 `brctl` with Linux. We only configure one physical interface with two
@@ -777,7 +780,12 @@ Quagga*.[^whypatch]
         }
     
     You also need to unset `routing-instance switch vrf-target auto`.
-
+    
+    **UPDATED (2018.04):** This patch is not enough: if you have several
+    VNIs hosted on the same Juniper, they all use the same route
+    distinguisher. *JunOS* sets the Ethernet tag ID to ensure uniqueness
+    of the prefix. However, *Quagga* ignores it. Therefore, only one VNI
+    will get a type 3 route.
 
 The routes sent by this configuration are very similar to the routes
 sent by Quagga. The main differences are:
