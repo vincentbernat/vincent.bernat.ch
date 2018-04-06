@@ -220,7 +220,7 @@ several ways (in the order of difficulty to setup):
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
 [11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
 
-Of course, a last solution is to tweak `net.ipv4.tcp_tw_reuse` and
+A last solution is to tweak `net.ipv4.tcp_tw_reuse` and
 `net.ipv4.tcp_tw_recycle`. Don't do that yet, we will cover these
 settings later.
 
@@ -321,7 +321,7 @@ purposes):
              tracked has been modified to increase performance and
              parallelism. The death row is now just a hash table.
 
-So, we are only concerned by the space occupied by `struct
+We are only concerned by the space occupied by `struct
 tcp_timewait_sock` and `struct inet_bind_socket`. There is one `struct
 tcp_timewait_sock` for each connection in the `TIME-WAIT` state,
 inbound or outbound. There is one dedicated `struct inet_bind_socket`
@@ -341,7 +341,7 @@ inet_bind_socket` is 48 bytes:
     (gdb) print sizeof(struct inet_bind_bucket)
      $3 = 48
 
-So, if you have about 40,000 inbound connections in the `TIME-WAIT`
+If you have about 40,000 inbound connections in the `TIME-WAIT`
 state, it should eat less than 10MB of memory. If you have about
 40,000 outbound connections in the `TIME-WAIT` state, you need to
 account for 2.5MB of additional memory.  Let's check that by looking

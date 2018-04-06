@@ -92,13 +92,13 @@ From here, you can start your kernel with the following command
       -kernel $LINUX \
       -append "init=/bin/sh console=ttyS0"
 
-Of course, since there is no disk to boot from, the kernel will panic
-when trying to mount the root filesystem. QEMU is configured to not
-display video output (`-display none`). A serial port is defined and
-uses `stdio` as a backend.[^signal] The kernel is configured to use
-this serial port as a console (`console=ttyS0`). A VirtIO console
-could have been used instead but it seems this is not possible to make
-it work early in the boot process.
+Since there is no disk to boot from, the kernel will panic when trying
+to mount the root filesystem. QEMU is configured to not display video
+output (`-display none`). A serial port is defined and uses `stdio` as
+a backend.[^signal] The kernel is configured to use this serial port
+as a console (`console=ttyS0`). A VirtIO console could have been used
+instead but it seems this is not possible to make it work early in the
+boot process.
 
 [^signal]: `stdio` is configured such that signals are not
            enabled. QEMU won't stop when receiving `SIGINT`. This is
@@ -311,7 +311,7 @@ You can now set breakpoints and resume the execution of the kernel.
 It is easier to debug the kernel if optimizations are not
 enabled. However, it is not possible to
 [disable them globally][gcc20217]. You can however disable them
-for some files. For example, to debug `net/ipv6/route.c`, just add
+for some files. For example, to debug `net/ipv6/route.c`, add
 `CFLAGS_route.o = -O0` to `net/ipv6/Makefile`, remove
 `net/ipv6/route.o` and type `make`.
 
