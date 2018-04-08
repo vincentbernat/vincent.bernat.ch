@@ -90,13 +90,17 @@ Pour utiliser « nativement » l'*OPL2LPT*, j'ai modifié les programmes
 suivants :
 
  - [ScummVM][], un émulateur pour d'anciens jeux d'aventure, notamment
-   ceux de Lucas­Arts — [patch][scummvm-patch]
+   ceux de Lucas­Arts — [patch][scummvm-patch][^scummvm]
  - [QEMU][], un émulateur générique et rapide — [patch][qemu-patch]
    avec une émulation minimaliste des minuteries et les temporisations
    codées en dur 🙄
  - [DOSBox][], un émulateur x86 intégrant DOS — [patch][dosbox-patch]
    avec une émulation complète des minuteries et un fil d'exécution
    dédié[^delays]
+
+[^scummvm]: Le patch pour *ScummVM* a été accepté. La prise en charge
+    de l'*OPL2LPT* apparaîtra avec la version 2.1. À la compilation,
+    l'option `--enable-opl2lpt` doit être spécifiée.
 
 [^delays]: Avec *QEMU* et *DOSBox*, le respect des délais nécessaires
     au bon fonctionnement de l'OPL2 devrait être la responsabilité du
@@ -182,23 +186,23 @@ partie du montage. Voici un exemple :
           fontsize=16:
           x=w-text_w-10"
     ffmpeg -y \
-     -thread_queue_size 64 \
-     -f x11grab -draw_mouse 0 -r 30 -s 640x400 -i :0+844,102 \
-     -thread_queue_size 64 \
-     -f pulse -ac 1 -i default \
-     -filter_complex "[0:v]pad=854:400:0:0,
-          drawtext=${FONT}:y= 10:text=Indiana Jones 3,
-          drawtext=${FONT}:y= 34:text=Intro,
-          drawtext=${FONT}:y=100:text=DOSBox,
-          drawtext=${FONT}:y=124:text=VGA,
-          drawtext=${FONT}:y=148:text=PC speaker,
-          scale=854:480[game];
-          [1:a]showwaves=s=214x100:colors=OrangeRed:scale=lin[waves];
-          [1:a]showcqt=s=214x100[spectrum];
-          [waves][spectrum]vstack[vis];
-          [game][vis]overlay=x=640:y=280" \
-     -pix_fmt yuv420p -c:v libx264 -qp 0 -preset ultrafast \
-     indy3-dosbox-pcspkr.mkv
+      -thread_queue_size 64 \
+      -f x11grab -draw_mouse 0 -r 30 -s 640x400 -i :0+844,102 \
+      -thread_queue_size 64 \
+      -f pulse -ac 1 -i default \
+      -filter_complex "[0:v]pad=854:400:0:0,
+           drawtext=${FONT}:y= 10:text=Indiana Jones 3,
+           drawtext=${FONT}:y= 34:text=Intro,
+           drawtext=${FONT}:y=100:text=DOSBox,
+           drawtext=${FONT}:y=124:text=VGA,
+           drawtext=${FONT}:y=148:text=PC speaker,
+           scale=854:480[game];
+           [1:a]showwaves=s=214x100:colors=OrangeRed:scale=lin[waves];
+           [1:a]showcqt=s=214x100[spectrum];
+           [waves][spectrum]vstack[vis];
+           [game][vis]overlay=x=640:y=280" \
+      -pix_fmt yuv420p -c:v libx264 -qp 0 -preset ultrafast \
+      indy3-dosbox-pcspkr.mkv
 
 La partie intéressante est l'argument `filter_complex`. La vidéo
 capturée passe du format 640×400 au format 854×400 sans étirement
