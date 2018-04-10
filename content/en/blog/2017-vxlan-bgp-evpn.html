@@ -48,7 +48,7 @@ application to VXLAN) is a standard control protocol to efficiently
 solves these two aspects without relying on multicast nor
 source-address learning.
 
-**UPDATED (2018.04):** [draft-ietf-bess-evpn-overlay][] has been
+!!! "Update (2018.04)" [draft-ietf-bess-evpn-overlay][] has been
 promoted to [RFC 8365][].
 
 BGP EVPN relies on BGP ([RFC 4271][]) and its MP-BGP extensions
@@ -101,9 +101,10 @@ a network operating system based on Debian powering switches from
 various brands. At some point, BGP EVPN support will be [contributed
 back][pr-evpn] to [FRR][], a community-maintained fork of *Quagga*.[^fork]
 
-**UPDATED (2017.08):** Cumulus switched from Quagga to [FRR][] (since
+!!! "Update (2017.08)" Cumulus switched from Quagga to [FRR][] (since
 Cumulus Linux 3.4.0). The configuration presented here also works with
-FRR 3.1 (yet to be released) when compiled with `--enable-cumulus` option.
+FRR 3.1 (yet to be released) when compiled with `--enable-cumulus`
+option.
 
 [^fork]: The development of *Quagga* is slow and "closed." New
     features are often stalled. *FRR* is placed under the umbrella of
@@ -167,7 +168,7 @@ and reflected to the other clients.
 You don't need to run *Zebra*, the route engine talking with the
 kernel. Instead, start `bgpd` with the `--no_kernel` flag.
 
-**UPDATED (2018.04):** If you need to support several implementations
+!!! "Update (2018.04)" If you need to support several implementations
 of BGP EVPN, it is safer to **not** use *Quagga* as a route reflector:
 it may mangle the received routes.
 
@@ -661,8 +662,8 @@ One of the strength of BGP EVPN is the interoperability with other
 network vendors. To demonstrate it works as expected, we will
 configure a [Juniper vMX][] 16.1R1.7 to act as a VTEP.
 
-**UPDATED (2018.04):** There are other issues not covered here that
-could prevent proper interoperability.
+!!! "Update (2018.04)" There are other issues not covered here
+preventing proper interoperability.
 
 First, we need to configure the physical
 bridge.[^routinginstance] This is similar to the use of `ip link` and
@@ -784,12 +785,6 @@ Quagga*.[^whypatch]
         }
     
     You also need to unset `routing-instance switch vrf-target auto`.
-    
-    **UPDATED (2018.04):** This patch is not enough: if you have several
-    VNIs hosted on the same Juniper, they all use the same route
-    distinguisher. *JunOS* sets the Ethernet tag ID to ensure uniqueness
-    of the prefix. However, *Quagga* ignores it. Therefore, only one VNI
-    will get a type 3 route.
 
 The routes sent by this configuration are very similar to the routes
 sent by Quagga. The main differences are:
@@ -864,7 +859,7 @@ check the received routes are correctly understood:
 
 Get in touch if you have some success with other vendors!
 
-**UPDATED (2018.03):** BGP EVPN is also able to handle multihomed
+!!! "Update (2018.03)" BGP EVPN is also able to handle multihomed
 Ethernet segments: a link aggregate can span over several VTEPs. While
 this is supported by *Juniper*, *Quagga*/*FRR* does not support such
 setup and will ever ignore remote multihomed segments. For more
