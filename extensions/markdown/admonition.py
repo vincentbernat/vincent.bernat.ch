@@ -30,8 +30,9 @@ class AdmonitionProcessor(BlockProcessor):
             div = etree.SubElement(parent, 'div')
             div.set('class', 'admonition')
             title = m.group(1)
-            h = etree.SubElement(div, 'h6')
-            h.text = title
+            p = etree.SubElement(div, 'p')
+            p.text = title
+            p.set('class', 'admonition-title')
 
         self.parser.parseChunk(div, block)
 
