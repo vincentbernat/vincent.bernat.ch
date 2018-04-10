@@ -685,8 +685,18 @@ implémentations d'autres constructeurs. Pour montrer qu'il s'agit
 d'une réalité, nous allons configurer un [Juniper vMX][] 16.1R1.7 pour
 agir en tant que VTEP.
 
-!!! "Mise à jour (2018.04)" Il existe d'autres problèmes non abordés
-ici qui peuvent nuire à l'interopérabilité.
+!!! "Mise à jour (04.20184)" Il est nécessaire d'appliquer les deux
+modifications suivantes sur *FRR*: [bgpd: add an option for RT
+auto-derivation to use RFC 8635][#2034] et [bgpd: add basic support
+for ETI and ESI for BGP EVPN][#2035]. Il faut aussi ajouter l'option
+`advertise-autort-rfc8365` dans la configuration de *FRR*. Le premier
+patch peut être évité en configurant manuellement les *route targets*
+du côté Juniper. Le second peut être omis en plaçant chaque VNI dans
+une instance séparée sur le Juniper, chacune avec son propre *route
+distinguisher*.
+
+[#2034]: https://github.com/FRRouting/frr/pull/2034
+[#2035]: https://github.com/FRRouting/frr/pull/2035
 
 Tout d'abord, nous devons le configurer en tant que pont. La
 configuration ci-dessous est équivalente à l'utilisation de `ip link`
@@ -778,33 +788,6 @@ VNI locaux. La configuration est similaire à celle de *Quagga* :
             then accept;
         }
     }
-
-Un [petit patch de compatibilité][patch1] est de plus
-nécessaire[^whypatch] pour *Cumulus Quagga*.
-
-[^whypatch]: L'encodage du VNI dans le *route target* est en cours de
-    standardisation dans [draft-ietf-bess-evpn-overlay][]. Juniper
-    implémente déjà les premières versions de ce document. Vous pouvez
-    également contourner ce problème en spécifiant explitement
-    `vrf-target` pour chaque VPN dans `protocols evpn`. Par exemple,
-    pour une compatibilité avec *Cumulus Quagga* sans patch :
-    
-        ::junos
-        protocols evpn {
-          encapsulation vxlan;
-          multicast-mode ingress-replication;
-          extended-vni-list [ 100 200 ];
-          vni-options {
-            vni 100 {
-              vrf-target target:65000:100;
-            }
-            vni 200 {
-              vrf-target target:65000:200;
-            }
-          }
-        }
-    
-    Il est aussi nécessaire de retirer la directive `routing-instance switch vrf-target auto`.
 
 Les routes générées sont très similaires à celles de Quagga. Il y a
 toutefois ces deux différences :

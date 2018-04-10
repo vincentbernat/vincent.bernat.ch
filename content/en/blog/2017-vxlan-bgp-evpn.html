@@ -662,8 +662,17 @@ One of the strength of BGP EVPN is the interoperability with other
 network vendors. To demonstrate it works as expected, we will
 configure a [Juniper vMX][] 16.1R1.7 to act as a VTEP.
 
-!!! "Update (2018.04)" There are other issues not covered here
-preventing proper interoperability.
+!!! "Update (2018.04)" You need to add the following patches for
+*FRR*: [bgpd: add an option for RT auto-derivation to use RFC
+8635][#2034] and [bgpd: add basic support for ETI and ESI for BGP
+EVPN][#2035]. You also need to enable the `advertise-autort-rfc8365`
+flag in *FRR*. The first patch may be removed if route targets are
+configured manually on the Juniper side. The second one can be avoided
+by configuring a separate Juniper virtual switch instance for each
+VNI—each with a dedicated route distinguisher.
+
+[#2034]: https://github.com/FRRouting/frr/pull/2034
+[#2035]: https://github.com/FRRouting/frr/pull/2035
 
 First, we need to configure the physical
 bridge.[^routinginstance] This is similar to the use of `ip link` and
@@ -758,33 +767,6 @@ configuration is quite similar to the one we did with *Quagga*:
             then accept;
         }
     }
-
-We also need a [small compatibility patch][patch1] for *Cumulus
-Quagga*.[^whypatch]
-
-[^whypatch]: The encoding of the VNI into the route target is being
-    standardized in [draft-ietf-bess-evpn-overlay][]. Juniper already
-    implements this draft. You can also workaround this issue by
-    specifying explicitely `vrf-target` for each VNI in `protocols
-    evpn`. For example, for compatibility with unpatched *Cumulus
-    Quagga*:
-    
-        ::junos
-        protocols evpn {
-          encapsulation vxlan;
-          multicast-mode ingress-replication;
-          extended-vni-list [ 100 200 ];
-          vni-options {
-            vni 100 {
-              vrf-target target:65000:100;
-            }
-            vni 200 {
-              vrf-target target:65000:200;
-            }
-          }
-        }
-    
-    You also need to unset `routing-instance switch vrf-target auto`.
 
 The routes sent by this configuration are very similar to the routes
 sent by Quagga. The main differences are:
