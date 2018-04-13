@@ -668,10 +668,15 @@ EVPN][#2035]. You also need to enable the `advertise-autort-rfc8365`
 flag in *FRR*. The first patch may be removed if route targets are
 configured manually on the Juniper side. The second one can be avoided
 by configuring a separate Juniper virtual switch instance for each
-VNI—each with a dedicated route distinguisher.
+VNI—each with a dedicated route distinguisher. For *Cumulus Quagga*,
+you can apply a simplified version of these patches ([first
+patch][patch1], [second patch][patch2], [third patch][patch3]).
 
-[#2034]: https://github.com/FRRouting/frr/pull/2034
-[#2035]: https://github.com/FRRouting/frr/pull/2035
+[#2034]: https://github.com/FRRouting/frr/pull/2034 "bgpd: add an option for RT auto-derivation to use RFC 8635"
+[#2035]: https://github.com/FRRouting/frr/pull/2035 "bgpd: add basic support for ETI and ESI for BGP EVPN"
+[patch1]: https://github.com/vincentbernat/quagga/commit/96d15fb77c0cc8a39ecb7c4782e5f7669b568828 "Quick and dirty hack for JunOS compatibility"
+[patch2]: https://github.com/vincentbernat/quagga/commit/5780b81ed25e2840ebd07976b35a76d80a73f406 "bgpd: add PMSI_TUNNEL_ATTRIBUTE to EVPN IMET routes"
+[patch3]: https://github.com/vincentbernat/quagga/commit/c87df13cc4e85e009d2de8a206a01be5169c9359 "bgpd: add basic support for ETI for BGP EVPN"
 
 First, we need to configure the physical
 bridge.[^routinginstance] This is similar to the use of `ip link` and
@@ -879,7 +884,6 @@ from Juniper][].
 [Juniper MX240]: http://www.juniper.net/us/en/products-services/routing/mx-series/mx240/ "MX240 edge router"
 [Juniper vRR]: https://www.juniper.net/documentation/en_US/junos/topics/concept/virtual-route-reflector-overview.html "Juniper Virtual Route Reflector"
 [Juniper vMX]: https://www.juniper.net/us/en/products-services/routing/mx-series/vmx/ "vMX virtual router for enterprises and service providers"
-[patch1]: https://github.com/vincentbernat/quagga/commit/96d15fb77c0cc8a39ecb7c4782e5f7669b568828 "Patch for Cumulus Quagga interoperability with Juniper"
 [pr-evpn]: https://github.com/FRRouting/frr/pull/619 "EVPN for VxLAN pull request for FRR"
 [gobgp-dynamic-neighbors]: https://github.com/osrg/gobgp/issues/1283 "Issue tracking progress on GoBGP dynamic neighbor support"
 [EVPN-VXLAN lab]: http://jncie.tech/2017/08/01/evpn-vxlan-lab-basic-l2-switching/ "EVPN-VXLAN lab – basic L2 switching"
