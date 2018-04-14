@@ -94,8 +94,26 @@ cache lookup.
 ![IPv4 route lookup performance with recent kernels][i4]
 [i4]: [[!!images/linux/lpc-trie-perf-recent-v2.svg]] "Route lookup times for more recent Linux kernel versions. Lookup is done on a table with 500,000 routes. The shaded surfaces represent the median absolute deviation."
 
+!!! "Update (2018.04)" The recent [Meltdown and Spectre exploits][]
+have made headlines due the performance impact of the various
+mitigations. Because route lookup happens entirely in the kernel, the
+mitigations should have no effect, as confirmed in the graphs
+below. Measures are done in a virtual machine with one vCPU. The host
+is an [Intel Core i5-4670K][]—*Haswell* microarchitecture—running at
+3.4 GHz with an up-to-date microcode and a Linux 4.16 kernel from
+Debian. When protected, host is using PTI, full generic retpoline and
+IBPB. When unprotected, the host is running with an out-of-date
+microcode and mitigations are disabled on the command line (`nopti
+nospectre_v2`). Kernels for the guest are compiled with GCC 7.3—with
+*retpoline* support.
+
+![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v1.svg]] "Route lookup times for more Linux kernel versions from late 2017 and early 2018. Lookup is done on a table with 500,000 routes. The kernels are ordered by their release date. The shaded area contain kernels without Spectre/Meltdown mitigations.")
+
+![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v2.svg]] "Route lookup times for more Linux kernel versions from late 2017 and early 2018. Lookup is done on a table with 500,000 routes. The kernels are ordered by their versions.")
+
 *[TSC]: Time Stamp Counter
 
+[Meltdown and Spectre exploits]: https://meltdownattack.com/ "Meltdown and Spectre"
 [IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
 [route cache]: [[en/blog/2011-ipv4-route-cache-linux.html]] "Tuning Linux IPv4 route cache"
 [Intel Core i5-4670K]: http://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
