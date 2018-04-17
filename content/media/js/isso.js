@@ -2065,16 +2065,16 @@ exports.DebugItem = function DebugItem(lineno, filename) {
 });
 define('jade',{load: function(id){throw new Error("Dynamic load not allowed: " + id);}});
 
-define('jade!app/text/postbox', function () {  var fn = function template(locals) {
+define('jade!app/text/postbox', function () {  var wfn = function (jade) {    var fn = function template(locals) {
 var buf = [];
 var jade_mixins = {};
 var jade_interp;
 ;var locals_for_with = (locals || {});(function (author, email, i18n, website) {
 buf.push("<div class=\"isso-postbox\"><div class=\"form-wrapper\"><div class=\"textarea-wrapper\"><div contenteditable=\"true\" class=\"textarea placeholder\">" + (jade.escape(null == (jade_interp = i18n('postbox-text')) ? "" : jade_interp)) + "</div></div><section class=\"auth-section\"><p class=\"input-wrapper\"><input type=\"text\" name=\"author\"" + (jade.attr("placeholder", i18n('postbox-author'), true, false)) + (jade.attr("value", author !== null ? '' + (author) + '' : '', true, false)) + "/></p><p class=\"input-wrapper\"><input type=\"email\" name=\"email\"" + (jade.attr("placeholder", i18n('postbox-email'), true, false)) + (jade.attr("value", email != null ? '' + (email) + '' : '', true, false)) + "/></p><p class=\"input-wrapper\"><input type=\"text\" name=\"website\"" + (jade.attr("placeholder", i18n('postbox-website'), true, false)) + (jade.attr("value", website != null ? '' + (website) + '' : '', true, false)) + "/></p><p class=\"post-action\"><input type=\"submit\"" + (jade.attr("value", i18n('postbox-submit'), true, false)) + "/></p></section></div></div>");}.call(this,"author" in locals_for_with?locals_for_with.author:typeof author!=="undefined"?author:undefined,"email" in locals_for_with?locals_for_with.email:typeof email!=="undefined"?email:undefined,"i18n" in locals_for_with?locals_for_with.i18n:typeof i18n!=="undefined"?i18n:undefined,"website" in locals_for_with?locals_for_with.website:typeof website!=="undefined"?website:undefined));;return buf.join("");
-};  return fn;});
+};    return fn;  };wfn.compiled = true;return wfn;});
 
 
-define('jade!app/text/comment', function () {  var fn = function template(locals) {
+define('jade!app/text/comment', function () {  var wfn = function (jade) {    var fn = function template(locals) {
 var buf = [];
 var jade_mixins = {};
 var jade_interp;
@@ -2108,16 +2108,16 @@ if ( conf.vote)
 buf.push("<a href=\"#\" class=\"upvote\">" + (null == (jade_interp = svg['arrow-up']) ? "" : jade_interp) + "</a><span class=\"spacer\">|</span><a href=\"#\" class=\"downvote\">" + (null == (jade_interp = svg['arrow-down']) ? "" : jade_interp) + "</a>");
 }
 buf.push("<a href=\"#\" class=\"reply\">" + (jade.escape((jade_interp = i18n('comment-reply')) == null ? '' : jade_interp)) + "</a><a href=\"#\" class=\"edit\">" + (jade.escape((jade_interp = i18n('comment-edit')) == null ? '' : jade_interp)) + "</a><a href=\"#\" class=\"delete\">" + (jade.escape((jade_interp = i18n('comment-delete')) == null ? '' : jade_interp)) + "</a></div><div class=\"isso-follow-up\"></div></div></div>");}.call(this,"bool" in locals_for_with?locals_for_with.bool:typeof bool!=="undefined"?bool:undefined,"comment" in locals_for_with?locals_for_with.comment:typeof comment!=="undefined"?comment:undefined,"conf" in locals_for_with?locals_for_with.conf:typeof conf!=="undefined"?conf:undefined,"datetime" in locals_for_with?locals_for_with.datetime:typeof datetime!=="undefined"?datetime:undefined,"humanize" in locals_for_with?locals_for_with.humanize:typeof humanize!=="undefined"?humanize:undefined,"i18n" in locals_for_with?locals_for_with.i18n:typeof i18n!=="undefined"?i18n:undefined,"svg" in locals_for_with?locals_for_with.svg:typeof svg!=="undefined"?svg:undefined));;return buf.join("");
-};  return fn;});
+};    return fn;  };wfn.compiled = true;return wfn;});
 
 
-define('jade!app/text/comment-loader', function () {  var fn = function template(locals) {
+define('jade!app/text/comment-loader', function () {  var wfn = function (jade) {    var fn = function template(locals) {
 var buf = [];
 var jade_mixins = {};
 var jade_interp;
 ;var locals_for_with = (locals || {});(function (comment, pluralize) {
 buf.push("<div" + (jade.attr("id", 'isso-loader-' + (comment.name) + '', true, false)) + " class=\"isso-comment-loader\"><a href=\"#\" class=\"load_hidden\">" + (jade.escape((jade_interp = pluralize('comment-hidden', comment.hidden_replies)) == null ? '' : jade_interp)) + "</a></div>");}.call(this,"comment" in locals_for_with?locals_for_with.comment:typeof comment!=="undefined"?comment:undefined,"pluralize" in locals_for_with?locals_for_with.pluralize:typeof pluralize!=="undefined"?pluralize:undefined));;return buf.join("");
-};  return fn;});
+};    return fn;  };wfn.compiled = true;return wfn;});
 
 define('app/jade',["libjs-jade-runtime", "app/utils", "jade!app/text/postbox", "jade!app/text/comment", "jade!app/text/comment-loader"], function(runtime, utils, tt_postbox, tt_comment, tt_comment_loader) {
     "use strict";
@@ -2128,6 +2128,9 @@ define('app/jade',["libjs-jade-runtime", "app/utils", "jade!app/text/postbox", "
     var load = function(name, js) {
         templates[name] = (function(jade) {
                 var fn;
+                if (js.compiled) {
+                    return js(jade);
+                }
                 eval("fn = " + js);
                 return fn;
             })(runtime);
