@@ -22,7 +22,7 @@ luffy.s.push(function() {
                     while (parent && parent.tagName !== "LI")
                         parent = parent.parentNode;
                     if (parent) {
-                        parent.parentNode.removeChild(parent);
+                        parent.style.visibility = 'hidden';
                     }
                 }
             };
