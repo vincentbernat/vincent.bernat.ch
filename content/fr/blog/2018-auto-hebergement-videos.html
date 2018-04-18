@@ -1,0 +1,402 @@
+---
+title: "Auto-hébergement de vidéos avec HLS"
+description: |
+  Bien que peu respectueux de la vie privée, YouTube est une solution commode
+  pour héberger une vidéo. En utilisant HLS, il est possible d'héberger
+  soi-même des vidéos tout en ménageant la bande passante.
+uuid: 9eeb590d-841a-436d-ae80-9f00b3bfff71
+attachments:
+  "https://github.com/vincentbernat/video2hls": video2hls
+---
+
+!!! "Note" Ce billet a été publié pour la première fois sur le [blog
+d'Exoscale][Exoscale blog] avec quelques modifications mineures.
+
+Héberger des vidéos sur [YouTube][] est pratique pour plusieurs
+raisons: bon lecteur, bande passante gratuite, fonctionnement sur
+mobile, effet réseau et, à la discrétion de l'auteur, pas de
+publicité[^ads]. Par contre, c'est l'une des solutions les moins
+respectueuses de la vie privée. La plupart des autres fournisseurs
+partagent les mêmes caractéristiques, à l'exception de la possibilité
+de désactiver gratuitement les annonces.
+
+[^ads]: YouTube vous donne le choix de ne pas insérer d'annonces
+    publicitaires dans vos vidéos.  vidéos. Dans les [paramètres
+    avancés][advanced settings], vous pouvez désélectionner «
+    Autoriser des publicités à s'afficher en même temps que mes
+    vidéos ». Sinon, vous pouvez également monétiser vos vidéos.
+
+Avec la [balise `<video>`][video], la publication d'une vidéo est
+simple[^formats] :
+
+    ::html
+    <video controls>
+      <source src="../videos/big_buck_bunny.webm" type="video/webm">
+      <source src="../videos/big_buck_bunny.mp4" type="video/mp4">
+    </video>
+
+[^formats]: De nos jours, tous les navigateurs supportent
+    MP4/H.264. De plus, cela permet généralement de profiter de
+    l'accélération matérielle, ce qui améliore la durée de vie de la
+    batterie sur les téléphones portables. WebM/VP9 permet d'obtenir
+    une meilleure qualité à débit identique.
+
+Cependant, bien qu'il soit possible de fournir des [vidéos différentes
+selon la taille de l'écran][different videos depending on the screen
+width], **adapter la vidéo à la bande passante disponible** est plus
+délicat. Il y a deux solutions :
+
+ - HLS ([RFC 8216][], non normative) et
+ - MPEG-DASH ([ISO/IEC 23009-1:2014][]).
+
+Il s'agit de deux **protocoles de diffusion à débit adaptatif** : la
+vidéo est découpée en petits segments et mise à disposition dans une
+variété de débits différents. Selon les conditions actuelles du
+réseau, le lecteur sélectionne automatiquement le débit le plus
+approprié pour télécharger le segment suivant.
+
+*HLS* a d'abord été implémenté par Apple mais est maintenant aussi
+pris en charge nativement par Microsoft Edge et Chrome sur
+Android. [hls.js][] est une librairie JavaScript apportant le support
+HLS à d'autres navigateurs. *MPEG-DASH* est techniquement supérieur
+(indépendant du codec) mais ne fonctionne qu' à travers une
+bibliothèque JavaScript, comme [dash.js][]. Dans les deux cas, le
+support des [Media Source Extensions][] est nécessaire lorsque le
+support natif est absent. Safari sur iOS [n'a pas cette
+fonctionnalité][caniuse] et ne peut donc pas utiliser *MPEG-DASH*. Par
+conséquent, la solution la plus compatible est actuellement *HLS*.
+
+# Encodage
+
+Trois types de fichiers sont nécessaires pour diffuser des vidéos HLS :
+
+ - les **segments** (encodés avec différents débits et résolutions),
+ - une **liste de lecture des segments** pour chacune des variantes,
+ - une **liste de lecture principale** énumérant les listes de lecture pour chaque variante.
+
+Deux formats sont possibles pour les segments :
+
+ - MPEG-2 Transport Streams (TS) ou
+ - MP4 fragmenté.
+
+Les segments au format MP4 fragmenté sont supportés depuis iOS 10. Ils
+sont un peu plus efficaces et peuvent être réutilisés pour servir le
+même contenu avec MPEG-DASH (seuls les listes de lecture sont
+différentes). Enfin, les fragments peuvent être servis depuis un même
+fichier. Cependant, si vous voulez cibler les anciennes versions
+d'iOS, vous devez vous en tenir au MPEG-2 TS[^both].
+
+[^both]: Vous pouvez générer les deux formats et les utiliser comme
+    variantes dans la liste de lecture principale. Cependant, un [bug
+    dans *hls.js*][issue1510] interdit cette option.
+
+[FFmpeg][] est capable de convertir une vidéo en segments et de
+générer les listes de lecture associées. La [documentation de
+Peer5][Peer5's documentation] explique les commandes appropriées. J'ai
+écrit un script (Python 3.6), [video2hls][], réalisant toutes les
+étapes. Après l'avoir exécuté sur votre vidéo cible, vous obtenez un
+répertoire contenant :
+
+ - les segments pour chaque résolution (`1080p_1_001.ts`, `720p_2_001.ts`, ...)
+ - les listes de lecture pour chaque résolution (`1080p_1.m3u8`, `720p_2.m3u8`, ...)
+ - la liste de lecture principale (`index.m3u8`)
+ - une version MP4 (`progressive.mp4`)
+ - un poster (`poster.jpg`)
+
+Le script accepte beaucoup d'options pour modifier son
+comportement. Le drapeau `--help` permet de les lister. En le lançant
+avec `--debug`, les commandes `ffmpeg` exécutées sont annotées
+d'explications. Par exemple, la construction du poster provient de la
+commande suivante :
+
+    ::sh
+    ffmpeg \
+      `# seek to the given position (5%)` \
+       -ss 4 \
+      `# load input file` \
+       -i ../2018-self-hosted-videos.mp4 \
+      `# take only one frame` \
+       -frames:v 1 \
+      `# filter to select an I-frame and scale` \
+       -vf 'select=eq(pict_type\,I),scale=1280:720' \
+      `# request a JPEG quality ~ 10` \
+       -qscale:v 28 \
+      `# output file` \
+       poster.jpg
+
+# Service
+
+Nous avons obtenu un tas de fichiers statiques qui peuvent être
+hébergés n'importe où. Toutefois, deux détails restent importants :
+
+ - Lorsque les fichiers sont servis depuis un autre domaine, il faut
+   configurer [CORS][] pour autoriser les requêtes `GET`. Ajouter
+   `Access-Control-Allow-Origin: *` dans les entêtes de réponse est
+   généralement suffisant[^cors].
+ - Certains clients peuvent être difficiles sur les types
+   MIME. Assurez-vous que chaque fichier est associé comme indiqué
+   dans le tableau ci-dessous.
+
+Type              | Extension | Type MIME
+----------------- | --------- | --------------
+Liste de lecture  | `.m3u8`   | `application/vnd.apple.mpegurl`
+Segments MPEG2-TS | `.ts`     | `video/mp2t`
+Segments fMP4     | `.mp4`    | `video/mp4`
+MP4 classique     | `.mp4`    | `video/mp4`
+Poster            | `.jpg`    | `image/jpeg`
+
+[^cors]: L'astérisque peut être remplacée par `https://example.org`
+    pour restreindre l'accès à son propre domaine.
+
+Hébergons nos fichiers sur le [stockage objet d'Exoscale][Exoscale's
+Object Storage] qui est compatible avec S3 et situé en Suisse. À titre
+d'exemple, la vidéo [*Caminandes 3: Llamigos*][video] pèse environ
+213 MiB (cinq tailles pour HLS et un MP4 classique). Cela nous
+coûterait moins de 0,01 € par mois pour le stockage et 1,42 € pour la
+bande passante si 1000 personnes regardaient la version 1080p du début
+à la fin[^cdn].
+
+[^cdn]: Nul besoin de placer les fichiers derrière un CDN. La latence
+    importe peu à condition d'avoir un débit suffisant.
+
+Nous utilisons `s3cmd` pour envoyer les fichiers. Récupérez d'abord
+vos [identifiants][API credentials] depuis le portail et placez les
+dans `~/.s3cfg` :
+
+    ::ini
+    [default]
+    host_base = sos-ch-dk-2.exo.io
+    host_bucket = %(bucket)s.sos-ch-dk-2.exo.io
+    access_key = EXO.....
+    secret_key = ....
+    use_https = True
+    bucket_location = ch-dk-2
+
+La seconde étape consiste à créer un *bucket* :
+
+    ::console
+    $ s3cmd mb s3://hls-videos
+    Bucket 's3://hls-videos/' created
+
+Pour configurer la politique CORS, placez la définition suivante dans
+un fichier `cors.xml` (il peut être souhaitable de restreindre les
+origines autorisées) :
+
+    ::xml
+    <CORSConfiguration>
+     <CORSRule>
+       <AllowedOrigin>*</AllowedOrigin>
+       <AllowedMethod>GET</AllowedMethod>
+     </CORSRule>
+    </CORSConfiguration>
+
+La commande suivante permet de l'appliquer :
+
+    ::console
+    $ s3cmd setcors cors.xml s3://hls-videos
+
+La dernière étape consiste à copier les fichiers statiques. Les listes
+de lecture sont servies compressées pour économiser un peu de bande
+passante. Pour chaque vidéo, à l'intérieur du répertoire contenant
+tous les fichiers générés, utilisez cette commande :
+
+    ::sh
+    while read extension mime gz; do
+      [ -z "$gz" ] || {
+        # gzip compression (if not already done)
+        for f in *.${extension}; do
+          ! gunzip -t $f 2> /dev/null || continue
+          gzip $f
+          mv $f.gz $f
+        done
+      }
+      s3cmd --no-preserve -F -P \
+            ${gz:+--add-header=Content-Encoding:gzip} \
+            --mime-type=${mime} \
+            --encoding=UTF-8 \
+            --exclude=* --include=*.${extension} \
+            --delete-removed \
+        sync . s3://hls-videos/video1/
+    done <<EOF
+    m3u8  application/vnd.apple.mpegurl true
+    jpg   image/jpeg
+    mp4   video/mp4
+    ts    video/mp2t
+    EOF
+
+Les fichiers sont maintenant disponibles à l'adresse
+`https://hls-videos.sos-ch-dk-2.exo.io/video1/`.
+
+# HTML
+
+Le code suivant permet d'insérer la vidéo dans un document HTML :
+
+    ::html
+    <video poster="https://hls-videos.sos-ch-dk-2.exo.io/video1/poster.jpg"
+           controls preload="none">
+      <source src="https://hls-videos.sos-ch-dk-2.exo.io/video1/index.m3u8"
+              type="application/vnd.apple.mpegurl">
+      <source src="https://hls-videos.sos-ch-dk-2.exo.io/video1/progressive.mp4"
+              type='video/mp4; codecs="avc1.4d401f, mp4a.40.2"'>
+    </video>
+
+Les navigateurs avec support natif utilisent la version HLS alors que
+les autres utiliseront la version MP4 progressive. Cependant, avec
+l'aide de [hls.js][], nous pouvons faire bénéficier la version HLS à
+la plupart des navigateurs :
+
+    ::html
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        if(Hls.isSupported()) {
+            var selector = "video source[type='application/vnd.apple.mpegurl']",
+                videoSources = document.querySelectorAll(selector);
+            videoSources.forEach(function(videoSource) {
+                var once = false;
+
+                // Copier la balise video pour retirer toutes les sources
+                var oldVideo = videoSource.parentNode,
+                    newVideo = oldVideo.cloneNode(false);
+
+                // Remplacer la balise video avec la copie
+                oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+
+                // Attendre le dernier moment pour initialiser hls.js,
+                // une seule fois
+                newVideo.addEventListener('play',function() {
+                    if (!once) return;
+                    once = true;
+
+                    var hls = new Hls({ capLevelToPlayerSize: true });
+                    hls.loadSource(m3u8);
+                    hls.attachMedia(newVideo);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        newVideo.play();
+                    });
+                }, false);
+            });
+        }
+    </script>
+
+Voici le résultat avec [*Caminandes 3: Llamigos*][video], une vidéo
+créée par Pablo Vasquez, produite par la [fondation Blender][Blender
+Foundation] et publiée sous licence [Creative Commons Attribution
+3.0][] :
+
+![]([[!!videos/2018-self-hosted-videos.m3u8]])
+
+La plupart des attributs, méthodes et événements JavaScript
+fonctionnent de la même façon qu'avec un simple élément `<video>`. Par
+exemple, vous pouvez atteindre une position arbitraire, comme
+[1:00](#video-seek-60) ou [2:00](#video-seek-120)<span
+class="when-nojs"> (mais vous avez besoin d'activer JavaScript à cet
+effet)</span>.
+
+Le lecteur est différent d'un navigateur à l'autre mais fournit
+généralement les fonctions basiques. Vous pouvez évoluer vers un
+lecteur plus avancé, comme [video.js][] out [MediaElements.js][]. Ils
+gèrent également HLS via *hls.js*.
+
+**Héberger ses vidéos sur *YouTube* n'est pas une fatalité** : les
+servir soi-même tout en proposant une livraison de qualité est
+techniquement accessible. Si les besoins en bande passante sont
+modestes et l'effet réseau peu important, l'auto-hébergement permet de
+reprendre le contrôle des contenus publiés et de ne pas livrer ses
+lecteurs à Google. Dans le même esprit, [PeerTube][] offre une
+plateforme de partage des vidéos. Décentralisée et fédérée, elle
+repose sur BitTorrent pour réduire les besoins en bande passante.
+
+# Annexe
+
+## Préchargement
+
+Dans l'exemple ci-dessus, `preload="none"` est utilisé pour deux raisons :
+
+ - La plupart des lecteurs ne vont pas visionner la vidéo qui ne sert
+   que d'illustration au contenu principal. Par conséquent, la bande
+   passante n'est pas gaspillée en téléchargeant quelques segments de
+   vidéo, au détriment d'une latence légèrement accrue en début de
+   lecture.
+ - Nous ne voulons pas que les clients ne comprenant pas HLS
+   nativement commencent à télécharger la version non-HLS alors que
+   *hls.js* s'initialise. Cela pourrait aussi être fait en ajoutant le
+   MP4 progressif à partir de JavaScript, mais cela rendrait la vidéo
+   impossible à lire pour les utilisateurs sans JavaScript. Si le
+   préchargement est important, vous pouvez supprimer l'attribut
+   `preload` via JavaScript (et ne pas attendre une demande de lecture
+   pour initialiser *hls.js*).
+
+## CSP
+
+Configurer correctement [CSP][] est plutôt pénible. Pour les
+navigateurs avec support HLS natif, il suffit d'ajouter la politique
+suivante en plus de la politique existante :
+
+ - `image-src https://hls-videos.sos-ch-dk-2.exo.io` pour les posters,
+ - `media-src https://hls-videos.sos-ch-dk-2.exo.io` pour les listes
+   de lecture et les segments.
+
+Avec *hls.js*, les choses se compliquent. Idéalement, il faut ajouter
+les éléments suivants :
+
+ - `worker-src blob:` pour la conversion du format vidéo en tâche de fond,
+ - `media-src blob:` pour la lecture des segments convertis,
+ - `connect-src https://hls-videos.sos-ch-dk-2.exo.io` pour récupérer
+   les listes de lecture et les segments depuis JavaScript.
+
+Toutefois, `worker-src` est un ajout [récent][worker-src]. Les
+navigateurs doivent se replier sur `child-src`
+([obsolète][child-src]), `script-src` (mais [pas partout][script-src])
+puis `default-src`. Ainsi, pour une meilleure compatibilité, il faut
+ajouter `blob:` à `default-src` ainsi qu'à `script-src` et `child-src`
+s'ils sont déjà présents. Voici un exemple pour lequel la politique
+initiale est `default-src 'self'` :
+
+    ::http
+    HTTP/1.0 200 OK
+    Content-Security-Policy: 
+      default-src 'self' blob:;
+      image-src 'self' https://hls-videos.sos-ch-dk-2.exo.io;
+      media-src blob: https://hls-videos.sos-ch-dk-2.exo.io;
+      connect-src https://hls-videos.sos-ch-dk-2.exo.io;
+      worker-src blob:;
+
+*[HLS]: HTTP Live Streaming
+*[MPEG-DASH]: Dynamic Adaptive Streaming over HTTP
+*[CORS]: Cross-origin resource sharing
+*[TS]: Transport Streams
+
+[YouTube]: https://www.youtube.com/ "YouTube"
+[advanced settings]: https://www.youtube.com/advanced_settings "YouTube advanced settings"
+[video]: https://www.html5rocks.com/en/tutorials/video/basics/ "HTML5 Video"
+[video.js]: http://videojs.com/ "Video.js: The Player Framework"
+[MediaElements.js]: http://www.mediaelementjs.com/ "MediaElements.js: HTML5 video and audio unification framework"
+[different videos depending on the screen width]: https://www.iandevlin.com/blog/2012/08/html5/responsive-html5-video/ "Responsive HTML5 video"
+[RFC 8216]: https://tools.ietf.org/html/rfc8216 "RFC 8216: HTTP Live Streaming"
+[ISO/IEC 23009-1:2014]: https://www.iso.org/standard/65274.html "Dynamic adaptive streaming over HTTP (DASH)"
+[hls.js]: https://github.com/video-dev/hls.js/ "JavaScript HLS client using Media Source Extension"
+[dash.js]: https://github.com/Dash-Industry-Forum/dash.js "Reference client implementation for the playback of MPEG DASH via Javascript and compliant browsers"
+[Media Source Extensions]: http://w3c.github.io/media-source/ "W3C: Media Source Extensions"
+[caniuse]: https://caniuse.com/#feat=mediasource "Can I use Media Source Extensions"
+[Exoscale's Object Storage]: https://www.exoscale.ch/object-storage/ "Exoscale: Object Storage"
+[API credentials]: https://portal.exoscale.ch/account/profile/api "Identifiants API pour Exoscale"
+[FFmpeg]: https://ffmpeg.org/ "A complete, cross-platform solution to record, convert and stream audio and video"
+[Peer5's documentation]: https://docs.peer5.com/guides/production-ready-hls-vod/ "Creating A Production Ready Multi Bitrate HLS VOD stream"
+[StackOverflow question]: https://stackoverflow.com/questions/16363167/html5-video-tag-codecs-attribute "StackOverflow: html5 video tag codecs attribute"
+[issue1510]: https://github.com/video-dev/hls.js/issues/1510 "Issue #1510: MPEGTS and fMP4 segments in the same HLS stream"
+[video2hls]: https://github.com/vincentbernat/video2hls "Préparation d'une vidéo pour diffusion avec HLS"
+[video]: http://www.caminandes.com/ "Caminandes"
+[Blender Foundation]: https://www.blender.org/foundation/ "Blender Foundation"
+[Creative Commons Attribution 3.0]: https://creativecommons.org/licenses/by/3.0/ "Creative Commons Attribution 3.0 Unported (CC BY 3.0)"
+[CSP]: https://content-security-policy.com/ "Content Security Policy Reference & Examples"
+[worker-src]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/worker-src#Browser_compatibility "Browser compatibility for worker-src"
+[child-src]: https://github.com/w3c/webappsec-csp/issues/145 "Deprecated child-src - Issue #145"
+[script-src]: https://bugzilla.mozilla.org/show_bug.cgi?id=1402332 "CSP: Enforce script-src for workers in the absence of worker-src"
+[Exoscale blog]: https://www.exoscale.ch/syslog/2018/02/07/self-hosted-videos/ "Self-hosting videos with HLS"
+[CORS]: https://fr.wikipedia.org/wiki/Cross-origin_resource_sharing "Cross-origin resource sharing sur Wikipedia"
+[PeerTube]: https://github.com/Chocobozzz/PeerTube "PeerTube: Federated (ActivityPub) video streaming platform using P2P (BitTorrent) directly in the web browser"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

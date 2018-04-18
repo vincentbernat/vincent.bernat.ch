@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from fabric.api import *
 from fabric.contrib.console import confirm, prompt
 
@@ -114,6 +115,8 @@ done <<EOF
                                  --audio-bitrate 128 --audio-only
 2018-adlib-opl2lpt-3-monkey2.mp4 --video-bitrate-factor 0.5 \
                                  --audio-bitrate 128 --audio-only
+2018-self-hosted-videos.mp4      --mp4-overlay {resolution}p, progressive \
+                                 --video-overlay {resolution}p, HLS
 EOF
 """
 

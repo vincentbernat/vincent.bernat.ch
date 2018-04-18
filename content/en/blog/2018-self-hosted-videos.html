@@ -1,0 +1,387 @@
+---
+title: "Self-hosted videos with HLS"
+description: |
+  Putting videos on YouTube is a convenient solution, but not a
+  privacy-friendly one. Using HLS, it's possible to self-host
+  videos while being bandwidth-friendly.
+uuid: 9eeb590d-841a-436d-ae80-9f00b3bfff71
+attachments:
+  "https://github.com/vincentbernat/video2hls": video2hls
+---
+
+!!! "Note" This article was first published on [Exoscale blog][] with
+some minor modifications.
+
+Hosting videos on [YouTube][] is convenient for several reasons:
+pretty good player, free bandwidth, mobile-friendly, network effect
+and, at your discretion, no ads.[^ads] On the other hand, this is one
+of the less privacy-friendly solution. Most other providers
+share the same characteristics—except the ability to disable ads for
+free.
+
+[^ads]: YouTube gives you the choice to not display ads on your
+    videos. In [advanced settings][], you can unselect "Allow
+    advertisements to be displayed alongside my videos."
+    Alternatively, you can also monetize your videos.
+
+With the [`<video>` tag][video], self-hosting a video is
+simple:[^formats]
+
+    ::html
+    <video controls>
+      <source src="../videos/big_buck_bunny.webm" type="video/webm">
+      <source src="../videos/big_buck_bunny.mp4" type="video/mp4">
+    </video>
+
+[^formats]: Nowadays, everything supports MP4/H.264. It usually also
+    brings hardware acceleration, which improves battery life on
+    mobile devices. WebM/VP9 provides a better quality at the same
+    bitrate.
+
+However, while it is possible to provide a [different videos depending
+on the screen width][], **adapting the video to the available
+bandwidth** is trickier. There are two solutions:
+
+ - HLS ([RFC 8216][], informational), and
+ - MPEG-DASH ([ISO/IEC 23009-1:2014][]).
+
+They are both **adaptive bitrate streaming protocols**: the video is
+sliced in small segments and made available at a variety of different
+bitrates. Depending on current network conditions, the player
+automatically selects the appropriate bitrate to download the next
+segment.
+
+*HLS* was initially implemented by Apple but is now also supported
+natively by Microsoft Edge and Chrome on Android. [hls.js][] is a
+JavaScript library bringing HLS support to other browsers. *MPEG-DASH*
+is technically superior (codec-agnostic) but only works through a
+JavaScript library, like [dash.js][]. In both cases, support of the
+[Media Source Extensions][] is needed when native support is
+absent. Safari on iOS [doesn't have this feature][caniuse] and cannot
+use *MPEG-DASH*. Consequently, the most compatible solution is
+currently *HLS*.
+
+# Encoding
+
+To serve HLS videos, you need three kinds of files:
+
+ - the **media segments** (encoded with different bitrates/resolutions),
+ - a **media playlist** for each variant, listing the media segments, and
+ - a **master playlist**, listing the media playlists.
+
+Media segments can come in two formats:
+
+ - MPEG-2 Transport Streams (TS), or
+ - Fragmented MP4.
+
+Fragmented MP4 media segments are supported since iOS 10. They are a
+bit more efficient and can be reused to serve the same content as
+MPEG-DASH (only the playlists are different). Also, they can be served
+from the same file with range requests. However, if you want to
+target older versions of iOS, you need to stick with MPEG-2 TS.[^both]
+
+[^both]: You could generate both formats and use them as variants in
+    the master playlist. However, a [limitation in
+    *hls.js*][issue1510] prevents this option.
+
+[FFmpeg][] is able to convert a video to media segments and generate
+the associated media playlists. [Peer5's documentation][] explains the
+suitable commands. I have put together an handy (Python 3.6) script,
+[video2hls][], stitching together all the steps. After executing it on
+your target video, you get a directory containing:
+
+ - media segments for each resolution (`1080p_1_001.ts`, `720p_2_001.ts`, ...)
+ - media playlists for each resolution (`1080p_1.m3u8`, `720p_2.m3u8`, ...)
+ - master playlist (`index.m3u8`)
+ - progressive (streamable) MP4 version of your video (`progressive.mp4`)
+ - poster (`poster.jpg`)
+
+The script accepts a lot of options for customization. Use the
+`--help` flag to discover them. Run it with `--debug` to get the
+`ffmpeg` commands executed with an explanation for each flag. For
+example, the poster is built with this command:
+
+    ::sh
+    ffmpeg \
+      `# seek to the given position (5%)` \
+       -ss 4 \
+      `# load input file` \
+       -i ../2018-self-hosted-videos.mp4 \
+      `# take only one frame` \
+       -frames:v 1 \
+      `# filter to select an I-frame and scale` \
+       -vf 'select=eq(pict_type\,I),scale=1280:720' \
+      `# request a JPEG quality ~ 10` \
+       -qscale:v 28 \
+      `# output file` \
+       poster.jpg
+
+# Serving
+
+So, we got a bunch of static files we can upload anywhere. Yet two
+details are important:
+
+ - When serving from another domain, [CORS][] needs to be configured
+   to allow `GET` requests. Adding `Access-Control-Allow-Origin: *` to
+   response headers is enough.[^cors]
+ - Some clients may be picky about the MIME types. Ensure files are
+   served with the ones in the table below.
+
+Kind              | Extension | MIME type
+----------------- | --------- | --------------
+Playlists         | `.m3u8`   | `application/vnd.apple.mpegurl`
+MPEG2-TS segments | `.ts`     | `video/mp2t`
+fMP4 segments     | `.mp4`    | `video/mp4`
+Progressive MP4   | `.mp4`    | `video/mp4`
+Poster            | `.jpg`    | `image/jpeg`
+
+[^cors]: Use `https://example.org` instead of the wildcard character
+    to restrict access to your own domain.
+
+Let's host our files on [Exoscale's Object Storage][] which is
+compatible with S3 and located in Switzerland. As an example, the
+[*Caminandes 3: Llamigos*][video] video is about 213 MiB (five sizes for
+HLS and one progressive MP4). It would cost us less than 0.01 € per month
+for storage and 1.42 € for bandwidth if 1000 people watch the 1080p
+version from beginning to end—unlikely.[^cdn]
+
+[^cdn]: There is no need to host those files behind a (costly)
+    CDN. Latency doesn't matter much as long as you can sustain the
+    appropriate bandwidth.
+
+We use `s3cmd` to upload files. First, you need to recover your [API
+credentials][] from the portal and put them in `~/.s3cfg`:
+
+    ::ini
+    [default]
+    host_base = sos-ch-dk-2.exo.io
+    host_bucket = %(bucket)s.sos-ch-dk-2.exo.io
+    access_key = EXO.....
+    secret_key = ....
+    use_https = True
+    bucket_location = ch-dk-2
+
+The second step is to create a bucket:
+
+    ::console
+    $ s3cmd mb s3://hls-videos
+    Bucket 's3://hls-videos/' created
+
+You need to configure the CORS policy for this bucket. First, define
+the policy in a `cors.xml` file (you may want to restrict the allowed
+origin):
+
+    ::xml
+    <CORSConfiguration>
+     <CORSRule>
+       <AllowedOrigin>*</AllowedOrigin>
+       <AllowedMethod>GET</AllowedMethod>
+     </CORSRule>
+    </CORSConfiguration>
+
+Then, apply it to the bucket:
+
+    ::console
+    $ s3cmd setcors cors.xml s3://hls-videos
+
+The last step is to copy the static files. Playlists are served
+compressed to save a bit of bandwidth. For each video, inside the
+directory containing all the generated files, use the following
+command:
+
+    ::sh
+    while read extension mime gz; do
+      [ -z "$gz" ] || {
+        # gzip compression (if not already done)
+        for f in *.${extension}; do
+          ! gunzip -t $f 2> /dev/null || continue
+          gzip $f
+          mv $f.gz $f
+        done
+      }
+      s3cmd --no-preserve -F -P \
+            ${gz:+--add-header=Content-Encoding:gzip} \
+            --mime-type=${mime} \
+            --encoding=UTF-8 \
+            --exclude=* --include=*.${extension} \
+            --delete-removed \
+        sync . s3://hls-videos/video1/
+    done <<EOF
+    m3u8  application/vnd.apple.mpegurl true
+    jpg   image/jpeg
+    mp4   video/mp4
+    ts    video/mp2t
+    EOF
+
+The files are now available at
+`https://hls-videos.sos-ch-dk-2.exo.io/video1/`.
+
+# HTML
+
+We can insert our video in a document with the following markup:
+
+    ::html
+    <video poster="https://hls-videos.sos-ch-dk-2.exo.io/video1/poster.jpg"
+           controls preload="none">
+      <source src="https://hls-videos.sos-ch-dk-2.exo.io/video1/index.m3u8"
+              type="application/vnd.apple.mpegurl">
+      <source src="https://hls-videos.sos-ch-dk-2.exo.io/video1/progressive.mp4"
+              type='video/mp4; codecs="avc1.4d401f, mp4a.40.2"'>
+    </video>
+
+Browsers with native support use the HLS version while others would
+fall back to the progressive MP4 version. However, with the help of
+[hls.js][], we can ensure most browsers benefit from the HLS version
+too:
+
+    ::html
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        if(Hls.isSupported()) {
+            var selector = "video source[type='application/vnd.apple.mpegurl']",
+                videoSources = document.querySelectorAll(selector);
+            videoSources.forEach(function(videoSource) {
+                var once = false;
+
+                // Clone the video to remove any source
+                var oldVideo = videoSource.parentNode,
+                    newVideo = oldVideo.cloneNode(false);
+
+                // Replace video tag with our clone.
+                oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+
+                // On play, initialize hls.js, once.
+                newVideo.addEventListener('play',function() {
+                    if (!once) return;
+                    once = true;
+
+                    var hls = new Hls({ capLevelToPlayerSize: true });
+                    hls.loadSource(m3u8);
+                    hls.attachMedia(newVideo);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                        newVideo.play();
+                    });
+                }, false);
+            });
+        }
+    </script>
+
+Here is the result, featuring [*Caminandes 3: Llamigos*][video], a
+video created by Pablo Vasquez, produced by the [Blender Foundation][]
+and released under the [Creative Commons Attribution 3.0][] license:
+
+![]([[!!videos/2018-self-hosted-videos.m3u8]])
+
+Most JavaScript attributes, methods and events work just like with a
+plain `<video>` element. For example, you can seek to an arbitrary
+position, like [1:00](#video-seek-60) or [2:00](#video-seek-120)<span
+class="when-nojs">—but you would need to enable JavaScript to
+test</span>.
+
+The player is different from one browser to another but provides the
+basic needs. You can upgrade to a more advanced player, like
+[video.js][] or [MediaElements.js][]. They also handle HLS videos
+through *hls.js*.
+
+**Hosting your videos on *YouTube* is not unavoidable**: serving them
+yourself while offering quality delivery is technically affordable. If
+bandwidth requirements are modest and the network effect not
+important, self-hosting makes it possible to regain control of the
+published content and not to turn over readers to Google. In the same
+spirit, [PeerTube][] offers a video sharing platform. Decentralized
+and federated, it relies on BitTorrent to reduce bandwidth
+requirements.
+
+# Addendum
+
+## Preloading
+
+In the above example, `preload="none"` was used for two reasons:
+
+ - Most readers won't play the video as it is an addon to the main
+   content. Therefore, bandwidth is not wasted by downloading a few
+   segments of video, at the expense of slightly increased latency on
+   play.
+ - We do not want non-native HLS clients to start downloading the
+   non-HLS version while *hls.js* is loading and taking over the
+   video. This could also be done by declaring the progressive MP4
+   fallback from JavaScript, but this would make the video unplayable
+   for users without JavaScript. If preloading is important, you can
+   remove the `preload` attribute from JavaScript—and not wait for
+   the play event to initialize *hls.js*.
+
+## CSP
+
+Setting up [CSP][] correctly can be quite a pain. For browsers with
+native HLS support, you need the following policy, in addition to your
+existing policy:
+
+ - `image-src https://hls-videos.sos-ch-dk-2.exo.io` for the posters,
+ - `media-src https://hls-videos.sos-ch-dk-2.exo.io` for the playlists and
+   media segments.
+
+With *hls.js*, things are more complex. Ideally, the following
+policy should also be applied:
+
+ - `worker-src blob:` for the transmuxing web worker,
+ - `media-src blob:` for the transmuxed segments,
+ - `connect-src https://hls-videos.sos-ch-dk-2.exo.io` to
+   fetch playlists and media segments from JavaScript.
+
+However, `worker-src` is quite [recent][worker-src]. The expected
+fallbacks are `child-src` ([deprecated][child-src]), `script-src` (but
+[not everywhere][script-src]) and then `default-src`. Therefore, for
+broader compatibility, you also need to append `blob:` to
+`default-src` as well as to `script-src` and `child-src` if you
+already have them. Here is an example policy—assuming the original
+policy was just `default-src 'self'` and media, XHR and workers were
+not needed:
+
+    ::http
+    HTTP/1.0 200 OK
+    Content-Security-Policy: 
+      default-src 'self' blob:;
+      image-src 'self' https://hls-videos.sos-ch-dk-2.exo.io;
+      media-src blob: https://hls-videos.sos-ch-dk-2.exo.io;
+      connect-src https://hls-videos.sos-ch-dk-2.exo.io;
+      worker-src blob:;
+
+*[HLS]: HTTP Live Streaming
+*[MPEG-DASH]: Dynamic Adaptive Streaming over HTTP
+*[CORS]: Cross-origin resource sharing
+*[TS]: Transport Streams
+
+[YouTube]: https://www.youtube.com/ "YouTube"
+[advanced settings]: https://www.youtube.com/advanced_settings "YouTube advanced settings"
+[video]: https://www.html5rocks.com/en/tutorials/video/basics/ "HTML5 Video"
+[video.js]: http://videojs.com/ "Video.js: The Player Framework"
+[MediaElements.js]: http://www.mediaelementjs.com/ "MediaElements.js: HTML5 video and audio unification framework"
+[different videos depending on the screen width]: https://www.iandevlin.com/blog/2012/08/html5/responsive-html5-video/ "Responsive HTML5 video"
+[RFC 8216]: https://tools.ietf.org/html/rfc8216 "RFC 8216: HTTP Live Streaming"
+[ISO/IEC 23009-1:2014]: https://www.iso.org/standard/65274.html "Dynamic adaptive streaming over HTTP (DASH)"
+[hls.js]: https://github.com/video-dev/hls.js/ "JavaScript HLS client using Media Source Extension"
+[dash.js]: https://github.com/Dash-Industry-Forum/dash.js "Reference client implementation for the playback of MPEG DASH via Javascript and compliant browsers"
+[Media Source Extensions]: http://w3c.github.io/media-source/ "W3C: Media Source Extensions"
+[caniuse]: https://caniuse.com/#feat=mediasource "Can I use Media Source Extensions"
+[Exoscale's Object Storage]: https://www.exoscale.ch/object-storage/ "Exoscale: Object Storage"
+[API credentials]: https://portal.exoscale.ch/account/profile/api "API credentials for Exoscale"
+[FFmpeg]: https://ffmpeg.org/ "A complete, cross-platform solution to record, convert and stream audio and video"
+[Peer5's documentation]: https://docs.peer5.com/guides/production-ready-hls-vod/ "Creating A Production Ready Multi Bitrate HLS VOD stream"
+[StackOverflow question]: https://stackoverflow.com/questions/16363167/html5-video-tag-codecs-attribute "StackOverflow: html5 video tag codecs attribute"
+[issue1510]: https://github.com/video-dev/hls.js/issues/1510 "Issue #1510: MPEGTS and fMP4 segments in the same HLS stream"
+[video2hls]: https://github.com/vincentbernat/video2hls "Prepare a video to be streamed with HLS"
+[video]: http://www.caminandes.com/ "Caminandes"
+[Blender Foundation]: https://www.blender.org/foundation/ "Blender Foundation"
+[Creative Commons Attribution 3.0]: https://creativecommons.org/licenses/by/3.0/ "Creative Commons Attribution 3.0 Unported (CC BY 3.0)"
+[CSP]: https://content-security-policy.com/ "Content Security Policy Reference & Examples"
+[worker-src]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/worker-src#Browser_compatibility "Browser compatibility for worker-src"
+[child-src]: https://github.com/w3c/webappsec-csp/issues/145 "Deprecated child-src - Issue #145"
+[script-src]: https://bugzilla.mozilla.org/show_bug.cgi?id=1402332 "CSP: Enforce script-src for workers in the absence of worker-src"
+[Exoscale blog]: https://www.exoscale.ch/syslog/2018/02/07/self-hosted-videos/ "Self-hosting videos with HLS"
+[CORS]: https://en.wikipedia.org/wiki/Cross-origin_resource_sharing "Cross-origin resource sharing on Wikipedia"
+[PeerTube]: https://github.com/Chocobozzz/PeerTube "Federated (ActivityPub) video streaming platform using P2P (BitTorrent) directly in the web browser"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
