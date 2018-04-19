@@ -2,15 +2,15 @@
 
 luffy.s.push(function() {
     // Don't do anything if there is no comment
-    var el = document.getElementById("isso-thread");
-    if (el === null || el === undefined || el.addEventListener === undefined) return;
-    var links = document.querySelectorAll('#lf-bottomlinks a[href=""]'), i;
+    var el = document.getElementById("isso-thread"),
+        links = document.querySelectorAll('#lf-bottomlinks a[href="#isso-thread"]'),
+        i;
+    if (!el) return;
 
-    // Load Isso on click
+    // Function to load Isso
     var load = function() {
 	var done = false;
-	return function(e) {
-            if (e) e.preventDefault();
+	return function() {
 	    if (done) return;
 	    done = true;	// Don't want to load twice.
 
@@ -30,23 +30,17 @@ luffy.s.push(function() {
 	}
     }();
 
-    for (i = 0; i < links.length; i++) {
-        links[i].addEventListener('click', load, false);
-    }
-
     // Load if we have an anchor
     var onHashChange = function() {
-        if (location.hash.match("^#isso-[0-9]+")) {
+        if (location.hash.match("^#isso-([0-9]+|thread)$")) {
             load();
         }
     };
-    if (window.addEventListener) {
-        window.addEventListener("hashchange", onHashChange);
-    }
+    window.addEventListener("hashchange", onHashChange);
     onHashChange();
 
     // Load when it becomes visible
-    if ('IntersectionObserver' in window) {
+    if ('IntersectionObserver' in window && links) {
         var observer = new window.IntersectionObserver(function(entries, observer) {
             for (i = 0; i < entries.length; i++) {
                 if (!entries[i].isIntersecting)
