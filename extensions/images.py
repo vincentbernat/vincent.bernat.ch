@@ -205,6 +205,10 @@ class ImageFixerPlugin(Plugin):
         source = source[len(self.site.config.media_url):].lstrip("/")
         source = self.site.config.media_root_path.child(source)
         source = self.site.content.resource_from_relative_deploy_path(source)
+        if os.path.exists(os.path.join(os.path.dirname(source.path),
+                                       destination)):
+            # Image already provided with the correct size.
+            return
         destination = os.path.join(
             os.path.dirname(self.site.config.deploy_root_path.child(source.relative_deploy_path)),
             destination)
