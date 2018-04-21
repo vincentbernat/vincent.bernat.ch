@@ -343,7 +343,7 @@ class ImageFixerPlugin(Plugin):
                 figure = pq('<figure />')
                 if img.attr.title:
                     figcaption = pq('<figcaption />')
-                    figcaption.text(img.attr.title)
+                    figcaption.html(img.attr.title)
                     del img.attr.title
                     figure.append(outer)
                     figure.append(figcaption)
