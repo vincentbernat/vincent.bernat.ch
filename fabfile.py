@@ -117,6 +117,11 @@ done <<EOF
                                  --audio-bitrate 128 --audio-only
 2018-self-hosted-videos.mp4      --mp4-overlay {resolution}p, progressive \
                                  --video-overlay {resolution}p, HLS
+2018-opl2-audio-board-1.mp4      --video-bitrate-factor 0.3 \
+                                 --audio-bitrate 128 --audio-only
+2018-opl2-audio-board-2.mp4      --video-bitrate-factor 0.6 \
+                                 --poster-seek 10% \
+                                 --audio-bitrate 128 --audio-only
 EOF
 """
 

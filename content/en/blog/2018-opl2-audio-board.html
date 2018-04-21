@@ -1,0 +1,242 @@
+---
+title: "OPL2 Audio Board: an AdLib sound card for Arduino"
+description: |
+  The OPL2 Audio Board is a sound card powered by an OPL2 chip (as found on the
+  AdLib) for Arduino. It can be operated from Linux with ScummVM and DOSBox.
+uuid: bb7e41b6-779f-46b6-bea6-8beffa55b1d1
+cover: opl2-audioboard@2x.jpg
+tags:
+  - retro
+---
+
+In a [previous article][], I presented the [OPL2LPT][], a sound card
+for the parallel port featuring a [Yamaha YM3812][] chip, also known
+as *OPL2*—the chip of the [AdLib sound card][]. The [OPL2 Audio Board
+for Arduino][] is another indie sound card using this chip. However,
+instead of relying on a parallel port, it uses a serial interface,
+which can be drived from an Arduino board or a Raspberry Pi. While the
+*OPL2LPT* targets retrogamers with real hardware, the *OPL2 Audio
+Board* cannot be used in the same way. Nonetheless, it can also be
+operated from [ScummVM][] and [DOSBox][]!
+
+![OPL2 Audio Board for Arduino]([[!!images/opl2-audioboard@2x.jpg]] "The OPL2 Audio Board over a “Grim Fandango” box.")
+
+# Unboxing
+
+The *OPL2 Audio Board* can be purchased on [Tindie][], either as a kit
+or fully assembled. I have paired it with a cheap clone of the
+[Arduino Nano][]. A library to drive the board is available on
+[GitHub][], along with some examples.
+
+One of them is [`DemoTune.ino`][DemoTune.ino]. It plays a short tune
+on three channels. It can be compiled and uploaded to the Arduino with
+[PlatformIO][]—installable with `pip install platformio`—using the
+following command:[^nano]
+
+    ::console
+    $ platformio ci \
+        --board nanoatmega328 \
+        --lib ../../src \
+        --project-option="targets=upload" \
+        --project-option="upload_port=/dev/ttyUSB0" \
+        DemoTune.ino
+    [...]
+    PLATFORM: Atmel AVR > Arduino Nano ATmega328
+    SYSTEM: ATMEGA328P 16MHz 2KB RAM (30KB Flash)
+    Converting DemoTune.ino
+    [...]
+    Configuring upload protocol...
+    AVAILABLE: arduino
+    CURRENT: upload_protocol = arduino
+    Looking for upload port...
+    Use manually specified: /dev/ttyUSB0
+    Uploading .pioenvs/nanoatmega328/firmware.hex
+    [...]
+    avrdude: 6618 bytes of flash written
+    [...]
+    ===== [SUCCESS] Took 5.94 seconds =====
+
+[^nano]: This command is valid for an Arduino Nano. For another board,
+    take a look at the output of `platformio boards arduino`.
+
+Immediately after the upload, the Arduino plays the tune. 🎶
+
+The next interesting example is [`SerialIface.ino`][SerialIface.ino].
+It turns the audio board into a sound card over serial port. Once the
+code has been pushed to the Arduino, you can use the `play.py` program
+in the same directory to play VGM files. They are a sample-accurate
+sound format for many sound chips. They log the exact commands
+sent. There are many of them on [VGMRips][]. Be sure to choose the
+ones for the [YM3812/OPL2][]!  Here is a small selection:
+
+![]([[!!videos/2018-opl2-audio-board-1.m3u8]] "The OPL2 Audio Board playing some VGM files. It is connected to an Arduino Nano. You can see the LEDs blinking when the Arduino receives the commands from the serial port.")
+
+ - [0:00](#video-seek-0), *Railroad Story* from the [demo songs shipped with the AdLib sound card][]
+ - [1:04](#video-seek-64), the opening of [Star Wars: X-Wing][]
+ - [2:19](#video-seek-139), the opening of [The Secret of Monkey Island][]
+ - [3:58](#video-seek-238), the opening of [Indiana Jones and the Last Crusade][]
+
+# Usage with DOSBox & ScummVM
+
+!!! "Notice" The support for the serial protocol used in this section
+has [not been merged yet][pr20]. In the meantime, grab
+`SerialIface.ino` from the pull request: `git checkout 50e1717`.
+
+
+When the Arduino is flashed with `SerialIface.ino`, the board can be
+driven through a simple protocol over the serial port. By patching
+*DOSBox* and *ScummVM*, we can make them use this unusual sound
+card. Here are some examples of games:
+
+![]([[!!videos/2018-opl2-audio-board-2.m3u8]])
+
+ - [0:00](#video-seek-0), with **DOSBox**, the first level of **Doom** 🎮
+ - [1:06](#video-seek-66), with **DOSBox**, the introduction of **Loom** 🎼
+ - [2:38](#video-seek-158), with **DOSBox**, the first level of **Lemmings** 🐹
+ - [3:32](#video-seek-212), with **DOSBox**, the introduction of **Legend of Kyrandia** 🃏
+ - [6:47](#video-seek-407), with **ScummVM**, the introduction of **Day of the Tentacle** ☢️
+ - [11:10](#video-seek-670), with **DOSBox**, the introduction of **Another World**[^anotherworld] 🐅
+
+[^anotherworld]: [Another World][] (also known as *Out of This
+    World*), released in 1991, designed by Éric Chahi, is using
+    sampled sounds at 5 kHz or 10 kHz. With a serial port operating at
+    115,200 bits/s, the 5 kHz option is just within our
+    reach. However, I have no idea if the rendering is faithful. It
+    doesn't sound like a SoundBlaster, but it sounds analogous to the
+    rendering of the *OPL2LPT* which sounds similar to the
+    SoundBlaster when using the 10 kHz option. *DOSBox*’ AdLib
+    emulation using [Nuked OPL3][]—which is considered to be the
+    best—sounds worse.
+
+## DOSBox
+
+The serial protocol is described in the `SerialIface.ino` file:
+
+    ::c
+    /*
+     * A very simple serial protocol is used.
+     *
+     * - Initial 3-way handshake to overcome reset delay / serial noise issues.
+     * - 5-byte binary commands to write registers.
+     *   - (uint8)  OPL2 register address
+     *   - (uint8)  OPL2 register data
+     *   - (int16)  delay (milliseconds); negative -> pre-delay; positive -> post-delay
+     *   - (uint8)  delay (microseconds / 4)
+     *
+     * Example session:
+     *
+     * Arduino: HLO!
+     * PC:      BUF?
+     * Arduino: 256 (switches to binary mode)
+     * PC:      0xb80a014f02 (write OPL register and delay)
+     * Arduino: k
+     *
+     * A variant of this protocol is available without the delays. In this
+     * case, the BUF? command should be sent as B0F? The binary protocol
+     * is now using 2-byte binary commands:
+     *   - (uint8)  OPL2 register address
+     *   - (uint8)  OPL2 register data
+     */
+
+Adding support for this protocol in *DOSBox* is relatively simple
+([patch][dosbox-patch]). For best performance, we use the 2-byte
+variant (5000 ops/s). The binary commands are pipelined and a
+dedicated thread collects the acknowledgments. A [semaphore][]
+captures the number of free slots in the receive buffer. As it is not
+possible to read registers, we rely on *DOSBox* to emulate the timers,
+which are mostly used to let the various games [detect the OPL2][].
+
+The patch is tested only on Linux but should work on any POSIX
+system—not Windows.  To test it, you need to build *DOSBox* from
+source:
+
+    ::console
+    $ sudo apt build-dep dosbox
+    $ git clone https://github.com/vincentbernat/dosbox.git -b feature/opl2audioboard
+    $ cd dosbox
+    $ ./autogen.sh
+    $ ./configure && make
+
+Replace the `sblaster` section of `~/.dosbox/dosbox-SVN.conf`:
+
+    ::ini
+    [sblaster]
+    sbtype=none
+    oplmode=opl2
+    oplrate=49716
+    oplemu=opl2arduino
+    opl2arduino=/dev/ttyUSB0
+
+Then, run *DOSBox* with `./src/dosbox`. That's it!
+
+You will likely get the "`OPL2Arduino: too slow, consider increasing
+buffer`" message a lot. To fix this, you need to recompile
+`SerialIface.ino` with a bigger receive buffer:
+
+    ::console
+    $ platformio ci \
+        --board nanoatmega328 \
+        --lib ../../src \
+        --project-option="targets=upload" \
+        --project-option="upload_port=/dev/ttyUSB0" \
+        --project-option="build_flags=-DSERIAL_RX_BUFFER_SIZE=512" \
+        SerialIface.ino
+
+## ScummVM
+
+The same code can be adapted for *ScummVM*
+([patch][patch-scummvm]). To test, build it from source:
+
+    ::console
+    $ sudo apt build-dep scummvm
+    $ git clone https://github.com/vincentbernat/scummvm.git -b feature/opl2audioboard
+    $ cd scummvm
+    $ ./configure --disable-all-engines --enable-engine=scumm && make
+
+Then, you can start *ScummVM* with `./scummvm`. Select "AdLib
+Emulator" as the music device and "OPL2 Arduino" as the AdLib
+emulator.[^serial] Like for *DOSBox*, watch the console to check if
+you need a larger receive buffer.
+
+[^serial]: If you need to specify a serial port other than
+    `/dev/ttyUSB0`, add a line `opl2arduino_device=` in the
+    `~/.scummvmrc` configuration file.
+
+Enjoy! 😍
+
+*[VGM]: Video Game Music
+
+[previous article]: [[en/blog/2018-adlib-opl2lpt.html]] "OPL2LPT: an AdLib sound card for the parallel port"
+[OPL2LPT]: http://www.serdashop.com/OPL2LPT "OPL2LPT on Serdashop"
+[AdLib sound card]: https://en.wikipedia.org/wiki/Ad_Lib,_Inc.#AdLib_Music_Synthesizer_Card_(1987) "AdLib Music Synthesizer Card on Wikipedia"
+[Yamaha YM3812]: https://en.wikipedia.org/wiki/Yamaha_YM3812 "Yamaha YM3812 on Wikipedia"
+[OPL2 Audio Board for Arduino]: https://hackaday.io/project/18995-opl2-audio-board-for-arduino-raspberry-pi "OPL2 Audio Board for Arduino & Raspberry Pi"
+[DOSBox]: https://www.dosbox.com/ "DOSBox, an x86 emulator with DOS"
+[ScummVM]: https://www.scummvm.org/ "ScummVM"
+[The Secret of Monkey Island]: http://vgmrips.net/packs/pack/the-secret-of-monkey-island-ibm-pc-at "VGMRips: The Secret of Monkey Island"
+[Indiana Jones and the Last Crusade]: http://vgmrips.net/packs/pack/indiana-jones-and-the-last-crusade-the-graphic-adventure-ibm-pc-xt-at "VGMRips: Indiana Jones and the Last Crusade"
+[Star Wars: X-Wing]: http://vgmrips.net/packs/pack/star-wars-x-wing-ibm-pc-at "VGMRips: Star Wars: X-Wing"
+[demo songs shipped with the AdLib sound card]: http://vgmrips.net/packs/pack/adlib-music-synthesizer-card-demo-songs-ibm-pc-xt-at "VGMRips: Adlib Music Synthesizer Card Demo Songs"
+[Tindie]: https://www.tindie.com/products/DhrBaksteen/opl2-audio-board/ "OPL2 Audio Board"
+[Arduino Nano]: https://store.arduino.cc/arduino-nano "Arduino Nano"
+[GitHub]: https://github.com/DhrBaksteen/ArduinoOPL2/ "Arduino library for use with the OPL2 board (YM3812)"
+[PlatformIO]: https://platformio.org/ "PlatformIO is an open source ecosystem for IoT development"
+[VGMRips]: http://vgmrips.net/packs/ "VGMRips"
+[YM3812/OPL2]: http://vgmrips.net/packs/chip/ym3812 "VGMRips: Packs using YM3812"
+[Day of the Tentacle]: https://en.wikipedia.org/wiki/Day_of_the_Tentacle "Day of the Tentacle on Wikipedia"
+[Maniac Mansion]: https://en.wikipedia.org/wiki/Maniac_Mansion "Maniac Mansion on Wikipedia"
+[patch-scummvm]: https://github.com/vincentbernat/scummvm/compare/feature/opl2audioboard "OPL2 Audio Board for Arduino support for ScummVM"
+[dosbox-patch]: https://github.com/vincentbernat/dosbox/compare/feature/opl2audioboard "OPL2 Audio Board for Arduino support for DOSBox"
+[DemoTune.ino]: https://github.com/DhrBaksteen/ArduinoOPL2/blob/master/examples/DemoTune/DemoTune.ino "ArduinoOPL2/examples/DemoTune/DemoTune.ino"
+[SerialIface.ino]: https://github.com/DhrBaksteen/ArduinoOPL2/blob/master/examples/SerialIface/SerialIface.ino "ArduinoOPL2/examples/SerialIface/SerialIface.ino"
+[semaphore]: https://wiki.libsdl.org/SDL_CreateSemaphore "SDL_CreateSemaphore"
+[Another World]: https://en.wikipedia.org/wiki/Another_World_(video_game) "Another World on Wikipedia"
+[optimized serial protocol]: https://github.com/DhrBaksteen/ArduinoOPL2/pull/20 "SerialIface.ino: add a variant protocol using less bytes"
+[detect the OPL2]: http://www.fit.vutbr.cz/~arnost/opl/opl3.html#appendixB "OPL3 Programmer's Guide: Detection Methods"
+[Nuked OPL3]: https://sourceforge.net/p/dosbox/patches/270/ "Nuked OPL3 patch for DOSBox"
+[pr20]: https://github.com/DhrBaksteen/ArduinoOPL2/pull/20 "SerialIface.ino: add a variant protocol using less bytes"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
