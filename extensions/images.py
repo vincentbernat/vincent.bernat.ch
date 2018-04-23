@@ -321,6 +321,7 @@ class ImageFixerPlugin(Plugin):
                 img.muted = 'muted'
                 img.loop = 'loop'
                 img.autoplay = 'autoplay'
+                img.playsinline = 'playsinline'
                 del img.attr.alt
 
             # If image is contained in a paragraph, enclose into a
