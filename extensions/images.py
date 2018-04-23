@@ -318,10 +318,10 @@ class ImageFixerPlugin(Plugin):
             # video tag like an animated GIF.
             elif src.endswith(".mp4") or src.endswith(".ogv"):
                 img[0].tag = 'video'
-                img.muted = 'muted'
-                img.loop = 'loop'
-                img.autoplay = 'autoplay'
-                img.playsinline = 'playsinline'
+                img.attr('muted', 'muted')
+                img.attr('loop', 'loop')
+                img.attr('autoplay', 'autoplay')
+                img.attr('playsinline', 'playsinline')
                 del img.attr.alt
 
             # If image is contained in a paragraph, enclose into a
