@@ -19,7 +19,7 @@ class CodeHiliteLangExtension(Extension):
             lang = lexer.name.lower().replace(' ', '-')
             result = pygments_highlight(src, lexer, formatter)
             if isinstance(formatter, HtmlFormatter):
-                d = pq(result)
+                d = pq(result, parser='html')
                 d.add_class('language-{}'.format(lang))
                 result = d.outer_html()
             return result

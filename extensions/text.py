@@ -13,7 +13,7 @@ class FootnotesPlugin(Plugin):
         if resource.source_file.kind != 'html':
             return
 
-        d = pq(text)
+        d = pq(text, parser='html')
         footnotes = d('.footnote ol')
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]

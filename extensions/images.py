@@ -10,6 +10,7 @@ from hyde.plugin import CLTransformer
 from fswrap import File, Folder
 
 import xml.etree.ElementTree as ET
+import lxml.html
 from pyquery import PyQuery as pq
 
 from PIL import Image
@@ -247,7 +248,7 @@ class ImageFixerPlugin(Plugin):
         return u'<!DOCTYPE html>\n' + d.outer_html()
 
     def _process(self, resource, text, ratio=True):
-        d = pq(text)
+        d = pq(text, parser='html')
         for img in d.items('img'):
             width = img.attr.width
             height = img.attr.height
@@ -297,7 +298,7 @@ class ImageFixerPlugin(Plugin):
             elif src.endswith('.m3u8'):
                 id = os.path.splitext(os.path.basename(src))[0]
                 img[0].tag = 'video'
-                img.attr("controls", "controls")
+                img[0].set("controls", None)
                 img.attr("preload", "none")
                 img.attr("poster", self.site.media_url(
                     'images/posters/{}.jpg'.format(id)))
@@ -318,10 +319,8 @@ class ImageFixerPlugin(Plugin):
             # video tag like an animated GIF.
             elif src.endswith(".mp4") or src.endswith(".ogv"):
                 img[0].tag = 'video'
-                img.attr('muted', 'muted')
-                img.attr('loop', 'loop')
-                img.attr('autoplay', 'autoplay')
-                img.attr('playsinline', 'playsinline')
+                for attr in {'muted', 'loop', 'autoplay', 'playsinline'}:
+                    img[0].set(attr, None)
                 del img.attr.alt
 
             # If image is contained in a paragraph, enclose into a
@@ -361,6 +360,6 @@ class ImageFixerPlugin(Plugin):
                 else:
                     inner.append(img)
                 # Replace parent with our enclosure
-                parent.replace_with(figure)
+                parent.replace_with(lxml.html.tostring(figure[0]))
 
         return d
