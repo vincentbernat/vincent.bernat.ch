@@ -1,0 +1,268 @@
+---
+title: "Un blog plus respectueux de la vie privée"
+description: |
+  Au fil des ans, j'ai apporté des changements à ce blog pour
+  le rendre plus respectueux de la vie privée.
+uuid: 73594db0-0d56-40ed-9a09-32197034c735
+---
+
+Quand j'ai [commencé ce blog][new-site], j'ai adopté certains services gratuits,
+comme [Disqus][] ou [Google Analytics][]. Ces services sont assez
+envahissants pour la vie privée des utilisateurs. Au fil des années,
+j'ai essayé de corriger cela pour arriver à un point où je ne repose
+plus sur aucun service « hostile ».
+
+[TOC]
+
+# Analyse d'audience
+
+ - **Avant** : [Google Analytics][]
+ - **Après** : rien
+
+*Google Analytics* est la solution universelle pour obtenir
+gratuitement une solution d'analyse d'audience. C'est aussi un
+excellent moyen de fournir gratuitement des données sur vos visiteurs
+à Google. Il existe des solutions auto-hébergées comme [Matomo][],
+anciennement *Piwik*.
+
+J'ai opté pour une solution plus simple : pas d'analyse
+d'audience. Cela me permet aussi de penser que mon blog attire des
+milliers de visiteurs par jour.
+
+# Polices de caractères
+
+ - **Avant** : [Google Fonts][]
+ - **Après** : auto-hébergement
+
+*Google Fonts* est une bibliothèque de polices et un service
+d'hébergement très populaire. Il repose sur les [règles de
+confidentialité de Google][Google Privacy Policy]. Le service
+[google-webfonts-helper][] permet d'auto-héberger facilement n'importe
+quelle police issue de *Google Fonts*. De plus, à l'aide de
+[`pyftsubset`][pyftsubset], les polices n'incluent que les caractères
+utilisés dans ce blog. Les fichiers sont plus légers et plus
+complets : pas de problème pour écrire « Antonín Dvořák ».
+
+# Vidéos
+
+ - **Avant** : [YouTube][]
+ - **Après** : auto-hébergement
+
+Certains articles sont accompagnés par une vidéo (comme « [OPL2LPT:
+une carte son AdLib sur port parallèle][OPL2LPT: an AdLib sound card
+for the parallel port] »). Par le passé, j'utilisais [YouTube][],
+principalement parce que c'était la seule plateforme gratuite avec une
+option pour désactiver les publicités. La diffusion de vidéos à la
+demande est généralement jugée assez difficile. Notamment, si vous
+utilisez simplement la balise `<video>`, vous risquez de servir un
+fichier trop volumineux pour les personnes ayant une connexion
+lente. Cependant, la difficulté est exagérée : [hls.js][] permet de
+livrer la vidéo coupée en segments disponibles dans différents
+débits. Les utilisateurs avec Java­Script désactivé se rabattent sur
+une version classique de qualité moyenne.
+
+Dans « [Auto-hébergement de vidéos avec HLS][Self-hosted videos with
+HLS] », j'explique cette approche plus en détail.
+
+# Commentaires
+
+ - **Avant** : [Disqus][]
+ - **Après** : auto-hébergement avec [Isso][]
+
+*Disqus* est une solution de commentaires populaire pour les pages
+statiques. Ils ont été récemment acquis par *Zeta Global*, une société
+de marketing dont le modèle économique repose entièrement sur le
+profilage. Côté technique, *Disqus* charge également [plusieurs
+centaines de kilo-octets de ressources][loads several hundred
+kilobytes of resources]. Par conséquent, de nombreux sites n'activent
+*Disqus* qu'à la demande. C'est ce que je faisais. Cela ne résout pas
+le problème de respect de la vie privée. J'avais aussi le sentiment
+qu'on était moins désireux de laisser un commentaire si une action
+supplémentaire était requise.
+
+Pendant un certain temps, j'ai pensé à mettre en place mon propre
+système de commentaires autour des flux Atom. Chaque page recevrait
+son propre flux de commentaires. Un morceau de Java­Script
+transformerait ces flux en HTML et les commentaires pourraient
+toujours être lus sans Java­Script grâce au rendu par défaut des
+navigateurs. Les lecteurs pourraient aussi s'abonner à ces flux : pas
+besoin de notifications par courrier ! Les flux seraient servis sous
+forme de fichiers statiques et mis à jour lors de nouveaux
+commentaires par un petit morceau de code côté serveur. Encore une
+fois, cela pourrait fonctionner sans Javascript.
+
+![Day Planner by Fowl Language Comics]([[!!images/day-planner@2x.jpg]] "<a href='https://www.fowllanguagecomics.com/comic/day-planner/'>Fowl Language Comics : Day Planner</a>. De ma difficulté à démarrer un nouveau projet.")
+
+Je pense toujours que c'est une bonne idée, mais je n'avais pas envie
+de développer et de maintenir un nouveau système de commentaires. Il
+existe plusieurs alternatives auto-hébergés, notamment [Isso][] et
+[Commento][]. *Isso* est un peu plus complet avec notamment un import
+imparfait depuis *Disqus*. Les deux rencontrent des difficultés pour
+assurer la maintenance et essaient de devenir pérennes via une version
+hébergée payante. *Commento* est plus orienté vers le respect de la
+vie privée avec sa non-utilisation des cookies. Cependant, les cookies
+ne sont pas indispensables au bon fonctionnement d'*Isso* et ils
+peuvent être filtrés avec nginx :
+
+    ::text
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header X-Set-Cookie;
+    proxy_ignore_headers Set-Cookie;
+
+*Isso* ne propose actuellement pas de [notifications par
+courrier][pr50] mais j'ai ajouté un [flux Atom pour chaque fil de
+commentaires][pr419].
+
+Une autre option aurait été de fermer les commentaires. Cependant, par
+le passé, j'ai eu d'excellentes contributions en commentaires et je
+pense aussi qu'ils peuvent faire office de comité de lecture pour
+articles de blog : c'est une petite garantie que le contenu n'est pas
+totalement faux.
+
+# Moteur de recherche
+
+ - **Avant** : [Google Search][]
+ - **Après** : [DuckDuckGo][]
+
+Un moyen de fournir un moteur de recherche pour un blog personnel est
+de fournir un formulaire pointant sur un moteur de recherche public,
+comme Google. C'est ce que je faisais. J'ai aussi glissé un peu de
+Java­Script sur le dessus pour intégrer l'ensemble.
+
+La solution consiste à passer à [DuckDuckGo][]. Il permet de
+[personnaliser][customize] un peu l'expérience de recherche :
+
+    ::html
+    <form id="lf-search" action="https://duckduckgo.com/">
+      <input type="hidden" name="kf" value="-1">
+      <input type="hidden" name="kaf" value="1">
+      <input type="hidden" name="k1" value="-1">
+      <input type="hidden" name="sites" value="vincent.bernat.im/{{ resource.meta.language }}">
+      <input type="submit" value="">
+      <input type="text" name="q" value="" autocomplete="off" aria-label="Search">
+    </form>
+
+La partie Java­Script est supprimée car *DuckDuckGo* ne fournit pas
+d'API. Comme il est peu probable que plus de trois personnes utilisent
+le moteur de recherche dans une année, cela semble une bonne idée de
+ne pas s'éterniser sur cette fonctionnalité annexe.
+
+# Bulletin d'information
+
+ - **Avant** : flux RSS
+ - **Après** : flux RSS mais aussi une publication par courrier via [MailChimp][]
+
+De nos jours, les flux RSS sont moins populaires. Je ne comprends pas
+bien cette tendance concernant le public technophile, mais certains
+lecteurs préfèrent recevoir les mises à jour par courrier
+électronique.
+
+[MailChimp][] est une solution courante pour l'envoi de bulletins. Il
+fournit une intégration simple avec les flux RSS pour déclencher un
+courrier à chaque mise à jour. Du point de vue de la vie privée,
+MailChimp semble être un bon citoyen : la collecte de données est
+principalement limitée à ce qui est nécessaire au service. Les
+utilisateurs soucieux de leur vie privée peuvent toujours éviter ce
+service et utiliser le [flux RSS][rss].
+
+# Moins de Java­Script
+
+ - **Avant** : du code Java­Script hébergé chez des tiers
+ - **Après** : du code Java­Script auto-hébergé
+
+Beaucoup de personnes soucieuses de leur vie privée désactivent
+Java­Script via des extensions telles que [uMatrix][] ou
+[NoScript][]. À l'exception des commentaires, je n'utilisais
+Java­Script que pour des choses annexes :
+
+ - rendu des formules (comme dans « [Déni de service
+   TLS : quelles solutions ?][TLS computational DoS mitigation] »)
+ - déplacement les notes de pied de page dans la marge quand il y a de la place[^footnote]
+ - livraison améliorée des vidéos (voir
+   « [Auto-hébergement de vidéos avec HLS][Self-hosted videos with HLS] »)
+ - amélioration des galeries de photos (voir
+   « [Installation de Debian sur un Thinkpad Edge 11”][Debian on Thinkpad Edge 11] »)
+
+[^footnote]: Vous avez peut-être remarqué mon affection
+    excessive pour les notes de pied de page.
+
+Pour les formules mathématiques, je suis passé de [MathJax][] à
+[KaTeX][]. Ce dernier est plus rapide mais permet aussi le rendu côté
+serveur : il produit le même résultat quel que soit le navigateur. Par
+conséquent, Java­Script côté client n'est plus nécessaire.
+
+Pour les notes en marge, j'ai converti le code Java­Script faisant la
+transformation en Python, avec [pyquery][]. Plus de Java­Script côté
+client pour cet aspect non plus.
+
+Le code restant est toujours là, mais il est auto-hébergé.
+
+# Mémento : CSP
+
+L'en-tête HTTP `Content-Security-Policy` contrôle les resources qu'un
+navigateur est autorisé à charger pour le rendu d'une page. Il s'agit
+d'un garde-fou et d'une documentation pour les ressources externes
+utilisées. Le mien est modérément complexe et montre à quoi s'attendre
+du point de vue de la protection de la vie privée[^cdn] :
+
+    ::text
+    Content-Security-Policy:
+      default-src 'self' blob:;
+      script-src  'self' blob: https://d1g3mdmxf8zbo9.cloudfront.net/js/;
+      object-src  'self' https://d1g3mdmxf8zbo9.cloudfront.net/images/;
+      img-src     'self' data: https://d1g3mdmxf8zbo9.cloudfront.net/images/;
+      frame-src   https://d1g3mdmxf8zbo9.cloudfront.net/images/;
+      style-src   'self' 'unsafe-inline' https://d1g3mdmxf8zbo9.cloudfront.net/css/;
+      font-src    'self' about: data: https://d1g3mdmxf8zbo9.cloudfront.net/fonts/;
+      worker-src  blob:;
+      media-src   'self' blob: https://luffy-video.sos-ch-dk-2.exo.io;
+      connect-src 'self' https://luffy-video.sos-ch-dk-2.exo.io https://comments.luffy.cx;
+      frame-ancestors 'none';
+      block-all-mixed-content;
+
+[^cdn]: Je n'ai pas de problème avec l'utilisation d'un CDN comme
+    [CloudFront][] : c'est un service payant et Amazon AWS n'est pas
+    une entreprise qui se spécialise dans l'espionnage des
+    utilisateurs.
+
+Je suis plutôt satisfait d'avoir pu atteindre ce résultat ! 😊
+
+*[CDN]: Content Delivery Network
+
+[DuckDuckGo]: https://duckduckgo.com "DuckDuckGo, the search engine that doesn't track you"
+[customize]: https://duckduckgo.com/params "DuckDuckGo URL parameters"
+[Google Analytics]: https://www.google.com/analytics/ "Google Analytics Solutions"
+[Matomo]: https://matomo.org/ "Matomo: Open Analytics Platform"
+[MailChimp]: https://mailchimp.com "MailChimp"
+[subscribe]: [[fr/blog/subscribe.html]] "Recevoir les mises à jour"
+[rss]: [[fr/blog/atom.xml]] "Flux RSS"
+[uMatrix]: https://addons.mozilla.org/en-US/firefox/addon/umatrix/ "uMatrix addon for Firefox"
+[NoScript]: https://addons.mozilla.org/en-US/firefox/addon/noscript/?src=search "NoScript addon for Firefox"
+[TLS computational DoS mitigation]: [[fr/blog/2011-dos-ssl-solutions.html]] "Déni de service TLS : quelles solutions ?"
+[Self-hosted videos with HLS]: [[fr/blog/2018-auto-hebergement-videos.html]] "Auto-hébergement de vidéos avec HLS"
+[Debian on Thinkpad Edge 11]: [[fr/blog/2011-thinkpad-edge-11.html]] "Installation de Debian sur un Thinkpad Edge 11”"
+[new-site]: [[fr/blog/2011-nouveau-site-avec-hyde.html]] "Nouveau site avec Hyde"
+[MathJax]: https://www.mathjax.org/ "MathJax: Beautiful math in all browsers"
+[KaTeX]: https://khan.github.io/KaTeX/ "KaTeX: The fastest math typesetting library for the web"
+[pyquery]: http://pyquery.readthedocs.io/en/latest/ "pyquery: a jquery-like library for python"
+[Google Fonts]: https://fonts.google.com/ "Google Fonts"
+[Merriweather]: https://fonts.google.com/specimen/Merriweather "Merriweather font"
+[Google Privacy Policy]: https://www.google.com/policies/privacy/ "Google Privacy Policy"
+[google-webfonts-helper]: https://google-webfonts-helper.herokuapp.com/fonts/merriweather "A Hassle-Free Way to Self-Host Google Fonts"
+[pyftsubset]: https://github.com/fonttools/fonttools "fonttools: a library to manipulate font files from Python"
+[OPL2LPT: an AdLib sound card for the parallel port]: [[en/blog/2018-adlib-opl2lpt.html]] "OPL2LPT: an AdLib sound card for the parallel port"
+[YouTube]: https://www.youtube.com "YouTube"
+[hls.js]: https://github.com/video-dev/hls.js/ "JavaScript HLS client using Media Source Extension"
+[CloudFront]: https://aws.amazon.com/cloudfront/ "Amazon CloudFront global content delivery network"
+[Disqus]: https://disqus.com "Disqus: blog comment hosting service"
+[Google Search]: https://encrypted.google.com "Google Search"
+[Isso]: https://posativ.org/isso/ "Isso: a commenting server similar to Disqus"
+[Commento]: https://commento.adtac.pw/ "Commento: a privacy-focused and bloat-free Disqus alternative"
+[loads several hundred kilobytes of resources]: http://donw.io/post/github-comments/ "Replacing Disqus with Github Comments"
+[pr50]: https://github.com/posativ/isso/pull/50 "Reply notification"
+[pr419]: https://github.com/posativ/isso/pull/419 "api: add /feed API to get an Atom feed for an URI"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
