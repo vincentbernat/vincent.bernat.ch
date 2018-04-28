@@ -120,7 +120,7 @@ luffy.s.push(function() {
     };
 
     // forEach polyfill for IE8
-    // http://stackoverflow.com/a/14827443/1077846
+    // https://stackoverflow.com/a/14827443/1077846
     /* jshint ignore:start */
     if (![].forEach) {
         Array.prototype.forEach = function(callback, thisArg) {

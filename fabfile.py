@@ -189,10 +189,11 @@ done""" % (os.path.join(path, directory), extension))
             directory=os.path.join(path, directory)))
 
 @task
-def linkcheck(remote='yes'):
+def linkcheck(remote='yes', verbose='no'):
     """Check links"""
     with settings(warn_only=True):
-        result = local("linkchecker -f ./linkcheckerrc {}".format(
+        result = local("linkchecker -f ./linkcheckerrc {} {}".format(
+            verbose == 'yes' and '--verbose' or '',
             remote == 'yes' and
             'https://vincent.bernat.im/' or
             'http://localhost:8080/'))
@@ -206,6 +207,8 @@ def fixlinks():
     reader = csv.DictReader(filter(lambda row: row[0]!='#', fp), delimiter=';')
     seen = {}
     for row in reader:
+        if row['valid'] == 'True' and 'Redirected' not in row['infostring']:
+            continue
         year = None
         archive = {}
         mo = re.search(r"/blog/(\d+)-", row['parentname'])
@@ -219,9 +222,11 @@ def fixlinks():
                            year, row['urlname'])}
         while True:
             print """
-URL:    {urlname}
-Source: {parentname}
-Result: {result}""".format(**row)
+URL:     {urlname}
+Source:  {parentname}
+Result:  {result}
+Warning: {warningstring}
+Info:    {infostring}""".format(**row)
             print """
 (c) Continue
 (b) Browse {urlname}
@@ -231,9 +236,16 @@ Result: {result}""".format(**row)
             valid = "cbqr"
             for a in archive:
                 print "({}) Browse {}".format(a, archive[a])
-                print "({}) Replace {} by {}".format(a.upper(), row['urlname'], archive[a])
+                print "({}) Replace by {}".format(a.upper(), archive[a])
                 valid += a
                 valid += a.upper()
+            if 'Redirected' in row['infostring']:
+                mo = re.search(r'.*Redirected to `(.*?)\'\.', row['infostring'],
+                               flags=re.DOTALL)
+                if mo:
+                    redirected = mo.group(1)
+                    print "(R) Replace by {}".format(redirected)
+                    valid += 'R'
             print
             ans = prompt("Command?", validate=r"[{}]".format(valid))
             if ans == "c":
@@ -242,11 +254,15 @@ Result: {result}""".format(**row)
                 return
             elif ans == "r":
                 url = prompt("URL?")
-                local("git grep -Fl '{}' | xargs sed -i 's+ {}+ {}+g'".format(
+                local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
                     row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
                 local("x-www-browser {}".format(row['urlname']))
+            elif ans == "R":
+                local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
+                    row['urlname'], row['urlname'], redirected))
+                break
             else:
                 found = False
                 for a in archive:
@@ -254,7 +270,7 @@ Result: {result}""".format(**row)
                         local("x-www-browser {}".format(archive[a]))
                         break
                     elif ans == a.upper():
-                        local("git grep -Fl '{}' | xargs sed -i 's+ {}+ {}+g'".format(
+                        local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
                             row['urlname'], row['urlname'], archive[a]))
                         found = True
                         break
