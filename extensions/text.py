@@ -15,6 +15,16 @@ class FootnotesPlugin(Plugin):
 
         d = pq(text, parser='html')
         footnotes = d('.footnote ol')
+
+        # Pop out orphaned backlinks
+        backrefs = footnotes('.footnote-backref')
+        for backref in backrefs.items():
+            parent = backref.parent()
+            if len(parent.contents()) == 1:
+                # We only have the <a> link
+                parent.replace_with(backref)
+
+        # Create sidenotes
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]
             fn = footnotes('li[id=fn-{}]'.format(name))
