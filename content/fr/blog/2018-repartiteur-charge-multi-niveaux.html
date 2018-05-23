@@ -1,0 +1,595 @@
+---
+title: "Répartiteur de charge à multiples niveaux avec Linux"
+description: |
+  Une solution de répartition de charge robuste et évolutive se compose
+  en 3 parties : routage ECMP, répartition L4 et répartition L7.
+uuid: 581da3c1-85dc-4919-82c0-4c99bb61acfe
+tags:
+  - network
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb": "Dépôt GitHub"
+---
+
+Une solution courante pour fournir un service hautement disponible et évolutif
+consiste à insérer une couche d'équilibrage de charge pour répartir les requêtes
+des utilisateurs vers les serveurs frontaux[^backend]. Nous avons habituellement
+plusieurs attentes à l'égard d'une telle couche :
+
+évolutivité
+: Elle permet à un service de monter en charge en poussant le trafic vers des
+  serveurs nouvellement provisionnés. Elle est également capable de s'étendre si
+  elle devient le goulot d'étranglement.
+
+disponibilité
+: Elle fournit la haute disponibilité au service. Si un serveur devient
+  indisponible, le trafic est rapidement redirigé vers un autre serveur. Elle
+  doit également être elle-même hautement disponible.
+
+flexibilité
+: Elle gère aussi bien les connexions de courtes et de longues durées. Elle est
+  suffisamment flexible pour offrir toutes les fonctionnalités généralement
+  attendues d'un répartiteur de charge comme TLS ou le routage HTTP.
+
+opérabilité
+: Avec un peu de coopération, tout changement prévu est transparent : mise à
+  niveau des frontaux, ajout ou suppression de frontaux ou changement de
+  topologie de la couche de répartition elle-même.
+
+[^backend]: Dans cet article, les « serveurs frontaux » sont les serveurs
+    derrière la couche de répartition de charge. Dans la version anglaise,
+    j'utilise le terme « *backend* » mais l'équivalent français n'est pas très
+    agréable.
+
+Le problème et ses solutions sont bien connus. Parmi les articles récemment
+parus sur le sujet, « [Introduction to modern network load-balancing and
+proxying][] » donne un aperçu de l'état de l'art. Google a publié « [Maglev: A
+Fast and Reliable Software Network Load Balancer][maglev] » décrivant en détail
+leur solution interne[^morningpaper]. Cependant, le logiciel associé n'est pas
+disponible. Fondamentalement, la construction d'une solution d'équilibrage de
+charge consiste à assembler trois composants :
+
+ - routage ECMP
+ - répartition L4 (sans état)
+ - répartition L7 (avec état)
+
+Dans cet article, je décris une solution à multiples niveaux utilisant Linux et
+des composants open-source. Cela offre une base pour construire une couche
+d'équilibrage de charge prête à la production.
+
+[^morningpaper]: Un bon résumé de ce papier est fait par [Adrian Colyer][]. Du
+    même auteur, jetez aussi un œil sur le résumé de « [Stateless datacenter
+    load-balancing with Beamer][] ».
+
+# Dernier niveau : répartition L7
+
+Commençons par le dernier niveau. Son rôle est de fournir la haute
+disponibilité, en transférant les requêtes vers les frontaux sains, ainsi que
+l'évolutivité, en répartissant équitablement les requêtes. Travaillant dans les
+couches supérieures du [modèle OSI][OSI model], il peut également offrir des
+services supplémentaires, comme la terminaison TLS, le routage HTTP, la
+réécriture des entêtes, la limitation du débit des utilisateurs non
+authentifiés, etc. Il peut tirer parti d'algorithmes complexes d'équilibrage de
+charge. En tant que premier point de contact avec les serveurs frontaux, il doit
+faciliter les maintenances et minimiser l'impact lors des changements
+quotidiens.
+
+![Répartiteurs de charge L7]([[!!images/multitier-lb-l7.svg]] "Le dernier niveau de la
+solution de répartition de charge est un ensemble d'équilibreurs de charge L7
+recevant les connexions des utilisateurs et les transférant vers les frontaux.")
+
+Il termine également les connexions TCP des clients. Cela découple l'étage de
+répartition des serveurs frontaux avec les avantages suivants :
+
+ - les connexions vers les frontaux peuvent être maintenues ouvertes pour
+   réduire l'utilisation des ressources et la latence ;
+ - les requêtes peuvent être réessayées de manière transparente en cas de
+   défaillance ;
+ - les clients peuvent utiliser un protocole IP différent des serveurs ;
+ - les frontaux n'ont pas à se soucier de la [découverte de la MTU du
+   chemin][Path MTU Discovery], des algorithmes de congestion TCP, de la gestion
+   de l'[état TIME-WAIT][avoidance of the TIME-WAIT state] ou d'autres détails
+   de bas niveau.
+
+De nombreux logiciels conviennent pour cette couche et il existe une littérature
+abondante sur la façon de les configurer. Vous pouvez regarder [HAProxy][],
+[Envoy][] ou [Træfik][]. Voici un exemple de configuration pour *HAProxy* :
+
+    ::haproxy
+    # Point d'entrée de la répartition de charge L7
+    frontend l7lb
+      # Écoute à la fois en IPv4 et IPv6
+      bind :80 v4v6
+      # Redirige tout sur un ensemble de serveurs frontaux
+      default_backend servers
+      # Vérification de la bonne santé
+      acl dead nbsrv(servers) lt 1
+      acl disabled nbsrv(enabler) lt 1
+      monitor-uri /healthcheck
+      monitor fail if dead || disabled
+    
+    # Serveurs frontaux en IPv6 avec tests HTTP et via un agent
+    backend servers
+      balance roundrobin
+      option httpchk
+      server web1 [2001:db8:1:0:2::1]:80 send-proxy check agent-check agent-port 5555
+      server web2 [2001:db8:1:0:2::2]:80 send-proxy check agent-check agent-port 5555
+      server web3 [2001:db8:1:0:2::3]:80 send-proxy check agent-check agent-port 5555
+      server web4 [2001:db8:1:0:2::4]:80 send-proxy check agent-check agent-port 5555
+    
+    # Faux serveur gérant la disponibilitant du répartiteur de charge lui-même
+    backend enabler
+      server enabler [::1]:0 agent-check agent-port 5555
+
+Cette configuration est très sommaire mais permet d'illustrer deux notions clés
+pour l'opérabilité :
+
+ 1. Les frontaux sont testés à la fois au niveau HTTP (avec `check` et `option
+    httpchk`) et via un [agent auxiliaire][auxiliary agent check] (avec
+    `agent-check`). Ce dernier permet de placer un serveur en maintenance pour
+    effectuer une mise en production progressive. Sur chaque frontal, un
+    processus écoute sur le port 5555 et répond avec le statut du service (`UP`,
+    `DOWN`, `MAINT`). Un simple `socat` fait l'affaire[^agentcheck] :
+
+        ::sh
+        socat -ly \
+          TCP6-LISTEN:5555,ipv6only=0,reuseaddr,fork \
+          OPEN:/etc/lb/agent-check,rdonly
+
+    Dans `/etc/lb/agent-check`, `UP` indique que le service est en mode nominal.
+    Si le test HTTP est aussi positif, *HAProxy* enverra des requêtes vers ce
+    nœud. Si vous devez le mettre en maintenance, écrivez `MAINT` et attendez
+    que les connexions en cours se terminent. Utilisez `READY` pour annuler ce
+    mode.
+
+ 2. Le répartiteur de charge lui-même fournit un point de diagnostic
+    (`/healthcheck`) pour les niveaux supérieurs. Il retourne une erreur 503 si
+    aucun frontal n'est disponible ou si le serveur `enabler` est indiqué comme
+    indisponible via l'agent. Le même mécanisme que pour les serveurs frontaux
+    classiques peut alors être utilisé pour signaler l'indisponibilité de cet
+    équilibreur de charge.
+
+[^agentcheck]: Si vous pensez que cette solution est fragile, n'hésitez pas à
+    développer votre propre agent. Il pourrait se coordonner avec un registre
+    clés/valeurs pour déterminer l'état souhaité du serveur. Il est possible de
+    centraliser l'agent à un seul endroit, mais vous risquez d'avoir un problème
+    de poule et d'œuf pour assurer sa disponibilité.
+
+De plus, la directive `send-proxy` permet d'utiliser le [protocole proxy][proxy
+protocol] afin de transmettre les adresses IP réelles des clients. Ce protocole
+fonctionne également pour les connexions non-HTTP et est supporté par de
+nombreux serveurs, y compris *nginx* :
+
+    ::nginx
+    http {
+      server {
+        listen [::]:80 default ipv6only=off proxy_protocol;
+        root /var/www;
+        set_real_ip_from ::/0;
+        real_ip_header proxy_protocol;
+      }
+    }
+
+En l'état, cette solution n'est pas complète. Nous avons déplacé le problème de
+disponibilité et d'évolutivité ailleurs. Comment répartir les demandes entre les
+équilibreurs de charge ?
+
+# Premier niveau : routage ECMP
+
+Sur la plupart des réseaux IP modernes, il existe des chemins redondants entre
+les clients et les serveurs. Pour chaque paquet, les routeurs doivent choisir
+une branche. Lorsque le coût associé à chaque trajet est égal, les flux
+entrants[^flow] sont répartis entre les destinations disponibles. Cette
+caractéristique peut être utilisée pour répartir les connexions entre les
+équilibreurs de charge disponibles :
+
+![Routage ECMP]([[!!images/multitier-lb-ecmp.svg]] "Le routage ECMP est utilisé
+comme premier étage. Les flux sont répartis entre les équilibreurs de charge L7
+disponibles. Le routage est sans état et asymétrique. Les serveurs frontaux ne
+sont pas représentés.")
+
+[^flow]: Un flux est généralement déterminé par l'IP source et destination et le
+    protocole L4. Alternativement, le port source et le port de destination
+    peuvent également être utilisés. Le routeur hache ces informations pour
+    déterminer la destination. Concernant Linux, vous trouverez plus
+    d'informations à ce sujet dans « [Celebrating ECMP in Linux][] ».
+
+Il y a peu de contrôle sur la répartition des flux, mais le routage ECMP apporte
+la possibilité de faire évoluer horizontalement les deux niveaux. Une mise en
+œuvre courante d'une telle solution est d'utiliser BGP, un protocole de routage
+pour échanger des routes entre les équipements du réseau. Chaque répartiteur de
+charge annonce aux routeurs auxquels il est connecté les adresses IP qu'il
+dessert.
+
+En supposant que vous avez déjà des routeurs avec BGP, [ExaBGP][] est une
+solution flexible pour permettre aux répartiteurs de charge d'annoncer leur
+disponibilité. Voici un exemple de configuration :
+
+    ::junos
+    # Test de disponibilité en IPv6
+    process service-v6 {
+      run python -m exabgp healthcheck -s --interval 10 --increase 0 --cmd "test -f /etc/lb/v6-ready -a ! -f /etc/lb/disable";
+      encoder text;
+    }
+    
+    template {
+      # Patron pour un routeur IPv6
+      neighbor v6 {
+        router-id 192.0.2.132;
+        local-address 2001:db8::192.0.2.132;
+        local-as 65000;
+        peer-as 65000;
+        hold-time 6;
+        family {
+          ipv6 unicast;
+        }
+        api services-v6 {
+          processes [ service-v6 ];
+        }
+      }
+    }
+    
+    # Premier routeur
+    neighbor 2001:db8::192.0.2.254 {
+      inherit v6;
+    }
+    
+    # Second routeur
+    neighbor 2001:db8::192.0.2.253 {
+      inherit v6;
+    }
+
+Si `/etc/lb/v6-ready` est présent mais que `/etc/lb/disable` est absent, toutes
+les IP configurées sur l'interface `lo` sont annoncées aux deux routeurs. Si les
+autres répartiteurs de charge ont une configuration similaire, les routeurs leur
+distribuent équitablement les flux reçus. Un processus externe doit gérer
+l'existence du fichier `/etc/lb/v6-ready` en vérifiant la bonne santé du
+répartiteur de charge (à l'aide du point `/healthcheck` par exemple). Un
+opérateur peut retirer un répartiteur de charge de la rotation en créant le
+fichier `/etc/lb/disable`.
+
+Pour plus de détails concernant cette partie, jetez un œil sur « [Redondance
+avec ExaBGP][High availability with ExaBGP] ». Si vous êtes hébergés dans les
+nuages, ce tiers est généralement mis en place par votre fournisseur sous forme
+d'une IP « élastique » ou d'un service de répartition L4.
+
+Malheureusement, cette solution n'est pas robuste lorsqu'un changement, prévu ou
+non, se produit. Notamment, lors de l'ajout ou de la suppression d'un
+équilibreur de charge, le nombre de routes disponibles pour une destination
+change. L'algorithme de hachage utilisé par les routeurs n'est pas cohérent et
+les flux sont redistribués entre les répartiteurs de charge disponibles, rompant
+les connexions existantes :
+
+![Stabilité du routage ECMP 1/2]([[!!images/multitier-lb-ecmp-failure1.svg]] "Le
+routage ECMP est instable lorsqu'un changement se produit. Un équilibreur de
+charge supplémentaire est ajouté et chaque flux est acheminé vers un répartiteur
+différent qui n'a pas les entrées appropriées dans sa table de connexions.")
+
+De plus, chaque routeur peut choisir ses propres chemins. Quand un routeur
+devient indisponible, le second peut router les mêmes flux différemment :
+
+![Stabilité du routage ECMP 2/2]([[!!images/multitier-lb-ecmp-failure2.svg]] "Un
+routeur devient indisponible et le routeur restant route différemment ses flux.
+L'un d'entre eux est acheminé vers un répartiteur de charge différent qui n'a
+pas l'entrée appropriée dans sa table des connexions.")
+
+Si vous pensez que ce n'est pas un résultat acceptable, notamment si vous devez
+gérer de longues connexions comme le téléchargement de fichiers, le streaming
+vidéo ou les connexions *websocket*, vous avez besoin d'un niveau
+supplémentaire. Continuez la lecture !
+
+# Second niveau : répartition L4
+
+Le deuxième niveau est la glue entre le monde *sans état* des routeurs IP et le
+pays *avec état* de l'équilibrage de charge L7. Il est mis en œuvre grâce à
+l'équilibrage de charge L4. La terminologie peut être un peu confuse ici : ce
+niveau route les datagrammes IP (pas de terminaison TCP) mais l'agorithme de
+répartition utilise à la fois l'IP de destination et le port pour choisir un
+serveur disponible dans le niveau suivant. Le but de cet étage est de s'assurer
+que tous les membres prennent la même décision d'ordonnancement pour un paquet
+entrant.
+
+Il y a deux possibilités :
+
+ - répartition de charge L4 avec synchronisation des états ;
+ - répartition de charge L4 avec hachage cohérent.
+
+La première option augmente la complexité et limite l'évolutivité. Nous ne
+l'explorons pas[^conntrackd]. La seconde option est moins robuste aux
+changements mais cela peut être amélioré via une approche hybride avec un état
+local.
+
+[^conntrackd]: Avec Linux, cela peut être mis en place en utilisant
+    [Netfilter][] pour la répartition de charge et [conntrackd][] pour
+    synchroniser les états. *IPVS* ne permet qu'une synchronisation
+    actif/passif, limitant l'évolutivité.
+
+Nous utilisons [IPVS][], un répartiteur de charge L4 performant fonctionnant
+dans le noyau Linux. Il est piloté par [Keepalived][] qui dispose d'un ensemble
+de tests de disponibilité pour détecter les problèmes. *IPVS* est configuré pour
+utiliser *Maglev*, un [algorithme de hachage cohérent créé par Google][maglev].
+Dans sa famille, c'est un bon algorithme car il répartit les connexions de
+manière équitable, minimise les impacts consécutifs à un changement et est
+particulièrement rapide pour construire sa table de correspondance. Enfin, pour
+améliorer les performances, le dernier niveau (les répartiteurs de charge L7)
+répond aux clients directement sans impliquer le second niveau (les répartiteurs
+de charge L4). Ce mécanisme est connu sous le nom de *direct server return*
+(DSR) ou *direct routing* (DR).
+
+![Second niveau : répartition L4]([[!!images/multitier-lb-l4.svg]] "Équilibrage
+de charge L4 avec IPVS et hachage cohérent liant le premier et le troisième
+niveau. Les serveurs frontaux ont été omis. Les lignes en pointillés
+représentent le chemin pris par les paquets retour.")
+
+Avec une telle configuration, on s'attend à ce que les paquets appartenant à un
+flux puissent se déplacer librement entre les composants des deux premiers
+niveaux tout en finissant sur le même équilibreur de charge L7.
+
+## Configuration
+
+Une fois *ExaBGP* configuré comme décrit dans la section précédente, nous
+pouvons passer à la configuration de *Keepalived* :
+
+    ::junos
+    virtual_server_group VS_GROUP_MH_IPv6 {
+      2001:db8::198.51.100.1 80
+    }
+    virtual_server group VS_GROUP_MH_IPv6 {
+      lvs_method TUN  # Mode tunnel pour DSR
+      lvs_sched mh    # Algorithme : Maglev
+      sh-port         # Prend en compte les ports TCP
+      protocol TCP
+      delay_loop 5
+      alpha           # Les serveurs sont considérés inaccessibles au démarrage
+      omega           # Exécute quorum_down à l'arrêt
+      quorum_up   "/bin/touch /etc/lb/v6-ready"
+      quorum_down "/bin/rm -f /etc/lb/v6-ready"
+    
+      # Premier répartiteur de charge L7
+      real_server 2001:db8::192.0.2.132 80 {
+        weight 1
+        HTTP_GET {
+          url {
+            path /healthcheck
+            status_code 200
+          }
+          connect_timeout 2
+        }
+      }
+    
+      # Tous les autres...
+    }
+
+
+Les directives `quorum_up` et `quorum_down` définissent les commandes à exécuter
+quand le service devient respectivement accessible et inaccessible. Le fichier
+`/etc/lb/v6-ready` est utilisé pour signaler à *ExaBGP* s'il doit ou non publier
+l'adresse IP du service aux routeurs.
+
+De plus, *IPVS* doit être configuré pour router les paquets appartenant à un
+flux traité initialement par un autre nœud. Il doit également continuer de
+router les paquets quand une destination devient indisponible afin de s'assurer
+qu'on puisse mettre hors service proprement un répartiteur de charge L7.
+
+    ::sh
+    # Prend aussi en charge les paquets non SYN
+    sysctl -qw net.ipv4.vs.sloppy_tcp=1
+    # Ne PAS rerouter une connexion quand une destination
+    # devient invalide.
+    sysctl -qw net.ipv4.vs.expire_nodest_conn=0
+    sysctl -qw net.ipv4.vs.expire_quiescent_template=0
+
+L'algorithme *Maglev* sera disponible dans Linux 4.18, grâce au travail de [Inju
+Song][]. Pour les noyaux plus anciens, j'ai préparé un
+[rétroportage][backport][^backport]. Le substituer par un autre algorithme, tel
+que `sh`, rend l'ensemble moins robuste.
+
+[^backport]: Le rétroportage n'est pas fonctionnellement équivalent à la version
+    originale. Consultez le [fichier `README`][README] pour comprendre les
+    différences. Brièvement, dans la configuration de *Keepalived*, il faut :
+    
+     - ne pas utiliser `inhibit_on_failure`
+     - utiliser `sh-port`
+     - ne pas utiliser `sh-fallback`
+
+Le DSR est mis en place avec le mode tunnel. Cette méthode est compatible avec
+les réseaux routés. Les requêtes sont encapsulées vers le nœud choisi à l'aide du
+[protocole IPIP][IPIP encapsulation]. Cela ajoute un léger surcoût et entraîne
+des problèmes de MTU. Si possible, utilisez une MTU plus grande entre le second
+et troisième niveau[^mtu]. Dans le cas contraire, autorisez explicitement la
+fragmentation des paquets IP :
+
+    ::sh
+    sysctl -qw net.ipv4.vs.pmtu_disc=0
+
+[^mtu]: Au moins 1520 pour IPv4 et 1540 pour IPv6.
+
+Il faut aussi configurer les répartiteurs de charge L7 pour accepter ce trafic
+encapsulé[^firewall] :
+
+    ::sh
+    # Configure le tunnel IPIP pour accepter des paquets de n'importe quelle source
+    ip tunnel add tunlv6 mode ip6ip6 local 2001:db8::192.0.2.132
+    ip link set up dev tunlv6
+    ip addr add 2001:db8::198.51.100.1/128 dev tunlv6
+
+[^firewall]: En l'état, cette configuration n'est pas sûre. Vous devez vous
+    assurer que seuls les répartiteurs de charge L4 seront en mesure d'envoyer
+    du traffic IPIP.
+
+## Évaluation de la robustesse
+
+Ainsi configuré, le second niveau améliore la robustesse de l'ensemble pour deux
+raisons :
+
+ 1. L'utilisation d'un algorithme de hachage cohérent pour choisir la
+    destination réduit l'impact négatif d'un changement, prévu ou non, en
+    minimisant le nombre de flux déplacés vers une nouvelle destination.
+    « [Consistent Hashing: Algorithmic Tradeoffs][] » offre plus de détails sur
+    ce sujet.
+
+ 2. *IPVS* garde localement une table des connexions pour les flux connus. Quand
+    un changement n'impacte que le dernier niveau, les flux existants continuent
+    d'être routés correctement en utilisant cette table.
+
+Si nous ajoutons ou retirons un répartiteur L4, les flux existants ne sont pas
+impactés car chaque répartiteur prend la même décision grâce au hachage cohérent :
+
+![Instabilité de la répartition L4 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
+"La perte d'un équilibreur L4 n'a pas d'impact sur les flux existants. Chaque
+flèche est un exemple de flux. Les points sont des connexions liées à
+l'équilibreur de charge associé. S'ils s'étaient déplacés vers un autre
+équilibreur, la connexion aurait été perdue.")
+
+Lors de l'ajout d'un répartiteur L7, les flux existants ne sont pas impactés non
+plus car seules les nouvelles connexions sont routées vers le nouveau
+répartiteur. Pour les connexions existantes, *IPVS* utilise sa table de
+connexion locale et continue de router les paquets vers la destination
+originale. De manière similaire, le retrait d'un répartiteur L7 n'impacte que
+les connexions liées à celui-ci. Les autres connexions sont routées correctement
+:
+
+![Instabilité de la répartition L4 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
+"La parte d'un équilibreur L7 n'impacte que les flux qu'il hébergeait.")
+
+Seuls des changements simultanés sur les deux niveaux mènent à un impact
+notable. Par exemple, lors de l'ajout d'un équilibreur de charge L4 et d'un
+équilibreur de charge L7, seules les connexions déplacées vers un répartiteur L4
+sans état et programmées vers le nouveau répartiteur seront rompues. Grâce à
+l'algorithme de hachage cohérent, les autres connexions resteront liées au
+répartiteur L7 adéquat. Lors d'un changement planifié, cette perturbation peut
+être minimisée en ajoutant d'abord les nouveaux équilibreurs L4, en attendant
+quelques minutes puis en ajoutant les nouveaux équilibreurs L7.
+
+![Instabilité de la répartition L4 3/3]([[!!images/multitier-lb-l4-failure3.svg]]
+"Un équilibreur de charge L4 et un équilibreur de charge L7 reviennent à la vie.
+L'algorithme de hachage cohérent garantit que seul un cinquième des connexions
+existantes serait déplacé vers le nouvel équilibreur L7. Certains d'entre eux
+continuent d'être acheminés par le répartiteur L4 d'origine qui connait la
+destination correcte, ce qui atténue l'impact.")
+
+De plus, *IPVS* route correctement les messages ICMP vers les mêmes répartiteurs
+L7 que les flux associés. Cela permet à la découverte de la MTU du chemin de
+fonctionner correctement sans utiliser de [techniques palliatives][smart
+workarounds].
+
+# Niveau 0 : répartition de charge via le DNS
+
+Il est également possible d'ajouter un équilibrage de charge DNS à l'ensemble.
+Ceci est utile si votre installation est répartie sur plusieurs centres de
+données, plusieurs régions ou si vous voulez diviser une large ferme de
+répartition de charge en morceaux plus petits. Il n'est pas destiné à remplacer
+le premier niveau car il ne partage pas les mêmes caractéristiques : la
+répartition de charge est déséquilibrée (elle n'est pas basée sur les flux) et
+la guérison après une panne est lente.
+
+![Répartition de charge globale]([[!!images/multitier-lb-dns.svg]]
+"Une solution complète de répartition de charge sur deux centres de données.")
+
+[gdnsd][] est un serveur DNS autoritaire avec des tests de disponibilité
+intégrés. Il peut servir des zones au format [RFC 1035][] :
+
+    ::text hl_lines="6 7"
+    @ SOA ns1 ns1.example.org. 1 7200 1800 259200 900
+    @ NS ns1.example.com.
+    @ NS ns1.example.net.
+    @ MX 10 smtp
+    
+    @     60 DYNA multifo!web
+    www   60 DYNA multifo!web
+    smtp     A    198.51.100.99
+
+L'enregistrement spécial `DYNA` retourne des entrées `A` et `AAAA` après avoir
+consulté le greffon spécifié. Ici, le greffon `multfifo` implémente une
+surveillance en mode actif/actif des adresses IP de la ferme :
+
+    ::apache
+    service_types => {
+      web => {
+        plugin => http_status
+        url_path => /healthcheck
+        down_thresh => 5
+        interval => 5
+      }
+      ext => {
+        plugin => extfile
+        file => /etc/lb/ext
+        def_down => false
+      }
+    }
+    
+    plugins => {
+      multifo => {
+        web => {
+          service_types => [ ext, web ]
+          addrs_v4 => [ 198.51.100.1, 198.51.100.2 ]
+          addrs_v6 => [ 2001:db8::198.51.100.1, 2001:db8::198.51.100.2 ]
+        }
+      }
+    }
+
+En mode nominal, une requête `A` recevra en réponse à la fois `198.51.100.1` et
+`198.51.100.2`. Si un test de disponibilité échoue, l'ensemble retourné est mis
+à jour. Il est également possible de retirer une IP volontairement en modifiant
+le fichier `/etc/lb/ext`. Par exemple, en mettant le contenu suivant,
+`198.51.100.2` ne fera plus parti des réponses :
+
+    ::text
+    198.51.100.1 => UP
+    198.51.100.2 => DOWN
+    2001:db8::c633:6401 => UP
+    2001:db8::c633:6402 => UP
+
+---
+
+Tous les fichiers de configuration pour la mise en place de chaque niveau sont
+disponibles dans un [dépôt GitHub][GitHub repository]. Si vous voulez reproduire
+cette configuration à une échelle plus petite, il est possible de fusionner le
+second et le troisième niveau, soit avec des espaces de nom, soit avec une
+configuration spécifique de type [*localnode*][localnode]. Même si vous n'avez
+pas besoin de ces services directs, vous devriez garder le dernier niveau :
+alors que les serveurs frontaux vont et viennent, les équilibreurs de charge L7
+apportent de la stabilité, rendant l'ensemble plus robuste.
+
+*[MTU]: Maximum Transmission Unit
+*[DSR]: Direct Server Return
+*[DR]: Direct Routing
+*[TTL]: Time To Live
+*[RR]: Resource Record
+*[ECMP]: Equal-Cost Multi-Path
+*[BGP]: Border Gateway Protocol
+
+[Introduction to modern network load-balancing and proxying]: https://blog.envoyproxy.io/introduction-to-modern-network-load-balancing-and-proxying-a57f6ff80236 "Introduction to modern network load balancing and proxying"
+[maglev]: https://ai.google/research/pubs/pub44824 "Maglev: A Fast and Reliable Software Network Load Balancer"
+[Adrian Colyer]: https://blog.acolyer.org/2016/03/21/maglev-a-fast-and-reliable-software-network-load-balancer/ "Maglev: A Fast and Reliable Software Network Load Balancer"
+[Stateless datacenter load-balancing with Beamer]: https://blog.acolyer.org/2018/05/03/stateless-datacenter-load-balancing-with-beamer/ "Stateless datacenter load-balancing with Beamer"
+[OSI model]: https://fr.wikipedia.org/wiki/Mod%C3%A8le_OSI "Modèle OSI sur Wikipedia"
+[Envoy]: https://www.envoyproxy.io/ "Envoy is an open source edge and service proxy"
+[HAProxy]: https://www.haproxy.org/ "Reliable, High Performance TCP/HTTP Load Balancer"
+[Træfik]: https://traefik.io/ "Træfik: modern HTTP reverse proxy and load-balancer"
+[auxiliary agent check]: https://cbonte.github.io/haproxy-dconv/1.8/configuration.html#5.2-agent-check "agent-check directive in HAProxy documentation"
+[proxy protocol]: https://www.haproxy.com/blog/haproxy/proxy-protocol/ "Proxy Protocol"
+[Path MTU Discovery]: https://fr.wikipedia.org/wiki/Path_MTU_discovery "Path MTU discovery sur Wikipedia"
+[avoidance of the TIME-WAIT state]: [[fr/blog/2014-tcp-time-wait-state-linux.html]] "TCP TIME-WAIT & les serveurs Linux à fort trafic"
+[High availability with ExaBGP]: [[fr/blog/2013-exabgp-haute-dispo.html]] "Redondance avec ExaBGP"
+[Celebrating ECMP in Linux]: https://cumulusnetworks.com/blog/celebrating-ecmp-part-one/ "Celebrating ECMP in Linux"
+[ExaBGP]: https://github.com/Exa-Networks/exabgp "The BGP swiss army knife of networking"
+[netfilter]: https://www.netfilter.org/ "Packet filtering framework for Linux"
+[conntrackd]: http://conntrack-tools.netfilter.org/about.html "Connection tracking userspace tools for Linux"
+[IPVS]: http://www.linuxvirtualserver.org/software/ipvs.html "Advanced Layer-4 Switching"
+[Keepalived]: http://www.keepalived.org/ "Keepalived for Linux"
+[backport]: https://github.com/vincentbernat/ip_vs_mh "Backport of consistent source hashing scheduler for Linux IPVS"
+[README]: https://github.com/vincentbernat/ip_vs_mh/blob/master/README.md#differences-with-the-upstream-module
+[IPIP encapsulation]: http://www.networksorcery.com/enp/protocol/ip-ip.htm "IP in IP Encapsulation"
+[Consistent Hashing: Algorithmic Tradeoffs]: https://blog.cloudflare.com/path-mtu-discovery-in-practice/ "Consistent Hashing: Algorithmic Tradeoffs"
+[localnode]: http://www.austintek.com/LVS/LVS-HOWTO/HOWTO/LVS-HOWTO.localnode.html "LVS: LocalNode"
+[gdnsd]: http://gdnsd.org/ "Authoritative-only DNS server which does geographic balancing, redirection, weighting, and service-state-conscious failover at the DNS layer"
+[RFC 1035]: https://tools.ietf.org/html/rfc1035 "Domain Names - Implementation And Specification"
+[smart workarounds]: https://blog.cloudflare.com/path-mtu-discovery-in-practice/ "Path MTU discovery in practice"
+[GitHub repository]: https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb "Fichiers de configuration pour une répartition de charge à 4 niveaux"
+[Inju Song]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=039f32e8cdea29b4d0680df7a83817b5ec4166e1 "netfilter: ipvs: Add Maglev hashing scheduler"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}

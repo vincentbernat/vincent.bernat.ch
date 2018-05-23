@@ -1,0 +1,568 @@
+---
+title: "Multi-tier load-balancing with Linux"
+description: |
+  A robust and scalable load-balancing solution is composed of 3 parts:
+  ECMP routing, stateless L4 and stateful L7.
+uuid: 581da3c1-85dc-4919-82c0-4c99bb61acfe
+tags:
+  - network
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb": "GitHub repository"
+---
+
+A common solution to provide a highly-available and scalable service is to
+insert a load-balancing layer to spread requests from users to backend
+servers.[^backend] We usually have several expectations for such a layer:
+
+scalability
+: It allows a service to scale by pushing traffic to newly provisioned backend
+  servers. It should also be able to scale itself when it becomes the
+  bottleneck.
+
+availability
+: It provides high availability to the service. If one server becomes
+  unavailable, the traffic should be quickly steered to another server. The
+  load-balancing layer itself should also be highly available.
+
+flexibility
+: It handles both short and long connections. It is flexible enough to offer
+  all the features backends generally expect from a load-balancer like TLS or
+  HTTP routing.
+
+operability
+: With some cooperation, any expected change should be seamless: rolling out a
+  new software on the backends, adding or removing backends, or scaling up or
+  down the load-balancing layer itself.
+
+[^backend]: In this article, "*backend servers*" are the servers behind the
+    load-balancing layer. To avoid confusion, we will not use the term
+    "*frontend*."
+
+The problem and its solutions are well known. From recently published articles
+on the topic, "[Introduction to modern network load-balancing and proxying][]"
+provides an overview of the state of the art. Google released "[Maglev: A Fast
+and Reliable Software Network Load Balancer][maglev]" describing their in-house
+solution in details.[^morningpaper] However, the associated software is not
+available. Basically, building a load-balancing solution with commodity servers
+consists of assembling three components:
+
+ - ECMP routing
+ - stateless L4 load-balancing
+ - stateful L7 load-balancing
+
+In this article, I describe and support a multi-tier solution using Linux and
+only open-source components. It should offer you the basis to build a
+production-ready load-balancing layer.
+
+[^morningpaper]: A good summary of the paper is available from [Adrian
+    Colyer][]. From the same author, you may also have a look at the summary for
+    "[Stateless datacenter load-balancing with Beamer][]."
+
+# Last tier: L7 load-balancing
+
+Let's start with the last tier. Its role is to provide high availability, by
+forwarding requests to only healthy backends, and scalability, by spreading
+requests fairly between them. Working in the highest layers of the [OSI
+model][], it can also offer additional services, like TLS-termination, HTTP
+routing, header rewriting, rate-limiting of unauthenticated users, and so on.
+Being stateful, it can leverage complex load-balancing algorithm. Being the
+first point of contact with backend servers, it should ease maintenances and
+minimize impact during daily changes.
+
+![L7 load-balancers]([[!!images/multitier-lb-l7.svg]] "The last tier of the
+load-balancing solution is a set of L7 load-balancers receiving user connections
+and forwarding them to the backends.")
+
+It also terminates client TCP connections. This introduces some loose coupling
+between the load-balancing components and the backend servers with the following
+benefits:
+
+ - connections to servers can be kept open for lower resource use and latency,
+ - requests can be retried transparently in case of failure,
+ - clients can use a different IP protocol than servers, and
+ - servers do not have to care about [path MTU discovery][], TCP congestion
+   control algorithms, [avoidance of the TIME-WAIT state][] and various other
+   low-level details.
+
+Many pieces of software would fit in this layer and an ample literature exists
+on how to configure them. You could look at [HAProxy][], [Envoy][] or
+[Træfik][]. Here is a configuration example for *HAProxy*:
+
+    ::haproxy
+    # L7 load-balancer endpoint
+    frontend l7lb
+      # Listen on both IPv4 and IPv6
+      bind :80 v4v6
+      # Redirect everything to a default backend
+      default_backend servers
+      # Healthchecking
+      acl dead nbsrv(servers) lt 1
+      acl disabled nbsrv(enabler) lt 1
+      monitor-uri /healthcheck
+      monitor fail if dead || disabled
+    
+    # IPv6-only servers with HTTP healthchecking and remote agent checks
+    backend servers
+      balance roundrobin
+      option httpchk
+      server web1 [2001:db8:1:0:2::1]:80 send-proxy check agent-check agent-port 5555
+      server web2 [2001:db8:1:0:2::2]:80 send-proxy check agent-check agent-port 5555
+      server web3 [2001:db8:1:0:2::3]:80 send-proxy check agent-check agent-port 5555
+      server web4 [2001:db8:1:0:2::4]:80 send-proxy check agent-check agent-port 5555
+    
+    # Fake backend: if the local agent check fails, we assume we are dead
+    backend enabler
+      server enabler [::1]:0 agent-check agent-port 5555
+
+This configuration is the most incomplete piece of this guide. However, it
+illustrates two key concepts for operability:
+
+ 1. Healthchecking of the web servers is done both at HTTP-level (with `check`
+    and `option httpchk`) and using an [auxiliary agent check][] (with
+    `agent-check`). The later makes it easy to put a server to maintenance or to
+    orchestrate a progressive rollout. On each backend, you need a process
+    listening on port 5555 and reporting the status of the service (`UP`,
+    `DOWN`, `MAINT`). A simple `socat` process can do the trick:[^agentcheck]
+
+        ::sh
+        socat -ly \
+          TCP6-LISTEN:5555,ipv6only=0,reuseaddr,fork \
+          OPEN:/etc/lb/agent-check,rdonly
+
+    Put `UP` in `/etc/lb/agent-check` when the service is in nominal mode. If
+    the regular healthcheck is also positive, *HAProxy* will send requests to
+    this node. When you need to put it in maintenance, write `MAINT` and wait for
+    the existing connections to terminate. Use `READY` to cancel this mode.
+
+ 2. The load-balancer itself should provide an healthcheck endpoint
+    (`/healthcheck`) for the upper tier. It will return a 503 error if either
+    there is no backend servers available or if put down the `enabler` backend
+    through the agent check. The same mechanism as for regular backends can be
+    used to signal the unavailability of this load-balancer.
+
+[^agentcheck]: If you feel this solution is fragile, feel free to develop your
+    own agent. It could coordinate with a key-value store to determine the
+    wanted state of the server. It is possible to centralize the agent in a
+    single location, but you may get a chicken-and-egg problem to ensure its
+    availability.
+
+Additionally, the `send-proxy` directive enables the [proxy protocol][] to
+transmit the real clients' IP addresses. This protocol also works for non-HTTP
+connections and is supported by a variety of servers, including *nginx*:
+
+    ::nginx
+    http {
+      server {
+        listen [::]:80 default ipv6only=off proxy_protocol;
+        root /var/www;
+        set_real_ip_from ::/0;
+        real_ip_header proxy_protocol;
+      }
+    }
+
+As is, this solution is not complete. We have just moved the availability and
+scalability problem somewhere else. How do we load-balance the requests between
+the load-balancers?
+
+# First tier: ECMP routing
+
+On most modern routed IP networks, redundant paths exist between clients and
+servers. For each packet, routers have to choose a path. When the cost
+associated to each path is equal, incoming flows[^flow] are load-balanced among
+the available destinations. This characteristic can be used to balance
+connections among available load-balancers:
+
+![ECMP routing]([[!!images/multitier-lb-ecmp.svg]] "ECMP routing is used as a
+first tier. Flows are spread among available L7 load-balancers. Routing is
+stateless and asymmetric. Backend servers are not represented.")
+
+[^flow]: A flow is usually determined by the source and destination IP and the
+    L4 protocol. Alternatively, the source and destination port can also be
+    used. The router hashes these information to choose the destination. For
+    Linux, you may find more information on this topic in "[Celebrating ECMP in
+    Linux][]."
+
+There is little control over the load-balancing but ECMP routing brings the
+ability to scale horizontally both tiers. A common way to implement such a
+solution is to use BGP, a routing protocol to exchange routes between network
+equipments. Each load-balancer announces to its connected routers the IP
+addresses it is serving.
+
+If we assume you already have BGP-enabled routers available, [ExaBGP][] is a
+flexible solution to let the load-balancers advertise their availability. Here
+is a configuration for one of the load-balancers:
+
+    ::junos
+    # Healthcheck for IPv6
+    process service-v6 {
+      run python -m exabgp healthcheck -s --interval 10 --increase 0 --cmd "test -f /etc/lb/v6-ready -a ! -f /etc/lb/disable";
+      encoder text;
+    }
+    
+    template {
+      # Template for IPv6 neighbors
+      neighbor v6 {
+        router-id 192.0.2.132;
+        local-address 2001:db8::192.0.2.132;
+        local-as 65000;
+        peer-as 65000;
+        hold-time 6;
+        family {
+          ipv6 unicast;
+        }
+        api services-v6 {
+          processes [ service-v6 ];
+        }
+      }
+    }
+    
+    # First router
+    neighbor 2001:db8::192.0.2.254 {
+      inherit v6;
+    }
+    
+    # Second router
+    neighbor 2001:db8::192.0.2.253 {
+      inherit v6;
+    }
+
+If `/etc/lb/v6-ready` is present and `/etc/lb/disable` is absent, all the IP
+addresses configured on the `lo` interface will be announced to both routers. If
+the other load-balancers use a similar configuration, the routers will
+distribute incoming flows between them. Some external process should manage the
+existence of the `/etc/lb/v6-ready` file by checking for the healthiness of the
+load-balancer (using the `/healthcheck` endpoint for example). An operator can
+remove a load-balancer from the rotation by creating the `/etc/lb/disable` file.
+
+To get more details on this part, have a look at "[High availability with
+ExaBGP][]." If you are in the cloud, this tier is usually implemented by your
+cloud provider, either using an anycast IP address or a basic L4 load-balancer.
+
+Unfortunately, this solution is not resilient when an expected or unexpected
+change happens. Notably, when adding or removing a load-balancer, the number of
+available routes for a destination changes. The hashing algorithm used by
+routers is not consistent and flows are reshuffled among the available
+load-balancers, breaking existing connections:
+
+![Stability of ECMP routing 1/2]([[!!images/multitier-lb-ecmp-failure1.svg]]
+"ECMP routing is unstable when a change happens. An additional load-balancer is
+added to the pool and the flows are routed to different load-balancers, which do
+not have the appropriate entries in their connection tables.")
+
+Moreover, each router may choose its own routes. When a router becomes
+unavailable, the second one may route the same flows differently:
+
+![Stability of ECMP routing 2/2]([[!!images/multitier-lb-ecmp-failure2.svg]] "A
+router becomes unavailable and the remaining router load-balances its flows
+differently. One of them is routed to a different load-balancer, which do not
+have the appropriate entry in its connection table.")
+
+If you think this is not an acceptable outcome, notably if you need to handle
+long connections like file downloads, video streaming or websocket connections,
+you need an additional tier. Keep reading!
+
+# Second tier: L4 load-balancing
+
+The second tier is the glue between the *stateless* world of IP routers and the
+*stateful* land of L7 load-balancing. It is implemented with L4 load-balancing.
+The terminology can be a bit confusing here: this tier routes IP datagrams (no
+TCP termination) but the scheduler uses both destination IP and port to choose
+an available L7 load-balancer. The purpose of this tier is to ensure all members
+take the same scheduling decision for an incoming packet.
+
+There are two options:
+
+ - stateful L4 load-balancing with state synchronization accross the members, or
+ - stateless L4 load-balancing with consistent hashing.
+
+The first option increases complexity and limits scalability. We won't use
+it.[^conntrackd] The second option is less resilient during some changes but can
+be enhanced with an hybrid approach using a local state.
+
+[^conntrackd]: On Linux, it can be implemented by using [Netfilter][] for
+    load-balancing and [conntrackd][] to synchronize state. *IPVS* only provides
+    active/backup synchronization.
+
+We use [IPVS][], a performant L4 load-balancer running inside the Linux kernel,
+with [Keepalived][], a frontend to *IPVS* with a set of healthcheckers to kick
+out an unhealthy component. *IPVS* is configured to use the *Maglev* scheduler,
+a [consistent hashing algorithm from Google][maglev]. Among its family, this is
+a great algorithm because it spreads connections fairly, minimizes disruptions
+during changes and is quite fast at building its lookup table. Finally, to
+improve performance, we let the last tier—the L7 load-balancers—sends back
+answers directly to the clients without involving the second tier—the L4
+load-balancers. This is referred to as *direct server return* (DSR) or *direct
+routing* (DR).
+
+![Second tier: L4 load-balancing]([[!!images/multitier-lb-l4.svg]] "L4
+load-balancing with IPVS and consistent hashing as a glue between the first tier
+and the third tier. Backend servers have been omitted. Dotted lines represent
+the path for the return packets.")
+
+With such a setup, we expect packets from a flow to be able to move freely
+between the components of the two first tiers while sticking to the same L7
+load-balancer.
+
+## Configuration
+
+Assuming *ExaBGP* has already been configured like described in the previous
+section, let's start with the configuration of *Keepalived*:
+
+    ::junos
+    virtual_server_group VS_GROUP_MH_IPv6 {
+      2001:db8::198.51.100.1 80
+    }
+    virtual_server group VS_GROUP_MH_IPv6 {
+      lvs_method TUN  # Tunnel mode for DSR
+      lvs_sched mh    # Scheduler: Maglev
+      sh-port         # Use port information for scheduling
+      protocol TCP
+      delay_loop 5
+      alpha           # All servers are down on start
+      omega           # Execute quorum_down on shutdown
+      quorum_up   "/bin/touch /etc/lb/v6-ready"
+      quorum_down "/bin/rm -f /etc/lb/v6-ready"
+    
+      # First L7 load-balancer
+      real_server 2001:db8::192.0.2.132 80 {
+        weight 1
+        HTTP_GET {
+          url {
+            path /healthcheck
+            status_code 200
+          }
+          connect_timeout 2
+        }
+      }
+    
+      # Many others...
+    }
+
+The `quorum_up` and `quorum_down` statements define the commands to be executed
+when the service becomes available and unavailable respectively. The
+`/etc/lb/v6-ready` file is used as a signal to *ExaBGP* to advertise the service
+IP address to the neighbor routers.
+
+Additionally, *IPVS* needs to be configured to continue routing packets from a
+flow moved from another L4 load-balancer. It should also continue routing
+packets from unavailable destinations to ensure we can drain properly a L7
+load-balancer.
+
+    ::sh
+    # Schedule non-SYN packets
+    sysctl -qw net.ipv4.vs.sloppy_tcp=1
+    # Do NOT reschedule a connection when destination
+    # doesn't exist anymore
+    sysctl -qw net.ipv4.vs.expire_nodest_conn=0
+    sysctl -qw net.ipv4.vs.expire_quiescent_template=0
+
+The *Maglev* scheduling algorithm will be available with Linux 4.18, thanks to
+[Inju Song][]. For older kernels, I have prepared a [backport][].[^backport] Use
+of source hashing as a scheduling algorithm will hurt the resilience of the
+setup.
+
+[^backport]: The backport is not strictly equivalent to its original version. Be
+    sure to check the [`README` file][README] to understand the differences.
+    Briefly, in *Keepalived* configuration, you should:
+    
+     - not use `inhibit_on_failure`
+     - use `sh-port`
+     - not use `sh-fallback`
+
+DSR is implemented using the tunnel mode. This method is compatible with routed
+datacenters and cloud environments. Requests are tunneled to the scheduled peer
+using [IPIP encapsulation][]. It adds a small overhead and may lead to MTU
+issues. If possible, ensure you are using a larger MTU for communication between
+the second and the third tier.[^mtu] Otherwise, it is better to explicitely
+allow fragmentation of IP packets:
+
+    ::sh
+    sysctl -qw net.ipv4.vs.pmtu_disc=0
+
+[^mtu]: At least 1520 for IPv4 and 1540 for IPv6.
+
+You also need to configure the L7 load-balancers to handle encapsulated
+traffic:[^firewall]
+
+    ::sh
+    # Setup IPIP tunnel to accept packets from any source
+    ip tunnel add tunlv6 mode ip6ip6 local 2001:db8::192.0.2.132
+    ip link set up dev tunlv6
+    ip addr add 2001:db8::198.51.100.1/128 dev tunlv6
+
+[^firewall]: As is, this configuration is a insecure. You need to ensure only
+    the L4 load-balancers will be able to send IPIP traffic.
+
+## Evaluation of the resilience
+
+As configured, the second tier increases the resilience of this setup for two
+reasons:
+
+ 1. The scheduling algorithm is using a consistent hash to choose its
+    destination. Such an algorithm reduces the negative impact of expected or
+    unexpected changes by minimizing the number of flows moving to a new
+    destination. "[Consistent Hashing: Algorithmic Tradeoffs][]" offers more
+    details on this subject.
+
+ 2. *IPVS* keeps a local connection table for known flows. When a change impacts
+    only the third tier, existing flows will be correctly directed according to
+    the connection table.
+
+If we add or remove a L4 load-balancer, existing flows are not impacted because
+each load-balancer takes the same decision, as long as they see the same set of
+L7 load-balancers:
+
+![L4 load-balancing instability 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
+"Loosing a L4 load-balancer has no impact on existing flows. Each arrow is an
+example of flow. The dots are flow endpoints bound to the associated
+load-balancer. If they had moved to another load-balancer, connection
+would have been lost.")
+
+If we add a L7 load-balancer, existing flows are not impacted either because
+only new connections will be scheduled to it. For existing connections, *IPVS*
+will look at its local connection table and continue to forward packets to the
+original destination. Similarly, if we remove a L7 load-balancer, only existing
+flows terminating at this load-balancer are impacted. Other existing connections
+will be forwarded correctly:
+
+![L4 load-balancing instability 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
+"Loosing a L7 load-balancer only impacts the flows bound to it.")
+
+We need to have simultaneous changes on both levels to get a noticeable impact.
+For example, when adding both a L4 load-balancer and a L7 load-balancer, only
+connections moved to a L4 load-balancer without state _and_ scheduled to the new
+load-balancer will be broken. Thanks to the consistent hashing algorithm, other
+connections will stay bound to the right L7 load-balancer. During a planned
+change, this disruption can be minimized by adding the new L4 load-balancers
+first, waiting a few minutes, then adding the new L7 load-balancers.
+
+![L4 load-balancing instability 3/3]([[!!images/multitier-lb-l4-failure3.svg]]
+"Both a L4 load-balancer and a L7 load-balancer come back to life. The
+consistent hash algorithm ensures that only one fifth of the existing
+connections would be moved to the incoming L7 load-balancer. Some of them
+continue to be routed through their original L4 load-balancer, which mitigates
+the impact.")
+
+Additionally, *IPVS* correctly routes ICMP messages to the same L7
+load-balancers as the associated connections. This ensures notably path MTU
+discovery works and there is no need for [smart workarounds][].
+
+# Tier 0: DNS load-balancing
+
+Optionally, you can add DNS load-balancing to the mix. This is useful either if
+your setup is spanned accross multiple datacenters, or multiple cloud regions,
+or if you want to break a large load-balancing cluster into smaller ones. It is
+not intended to replace the first tier as it doesn't share the same
+characteristics: load-balancing is unfair (it is not flow-based) and recovery
+from a failure is slow.
+
+![Complete load-balancing solution]([[!!images/multitier-lb-dns.svg]]
+"A complete load-balancing solution spanning accross two datacenters.")
+
+[gdnsd][] is an authoritative-only DNS server with integrated healthchecking. It
+can serve zones from master files using the [RFC 1035][] zone format:
+
+    ::text hl_lines="6 7"
+    @ SOA ns1 ns1.example.org. 1 7200 1800 259200 900
+    @ NS ns1.example.com.
+    @ NS ns1.example.net.
+    @ MX 10 smtp
+    
+    @     60 DYNA multifo!web
+    www   60 DYNA multifo!web
+    smtp     A    198.51.100.99
+
+The special RR type `DYNA` will return `A` and `AAAA` records after querying the
+specified plugin. Here, the `multifo` plugin implements an all-active failover
+of monitored addresses:
+
+    ::apache
+    service_types => {
+      web => {
+        plugin => http_status
+        url_path => /healthcheck
+        down_thresh => 5
+        interval => 5
+      }
+      ext => {
+        plugin => extfile
+        file => /etc/lb/ext
+        def_down => false
+      }
+    }
+    
+    plugins => {
+      multifo => {
+        web => {
+          service_types => [ ext, web ]
+          addrs_v4 => [ 198.51.100.1, 198.51.100.2 ]
+          addrs_v6 => [ 2001:db8::198.51.100.1, 2001:db8::198.51.100.2 ]
+        }
+      }
+    }
+
+In nominal state, an `A` request will be answered with both `198.51.100.1` and
+`198.51.100.2`. An healthcheck failure will update the returned set accordingly.
+It is also possible to administratively remove an entry by modifying the
+`/etc/lb/ext` file. For example, with the following content, `198.51.100.2` will
+not be advertised anymore:
+
+    ::text
+    198.51.100.1 => UP
+    198.51.100.2 => DOWN
+    2001:db8::c633:6401 => UP
+    2001:db8::c633:6402 => UP
+
+---
+
+You can find all the configuration files and the setup of each tier in the
+[GitHub repository][]. If you want to replicate this setup at a smaller scale,
+it is possible to collapse the second and the third tiers by using either
+[localnode][] or network namespaces. Even if you don't need its fancy
+load-balancing services, you should keep the last tier: while backend servers
+come and go, the L7 load-balancers bring stability, which translates to
+resiliency.
+
+*[MTU]: Maximum Transmission Unit
+*[DSR]: Direct Server Return
+*[DR]: Direct Routing
+*[TTL]: Time To Live
+*[RR]: Resource Record
+*[ECMP]: Equal-Cost Multi-Path
+*[BGP]: Border Gateway Protocol
+
+[Introduction to modern network load-balancing and proxying]: https://blog.envoyproxy.io/introduction-to-modern-network-load-balancing-and-proxying-a57f6ff80236 "Introduction to modern network load balancing and proxying"
+[maglev]: https://ai.google/research/pubs/pub44824 "Maglev: A Fast and Reliable Software Network Load Balancer"
+[Adrian Colyer]: https://blog.acolyer.org/2016/03/21/maglev-a-fast-and-reliable-software-network-load-balancer/ "Maglev: A Fast and Reliable Software Network Load Balancer"
+[Stateless datacenter load-balancing with Beamer]: https://blog.acolyer.org/2018/05/03/stateless-datacenter-load-balancing-with-beamer/ "Stateless datacenter load-balancing with Beamer"
+[OSI model]: https://en.wikipedia.org/wiki/OSI_model "OSI model on Wikipedia"
+[Envoy]: https://www.envoyproxy.io/ "Envoy is an open source edge and service proxy"
+[HAProxy]: https://www.haproxy.org/ "Reliable, High Performance TCP/HTTP Load Balancer"
+[Træfik]: https://traefik.io/ "Træfik: modern HTTP reverse proxy and load-balancer"
+[auxiliary agent check]: https://cbonte.github.io/haproxy-dconv/1.8/configuration.html#5.2-agent-check "agent-check directive in HAProxy documentation"
+[proxy protocol]: https://www.haproxy.com/blog/haproxy/proxy-protocol/ "Proxy Protocol"
+[path MTU discovery]: https://en.wikipedia.org/wiki/Path_MTU_Discovery "Path MTU Discovery on Wikipedia"
+[avoidance of the TIME-WAIT state]: [[en/blog/2014-tcp-time-wait-state-linux.html]] "Coping with the TCP TIME-WAIT state on busy Linux servers"
+[High availability with ExaBGP]: [[en/blog/2013-exabgp-highavailability.html]] "High availability with ExaBGP"
+[Celebrating ECMP in Linux]: https://cumulusnetworks.com/blog/celebrating-ecmp-part-one/ "Celebrating ECMP in Linux"
+[ExaBGP]: https://github.com/Exa-Networks/exabgp "The BGP swiss army knife of networking"
+[netfilter]: https://www.netfilter.org/ "Packet filtering framework for Linux"
+[conntrackd]: http://conntrack-tools.netfilter.org/about.html "Connection tracking userspace tools for Linux"
+[IPVS]: http://www.linuxvirtualserver.org/software/ipvs.html "Advanced Layer-4 Switching"
+[Keepalived]: http://www.keepalived.org/ "Keepalived for Linux"
+[backport]: https://github.com/vincentbernat/ip_vs_mh "Backport of consistent source hashing scheduler for Linux IPVS"
+[README]: https://github.com/vincentbernat/ip_vs_mh/blob/master/README.md#differences-with-the-upstream-module
+[IPIP encapsulation]: http://www.networksorcery.com/enp/protocol/ip-ip.htm "IP in IP Encapsulation"
+[Consistent Hashing: Algorithmic Tradeoffs]: https://blog.cloudflare.com/path-mtu-discovery-in-practice/ "Consistent Hashing: Algorithmic Tradeoffs"
+[localnode]: http://www.austintek.com/LVS/LVS-HOWTO/HOWTO/LVS-HOWTO.localnode.html "LVS: LocalNode"
+[gdnsd]: http://gdnsd.org/ "Authoritative-only DNS server which does geographic balancing, redirection, weighting, and service-state-conscious failover at the DNS layer"
+[RFC 1035]: https://tools.ietf.org/html/rfc1035 "Domain Names - Implementation And Specification"
+[smart workarounds]: https://blog.cloudflare.com/path-mtu-discovery-in-practice/ "Path MTU discovery in practice"
+[GitHub repository]: https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb "Configuration files for 4-tier load-balancer"
+[Inju Song]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=039f32e8cdea29b4d0680df7a83817b5ec4166e1 "netfilter: ipvs: Add Maglev hashing scheduler"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# fill-column: 80       #}
+{# End:                  #}
