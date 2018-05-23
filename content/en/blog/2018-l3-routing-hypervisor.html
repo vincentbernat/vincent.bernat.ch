@@ -612,6 +612,13 @@ following configuration snippet:
       }
     }
 
+*ndppd* [does not spoof the source address][] and some systems are
+[more picky about it][]. Therefore, an appropriate address needs to be
+configured on each interface:
+
+    ::sh
+    ip addr add 2001:db8:cb00:7100::1/64 dev vnet5 noprefixroute nodad
+
 For DHCP, some daemons may have difficulties to handle this odd
 configuration (with the `/32` IP address on the interface), but
 [Dnsmasq][] accepts such an oddity. For IPv6, assuming the assigned IP
@@ -719,6 +726,8 @@ BGP resiliency with BGP LLGR
 [Calico]: https://www.projectcalico.org/ "Project Calico: Secure networking for the cloud native era"
 [EUI-64]: https://en.wikipedia.org/wiki/IPv6_address#Modified_EUI-64 "Modified IPv6 EUI-64 on Wikipedia"
 [l2-fabric]: https://docs.projectcalico.org/v2.6/reference/private-cloud/l2-interconnect-fabric "Calico over an Ethernet interconnect fabric"
+[does not spoof the source address]: https://github.com/DanielAdolfsson/ndppd/issues/41 "Source address used by ndppd may not be a neighbor address #41"
+[more picky about it]: https://github.com/openbsd/src/blob/442f4bb483c9350a9d4c74fd7a2ae45f06c454dd/sys/netinet6/nd6_nbr.c#L155-L159 "nd6_ns_input() on OpenBSD"
 
 [GitHub]: https://github.com/vincentbernat/network-lab/tree/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv "Lab configuration files"
 [local-out]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/hypervisor.conf#L11-L40 "local-out table configuration"

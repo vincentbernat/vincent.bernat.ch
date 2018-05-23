@@ -651,6 +651,14 @@ chaque interface, nous utilisons la configuration suivante :
       }
     }
 
+*ndppd* [n'usurpe pas l'adresse source][does not spoof the source
+address] et certains systèmes sont [plus pointilleux à ce sujet][more
+picky about it]. Par conséquent, une adresse adéquate doit être
+configurée sur chaque interface :
+
+    ::sh
+    ip addr add 2001:db8:cb00:7100::1/64 dev vnet5 noprefixroute nodad
+
 En ce qui concerne le DHCP, certains démons peuvent être contrariés
 par l'adresse en `/32` associée à l'interface. Toutefois, [Dnsmasq][]
 accepte de s'y faire. Si besoin, l'écriture d'un démon DHCP est
@@ -767,6 +775,8 @@ utilisation de BGP LLGR
 [Calico]: https://www.projectcalico.org/ "Project Calico: Secure networking for the cloud native era"
 [EUI-64]: https://fr.wikipedia.org/wiki/Adresse_IPv6#Assignation_des_adresses_IPv6_dans_un_r%C3%A9seau_local "Assgnation des adresses IPv6 dans un réseau local sur Wikipedia"
 [l2-fabric]: https://docs.projectcalico.org/v2.6/reference/private-cloud/l2-interconnect-fabric "Calico over an Ethernet interconnect fabric"
+[does not spoof the source address]: https://github.com/DanielAdolfsson/ndppd/issues/41 "Source address used by ndppd may not be a neighbor address #41"
+[more picky about it]: https://github.com/openbsd/src/blob/442f4bb483c9350a9d4c74fd7a2ae45f06c454dd/sys/netinet6/nd6_nbr.c#L155-L159 "nd6_ns_input() dans OpenBSD"
 
 [GitHub]: https://github.com/vincentbernat/network-lab/tree/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv "Fichiers de configuration du labo"
 [local-out]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/hypervisor.conf#L11-L40 "Configuration de la table local-out"
