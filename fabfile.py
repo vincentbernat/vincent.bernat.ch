@@ -290,6 +290,9 @@ def build():
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
               "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo --quiet --disable=mergePaths")
+        local("find media/images -type f -name '*.svg'"
+              "| grep -Ev '^media/images/(l|obj)(/|$)'"
+              "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
         # Optimize JPG
         local("find media/images -type f -name '*.jpg' -print0"
               " | xargs -0 -n10 -P4 jpegoptim --max=84 --strip-all")
