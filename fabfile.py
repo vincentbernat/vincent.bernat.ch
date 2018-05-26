@@ -285,7 +285,7 @@ def build():
     local("rm -rf .final/*")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
-        # Optimize SVG
+        # Optimize SVG (consider using svgcleaner instead, svgo is a bit fragile)
         local("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
