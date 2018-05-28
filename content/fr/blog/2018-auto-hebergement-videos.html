@@ -254,7 +254,8 @@ la plupart des navigateurs :
             var selector = "video source[type='application/vnd.apple.mpegurl']",
                 videoSources = document.querySelectorAll(selector);
             videoSources.forEach(function(videoSource) {
-                var once = false;
+                var m3u8 = videoSource.src,
+                    once = false;
 
                 // Copier la balise video pour retirer toutes les sources
                 var oldVideo = videoSource.parentNode,
@@ -266,7 +267,7 @@ la plupart des navigateurs :
                 // Attendre le dernier moment pour initialiser hls.js,
                 // une seule fois
                 newVideo.addEventListener('play',function() {
-                    if (!once) return;
+                    if (once) return;
                     once = true;
 
                     var hls = new Hls({ capLevelToPlayerSize: true });
