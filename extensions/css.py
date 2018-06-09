@@ -27,7 +27,7 @@ process.stdin.on('readable', function() {
   }
 });
 process.stdin.on('end', function() {
-  postcss([autoprefixer, mqpacker, cssnano({reduceIdents: false, reduceInitial: false})])
+  postcss([autoprefixer, mqpacker, cssnano({reduceIdents: false})])
         .process(input, { from: undefined })
         .then(function(result) {
           process.stdout.write(result.css.toString());
