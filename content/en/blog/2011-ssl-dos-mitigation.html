@@ -14,15 +14,15 @@ implies costly cryptographic computations.
 
 There are two different aspects in the presented attack:
 
- - The computation cost of an handshake is more important on the
-   server side than on the client side. The advisory explains that a
-   server will require 15 times the processing power of a client. This
-   means a single average workstation could challenge a multi-core
-   high-end server.
- - The use of [TLS renegotiation][rfc5746] allows you to trigger hundreds
-   of handshakes in the same TCP connection. Even a client behind a
-   DSL connection can therefore bomb a server with a lot of
-   renegotiation requests.
+ - The computation cost of an handshake is more important for the
+   server than for the client. The advisory explains that a server
+   will require 15 times the processing power of a client. This means
+   a single average workstation could challenge a multi-core high-end
+   server.
+ - [TLS renegotiation][rfc5746] allows you to trigger hundreds of
+   handshakes in the same TCP connection. Even a client behind a DSL
+   connection can therefore bomb a server with a lot of renegotiation
+   requests.
 
 !!! "Update (2015.02)" While the content of this article is still
 technically sound, ensure you understand it was written by the end of
@@ -45,7 +45,7 @@ renegotiation. It is hardly needed: a server can trigger a
 renegotiation to ask a client to present a certificate but a client
 usually does not have any reason to trigger one. Because of a
 [past vulnerability in TLS renegotiation][cve-2009-3555], recent
-version of _Apache_ and _nginx_ just forbid it, even when the
+versions of _Apache_ and _nginx_ just forbid it, even when the
 [non-vulnerable version][rfc5746] is available.
 
 `openssl s_client` can be used to test if TLS renegotiation is really
@@ -78,16 +78,16 @@ an option. Since these renegotiations should not happen often, a
 workaround is to limit them.
 
 When the flaw was first advertised, [F5 Networks][f5] provided a way
-to configure such a limitation with an iRule on their load-balancers. We
-can do something similar with just Netfilter. We can spot most TCP
+to configure such a limitation with an iRule on their load-balancers.
+We can do something similar with Netfilter. We can spot most TCP
 packets triggering such a renegotiation by looking for encrypted TLS
 handshake record. They may happen in a regular handshake but in this
 case, they usually are not at the beginning of the TCP payload. There
 is no field saying if a TLS record is encrypted or not (TLS is
-stateful for this purpose). Therefore, we have to use some
-heuristics. If the handshake type is unknown, we assume that this is
-an encrypted record. Moreover, renegotiation requests are usually
-encapsulated in a TCP packet flagged with "push."
+stateful for this purpose). Therefore, we have to use some heuristics.
+If the handshake type is unknown, we assume that this is an encrypted
+record. Moreover, renegotiation requests are usually encapsulated in a
+TCP packet flagged with "push."
 
 	::sh
 	# Access to TCP payload (if not fragmented)
@@ -160,7 +160,7 @@ CPU. Adding expensive TLS accelerators would also do the
 trick. Scaling out is also relatively easy but you should care about
 [TLS session resume][sslresume].
 
-## Putting more work on the client side
+## Putting more work on the client
 
 In their presentation of the [denial of service tool][thc], THC explains:
 
@@ -188,7 +188,7 @@ needs 34% less CPU power. The most efficient cipher suite from the
 server point of view seems to be something like `DHE-DSS-AES256-SHA`
 where the server needs half the power of the client.
 
-However, you can't really uses only these shiny cipher suites:
+However, you can't really use only these shiny cipher suites:
 
  1. Some browsers do not support them: they are limited to RSA cipher
     suites.[^1]
