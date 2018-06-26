@@ -88,10 +88,12 @@ example, Net-SNMP ships with a Python binding:
     import netsnmp
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("host", default="localhost", nargs="?",
-                        help="Agent to retrieve variables from")
-    parser.add_argument("community", default="public", nargs="?",
-                        help="Community to query the agent")
+    parser.add_argument(
+        "host", default="localhost", nargs="?",
+        help="Agent to retrieve variables from")
+    parser.add_argument(
+        "community", default="public", nargs="?",
+        help="Community to query the agent")
     options = parser.parse_args()
     args = {
         "Version": 2,
@@ -146,10 +148,12 @@ Here is how the previous script could be written:
     import argparse
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("host", default="localhost", nargs="?",
-                        help="Agent to retrieve variables from")
-    parser.add_argument("community", default="public", nargs="?",
-                        help="Community to query the agent")
+    parser.add_argument(
+        "host", default="localhost", nargs="?",
+        help="Agent to retrieve variables from")
+    parser.add_argument(
+        "community", default="public", nargs="?",
+        help="Community to query the agent")
     options = parser.parse_args()
     
     m = M(options.host, options.community, 2)
@@ -160,20 +164,23 @@ Here is how the previous script could be written:
             continue
         if m.ifOperStatus[idx] != "up":
             continue
-        print("{} {} {}".format(m.ifDescr[idx],
-                                m.ifInOctets[idx],
-                                m.ifOutOctets[idx]))
+        print("{} {} {}".format(
+            m.ifDescr[idx],
+            m.ifInOctets[idx],
+            m.ifOutOctets[idx]))
 
 You can also use a list comprehension:
 
     ::python
     load("IF-MIB")
-    print("\n".join([ "{} {} {}".format(m.ifDescr[idx],
-                                        m.ifInOctets[idx],
-                                        m.ifOutOctets[idx])
-                      for idx in m.ifDescr
-                      if m.ifDescr[idx] != "lo"
-                      and m.ifOperStatus[idx] == "up" ]))
+    print("\n".join([
+        "{} {} {}".format(
+            m.ifDescr[idx],
+            m.ifInOctets[idx],
+            m.ifOutOctets[idx])
+        for idx in m.ifDescr
+        if m.ifDescr[idx] != "lo"
+        and m.ifOperStatus[idx] == "up" ]))
 
 Here is another simple example to get the routing database from the
 agent:
