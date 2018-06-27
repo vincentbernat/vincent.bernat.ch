@@ -105,13 +105,13 @@ place :
 
     ::console
     root@c1# xorpsh
-    root@c1$ show ospf4 neighbor   
+    root@c1$ show ospf4 neighbor
       Address         Interface             State      ID              Pri  Dead
     192.168.11.11    eth0/eth0              Full      3.0.0.1          128    36
     192.168.12.22    eth1/eth1              Full      3.0.0.2          128    33
     192.168.101.133  eth2/eth2              Full      2.0.0.3          128    36
     192.168.102.122  eth3/eth3              Full      2.0.0.2          128    38
-    root@c1$ show route table ipv4 unicast ospf   
+    root@c1$ show route table ipv4 unicast ospf
     192.168.1.0/24  [ospf(110)/2]
                     > to 192.168.11.11 via eth0/eth0
     192.168.2.0/24  [ospf(110)/2]
@@ -187,9 +187,9 @@ façon à gagner les élections.
 [2]: [[!!images/vxlan/multicast-rp.png]] "C3 a été élu RP"
 
     ::console
-    root@e1$ show pim rps   
-    RP              Type      Pri Holdtime Timeout ActiveGroups GroupPrefix       
-    192.168.101.133 bootstrap 100      150     135            0 239.0.0.0/8       
+    root@e1$ show pim rps
+    RP              Type      Pri Holdtime Timeout ActiveGroups GroupPrefix
+    192.168.101.133 bootstrap 100      150     135            0 239.0.0.0/8
 
 Supposons maintenant que nous démarrons `iperf` sur `R2` et `R3`. À
 l'aide d'IGMP, ils s'inscrivent au groupe `239.0.0.11` auprès de `E2`
@@ -204,13 +204,13 @@ paquets multicast pour `239.0.0.11` : il les envoie vers les feuilles.
 [3]: [[!!images/vxlan/multicast-rptree.png]] "Arbre partagé unidirectionnel pour 239.0.0.11"
 
     ::console
-    root@e3$ show pim join   
+    root@e3$ show pim join
     Group           Source          RP              Flags
-    239.0.0.11      0.0.0.0         192.168.101.133 WC   
+    239.0.0.11      0.0.0.0         192.168.101.133 WC
         Upstream interface (RP):   eth2
         Upstream MRIB next hop (RP): 192.168.23.133
         Upstream RPF'(*,G):        192.168.23.133
-        Upstream state:            Joined 
+        Upstream state:            Joined
         Join timer:                5
         Local receiver include WC: O...
         Joins RP:                  ....
@@ -283,16 +283,16 @@ sur l'interface qui le lie à `C3` et l'autre sur l'interface qui le
 lie à `C1` :
 
     ::console
-    root@e1$ show pim join   
+    root@e1$ show pim join
     Group           Source          RP              Flags
-    239.0.0.11      192.168.1.1     192.168.101.133 SG SPT DirectlyConnectedS 
+    239.0.0.11      192.168.1.1     192.168.101.133 SG SPT DirectlyConnectedS
         Upstream interface (S):    eth0
         Upstream interface (RP):   eth1
         Upstream MRIB next hop (RP): 192.168.11.111
         Upstream MRIB next hop (S):  UNKNOWN
         Upstream RPF'(S,G):        UNKNOWN
-        Upstream state:            Joined 
-        Register state:            RegisterPrune RegisterCouldRegister 
+        Upstream state:            Joined
+        Register state:            RegisterPrune RegisterCouldRegister
         Join timer:                7
         KAT(S,G) running:          true
         Local receiver include WC: ....
@@ -323,15 +323,15 @@ lie à `C1` :
         PIM include WC:            ....
         PIM include SG:            ....
         PIM exclude SG:            ....
-    root@e1$ show pim mfc  
-    Group           Source          RP             
+    root@e1$ show pim mfc
+    Group           Source          RP
     239.0.0.11      192.168.1.1     192.168.101.133
         Incoming interface :      eth0
         Outgoing interfaces:      .OO.
     root@e1$ exit
     [Connection to XORP closed]
     root@e1# ip mroute
-    (192.168.1.1, 239.0.0.11)        Iif: eth0       Oifs: eth1 eth2 
+    (192.168.1.1, 239.0.0.11)        Iif: eth0       Oifs: eth1 eth2
 
 ## Mise en place de VXLAN
 
@@ -349,13 +349,13 @@ des commandes suivantes :
 
     ::console
     root@rX# ./ip link add vxlan42 type vxlan id 42 \
-    >                               group 239.0.0.42 \
-    >                               ttl 10 dev eth0
+    >           group 239.0.0.42 \
+    >           ttl 10 dev eth0
     root@rX# ip link set up dev vxlan42
     root@rX# ./ip -d link show vxlan42
-    10: vxlan42: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1460 qdisc noqueue state UNKNOWN mode DEFAULT 
+    10: vxlan42: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1460 qdisc noqueue state UNKNOWN mode DEFAULT
     link/ether 3e:09:1c:e1:09:2e brd ff:ff:ff:ff:ff:ff
-    vxlan id 42 group 239.0.0.42 dev eth0 port 32768 61000 ttl 10 ageing 300 
+    vxlan id 42 group 239.0.0.42 dev eth0 port 32768 61000 ttl 10 ageing 300
 
 Ajoutons une IP dans `192.168.99.0/24` pour chaque routeur et
 vérifions le bon fonctionnement avec `ping` :
@@ -364,7 +364,7 @@ vérifions le bon fonctionnement avec `ping` :
     root@r1# ip addr add 192.168.99.1/24 dev vxlan42
     root@r2# ip addr add 192.168.99.2/24 dev vxlan42
     root@r3# ip addr add 192.168.99.3/24 dev vxlan42
-    root@r1# ping 192.168.99.2                    
+    root@r1# ping 192.168.99.2
     PING 192.168.99.2 (192.168.99.2) 56(84) bytes of data.
     64 bytes from 192.168.99.2: icmp_req=1 ttl=64 time=3.90 ms
     64 bytes from 192.168.99.2: icmp_req=2 ttl=64 time=1.38 ms
@@ -398,8 +398,8 @@ FDB de l'interface VXLAN (qui se comporte comme un switch) :
 
     ::console
     root@r1# ../bridge/bridge fdb show vxlan42
-    3e:09:1c:e1:09:2e dev vxlan42 dst 192.168.2.2 self 
-    0e:98:40:c6:58:10 dev vxlan42 dst 192.168.3.3 self 
+    3e:09:1c:e1:09:2e dev vxlan42 dst 192.168.2.2 self
+    0e:98:40:c6:58:10 dev vxlan42 dst 192.168.3.3 self
 
 # Démonstration
 
