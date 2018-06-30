@@ -6,7 +6,7 @@ tags:
 ---
 
 Here is the short version: to get better performance on your TLS
-terminator, use [stud][stud] on 64bit system with patch from
+terminator, use [stud][stud] on 64-bit system with patch from
 [Émeric Brun for TLS session reuse][studsslreuse] with some AES cipher
 suite (128 or 256, does not really matter), without DHE, on as many
 cores as needed, a key size of 1024 bits unless more is needed.
@@ -57,7 +57,7 @@ balancer (even if you know
 
 There are a lot of knobs you can use to get better performances from
 TLS: choosing the best **implementation**, using more **CPU cores**,
-switching to **64bit** system, choosing the right **cipher suite** and
+switching to **64-bit** system, choosing the right **cipher suite** and
 the appropriate **key size** and enabling a **session cache**.
 
 We will consider three TLS terminators. They all use OpenSSL under
@@ -145,7 +145,7 @@ TPS on one core. During the tests, it was never the bottleneck.
 ## Implementation
 
 We run a first bench to compare *nginx*, *stud* and *stunnel* on one
-core. This bench runs on a 32bit system, with AES128-SHA1 cipher suite
+core. This bench runs on a 32-bit system, with AES128-SHA1 cipher suite
 and a 1024bit key size. Here is the result for *stud* (version 0.1,
 with [Émeric Brun's patch for TLS session reuse][studsslreuse]):
 
@@ -230,20 +230,20 @@ As you can see in the plot above, only *stud* is able to scale
 properly. *stunnel* is not able to take advantage of the cores and its
 performances are worse than with a single core. I think this may be
 due to its threaded model and the fact that the userland for this
-32bit system is a bit old. *nginx* is able to achieve the same TPS
+32-bit system is a bit old. *nginx* is able to achieve the same TPS
 than *stud* but is disqualified because of the increased latency. We
 won't use *stunnel* in the remaining tests.
 
-## 32bit vs 64bit
+## 32-bit vs 64-bit
 
-The easiest way to achieve a performance boost is to switch to a 64bit
-system. TPS are doubled. On our 64bit system, thanks to the use of a
+The easiest way to achieve a performance boost is to switch to a 64-bit
+system. TPS are doubled. On our 64-bit system, thanks to the use of a
 version of OpenSSL with the appropriate support, AES-NI, a CPU
 extension to improve the speed of AES encryption/decryption, is
-enabled. Remaining tests are done with a 64bit system.
+enabled. Remaining tests are done with a 64-bit system.
 
-![stud vs nginx, 64bit][s4]
-[s4]: [[!!images/benchs-ssl/64bit.png]] "Performances of stud and nginx on a 64bit system"
+![stud vs nginx, 64-bit][s4]
+[s4]: [[!!images/benchs-ssl/64bit.png]] "Performances of stud and nginx on a 64-bit system"
 
 ## Ciphers and key sizes
 
@@ -277,14 +277,14 @@ enabled.
 
 Here is a summary of the maximum TPS reached during the benchmark
 (with an average response time below 100ms). Our control use case is
-the following: 64bit, 6 cores, AES128, SHA1, 1024bit key, 4 requests
+the following: 64-bit, 6 cores, AES128, SHA1, 1024bit key, 4 requests
 into the same TLS session.
 
 Context                     | nginx 1.0.5 | stunnel 4.41  | stud 0.1 ([patched][studsslreuse])
 --------------------------- | ----------- | ------------- | ----------------------------------
-1 core, 32bit               | 512 TPS     | 503 TPS       | 766 TPS
-2 cores, 32bit              | 599 TPS     | -             | -
-32bit                       | 804 TPS     | 501 TPS       | 4251 TPS
+1 core, 32-bit              | 512 TPS     | 503 TPS       | 766 TPS
+2 cores, 32-bit             | 599 TPS     | -             | -
+32-bit                      | 804 TPS     | 501 TPS       | 4251 TPS
 -                           | **1799 TPS**| -             | **9000 TPS**
 AES256                      | -           | -             | 8880 TPS
 RC4-MD5                     | -           | -             | 7370 TPS
