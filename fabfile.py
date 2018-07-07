@@ -233,7 +233,7 @@ Info:    {infostring}""".format(**row)
 (p) Browse {parentname}
 (r) Replace by your own URL
 (q) Quit""".format(**row)
-            valid = "cbqr"
+            valid = "cbprq"
             for a in archive:
                 print "({}) Browse {}".format(a, archive[a])
                 print "({}) Replace by {}".format(a.upper(), archive[a])
@@ -259,6 +259,8 @@ Info:    {infostring}""".format(**row)
                 break
             elif ans == "b":
                 local("x-www-browser {}".format(row['urlname']))
+            elif ans == "p":
+                local("x-www-browser {}".format(row['parentname']))
             elif ans == "R":
                 local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
                     row['urlname'], row['urlname'], redirected))
