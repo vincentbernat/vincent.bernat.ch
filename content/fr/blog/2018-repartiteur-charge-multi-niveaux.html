@@ -56,9 +56,15 @@ Dans cet article, je décris une solution à multiples niveaux utilisant Linux e
 des composants open-source. Cela offre une base pour construire une couche
 d'équilibrage de charge prête à la production.
 
-!!! "Mise à jour (05.2018)" Facebook vient juste de publier [Katran][], un
+!!! "Mise à jour (05.2018)" Facebook vient de publier [Katran][], un
 répartiteur de charge L4 utilisant XDP et eBPF ainsi que du hachage cohérent. Il
 pourrait s'insérer dans la configuration décrite ci-dessous.
+
+!!! "Update (08.2018)" GitHub vient de publier [GLB Director][], un répartiteur
+de charge L4 avec un [algorithme de hachage][rendez-vous hashing] sélectionnant
+un couple de répartiteurs L7. À l'aide d'un module *Netfilter*, le premier
+membre redirige le flux vers le second lorsqu'il ne trouve pas d'entrée
+correspondante dans sa table de connexions.
 
 [^morningpaper]: Un bon résumé de ce papier est fait par [Adrian Colyer][]. Du
     même auteur, jetez aussi un œil sur le résumé de « [Stateless datacenter
@@ -594,6 +600,8 @@ apportent de la stabilité, rendant l'ensemble plus robuste.
 [GitHub repository]: https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb "Fichiers de configuration pour une répartition de charge à 4 niveaux"
 [Inju Song]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=039f32e8cdea29b4d0680df7a83817b5ec4166e1 "netfilter: ipvs: Add Maglev hashing scheduler"
 [Katran]: https://code.facebook.com/posts/1906146702752923 "Open-sourcing Katran, a scalable network load balancer"
+[GLB Director]: https://github.com/github/glb-director "GitHub Load Balancer Director"
+[rendez-vous hashing]: https://en.wikipedia.org/wiki/Rendezvous_hashing "Rendezvous hashing sur Wikipedia"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
