@@ -384,7 +384,6 @@ def build():
 def push():
     """Push built site to production"""
     local("git push github")
-    local("git push ace.luffy.cx")
 
     # media.luffy.cx
     local("rsync --exclude=.git --copy-unsafe-links -rc .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
