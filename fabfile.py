@@ -385,8 +385,14 @@ def push():
     """Push built site to production"""
     local("git push github")
 
-    # media.luffy.cx
-    local("rsync --exclude=.git --copy-unsafe-links -rc .final/media/ ace.luffy.cx:/srv/www/luffy/media/")
+    hosts = ["web01.luffy.cx", "web02.luffy.cx"]
+
+    # media
+    for host in hosts:
+        local("rsync --exclude=.git --copy-unsafe-links -rc "
+              ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
 
     # HTML
-    local("rsync --exclude=.git --copy-unsafe-links -rc .final/ ace.luffy.cx:/srv/www/luffy/")
+    for host in hosts:
+        local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rc "
+              ".final/ {}:/data/webserver/vincent.bernat.im/".format(host))
