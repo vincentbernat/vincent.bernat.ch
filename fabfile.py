@@ -143,6 +143,7 @@ def upload_videos(video=None):
     # <CORSConfiguration>
     #  <CORSRule>
     #    <AllowedOrigin>https://vincent.bernat.im</AllowedOrigin>
+    #    <AllowedOrigin>https://vincent.bernat.ch</AllowedOrigin>
     #    <AllowedMethod>GET</AllowedMethod>
     #  </CORSRule>
     # </CORSConfiguration>
@@ -195,7 +196,7 @@ def linkcheck(remote='yes', verbose='no'):
         result = local("linkchecker -f ./linkcheckerrc {} {}".format(
             verbose == 'yes' and '--verbose' or '',
             remote == 'yes' and
-            'https://vincent.bernat.im/' or
+            'https://vincent.bernat.ch/' or
             'http://localhost:8080/'))
     if result.failed:
         fixlinks()
@@ -395,4 +396,4 @@ def push():
     # HTML
     for host in hosts:
         local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rc "
-              ".final/ {}:/data/webserver/vincent.bernat.im/".format(host))
+              ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))

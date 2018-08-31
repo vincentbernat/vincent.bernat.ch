@@ -1,8 +1,8 @@
-vincent.bernat.im
+vincent.bernat.ch
 =================
 
 This is the source code of my website. You can find the result at
-<http://vincent.bernat.im>. I am using [Hyde][hyde], a static website
+<http://vincent.bernat.ch>. I am using [Hyde][hyde], a static website
 generator written in Python.
 
 Licensing is described in `content/en/licenses.html`.
