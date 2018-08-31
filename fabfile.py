@@ -95,8 +95,7 @@ def screenshots():
 # Encoding of videos needs to be done with video2hls.
 """
 while read video arguments; do
-  video2hls --hls-playlist-prefix https://luffy-video.sos-ch-dk-2.exo.io/${video%.*}/ \
-                                  https://luffy-video.s3.eu-central-1.amazonaws.com/${video%.*}/ \
+  video2hls --hls-playlist-prefix https://video.luffy.cx/${video%.*}/ \
     $=arguments $video
 done <<EOF
 2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
@@ -139,53 +138,23 @@ EOF
 @task
 def upload_videos(video=None):
     """Upload a transcoded video."""
-    # Bucket needs to exist with CORS configuration:
-    # <CORSConfiguration>
-    #  <CORSRule>
-    #    <AllowedOrigin>https://vincent.bernat.im</AllowedOrigin>
-    #    <AllowedOrigin>https://vincent.bernat.ch</AllowedOrigin>
-    #    <AllowedMethod>GET</AllowedMethod>
-    #  </CORSRule>
-    # </CORSConfiguration>
     path = 'content/media/videos'
     for directory in os.listdir(path):
         if not os.path.isfile(os.path.join(path, directory, 'index.m3u8')):
             continue
         if video is not None and video != directory:
             continue
-        for extension, mime, gz in (
-                ('m3u8', 'application/vnd.apple.mpegurl', True),
-                ('jpg', 'image/jpeg', False),
-                ('mp4', 'video/mp4', False),
-                ('ts', 'video/mp2t', False)):
-            more = ""
-
-            # If needed, gzip
-            if gz:
-                local(r"""find %s -type f -name *.%s | while read f; do
-   ! gunzip -t $f 2> /dev/null || continue
-   gzip $f
-   mv $f.gz $f
-done""" % (os.path.join(path, directory), extension))
-                more += "--add-header=Content-Encoding:'gzip'"
-            local("s3cmd --no-preserve -F -P --rr"
-                  " {more}"
-                  " --mime-type={mime}"
-                  " --encoding=UTF-8"
-                  " --exclude=* --include=*.{extension}"
-                  " --delete-removed"
-                  "   sync {directory}/. s3://luffy-video/{short}/".format(
-                      more=more,
-                      short=directory,
-                      directory=os.path.join(path, directory),
-                      extension=extension,
-                      mime=mime))
-
+        # Upload
+        for host in hosts:
+            local("rsync -a {directory}/ {host}:/data/webserver/video.luffy.cx/{short}/".format(
+                host=host,
+                short=directory,
+                directory=os.path.join(path, directory)))
         # Copy poster and index.m3u8
         local("cp {directory}/poster.jpg content/media/images/posters/{short}.jpg".format(
             short=directory,
             directory=os.path.join(path, directory)))
-        local("gunzip -c {directory}/index.m3u8 > content/media/videos/{short}.m3u8".format(
+        local("cp {directory}/index.m3u8 content/media/videos/{short}.m3u8".format(
             short=directory,
             directory=os.path.join(path, directory)))
 
