@@ -169,6 +169,12 @@ class ImageFixerPlugin(Plugin):
                 path = self.site.config.media_root_path.child(path)
                 image = self.site.content.resource_from_relative_deploy_path(
                     path)
+            elif src.startswith(self.site.media_url('videos/')):
+                path = src[len(self.site.media_url('videos/')) -
+                           len('videos/'):]
+                path = self.site.config.media_root_path.child(path)
+                image = self.site.content.resource_from_relative_deploy_path(
+                    path)
             elif re.match(r'([a-z]+://|//).*', src):
                 # Not a local link
                 return None
@@ -311,7 +317,8 @@ class ImageFixerPlugin(Plugin):
                 m3u8.attr.type = 'application/vnd.apple.mpegurl'
                 img.append(m3u8)
                 progressive = pq('<source>')
-                progressive.attr.src = 'https://media.luffy.cx/videos/{}/progressive.mp4'.format(id)
+                progressive.attr.src = self.site.media_url(
+                    'videos/{}/progressive.mp4'.format(id))
                 progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
                 img.append(progressive)
 
