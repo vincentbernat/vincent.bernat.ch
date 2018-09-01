@@ -20,11 +20,10 @@ def decorate_media_url(media_url):
     def wrapper(site, path, safe=None):
         if path.startswith("files/") or path.startswith("videos/"):
             # Don't use CDN for those big files
-            if safe is not None:
-                path = quote(path, safe)
-            else:
-                path = quote(path)
-            return Folder(NOCDN).child(path).encode("utf-8")
+            base = NOCDN.encode('utf-8')
+            path = path.strip().replace(os.sep, '/').encode('utf-8')
+            path = quote(path, safe) if safe is not None else quote(path)
+            return base.rstrip('/') + '/' + path.lstrip('/')
         return media_url(site, path, safe)
     return wrapper
 
