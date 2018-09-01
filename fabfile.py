@@ -95,7 +95,7 @@ def screenshots():
 # Encoding of videos needs to be done with video2hls.
 """
 while read video arguments; do
-  video2hls --hls-playlist-prefix https://video.luffy.cx/${video%.*}/ \
+  video2hls --hls-playlist-prefix https://media.luffy.cx/videos/${video%.*}/ \
     $=arguments $video
 done <<EOF
 2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
@@ -146,7 +146,7 @@ def upload_videos(video=None):
             continue
         # Upload
         for host in hosts:
-            local("rsync -a {directory}/ {host}:/data/webserver/video.luffy.cx/{short}/".format(
+            local("rsync -a {directory}/ {host}:/data/webserver/media.luffy.cx/videos/{short}/".format(
                 host=host,
                 short=directory,
                 directory=os.path.join(path, directory)))

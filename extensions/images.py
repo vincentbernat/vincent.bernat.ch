@@ -311,7 +311,7 @@ class ImageFixerPlugin(Plugin):
                 m3u8.attr.type = 'application/vnd.apple.mpegurl'
                 img.append(m3u8)
                 progressive = pq('<source>')
-                progressive.attr.src = 'https://video.luffy.cx/{}/progressive.mp4'.format(id)
+                progressive.attr.src = 'https://media.luffy.cx/videos/{}/progressive.mp4'.format(id)
                 progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
                 img.append(progressive)
 
