@@ -18,6 +18,7 @@ env.command_prefixes = ['export PATH=$HOME/.virtualenvs/hyde/bin:$PATH']
 
 conf = "site-production.yaml"
 media = yaml.load(file(conf))['media_url']
+hosts = ["web01.luffy.cx", "web02.luffy.cx", "web03.luffy.cx"]
 
 def _hyde(args):
     return local('hyde -x %s' % args)
@@ -354,8 +355,6 @@ def build():
 def push():
     """Push built site to production"""
     local("git push github")
-
-    hosts = ["web01.luffy.cx", "web02.luffy.cx"]
 
     # media
     for host in hosts:
