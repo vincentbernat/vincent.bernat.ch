@@ -77,7 +77,7 @@ expliquer les concepts essentiels. Le labo s'appuie sur des machines
 QEMU. Mon [article précédent][] contient plus de détails à ce sujet.
 
 ![Labo VXLAN][1]
-[1]: [[!!images/vxlan/lab.png]] "Topologie du labo VXLAN"
+[1]: [[!!images/vxlan/lab.svg]] "Topologie du labo VXLAN"
 
 Les fichiers nécessaires pour installer ce labo sont hébergés
 sur [GitHub][]. Pour faciliter les choses, le noyau que j'utilise est
@@ -184,7 +184,7 @@ pour devenir point de rendez-vous. De plus, `C3` est configuré de
 façon à gagner les élections.
 
 ![Élection du RP][2]
-[2]: [[!!images/vxlan/multicast-rp.png]] "C3 a été élu RP"
+[2]: [[!!images/vxlan/multicast-rp.svg]] "C3 a été élu RP"
 
     ::console
     root@e1$ show pim rps
@@ -201,7 +201,7 @@ est `C3`. Chaque routeur de l'arbre sait alors comment envoyer des
 paquets multicast pour `239.0.0.11` : il les envoie vers les feuilles.
 
 ![Arbre partagé unidirectionnel][3]
-[3]: [[!!images/vxlan/multicast-rptree.png]] "Arbre partagé unidirectionnel pour 239.0.0.11"
+[3]: [[!!images/vxlan/multicast-rptree.svg]] "Arbre partagé unidirectionnel pour 239.0.0.11"
 
     ::console
     root@e3$ show pim join
@@ -239,7 +239,7 @@ envoyer via l'arbre partagé unidirectionnel construit lors de l'étape
 précédente afin que `R2` et `R3` les réceptionnent.
 
 ![Routage multicast via le RP][4]
-[4]: [[!!images/vxlan/multicast-register.png]] "R1 envoie des paquets multicast pour 239.0.0.11 via le RP"
+[4]: [[!!images/vxlan/multicast-register.svg]] "R1 envoie des paquets multicast pour 239.0.0.11 via le RP"
 
     ::console
     root@r1# iperf -c 239.0.0.11 -u -b 10k -t 30 -T 10
@@ -274,7 +274,7 @@ messages _(S,G) join_.
            bascule dès le premier paquet reçu.
 
 ![Routage multicast sans passer par le RP][5]
-[5]: [[!!images/vxlan/multicast-native.png]] "R1 envoie des paquets multicast pour 239.0.0.11 sans passer par le RP"
+[5]: [[!!images/vxlan/multicast-native.svg]] "R1 envoie des paquets multicast pour 239.0.0.11 sans passer par le RP"
 
 Chaque routeur situé dans l'arbre sait alors comment router les
 paquets de `R1` à destination du groupe sans utiliser le RP. Par
