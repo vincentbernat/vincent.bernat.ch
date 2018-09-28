@@ -1,10 +1,10 @@
 {# -*- web -*- #}
 
 {# List blog posts pertaining to a given language #}
-{% macro list_posts(lang) %}
+{% macro list_posts(lang, nb=-1) %}
 <ul class="lf-list-titles robots-noindex">
 {% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
-{% for resource in sort -%}
+{% for resource in sort[:nb] -%}
   <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
     <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
     {{ resource_short_date(resource) }}
@@ -17,7 +17,12 @@
 {% macro list_tags(lang) %}
 
 <div class="lf-list-tags">
-{% for tag, resources in site.tagger.tags|sort %}
+{% set tags = [] %}
+{% for tag, resources in site.tagger.tags %}
+{% do tags.append((site.tagger.tags[tag].order, tag)) %}
+{% endfor %}
+{% for tag in tags|sort %}
+{% set tag = tag[1] %}
 {% set rr = [] %}
 {% for resource in site.content.walk_resources_tagged_with(tag)
    if resource.meta.language == lang %}
