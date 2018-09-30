@@ -19,7 +19,7 @@
 <div class="lf-list-tags">
 {% set tags = [] %}
 {% for tag, resources in site.tagger.tags %}
-{% do tags.append((site.tagger.tags[tag].order, tag)) %}
+{% do tags.append((site.tagger.tags[tag].order or 0, tag)) %}
 {% endfor %}
 {% for tag in tags|sort %}
 {% set tag = tag[1] %}
@@ -31,11 +31,17 @@
 {% if rr %}
 <div class="lf-tag" id="tag-{{tag}}">
   <div class="lf-one-tag">
-    {{ site.tagger.tags[tag]|attr("descr_" + lang)|e }}{{ site.tagger.tags[tag].descr|e }}
+    {%- set tag = tag|string() %}
+    {%- set subtags = tag.split("-") %}
+    {%- for subtag in subtags -%}
+      {%- set subtag = subtags[:loop.index]|join('-') -%}
+      {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
+      {%- if not loop.last %} > {% endif -%}
+    {%- endfor -%}
   </div>
   <ul class="lf-list-titles robots-noindex">
     {% for resource in rr %}
-    <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag|string() != "outdated" %} class="lf-outdated"{% endif %}>
+    <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag != "outdated" %} class="lf-outdated"{% endif %}>
         <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
         {{ resource_short_date(resource) }}
     </li>
