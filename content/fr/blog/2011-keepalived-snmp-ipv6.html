@@ -1,14 +1,14 @@
 ---
-title: 'Support SNMP pour keepalived'
+title: 'Support SNMP pour Keepalived'
 uuid: 12d51063-f3e8-442a-9e28-8f61c5436d08
 attachments:
   "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-snmp": "Lab complet"
-  "https://github.com/vincentbernat/keepalived/tree/snmp": "Source de keepalived avec support SNMP"
+  "https://github.com/vincentbernat/keepalived/tree/snmp": "Source de Keepalived avec support SNMP"
 tags:
   - network-snmp
 ---
 
-[keepalived][keepalived] est une solution de haute disponibilité et de
+[Keepalived][keepalived] est une solution de haute disponibilité et de
 répartition de charge. [VRRP][vrrp] est utilisé pour partager une
 adresse IP entre différents routeurs. À un moment donné, un seul
 d'entre eux dispose de cette IP. Il s'agit du routeur *maître*. Les
@@ -23,9 +23,9 @@ grappe et de deux bases de données tout en essayant de ne pas faire
 tourner les bases de données sur les mêmes serveurs que les frontaux
 web ». Dans ce cas, [heartbeat][ha] est une solution plus appropriée.
 
-Pour la répartition de charge, *keepalived* s'appuie sur [IPVS][ipvs],
+Pour la répartition de charge, *Keepalived* s'appuie sur [IPVS][ipvs],
 un sous-système du noyau Linux pouvant effectuer de la répartition de
-charge TCP et UDP. *keepalived* va vérifier si les services vers
+charge TCP et UDP. *Keepalived* va vérifier si les services vers
 lesquels les requêtes doivent être réparties sont fonctionnels et
 configurer IPVS correctement. IPVS va ensuite choisir pour chaque
 requête entrante le serveur qui va s'en occuper selon une politique
@@ -34,23 +34,23 @@ que l'on peut configurer. La plus courante est la politique
 la seconde sur le second et ainsi de suite. Quand on arrive au bout de
 la chaîne, on recommence depuis le début.
 
-# keepalived & SNMP
+# Keepalived & SNMP
 
-Afin de pouvoir interroger *keepalived* en SNMP, j'ai ajouté un support
-complet de SNMP directement dans *keepalived*. Ce support n'est pas
+Afin de pouvoir interroger *Keepalived* en SNMP, j'ai ajouté un support
+complet de SNMP directement dans *Keepalived*. Ce support n'est pas
 encore intégré dans les sources officielles. En
 attendant, il est possible de récupérer
-[les sources complètes de *keepalived* avec support SNMP][source] depuis
+[les sources complètes de *Keepalived* avec support SNMP][source] depuis
 GitHub. Celles-ci sont actuellement synchronisées avec la dernière
-version disponible de *keepalived*.
+version disponible de *Keepalived*.
 
-!!! "Mise à jour (03.2014)" Le support de SNMP dans *keepalived* a été inclu dans la version 1.2.5.
+!!! "Mise à jour (03.2014)" Le support de SNMP dans *Keepalived* a été inclu dans la version 1.2.5.
 
 Voici ce que l'on peut faire avec un tel support :
 
- - récupérer la configuration complète de *keepalived* sans avoir besoin
+ - récupérer la configuration complète de *Keepalived* sans avoir besoin
    d'analyser le fichier de configuration ;
- - récupérer l'état de *keepalived* (le statut des instances VRRP,
+ - récupérer l'état de *Keepalived* (le statut des instances VRRP,
    l'état des frontaux) sans regarder les logs ;
  - récupérer des statistiques sur les serveurs virtuels (nombre de
    connexions envoyées sur tel frontal) sans avoir à interpréter la
@@ -84,9 +84,9 @@ commande à la place de `make`:
 
 Avant de pouvoir profiter du support SNMP, il faut vérifier la
 présence de la ligne `master agentx` dans `snmpd.conf`. Cette ligne
-permet à des programmes comme *keepalived* de se connecter à l'agent
+permet à des programmes comme *Keepalived* de se connecter à l'agent
 principal (`snmpd`) et d'en étendre les fonctionnalités. Ensuite,
-*keepalived* doit être lancé avec l'option `-x`. On doit trouver une
+*Keepalived* doit être lancé avec l'option `-x`. On doit trouver une
 ligne de ce type dans les logs:
 
     May 28 17:21:19 L1 Keepalived_vrrp: NET-SNMP version 5.4.3 AgentX subagent connected
@@ -95,7 +95,7 @@ ligne de ce type dans les logs:
 AgentX est normalement asynchrone. Toutefois, la vérification
 régulière de la connexion avec cet agent s'effectue de manière
 synchrone. Cela signifie que si celui-ci ne répond pas rapidement,
-*keepalived* peut se retrouver bloqué, ce qui est critique pour la
+*Keepalived* peut se retrouver bloqué, ce qui est critique pour la
 partie VRRP. Il est possible de réduire ce problème en
 [appliquant certaines contre-mesures][workarounds].
 
@@ -103,21 +103,21 @@ partie VRRP. Il est possible de réduire ce problème en
 
 ## Lab
 
-Pour mettre en œuvre *keepalived*, nous allons monter un lab avec
+Pour mettre en œuvre *Keepalived*, nous allons monter un lab avec
 UML. Pour mieux comprendre en quoi cela consiste, je vous invite à
 lire mon article précédent sur
 [comment créer un lab réseau avec UML][lab1]. Les
 [sources pour ce lab][lab2] sont sur GitHub. Changez dès maintenant le
-chemin vers les sources de *keepalived* en tête du script `setup`.
+chemin vers les sources de *Keepalived* en tête du script `setup`.
 
-![keepalived & SNMP lab][1]
-[1]: [[!!images/keepalived-lab.svg]] "Utilisation typique de keepalived"
+![Keepalived & SNMP lab][1]
+[1]: [[!!images/keepalived-lab.svg]] "Utilisation typique de Keepalived"
 
 Le lab comprend quatre serveurs web qui seront vus comme un unique
-service virtuel grâce à *keepalived*. Étant donné que ce dernier
+service virtuel grâce à *Keepalived*. Étant donné que ce dernier
 supporte désormais l'IPv6, nous allons aussi faire un peu d'IPv6.
 
-Voici la configuration VRRP du premier *keepalived* :
+Voici la configuration VRRP du premier *Keepalived* :
 
     ::junos
     vrrp_instance VI_1 {
@@ -254,7 +254,7 @@ Enfin, il est possible de grapher le nombre de connexions par seconde
 à l'aide [d'un script basé sur `rrdtool`][rrd]. Voici le graphique que
 nous obtenons :
 
-![graphique obtenu avec rrdtool depuis des données récupérées via l'agent SNMP de keepalived][2]
+![graphique obtenu avec rrdtool depuis des données récupérées via l'agent SNMP de Keepalived][2]
 [2]: [[!!images/keepalived-rrd.png]] "Utilisation de rrdtool avec des valeurs récupérées via SNMP"
 
 [keepalived]: http://www.keepalived.org/ "Keepalived"
