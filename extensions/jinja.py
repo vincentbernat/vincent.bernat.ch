@@ -16,7 +16,7 @@ def same_tag(resource, attribute, skip=0):
     """
     tags = {t.name
             for t in getattr(resource, 'tags', [])
-            if t.name != 'outdated'}
+            if t.name != 'outdated' and t.name != 'unclassified'}
     candidate = resource
     while candidate:
         candidate = getattr(candidate, attribute, None)
