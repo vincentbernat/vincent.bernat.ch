@@ -36,7 +36,7 @@ class FootnotesPlugin(Plugin):
             sidenote = pq('<aside/>')
             sidenote.attr.role = "note"
             sidenote.attr['aria-hidden'] = "true"
-            sidenote.attr['hidden'] = "true"
+            sidenote.attr['hidden'] = "hidden"
             sidenote.attr.class_ = "lf-sidenote"
             sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
                 ref.text(), fn.html()))
