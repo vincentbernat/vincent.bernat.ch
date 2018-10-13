@@ -24,9 +24,11 @@
 {% for tag in tags|sort %}
 {% set tag = tag[1] %}
 {% set rr = [] %}
-{% for resource in site.content.walk_resources_tagged_with(tag)
-   if resource.meta.language == lang %}
+{% for resource in site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
+{% for rtag in resource.meta.tags
+   if rtag == tag or rtag.startswith(tag + "-") %}
 {% do rr.append(resource) %}
+{% endfor %}
 {% endfor %}
 {% if rr and tag|string() != "outdated" %}
 <div class="lf-tag" id="tag-{{tag}}">
