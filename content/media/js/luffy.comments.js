@@ -26,6 +26,7 @@ luffy.s.push(function() {
                     }
                 }
             };
+            script.integrity = script.dataset.integrity;
             script.src = script.dataset.src;
 	}
     }();
