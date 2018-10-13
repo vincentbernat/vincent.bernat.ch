@@ -257,6 +257,7 @@ def build():
     """Build production content"""
     local("[ $(git rev-parse --abbrev-ref HEAD) = master ]")
     local("rm -rf .final/*")
+    local("yarn install --frozen-lockfile")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
         # Fix HTML (<source> is an empty tag)
