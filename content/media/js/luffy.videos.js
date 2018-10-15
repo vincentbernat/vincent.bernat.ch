@@ -33,7 +33,7 @@ luffy.s.push(function() {
             }, false);
         });
     };
-    script.integrity = script.dataset.integrity;
+    script.integrity = script.dataset.integrity || "";
     script.src = script.dataset.src;
 });
 
