@@ -1,0 +1,285 @@
+---
+title: "BGP LLGR : sessions BGP fiables et réactives"
+description: |
+  En utilisant BGP en protocole de routage, nous avons deux objectifs :
+  la correction rapide des pannes et une fiabilité exemplaire. Ces deux
+  objectifs peuvent être antinomiques.
+uuid: 211f45c3-e333-4a02-aba0-71203aff588c
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-llgr": "Labo pour BGP LLGR"
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-llgr-rr": "Labo pour BGP LLGR avec RR"
+tags:
+  - network-bgp
+---
+
+Sur un réseau routé via BGP et disposant de multiples chemins
+redondants, deux objectifs concernant la fiabilité sont souvent
+recherchés :
+
+ 1. Un dysfonctionnement sur un chemin doit **rapidement faire
+    tomber** la session BGP correspondante. On s'attend généralement à
+    se remettre d'une telle défaillance en moins d'une seconde en
+    déviant le traffic vers les autres chemins disponibles.
+
+ 2. Aussi longtemps qu'un chemin est opérationnel, les sessions BGP
+    qui y sont liées doivent **rester fonctionnelles**, même sous la
+    pression.
+
+# Détection rapide des pannes : BFD
+
+Pour détecter rapidement une panne, BGP peut être associé à BFD, un
+protocole de détection d'anomalies sur les chemins
+bidirectionnels[^undetected], défini dans la [RFC 5880][] et la [RFC
+5882][]. BFD peut réagir sur des délais très courts, de l'ordre de
+100 ms.
+
+Toutefois, lorsque BFD est géré dans un processus au-dessus d'un noyau
+générique[^cp], notamment lorsque [BGP tourne sur l'hôte][running BGP
+on the host], il est possible de perdre quelques paquets BFD lorsque
+le système est sous pression : le démon gérant les sessions BFD peut
+manquer de CPU pour répondre dans le temps imparti. Dans ce scénario,
+il n'est pas rare que toutes les sessions BGP terminant sur l'hôte
+tombent au même moment, créant un incident comme illustré dans le
+dernier cas du diagramme ci-dessous.
+
+![Exemples de dysfonctionnements sur un réseau
+BGP]([[!!images/bgp-llgr-nollgr.svg]] "Exemples de dysfonctionnements
+sur un réseau utilisant BGP. Un problème sur un lien est détecté par
+BFD et le chemin défectueux est retiré de la route ECMP. Toutefois, en
+cas d'usage intensif du CPU sur le routeur du bas, les paquets BFD ne
+sont pas traités assez rapidement et tous les chemins disponibles sont
+disqualifiés.")
+
+[^undetected]: Avec des connexions point à point, BGP peut détecter
+    immédiatement un problème sans s'aider de BFD. Toutefois, sur une
+    paire de fibres, le souci peut être unidirectionnel et rester
+    invisible d'un des deux pairs pendant plusieurs secondes.
+
+[^cp]: Sur un Juniper MX, BFD est généralement géré directement par le
+    micro-noyau temps réel attaché aux cartes poussant les paquets. Le
+    datagramme BFD contient un bit indiquant si la gestion se fait au
+    plus bas niveau ou non. `tcpdump` permet de vérifier la valeur de
+    ce bit. Voici un exemple où `10.71.7.1` est un hôte Linux avec
+    *BIRD* et `10.71.0.3` est un Juniper MX :
+
+        ::console
+        $ sudo tcpdump -pni vlan181 port 3784
+        IP 10.71.7.1 > 10.71.0.3: BFDv1, Control, State Up, Flags: [none]
+        IP 10.71.0.3 > 10.71.7.1: BFDv1, Control, State Up, Flags: [Control Plane Independent]
+
+À ce niveau, nous avons donc deux possibilités apparemment irréconciliables :
+
+ - descendre le temps de détection de BFD pour rendre le réseau plus
+   réactif aux problèmes ;
+ - augmenter le temps de détection de BFD pour s'assurer que les
+   sessions BGP restent opérationnelles.
+
+# Correction des faux positifs : BGP LLGR
+
+*Long-lived BGP Graceful Restart* (BGP LLGR) est une nouvelle capacité
+pour BGP permettant de garder les **routes périmées** (*stale*)
+pendant une certaine période après la fin de la session BGP mais en
+les traitant avec une **préférence inférieure**. Une nouvelle
+communauté « bien connue » permet de partager cette information avec
+les autres routeurs. BGP LLGR est défini dans le document en cours de
+discussion [draft-uttaro-idr-bgp-persistence-04][] et plusieurs
+implémentations existent déjà :
+
+ - Juniper JunOS (depuis la version 15.1, voir la [documentation][junos]),
+ - Cisco IOS XR (uniquement pour les familles VPN et FlowSpec),
+ - BIRD (depuis les versions 1.6.5 and 2.0.3, encore non publiées, parrainé par
+   [Exoscale][]),
+ - GoBGP (depuis la version 1.33).
+
+L'illustration ci-dessous montre comment BGP LLGR permet de surmonter
+certains dysfonctionnements. En ❷, une anomalie sur un lien est
+détectée par BFD et le chemin correspondant est retiré de la route car
+il reste deux autres chemins avec une préférence supérieure. Quelques
+minutes plus tard, le délai de grâce expire et ce chemin ne sera plus
+utilisé du tout. Peu de temps après, le routeur du bas est victime
+d'une charge processeur élevée et ne peut plus gérer les paquets BFD
+dans un délai suffisant. Les sessions BGP tombent et les deux chemins
+restants sont marqués comme périmés. Toutefois, comme il n'existe plus
+aucun autre chemin, ils restent utilisés jusqu'à l'expiration du délai
+de grâce. Cela permet de laisser le temps aux sessions BGP de
+remonter.
+
+![BGP avec LLGR]([[!!images/bgp-llgr-llgr.svg]] "Exemples de
+dysfonctionnements sur un réseau utilisant BGP LLGR.")
+
+Du point de vue du routeur du haut, le premier chemin a été considéré
+comme périmé car la session BGP avec R1 a été rompue. Toutefois, lors
+du second incident, les deux chemins restants ont été marqués comme
+périmés via la communauté « bien connue » `LLGR_STALE` (65535:6) par
+R2 et R3.
+
+Un autre intérêt de BGP LLGR est de pouvoir **redémarrer le démon BGP
+sans impact**, tant que les chemins restent stables peu de temps avant
+et pendant le redémarrage. C'est particulièrement intéressant si [BGP
+tourne sur un hyperviseur][running BGP on the host][^gr].
+
+[^gr]: Une telle fonctionnalité est l'apanage de *BGP graceful
+    restart*. Toutefois, sans LLGR, les chemins non fonctionnels sont
+    gardés avec la même préférence et ne sont pas retirés des routes
+    ECMP.
+
+## BIRD
+
+Voyons comment configurer *BIRD* 1.6. Comme BGP LLGR se base sur une
+capacité similaire appelée *BGP graceful restart* (BGP GR) mais pour
+laquelle les routes sont gardées avec une préférence inchangée. Le
+minuteur pour LLGR démarre après expiration du minuteur pour GR.
+Aussi, il est important de configurer ce dernier à 0.
+
+    ::junos
+    template bgp BGP_LLGR {
+      bfd graceful;
+      graceful restart yes;
+      graceful restart time 0;
+      long lived graceful restart yes;
+      long lived stale time 120;
+    }
+
+Quand un souci survient sur un chemin, la session BGP se termine et
+le minuteur pour LLGR commence :
+
+    ::console hl_lines="13 16 17"
+    $ birdc show protocol R1_1 all
+    name     proto    table    state  since       info
+    R1_1     BGP      master   start  11:20:17    Connect
+      Preference:     100
+      Input filter:   ACCEPT
+      Output filter:  ACCEPT
+      Routes:         1 imported, 0 exported, 0 preferred
+      Route change stats:     received   rejected   filtered    ignored   accepted
+        Import updates:              2          0          0          0          4
+        Import withdraws:            0          0        ---          0          0
+        Export updates:             12         10          0        ---          2
+        Export withdraws:            1        ---        ---        ---          0
+      BGP state:          Connect
+        Neighbor address: 2001:db8:104::1
+        Neighbor AS:      65000
+        Neighbor graceful restart active
+        LL stale timer:   112/-
+
+Le chemin lié à cette session est marqué comme périmé (ce qui
+correspond au `s` dans `100s`) et la communauté `LLGR_STALE` est
+ajoutée :
+
+    ::console hl_lines="8 14"
+    $ birdc show route 2001:db8:10::1/128 all
+    2001:db8:10::1/128 via 2001:db8:204::1 on eth0.204 [R1_2 10:35:01] * (100) [i]
+            Type: BGP unicast univ
+            BGP.origin: IGP
+            BGP.as_path:
+            BGP.next_hop: 2001:db8:204::1 fe80::5254:3300:cc00:5
+            BGP.local_pref: 100
+                       via 2001:db8:104::1 on eth0.104 [R1_1 11:22:51] (100s) [i]
+            Type: BGP unicast univ
+            BGP.origin: IGP
+            BGP.as_path:
+            BGP.next_hop: 2001:db8:104::1 fe80::5254:3300:6800:5
+            BGP.local_pref: 100
+            BGP.community: (65535,6)
+
+La route transmise au noyau n'est plus composée que du chemin restant :
+
+    ::console
+    $ ip route show 2001:db8:10::1
+    2001:db8:10::1 via 2001:db8:204::1 dev eth0.204 proto bird metric 1024 pref medium
+
+Pour mettre à jour *BIRD* sans impact, il faut qu'il soit démarré avec
+le drapeau `-R` et la directive `graceful restart yes` pour les
+protocoles `kernel`. Avant la mise à jour, il faut arrêter *BIRD* avec
+`SIGKILL` plutôt que `SIGTERM` pour ne pas lui laisser l'occasion de
+fermer proprement les sessions BGP.
+
+## Juniper JunOS
+
+Avec *JunOS*, si BFD est déjà activé, il suffit d'activer BGP LLGR
+pour chaque famille :
+
+    ::junos
+    # Enable BGP LLGR
+    edit protocols bgp group peers family inet6 unicast
+    set graceful-restart long-lived restarter stale-time 2m
+
+Une fois qu'une erreur survient sur un chemin, la session BGP associée
+se termine et le minuteur BGP LLGR commence :
+
+    ::console hl_lines="5 10 16 24"
+    > show bgp neighbor 2001:db8:104::4
+    Peer: 2001:db8:104::4+179 AS 65000 Local: 2001:db8:104::1+57667 AS 65000
+      Group: peers                 Routing-Instance: master
+      Forwarding routing-instance: master
+      Type: Internal    State: Connect        Flags: <>
+      Last State: Active        Last Event: ConnectRetry
+      Last Error: None
+      Export: [ LOOPBACK NOTHING ]
+      Options: <Preference HoldTime Ttl AddressFamily Multipath Refresh>
+      Options: <BfdEnabled LLGR>
+      Address families configured: inet6-unicast
+      Holdtime: 6 Preference: 170
+      NLRI inet6-unicast:
+      Number of flaps: 2
+      Last flap event: Restart
+      Time until long-lived stale routes deleted: inet6-unicast 00:01:05
+      Table inet6.0 Bit: 20000
+        RIB State: BGP restart is complete
+        Send state: not advertising
+        Active prefixes:              0
+        Received prefixes:            1
+        Accepted prefixes:            1
+        Suppressed due to damping:    0
+        LLGR-stale prefixes:          1
+
+Le chemin défectueux est marqué comme périmé et devient inactif car il
+existe de meilleurs chemins disponibles :
+
+    ::console hl_lines="10 13 14"
+    > show route 2001:db8:10::4 extensive
+    […]
+    BGP    Preference: 170/-101
+           Source: 2001:db8:104::4
+           Next hop type: Router, Next hop index: 778
+           Next hop: 2001:db8:104::4 via em1.104, selected
+           Protocol next hop: 2001:db8:104::4
+           Indirect next hop: 0xb1d27c0 1048578 INH Session ID: 0x15c
+           State: <Int Ext>
+           Inactive reason: LLGR stale
+           Local AS: 65000 Peer AS: 65000
+           Age: 4  Metric2: 0
+           Communities: llgr-stale
+           Accepted LongLivedStale
+           Localpref: 100
+           Router ID: 1.0.0.4
+    […]
+
+Jetez un œil au [dépôt GitHub][GitHub repository] pour les
+configurations complètes ainsi que les sorties des différentes
+commandes pour vérifier que tout fonctionne. Il existe aussi une
+[variante][variant] qui utilise des réflecteurs de routes. Maintenant
+que [FRR implémente BFD][FRR got BFD support], j'espère qu'il
+supportera également LLGR.
+
+*[BGP]: Border Gateway Protocol
+*[LLGR]: Long Lived Graceful Restart
+*[GR]: Graceful Restart
+*[BFD]: Bidirectional Forwarding Detection
+*[CoS]: Class of Service
+*[ECMP]: Equal-Cost Multipath
+
+[running BGP on the host]: [[fr/blog/2018-routage-l3-hyperviseur.html]] "Routage L3 jusqu'à l'hyperviseur avec BGP"
+[RFC 5880]: https://tools.ietf.org/html/rfc5880 "RFC 5880: Bidirectional Forwarding Detection (BFD)"
+[RFC 5882]: https://tools.ietf.org/html/rfc5882 "RFC 5882: Generic Application of Bidirectional Forwarding Detection (BFD)"
+[draft-uttaro-idr-bgp-persistence-04]: https://tools.ietf.org/html/draft-uttaro-idr-bgp-persistence-04 "Support for Long-lived BGP Graceful Restart"
+[junos]: https://www.juniper.net/documentation/en_US/junos/topics/concept/bgp-long-lived-graceful-restart.html "Understanding the Long-Lived BGP Graceful Restart Capability"
+[GitHub repository]: https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-llgr "Labo pour BGP LLGR"
+[variant]: https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-llgr-rr "Labo pour BGP LLGR avec des réflecteurs de routes"
+[Exoscale]: https://www.exoscale.com "European Cloud Hosting"
+[FRR got BFD support]: http://docs.frrouting.org/en/latest/bfd.html "Bidirectional Forwarding Detection - FRR documentation"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
