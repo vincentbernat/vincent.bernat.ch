@@ -1,0 +1,219 @@
+---
+title: "Haute densité (HiDPI) avec deux écrans 4K sous Linux"
+description: |
+  J'ai acheté deux écrans haute densité Dell P2415Q pour ma station
+  de travail. Le support sous Linux avec X11 laisse toujours à désirer.
+uuid: f7942543-be8a-4733-b897-cab011639e7f
+cover: dual-dell-p2415q@2x.jpg
+tags:
+  - desktop
+---
+
+J'utilise un portable [Lenovo Thinkpad X1 Carbon][] (210 PPP) depuis
+quatre ans ainsi qu'un téléphone [Nokia 8][] (550 PPP) depuis un an.
+J'apprécie la haute densité de leurs écrans respectifs : le rendu du
+texte est excellent. Pour obtenir des résultats similaires avec ma
+station de travail, j'ai acheté une paire d'écrans [Dell P2415Q][] :
+
+![Two Dell P2415Q]([[!!images/dual-dell-p2415q@2x.jpg]] "Dual screen setup with two Dell P2415Q monitors")
+
+# Écrans
+
+Le *Dell P2415Q* est un écran 24" doté d'un panneau IPS d'une
+résolution de 3840×2160 (185 PPP) et une couverture complète de
+l'espace de couleurs sRGB. Il est sorti en 2015 et son prix est
+désormais sous la barre des 400 €. Il a reçu des [critiques
+positives][positive reviews].
+
+L'une des unités est arrivé avec un pixel mort. Je pensais qu'il
+s'agissait d'un problème du passé, mais la [politique de Dell
+concernant les pixels morts][Dell policy on dead pixels] stipule :
+
+> Lors du processus de fabrication des écrans LCD, un ou plusieurs
+> pixels se figent parfois dans un état immuable. Un écran comportant
+> de 1 à 5 sous-pixels figés est considéré comme normal et conforme
+> aux normes industrielles.
+
+Un deuxième problème est la présence de lignes grises horizontales
+(difficilement) visibles sur fond blanc. Le problème [ne semble pas
+être rare][not be uncommon], mais Dell est peu enthousiaste à ce
+sujet. Si je m'assois correctement, les lignes deviennent invisibles.
+
+Je suis un peu déçu par ces aspects, mais je pense qu'ils restent
+supportables et que c'est l'occasion de corriger mon obsession pour
+ces détails.
+
+# Carte graphique
+
+Pour piloter un écran 4K à 60 Hz, il faut au moins un connecteur [HDMI
+2.0][] ou [DisplayPort 1.2][]. Le *Dell P2415Q* a été [mis à niveau
+vers HDMI 2.0][upgraded to HDMI 2.0] en 2016 et dispose également
+d'une entrée DP 1.2. Il y a un port pour chaîner un second écran, mais
+en l'absence de prise en charge de DP 1.3, le taux de rafraîchissement
+tomberait à 30 Hz.
+
+Il n'y a actuellement aucune carte Radeon disponible autour de 100 €
+et capable de piloter deux écrans 4K. Côté Nvidia, la [GeForce GT
+1030][] convient avec une consommation de 20 W pour la version GDDR4.
+J'ai opté pour un [modèle à refroidissement passif de MSI][passively
+cooled model from MSI]. Sous Linux, le résultat est assez décevant :
+
+ - Le [pilote *nouveau*][nouveau driver] n'a encore qu'une [prise en
+   charge rudimentaire][rudimentary support] pour cette génération de
+   puces Nvidia. Le résultat est excessivement lent et le port
+   HDMI 2.0 n'est pas géré correctement.
+
+ - Le [pilote propriétaire Nvidia en version 390][proprietary Nvidia
+   driver version 390] présente des [problèmes de performance
+   importants][important performance issues] qui le rendent
+   inutilisable à ces résolutions. Avec la [version 396][], la
+   situation s'améliore, mais cela reste encore un peu poussif.
+   J'utilise [Compton][] comme compositeur et j'ai passé [beaucoup de
+   temps][a lot of time] à essayer d'obtenir de meilleures
+   performances en utilisant le backend OpenGL, sans succès. J'utilise
+   maintenant le backend *XRender*. Je dois aussi activer
+   [l'utilisation d'OpenGL][OpenGL compositing] dans Firefox.[^video]
+   Je n'ai pas encore testé la version 410.
+
+[^video]: Sans ce paramètre, il est impossible de lire une vidéo HD ou
+    4K dans Firefox. C'est un peu dommage que nous ne puissions
+    toujours [pas obtenir un rendu vidéo accéléré sous Linux][unable
+    to get accelerated video rendering on Linux] alors que d'autres
+    plates-formes ont cette fonctionnalité depuis longtemps. Pour
+    Chromium, des [patchs existent][patches exist] mais ne sont pas
+    acceptés.
+
+A l'avenir, je remplacerai peut-être cette carte par une Radeon. Il
+est difficile de déterminer si cela améliorera les
+performances,[^perf] mais le pilote `amdgpu` sera certainement plus
+stable et utilisable.
+
+[^perf]: Par rapport à ma configuration précédente, le nombre de
+    pixels est quadruplé. La carte utilise 4 voies sur PCI 3.0, ce qui
+    correspond à une bande passante de 25 Gbits/s. Cela permet à peine
+    le transfert de 7680×2160 pixels à 60 Hz en 24 bits. Ceci peut
+    expliquer la difficulté à lire des vidéos 4K sans accélération.
+
+# Prise en charge de la haute densité avec X11
+
+Gnome et KDE prennent désormais en charge les affichages à haute
+densité (*HiDPI*) sans configuration particulière sous X11. Pour les
+autres environnements, le paramétrage est assez simple, grâce à
+[xsettingsd][]. Le code suivant doit être invoqué à partir de
+`~/.xsession` ou lorsque la densité change :
+
+    ::shell
+    # Densité cible
+    dpi=192
+
+    # Pour les applications supportant XSettings, `Xft/DPI' indique
+    # l'échelle pour les fontes (et parfois pour le reste de l'interface),
+    # `Gdk/WindowScalingFactor' indique l'échelle pour l'interface avec
+    # GTK 3 et `Gdk/UnscaledDPI' annule l'échelle choisie pour les fontes
+    # pour les applications GTK 3.
+    > ~/.xsettingsd cat <<EOF
+    Xft/DPI $(( $dpi*1024 ))
+    Gdk/WindowScalingFactor $(( $dpi/96 ))
+    Gdk/UnscaledDPI $(( $dpi*1024/($dpi/96) ))
+    EOF
+    pkill -HUP xsettingsd || xsettingsd &
+
+    # Pour les applications QT.
+    export QT_AUTO_SCREEN_SCALE_FACTOR=1
+
+    # Pour certaines autres applications.
+    echo Xft.dpi: $dpi | xrdb -merge
+
+Ensuite, c'est à chaque application de savoir comment effectuer le
+rendu à la densité choisie. Le tableau ci-dessous donne un aperçu de
+la prise en charge pour certaines d'entre elles, en utilisant les
+paramètres ci-dessus. « *Échelle du texte* » indique si une
+application est capable d'adapter la taille du texte. C'est
+généralement la fonctionnalité la plus essentielle. « *Échelle de
+l'interface* » indique si elle est capable de mettre à l'échelle
+l'ensemble de l'interface, y compris les icônes. Idéalement, les
+applications devraient également être en mesure de changer
+dynamiquement leurs paramètres lorsqu'elles sont notifiées via
+*XSettings*, ce qui est utile lors du passage sur un écran externe.
+
+Application                   | Échelle du texte | Échelle de l'interface | Sans redémarrage ?
+--------------------          | ---------------- | ---------------------- | --------
+Applications QT 5             | 😀            | 😀                 | 😀
+Chromium[^chromium]           | 😀            | 😀                 | 😀
+Firefox                       | 😀            | 😀                 | 😞
+Blender[^blender]             | 😀            | 😀                 | 😞
+Emacs 26.1 (GTK 3)            | 😀            | 😐                 | 😀
+[Terminaux VTE][vte] (GTK 3)  | 😀            | 😐                 | 😀
+Applications GTK 3            | 😀            | 😐                 | 😀
+Gimp (GTK 2)                  | 😀            | 😞                 | 😀
+Inkscape (GTK 2)              | 😀            | 😞                 | 😀
+Applications GTK 2            | 😀            | 😞                 | 😀
+Applications Electron[^electron] | 🙄            | 🙄                 | 😞
+Applications Java[^java]      | 🙄            | 🙄                 | 😞
+xterm et rxvt                 | 😞            | 😞                 | 😞
+Autres applications           | 😞            | 😞                 | 😞
+
+[^chromium]: Pour détecter les changements, *Chromium* surveille les
+    évènements *RandR*. Ils peuvent être capturés avant d'avoir pu
+    mettre à jour les variables *XSettings*.
+
+[^blender]: *Blender* se base sur la valeur de la ressource `Xft.dpi`.
+
+[^electron]: Les applications Electron doivent être invoquées avec le
+    drapeau `--force-device-scale-factor=2`, sans quoi, aucune mise à
+    l'échelle n'est effectuée.
+
+[^java]: Les applications Java doivent être invoquées avec la variable
+    d'environnement `GDK_SCALE=2`, sans quoi, aucune mise à l'échelle
+    n'est effectuée.
+
+Les applications **QT 5** offrent une excellente prise en charge. Les
+applications **GTK 3** ne peuvent utiliser qu'un coefficient
+multiplicateur entier pour mettre à l'échelle leurs interfaces, ce qui
+est ennuyeux quand on a besoin d'un facteur 1.5×. Les applications
+**GTK 2** ne savent adapter que la taille du texte. Elles sont
+toujours assez nombreuses, avec notamment *Gimp*. Pour plus de
+détails, jetez un œil sur la page dédiée au sujet sur [ArchWiki][].
+Au-delà de X11, [Wayland][] permet d'utiliser une densité différente
+pour chaque écran et de mettre à l'échelle les applications qui ne
+savent pas prendre en charge les densités élevées.
+
+En conclusion, la situation actuelle dépend énormément des
+applications utilisées. Mes principales applications étant Firefox,
+Emacs et un terminal basé sur VTE, le résultat me satisfait.
+
+*[PPP]: Pixels par pouce
+*[IPS]: In-Plane Switching
+
+[Lenovo Thinkpad X1 Carbon]: https://www.thinkwiki.org/wiki/Category:X1_Carbon_2nd "ThinkPad X1 Carbon 2nd on ThinkWiki"
+[Nokia 8]: https://en.wikipedia.org/wiki/Nokia_8 "Nokia 8 on Wikipedia"
+[Dell P2415Q]: https://www.dell.com/en-us/shop/dell-24-ultra-hd-4k-monitor-p2415q/apd/210-agnk/monitors-monitor-accessories "Dell 24 Ultra HD 4K Monitor"
+[positive reviews]: https://pcmonitors.info/reviews/dell-p2415q/ "Dell P2415Q on PC Monitors"
+[Dell policy on dead pixels]: https://www.dell.com/support/article/us/en/19/sln130145/dell-lcd-display-pixel-guidelines?lang=fr "Instructions relatives aux pixels des écrans LCD de Dell"
+[not be uncommon]: https://www.dell.com/community/Desktops-General-Read-Only/P2415Q-faint-horizontal-grey-lines/td-p/5135894 "P2415Q, faint horizontal grey lines"
+[HDMI 2.0]: https://en.wikipedia.org/wiki/HDMI#Refresh_frequency_limits_for_standard_video "HDMI: Refresh frequency limits for standard video"
+[DisplayPort 1.2]: https://en.wikipedia.org/wiki/DisplayPort#Resolution_and_refresh_frequency_limits "DisplayPort: Refresh frequency limits"
+[upgraded to HDMI 2.0]: https://www.dell.com/support/article/us/en/19/sln306595/setting-up-the-p2415q-p2715q-monitors-with-hdmi-20-that-support-4k-x-2k-60hz?lang=en "Setting Up the P2415Q / P2715Q Monitors with HDMI 2.0 that Support 4K x 2K 60Hz"
+[GeForce GT 1030]: https://www.geforce.com/hardware/desktop-gpus/geforce-gt-1030/specifications "GeForce GT 1030 specifications"
+[passively cooled model from MSI]: https://www.msi.com/Graphics-card/GeForce-GT-1030-2GHD4-LP-OC "MSI GeForce GT 1030 2GHD4 LP OC"
+[nouveau driver]: https://nouveau.freedesktop.org "Nouveau: Accelerated Open Source driver for Nvidia cards"
+[rudimentary support]: https://archive.is/2018/https://nouveau.freedesktop.org/wiki/FeatureMatrix/ "Feature matrix for the nouveau driver"
+[important performance issues]: https://devtalk.nvidia.com/default/topic/1029484/linux/-various-all-distros-numerous-performance-amp-rendering-issues-on-390-25 "Numerous Performance & Rendering Issues on 390.25"
+[Compton]: https://github.com/chjj/compton/ "A compositor for X11"
+[OpenGL compositing]: https://wiki.archlinux.org/index.php/Firefox/Tweaks#Enable_OpenGL_Off-Main-Thread_Compositing_.28OMTC.29 "Firefox performance tweaks"
+[patches exist]: https://chromium-review.googlesource.com/c/chromium/src/+/532294 "Chromium: Enable VAVDA, VAVEA and VAJDA on linux with VAAPI only"
+[unable to get accelerated video rendering on Linux]: https://bugzilla.mozilla.org/show_bug.cgi?id=1210727 "Add VA-API hardware decoding support on Linux"
+[xsettingsd]: https://github.com/derat/xsettingsd "Provides settings to X11 applications via the XSETTINGS specification"
+[vte]: [[fr/blog/2017-ecrire-emulateur-terminal.html]] "Écrire son propre émulateur de terminal"
+[ArchWiki]: https://wiki.archlinux.org/index.php/HiDPI "HiDPI on ArchWiki"
+[Wayland]: https://wayland.freedesktop.org/ "Wayland"
+[a lot of time]: https://github.com/vincentbernat/awesome-configuration/commits/c7a3a44b378d6cca8de09b005d0200bc629e6796/xsession
+
+{# At some point, replace them with archive.is #}
+[proprietary Nvidia driver version 390]: https://packages.debian.org/buster/nvidia-driver "nvidia-driver (390.87-2) in Debian Buster"
+[version 396]: https://packages.debian.org/experimental/nvidia-driver "nvidia-driver (396.54-1)"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

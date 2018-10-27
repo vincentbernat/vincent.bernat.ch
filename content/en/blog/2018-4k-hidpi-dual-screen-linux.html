@@ -1,0 +1,198 @@
+---
+title: "HiDPI on dual 4K monitors with Linux"
+description: |
+  I have bought a pair of HiDPI Dell P2415Q monitors for my
+  workstation. Support in Linux with X11 is still not satisfactory.
+uuid: f7942543-be8a-4733-b897-cab011639e7f
+cover: dual-dell-p2415q@2x.jpg
+tags:
+  - desktop
+---
+
+I am using a [Lenovo Thinkpad X1 Carbon][] laptop (210 DPI) since four
+years and a [Nokia 8][] phone (550 DPI) since a year. I enjoy their
+HiDPI screens: text is crisp and easy to read. To get a similar
+experience for my workstation, I bought a pair of [Dell P2415Q][]
+monitors:
+
+![Two Dell P2415Q]([[!!images/dual-dell-p2415q@2x.jpg]] "Dual screen setup with two Dell P2415Q monitors")
+
+# Monitors
+
+The *Dell P2415Q* is a 24" display featuring an IPS panel with a
+3840×2160 resolution (185 DPI) and a complete coverage of the sRGB
+color space. It was released in 2015 and its price is now below $400.
+It received [positive reviews][].
+
+One of my units arrived with a dead pixel. I thought it was a problem
+from the past but [Dell policy on dead pixels][] says:
+
+> During LCD manufacturing process, it is not uncommon for one or more
+> sub-pixels to become fixed in an unchanging state. A display with a
+> 1 to 5 fixed sub-pixel is considered normal and within industry
+> standards.
+
+Another issue is the presence of faint horizontal grey lines, (barely)
+visible on white background. The issue seems to [not be uncommon][]
+but Dell is dismissive about it. If I sit correctly, the lines become
+invisible.
+
+I am a bit disappointed by these issues, but I think they are bearable
+and it is an opportunity to help fix my obsession over such details.
+
+# Graphic card
+
+To drive a 4K display at 60 Hz, you need at least either [HDMI 2.0][]
+or [DisplayPort 1.2][]. The *Dell P2415Q* has been [upgraded to HDMI
+2.0][] in 2016 and also provides a DP 1.2 input. There is a port for
+daisy-chaining a second monitor but, without support for DP 1.3, the
+refresh rate would drop to 30 Hz.
+
+There is currently no available Radeon card around $100 able to drive
+two 4K displays. On the Nvidia side, the [GeForce GT 1030][] fits the
+bill with a power consumption of 20 W for the GDDR4 version. I opted
+for a [passively cooled model from MSI][]. On Linux, the result is
+quite disappointing:
+
+ - The [nouveau driver][] has still [rudimentary support][] for the
+   this generation of Nvidia chips. The result was unbearably slow and
+   the HDMI 2.0 port was not handled correctly.
+
+ - The [proprietary Nvidia driver version 390][] exhibits [important
+   performance issues][] making it unusable at these resolutions. When
+   using [version 396][], the situation improves but it's still quite
+   laggy. I am using [Compton][] as a compositor and I spent [a lot of
+   time][] trying to get better performance using the OpenGL backend,
+   without any luck. I am now using the *XRender* backend. I also have
+   to enable [OpenGL compositing][] in Firefox.[^video] I didn't test
+   version 410 yet.
+
+[^video]: Without this setting, it's impossible to play an HD or a 4K
+    video in Firefox. This is a bit a pity we are still [unable to get
+    accelerated video rendering on Linux][] while other platforms have
+    this feature since a long time. For Chromium, [patches exist][]
+    but are left unapplied.
+
+In the future, I may replace this card with a Radeon one. While this
+may or may not improve performances[^perf], the `amdgpu` driver should
+be more stable and usable.
+
+[^perf]: Compared to my previous setup, the number of pixels is
+    quadrupled. The card is using 4-lane links over PCI 3.0 which
+    translates to a bandwidth of 25 Gbits/s. This barely allows the
+    transfer of 7680×2160 pixels at 60 Hz using 24-bit colors. This
+    may explain the difficulty to render unaccelerated 4K videos.
+
+# HiDPI support on Linux with X11
+
+Gnome and KDE now supports HiDPI displays out of the box when running
+with X11. For other environments, it's quite easy to setup, thanks to
+[xsettingsd][]. The following snippet should be invoked from
+`~/.xsession` or when the DPI value changes:
+
+    ::shell
+    # Target DPI
+    dpi=192
+
+    # For applications supporting XSettings, `Xft/DPI' sets font scaling
+    # (and sometimes interface scaling), `Gdk/WindowScalingFactor' sets
+    # interface scaling with GTK 3, and `Gdk/UnscaledDPI' undo font scaling
+    # for GTK 3 applications.
+    > ~/.xsettingsd cat <<EOF
+    Xft/DPI $(( $dpi*1024 ))
+    Gdk/WindowScalingFactor $(( $dpi/96 ))
+    Gdk/UnscaledDPI $(( $dpi*1024/($dpi/96) ))
+    EOF
+    pkill -HUP xsettingsd || xsettingsd &
+
+    # For QT applications.
+    export QT_AUTO_SCREEN_SCALE_FACTOR=1
+
+    # For miscellaneous applications.
+    echo Xft.dpi: $dpi | xrdb -merge
+
+Then, it is up to each application to know how to render on a HiDPI
+display. The table below gives an overview of HiDPI support for
+various ones, using the above settings. "*Text scaling*" indicates if
+an application is able to adapt the font size. This is usually the
+most essential feature. "*Interface scaling*" tells if it is able to
+scale the whole interface, including the icons. Ideally, applications
+are also expected to be able to dynamically update scaling when
+notified through *XSettings*, which is useful when switching to an
+external display.
+
+Application                   | Text scaling | Interface scaling | No restart needed?
+--------------------          | ------------ | ----------------- | --------
+Most QT 5 apps                | 😀            | 😀                 | 😀
+Chromium[^chromium]           | 😀            | 😀                 | 😀
+Firefox                       | 😀            | 😀                 | 😞
+Blender[^blender]             | 😀            | 😀                 | 😞
+Emacs 26.1 (GTK 3)            | 😀            | 😐                 | 😀
+[VTE terminals][vte] (GTK 3)  | 😀            | 😐                 | 😀
+Most GTK 3 apps               | 😀            | 😐                 | 😀
+Gimp (GTK 2)                  | 😀            | 😞                 | 😀
+Inkscape (GTK 2)              | 😀            | 😞                 | 😀
+Most GTK 2 apps               | 😀            | 😞                 | 😀
+Most Electron apps[^electron] | 🙄            | 🙄                 | 😞
+Most Java apps[^java]         | 🙄            | 🙄                 | 😞
+xterm and rxvt                | 😞            | 😞                 | 😞
+Most other applications       | 😞            | 😞                 | 😞
+
+[^chromium]: To detect changes, *Chromium* watches for *RandR* events.
+    They may be caught before *XSettings* variables are updated.
+
+[^blender]: *Blender* relies on the `Xft.dpi` resource value.
+
+[^electron]: Electron applications need to be invoked with the
+    `--force-device-scale-factor=2` flag. Otherwise, they don't scale.
+
+[^java]: Java applications need to be invoked with the `GDK_SCALE=2`
+    environment variable. Otherwise, they don't scale.
+
+**QT 5** applications offer a very good support. **GTK 3**
+applications can currenly only scale their interfaces using an integer
+factor, which is annoying when you need an 1.5× factor. **GTK 2**
+applications will only scale the text and there are still many of
+them—notably *Gimp*. For more details, have a look at the dedicated
+page on [ArchWiki][]. Beyond X11, [Wayland][] is able to provide
+per-monitor scaling and to scale applications without HiDPI support.
+
+In conclusion, today's situation still depends heavily on the
+applications you run. As I spend most of my time in a VTE terminal, in
+Emacs and in Firefox, I am mostly happy with the result.
+
+*[DPI]: Dots per inch
+*[IPS]: In-Plane Switching
+
+[Lenovo Thinkpad X1 Carbon]: https://www.thinkwiki.org/wiki/Category:X1_Carbon_2nd "ThinkPad X1 Carbon 2nd on ThinkWiki"
+[Nokia 8]: https://en.wikipedia.org/wiki/Nokia_8 "Nokia 8 on Wikipedia"
+[Dell P2415Q]: https://www.dell.com/en-us/shop/dell-24-ultra-hd-4k-monitor-p2415q/apd/210-agnk/monitors-monitor-accessories "Dell 24 Ultra HD 4K Monitor"
+[positive reviews]: https://pcmonitors.info/reviews/dell-p2415q/ "Dell P2415Q on PC Monitors"
+[Dell policy on dead pixels]: https://www.dell.com/support/article/us/en/19/sln130145/dell-lcd-display-pixel-guidelines?lang=en "Dell LCD Display Pixel Guidelines"
+[not be uncommon]: https://www.dell.com/community/Desktops-General-Read-Only/P2415Q-faint-horizontal-grey-lines/td-p/5135894 "P2415Q, faint horizontal grey lines"
+[HDMI 2.0]: https://en.wikipedia.org/wiki/HDMI#Refresh_frequency_limits_for_standard_video "HDMI: Refresh frequency limits for standard video"
+[DisplayPort 1.2]: https://en.wikipedia.org/wiki/DisplayPort#Resolution_and_refresh_frequency_limits "DisplayPort: Refresh frequency limits"
+[upgraded to HDMI 2.0]: https://www.dell.com/support/article/us/en/19/sln306595/setting-up-the-p2415q-p2715q-monitors-with-hdmi-20-that-support-4k-x-2k-60hz?lang=en "Setting Up the P2415Q / P2715Q Monitors with HDMI 2.0 that Support 4K x 2K 60Hz"
+[GeForce GT 1030]: https://www.geforce.com/hardware/desktop-gpus/geforce-gt-1030/specifications "GeForce GT 1030 specifications"
+[passively cooled model from MSI]: https://www.msi.com/Graphics-card/GeForce-GT-1030-2GHD4-LP-OC "MSI GeForce GT 1030 2GHD4 LP OC"
+[nouveau driver]: https://nouveau.freedesktop.org "Nouveau: Accelerated Open Source driver for Nvidia cards"
+[rudimentary support]: https://archive.is/2018/https://nouveau.freedesktop.org/wiki/FeatureMatrix/ "Feature matrix for the nouveau driver"
+[important performance issues]: https://devtalk.nvidia.com/default/topic/1029484/linux/-various-all-distros-numerous-performance-amp-rendering-issues-on-390-25 "Numerous Performance & Rendering Issues on 390.25"
+[Compton]: https://github.com/chjj/compton/ "A compositor for X11"
+[OpenGL compositing]: https://wiki.archlinux.org/index.php/Firefox/Tweaks#Enable_OpenGL_Off-Main-Thread_Compositing_.28OMTC.29 "Firefox performance tweaks"
+[patches exist]: https://chromium-review.googlesource.com/c/chromium/src/+/532294 "Chromium: Enable VAVDA, VAVEA and VAJDA on linux with VAAPI only"
+[unable to get accelerated video rendering on Linux]: https://bugzilla.mozilla.org/show_bug.cgi?id=1210727 "Add VA-API hardware decoding support on Linux"
+[xsettingsd]: https://github.com/derat/xsettingsd "Provides settings to X11 applications via the XSETTINGS specification"
+[vte]: [[en/blog/2017-write-own-terminal.html]] "Write your own terminal emulator"
+[ArchWiki]: https://wiki.archlinux.org/index.php/HiDPI "HiDPI on ArchWiki"
+[Wayland]: https://wayland.freedesktop.org/ "Wayland"
+[a lot of time]: https://github.com/vincentbernat/awesome-configuration/commits/c7a3a44b378d6cca8de09b005d0200bc629e6796/xsession
+
+{# At some point, replace them with archive.is #}
+[proprietary Nvidia driver version 390]: https://packages.debian.org/buster/nvidia-driver "nvidia-driver (390.87-2) in Debian Buster"
+[version 396]: https://packages.debian.org/experimental/nvidia-driver "nvidia-driver (396.54-1)"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
