@@ -66,7 +66,6 @@ location = /favicon.ico {
   rewrite ^  /media/images/favicon.ico break;
 }
 
-{# do not log #}
 {% for res in resource.node.walk_resources() %}
 {% if res.meta.nolog %}
 location = {{ content_url(res.url) }} {
@@ -76,6 +75,12 @@ location = {{ content_url(res.url) }} {
 location = {{ content_url(res.url) }}.html {
   access_log off;
   log_not_found off;
+}
+{% endif %}
+{% if res.meta.mime %}
+location = {{ content_url(res.url) }} {
+  types { }
+  default_type {{ res.meta.mime }};
 }
 {% endif %}
 {% endfor %}
