@@ -245,7 +245,7 @@ class ImageFixerPlugin(Plugin):
                                   u'<div>{}</div>'.format(c.text),
                                   ratio=False)
                 c.text = d.html()
-            return u'<?xml version="1.0" encoding="utf-8"?>\n{}'.format(
+            return u'<?xml version="1.0" encoding="UTF-8"?>\n{}'.format(
                 ET.tostring(root, encoding='utf-8').decode('utf-8'))
         if not resource.source_file.kind == 'html':
             return
