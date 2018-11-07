@@ -374,3 +374,13 @@ def push():
     for host in hosts:
         local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rc "
               ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
+
+@task
+def analytics():
+    """Get some stats"""
+    local("for h in {};"
+          "do ssh $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
+          "   | grep -v atom.xml;"
+          "done"
+          " | goaccess --ignore-crawlers --http-protocol=no --log-format=COMBINED"
+          "".format(" ".join(hosts)))
