@@ -17,6 +17,9 @@ luffy.s.push(function() {
             // Replace video tag with our clone.
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
+            // Add an empty source (enable play event on Chromium 72+)
+            newVideo.src = "about:blank";
+
             // Pass control to hls.js
             var play = function() {
                 if (once) return;
@@ -32,7 +35,6 @@ luffy.s.push(function() {
                 once = true;
             };
             newVideo.addEventListener('play', play, false);
-            newVideo.addEventListener('click', play, false);
         });
     };
     script.integrity = script.dataset.integrity || "";
