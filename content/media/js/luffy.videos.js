@@ -18,7 +18,7 @@ luffy.s.push(function() {
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
             // Pass control to hls.js
-            newVideo.addEventListener('play', function() {
+            var play = function() {
                 if (once) return;
                 var hls = new Hls({
                     capLevelToPlayerSize: true,
@@ -30,7 +30,9 @@ luffy.s.push(function() {
                     newVideo.play();
                 });
                 once = true;
-            }, false);
+            };
+            newVideo.addEventListener('play', play, false);
+            newVideo.addEventListener('click', play, false);
         });
     };
     script.integrity = script.dataset.integrity || "";
