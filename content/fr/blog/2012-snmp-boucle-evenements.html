@@ -1,12 +1,12 @@
 ---
-title: "Intégration de Net-SNMP dans une boucle d'événements"
+title: "Intégration de Net-SNMP dans une boucle d'évènements"
 uuid: 48576890-3afb-4b5b-91b9-c168ccd23a80
 tags:
   - network-snmp
   - programming-c
 ---
 
-_Net-SNMP_ utilise sa propre [boucle d'événements][event loop] basée
+_Net-SNMP_ utilise sa propre [boucle d'évènements][event loop] basée
 sur l'appel système `select()`. Bien qu'il soit possible de l'utiliser
 dans un programme tiers, on lui préfère généralement sa propre boucle
 ou des bibliothèques telles que [libevent][], [libev][] ou
@@ -17,7 +17,7 @@ ou des bibliothèques telles que [libevent][], [libev][] ou
 # Boucle d'évènements propre
 
 Commençons par le cas le plus simple : vous avez mis en place votre
-propre boucle d'événements à l'aide de `select()`, `poll()`,
+propre boucle d'évènements à l'aide de `select()`, `poll()`,
 `epoll()`, `kqueue()` ou quelque chose de similaire. Toutes ces
 fonctions prennent un ensemble de descripteurs de fichiers et
 attendent un certain temps que l'un d'eux devienne actif.
@@ -124,18 +124,18 @@ _manager_ :
  - [Keepalived](https://github.com/vincentbernat/keepalived/blob/snmp/lib/scheduler.c#L501-L701)
  - [PowerDNS](https://github.com/PowerDNS/pdns/blob/0e663c3b059c1618c99dec6f19f3a3bad32d10c6/pdns/snmp-agent.cc)
 
-# Boucle d'événements tierce
+# Boucle d'évènements tierce
 
-Avec une boucle d'événements tierce, il n'est plus possible d'accéder
+Avec une boucle d'évènements tierce, il n'est plus possible d'accéder
 directement à l'appel système `select()` afin de l'altérer avec
 `snmp_select_info()`. Au lieu de cela, il convient, à chaque
 itération, de maintenir une liste des descripteurs de fichiers liés à
 SNMP en s'aidant de `snmp_select_info()`: les nouveaux descripteurs
-sont ajoutés à la boucle d'événements et les anciens sont retirés.
+sont ajoutés à la boucle d'évènements et les anciens sont retirés.
 
 ## libevent
 
-Supposons que `snmp_fds` est la liste des événements liés à SNMP que
+Supposons que `snmp_fds` est la liste des évènements liés à SNMP que
 nous souhaitons tenir à jour[^base]. Voici un exemple de fonction pour
 remplir cette tâche. Il s'agit d'une version partielle omettant
 certaines déclarations et la gestion des erreurs. Reportez-vous ci
@@ -183,7 +183,7 @@ issue de [lldpd][]:
         evtimer_add(snmp_timeout, block?NULL:&timeout);
     }
 
-[^base]: La liste des événements liés à SNMP est globale mais il est
+[^base]: La liste des évènements liés à SNMP est globale mais il est
          possible de maintenir une liste par base si nécessaire. Ce
          n'est pas nécessaire dans le cas de _lldpd_ qui n'utilise
          qu'une seule base.
@@ -200,7 +200,7 @@ La boucle principale est généralement un appel à
         levent_snmp_update();
     } while (event_base_loop(base, EVLOOP_ONCE) == 0);
 
-Voici comme sont définies les deux fonctions attachées aux événements
+Voici comme sont définies les deux fonctions attachées aux évènements
 mis en place:
 
     ::c
@@ -226,7 +226,7 @@ mis en place:
 Comme second exemple, nous allons voir comment intégrer _Net-SNMP_ dans
 le réacteur de [Twisted][]. _Twisted_ est un ensemble de composants
 pour la programmation réseau basé sur le paradigme
-événementiel. Fourni avec le support de nombreux protocoles, il n'y a
+évènementiel. Fourni avec le support de nombreux protocoles, il n'y a
 cependant rien pour SNMP[^twistedsnmp]. _Twisted_ étant écrit en
 Python, l'interface avec _Net-SNMP_ doit se faire à l'aide d'une
 extension en C ou en utilisant le module `ctypes`[^ffi].
@@ -239,8 +239,8 @@ extension en C ou en utilisant le module `ctypes`[^ffi].
 [^ffi]: Actuellement, il serait préférable d'utiliser [CFFI](https://cffi.readthedocs.org/en/latest/).
 
 
-La boucle d'événements de _Twisted_ est appelée le réacteur. Comme
-pour _libevent_, chaque événement doit etre y être enregistré. Il est
+La boucle d'évènements de _Twisted_ est appelée le réacteur. Comme
+pour _libevent_, chaque évènement doit etre y être enregistré. Il est
 possible d'y inscrire des descripteurs de fichiers en implémentant une
 classe respectant une certaine interface. Voici un exemple
 d'implémentation tiré de _PyNet-SNMP_, un sous-projet de [Zenoss][],
@@ -261,7 +261,7 @@ utilisant le module `ctypes` :
             return self.fd
 
 Comme pour _libevent_, nous avons besoin d'une fonction pour mettre à
-jour la liste des événements liés à SNMP (il s'agit ici d'un
+jour la liste des évènements liés à SNMP (il s'agit ici d'un
 dictionnaire associant un descripteur de fichier avec l'instance
 `SnmpReader` correspondante) :
 
@@ -304,7 +304,7 @@ Pour un autre exemple, le lecteur intéressé pourra consulter
 
 ## Asynchronicité défaillante
 
-Intégrer _Net-SNMP_ dans un programme reposant sur les événements n'est
+Intégrer _Net-SNMP_ dans un programme reposant sur les évènements n'est
 pas sans risque. Le lecteur souhaitant intégrer la fonctionnalité
 d'agent SNMP dans un programme existant est invité à lire de toute
 urgence mon article sur le
@@ -390,7 +390,7 @@ sessions SNMP utilisées.
 La partie agent de _Net-SNMP_ n'est disponible que via la première API.
 
 [RFC 5343]: https://tools.ietf.org/html/rfc5343 "RFC 5343: SNMP Context EngineID Discovery"
-[event loop]: https://fr.wikipedia.org/wiki/Programmation_%C3%A9v%C3%A9nementielle "Programmation événementielle sur Wikipédia"
+[event loop]: https://fr.wikipedia.org/wiki/Programmation_%C3%A9v%C3%A9nementielle "Programmation évènementielle sur Wikipédia"
 [lack]: [[fr/blog/2012-snmp-async-agentx.html]] "De la non asynchronicité du protocole AgentX dans Net-SNMP"
 [3446148]: https://sourceforge.net/p/net-snmp/bugs/2310/ "snmp_async_send() blocks during SNMPv3 probe"
 [workaround]: https://www.mail-archive.com/net-snmp-coders@lists.sourceforge.net/msg18746.html "Workaround for snmp_async_send() and SNMPv3"
