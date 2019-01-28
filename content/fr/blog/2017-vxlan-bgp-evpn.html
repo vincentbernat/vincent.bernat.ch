@@ -103,7 +103,7 @@ routes de type 2 pour partager MAC et IP, mobilité des adresses MAC
 quand un hôte passe d'un VTEP à un autre) et ne nécessite que peu de
 configuration.
 
-Il s'agit d'un dérivé de [Quagga][] et est utilisé extensivement
+Il s'agit d'un dérivé de [Quagga][] et était utilisé extensivement
 dans [Cumulus Linux][], une distribution réseau basée sur Debian et
 animant diverses marques de commutateurs. Dans le futur,
 l'implémentation de BGP EVPN [sera reversé][pr-evpn] au projet [FRR][], un dérivé
@@ -129,7 +129,7 @@ actuellement en compte qu'IPv4.
 Avant de configurer les VTEP, nous devons configurer les
 réflecteurs. Plusieurs solutions sont possibles, dont :
 
- - *Cumulus Quagga*,
+ - *Cumulus Quagga* ou *FRR*,
  - *GoBGP*, une implémentation de BGP en Go,
  - *Juniper JunOS*.
 
@@ -142,7 +142,7 @@ centraliser les politiques de distributions sur les réflecteurs (par
 exemple, les routes présentant telle communauté ne doivent être
 redistribuées que sur un certain type de VTEP).
 
-## Quagga
+## Quagga (ou FRR)
 
 La configuration est simple. Le réflecteur utilise l'adresse
 `203.0.113.254`.
@@ -329,9 +329,9 @@ hyperviseurs.
     brctl addif br100 vnet11
     brctl addif br200 vnet12
 
-La configuration de *Cumulus Quagga* est similaire à celle d'un
-réflecteur mais la directive `advertise-all-vni` indique à *Quagga* de
-publier l'ensemble des VNI présents localement :
+La configuration de *Cumulus Quagga* (ou *FRR*) est similaire à celle
+d'un réflecteur mais la directive `advertise-all-vni` indique à
+*Quagga* de publier l'ensemble des VNI présents localement :
 
     ::quagga hl_lines="14"
     router bgp 65000

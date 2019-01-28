@@ -96,7 +96,7 @@ BGP EVPN (type 3 routes for VTEP discovery, type 2 routes with MAC or
 IP addresses, MAC mobility when a host changes from one VTEP to
 another one) which requires very little configuration.
 
-This is a fork of [Quagga][] and currently used in [Cumulus Linux][],
+This is a fork of [Quagga][] and was used in [Cumulus Linux][],
 a network operating system based on Debian powering switches from
 various brands. At some point, BGP EVPN support will be [contributed
 back][pr-evpn] to [FRR][], a community-maintained fork of *Quagga*.[^fork]
@@ -120,7 +120,7 @@ currently only supports IPv4.
 Before configuring each VTEP, we need to configure two or more route
 reflectors. There are many solutions. I will present three of them:
 
- - using *Cumulus Quagga*,
+ - using *Cumulus Quagga* or *FRR*,
  - using *GoBGP*, an implementation of BGP in Go,
  - using *Juniper JunOS*.
 
@@ -132,7 +132,7 @@ The proposed configurations are quite minimal. However, it is possible
 to centralize policies on the route reflectors (e.g. routes tagged
 with some community can only be readvertised to some group of VTEPs).
 
-## Using Quagga
+## Using Quagga (or FRR)
 
 The configuration is pretty simple. We suppose the configured route
 reflector has `203.0.113.254` configured as a loopback IP.
@@ -311,9 +311,9 @@ FDBs between the hypervisors.
     brctl addif br100 vnet11
     brctl addif br200 vnet12
 
-The configuration of *Cumulus Quagga* is similar to the one used for a
-route reflector, except we use the `advertise-all-vni` directive to
-publish all local VNIs.
+The configuration of *Cumulus Quagga* (or *FRR*) is similar to the one
+used for a route reflector, except we use the `advertise-all-vni`
+directive to publish all local VNIs.
 
     ::quagga hl_lines="14"
     router bgp 65000
