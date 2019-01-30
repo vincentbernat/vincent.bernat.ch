@@ -51,12 +51,14 @@ location = / {
   if ($http_accept_language ~* ^{{code}}) {
     add_header Vary Accept-Language;
     add_header "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
+    http2_push  /{{code}};
     rewrite ^ /{{code}} permanent;
   }
 {% endfor %}
 {# If not found in the first language, redirect to english #}
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
+  http2_push  /en;
   rewrite ^   /en permanent;
 }
 
