@@ -48,18 +48,15 @@ location {{content_url('/' + code + '/404.html')}} {
 {% endfor %}
 location = / {
 {% for code, lang in languages %}
+  set $lang en;
   if ($http_accept_language ~* ^{{code}}) {
-    add_header Vary Accept-Language;
-    add_header "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
-    http2_push  /{{code}};
-    rewrite ^ /{{code}} permanent;
+    set $lang {{code}};
   }
 {% endfor %}
-{# If not found in the first language, redirect to english #}
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
-  http2_push  /en;
-  rewrite ^   /en permanent;
+  http2_push  /$lang;
+  rewrite ^   /$lang permanent;
 }
 
 {# redirections #}
