@@ -37,9 +37,6 @@ location = /nginx.conf {
 {% for code, lang in languages %}
 location /{{code}} {
   error_page 404 {{content_url('/' + code + '/404.html')}};
-{# TODO: http2_push for these rewrites? #}
-  rewrite ^(.*)/index\.html$ $1 permanent;
-  rewrite ^(.*)\.html$ $1 permanent;
   try_files $uri.html $uri $uri/index.html =404;
 }
 location {{content_url('/' + code + '/404.html')}} {
@@ -68,20 +65,34 @@ location = /favicon.ico {
 }
 
 {% for res in resource.node.walk_resources() %}
-{% if res.meta.nolog %}
-location = {{ content_url(res.url) }} {
-  access_log off;
-  log_not_found off;
-}
+{# redirect .html to non .html #}
+{% if res.url.endswith(".html") %}
+{% if res.url.endswith("/index.html") %}
+location = {{ content_url(res.url) }}/index.html {
+{% else %}
+{# regular pages #}
 location = {{ content_url(res.url) }}.html {
+{% endif %}
+{% if res.meta.nolog %}
   access_log off;
   log_not_found off;
+{% endif %}
+  rewrite ^.*$ {{ content_url(res.url) }} permanent;
+  http2_push {{ content_url(res.url) }};
 }
 {% endif %}
-{% if res.meta.mime %}
+{# handle exceptions #}
+{% if res.meta.nolog or res.meta.mime %}
 location = {{ content_url(res.url) }} {
+{% if res.meta.nolog %}
+  access_log off;
+  log_not_found off;
+{% endif %}
+{% if res.meta.mime %}
   types { }
   default_type {{ res.meta.mime }};
+{% endif %}
+  try_files $uri.html $uri $uri/index.html;
 }
 {% endif %}
 {% endfor %}
