@@ -63,24 +63,20 @@ location = /favicon.ico {
   expires     60d;
   rewrite ^  /media/images/favicon.ico break;
 }
-
-{% for res in resource.node.walk_resources() %}
-{# redirect .html to non .html #}
-{% if res.url.endswith(".html") %}
-{% if res.url.endswith("/index.html") %}
-location = {{ content_url(res.url) }}/index.html {
-{% else %}
-{# regular pages #}
-location = {{ content_url(res.url) }}.html {
-{% endif %}
-{% if res.meta.nolog %}
+location ~ ^(?<canonical>.*)/index\.html$ {
+  rewrite ^ $canonical permanent;
+  http2_push $canonical;
   access_log off;
   log_not_found off;
-{% endif %}
-  rewrite ^.*$ {{ content_url(res.url) }} permanent;
-  http2_push {{ content_url(res.url) }};
 }
-{% endif %}
+location ~ ^(?<canonical>.*)\.html$ {
+  rewrite ^ $canonical permanent;
+  http2_push $canonical;
+  access_log off;
+  log_not_found off;
+}
+
+{% for res in resource.node.walk_resources() %}
 {# handle exceptions #}
 {% if res.meta.nolog or res.meta.mime %}
 location = {{ content_url(res.url) }} {
