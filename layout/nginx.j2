@@ -56,7 +56,7 @@ location = / {
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
   http2_push  /$lang;
-  rewrite ^   /$lang permanent;
+  return 301  /$lang;
 }
 
 {# redirections #}
@@ -65,16 +65,16 @@ location = /favicon.ico {
   rewrite ^  /media/images/favicon.ico break;
 }
 location ~ ^(?<canonical>.*)/index\.html$ {
-  rewrite ^ $canonical permanent;
-  http2_push $canonical;
   access_log off;
   log_not_found off;
+  http2_push $canonical;
+  return 301 $canonical;
 }
 location ~ ^(?<canonical>.*)\.html$ {
-  rewrite ^ $canonical permanent;
-  http2_push $canonical;
   access_log off;
   log_not_found off;
+  http2_push $canonical;
+  return 301 $canonical;
 }
 
 {% for res in resource.node.walk_resources() %}
