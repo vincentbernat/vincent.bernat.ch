@@ -357,6 +357,11 @@ def build():
             local('git commit -a -m "Autocommit"')
             local('git rev-parse HEAD~100 > .git/shallow')
             local('git gc --prune=now')
+            # Restore timestamps
+            local('''
+for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
+    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") "$f";
+done''')
         else:
             local("git reset --hard")
             local("git clean -d -f")
@@ -369,12 +374,12 @@ def push():
 
     # media
     for host in hosts:
-        local("rsync --exclude=.git --copy-unsafe-links -rc "
+        local("rsync --exclude=.git --copy-unsafe-links -rt "
               ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
 
     # HTML
     for host in hosts:
-        local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rc "
+        local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rt "
               ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
 
 @task
