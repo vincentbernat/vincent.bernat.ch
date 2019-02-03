@@ -355,6 +355,8 @@ def build():
             local("git diff --word-diff HEAD || true")
         if confirm("Keep?", default=True):
             local('git commit -a -m "Autocommit"')
+            local('git rev-parse HEAD~100 > .git/shallow')
+            local('git gc --prune=now')
         else:
             local("git reset --hard")
             local("git clean -d -f")
