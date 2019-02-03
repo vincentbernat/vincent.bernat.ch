@@ -355,8 +355,9 @@ def build():
             local("git diff --word-diff HEAD || true")
         if confirm("Keep?", default=True):
             local('git commit -a -m "Autocommit"')
-            local('git rev-parse HEAD~100 > .git/shallow')
-            local('git gc --prune=now')
+            # Truncate history (may alter timestamps of older unmodified files)
+            # local('git rev-parse HEAD~100 > .git/shallow')
+            # local('git gc --prune=now')
             # Restore timestamps
             local('''
 for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
