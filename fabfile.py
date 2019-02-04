@@ -355,12 +355,6 @@ def build():
             local("git diff --word-diff HEAD || true")
         if confirm("Keep?", default=True):
             local('git commit -a -m "Autocommit"')
-            # Restore timestamps (this relies on us not truncating
-            # history too often)
-            local('''
-for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
-    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") "$f";
-done''')
         else:
             local("git reset --hard")
             local("git clean -d -f")
@@ -370,6 +364,14 @@ done''')
 def push():
     """Push built site to production"""
     local("git push github")
+
+    with lcd(".final"):
+        # Restore timestamps (this relies on us not truncating
+        # history too often)
+        local('''
+for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
+    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") "$f";
+done''')
 
     # media
     for host in hosts:
