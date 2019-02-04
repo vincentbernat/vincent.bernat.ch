@@ -388,5 +388,5 @@ def analytics():
           "do ssh $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
           "   | grep -v atom.xml;"
           "done"
-          " | goaccess --ignore-crawlers --http-protocol=no --log-format=COMBINED"
+          " | LANG=en_US.utf8 goaccess --ignore-crawlers --http-protocol=no --log-format=COMBINED"
           "".format(" ".join(hosts)))
