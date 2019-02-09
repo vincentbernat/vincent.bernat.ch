@@ -10,6 +10,7 @@ glyphs = {
         u"\u202f",              # NARROW NO-BREAK SPACE
     ]),
     'regular': set([
+        u"\u2026",              # HORIZONTAL ELLIPSIS
         u"\u2019",              # RIGHT SINGLE QUOTATION MARK
         u"\u200b",              # ZERO WIDTH SPACE
         u"\ufeff",              # ZERO WIDTH NO-BREAK SPACE
