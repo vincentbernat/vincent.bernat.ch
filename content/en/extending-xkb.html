@@ -1,0 +1,333 @@
+---
+title: Extending the X keyboard map with xkb
+uuid: 76398ec2-c2d5-4f8d-9677-fd0d44f4a579
+author: martin f. krafft
+twitter: martinkrafft
+github: madduck
+created: !!timestamp 2012-04-17 12:17:58
+---
+
+[xmodmap][] has long been the only way to modify the keyboard map of
+the X server, short of the complex configuration daemon approaches
+used by the large desktop managers, like KDE and GNOME. But it has
+always been a hack: it modifies the X keyboard map and thus requires a
+baseline to work from, kind of like a patch needs the correct context
+to be applicable.
+
+Worse yet, `xmodmap` weirdness required me to [invoke it twice][] to
+get the effect I wanted.
+
+When the recent upgrade to [X.org 7.4][] broke larger parts of [my
+elaborate xmodmap configuration][], I took the time to finally ditch
+`xmodmap` and implement my modifications as proper [xkb][]
+configuration.
+
+# Background information
+
+I [had tried before to use per-user xkb configuration][], but could
+not find the answers I want. It was somewhat by chance that I found
+[Doug Palmer's "Unreliable Guide to XKB configuration"][] at the same
+time that Julien Cristau and Matthew W. S. Bell provided me the
+necessary hints on the `#xorg/irc.freenode.org` IRC channel to get me
+started.
+
+The other resource worth mentioning is [Ivan Pascal's collection of
+XKB documents][], which were instrumental in my gaining an
+understanding of `xkb`.
+
+And just as I am writing this document, Debian's X Strike Force have
+published their [Input Hotplug Guide][], which is a nice complement to
+this very document you are reading right now, since it focuses on
+auto-configuration of `xkb` with *HAL*. The default `xkb`
+configuration comes with a lot of flexibility, and often you don't
+need anything else.
+
+But when you do, then this is how to do it:
+
+# Installing a new keyboard map
+
+The most basic way to install a new keyboard map is using `xkbcomp`, which can
+also be used to dump the currently installed map into a file. So, to get a bit
+of an idea of what we'll be dealing with, please run the following commands:
+
+    ::sh
+    xkbcomp $DISPLAY xkb.dump
+    editor xkb.dump
+    xkbcomp xkb.dump $DISPLAY
+
+The file is complex and large, and it completely went against my aesthetics to
+simply edit it to have `xkb` work according to my needs. I sought a way in
+which I could use as much as possible of the default configuration, and only
+place self-contained additional snippets in place to do the things I wanted
+done differently.
+
+# `setxkbmap` and rule files
+
+Thus began my voyage into the domain of rule files. But before we dive
+into those, let's take a look at `setxkbmap`. Despite the trivial
+invocation of e.g. `setxkbmap us` to install a standard US-American
+keyboard map, the command also takes arguments. More specifically, it
+allows you to specify the following high-level parameters, which
+determine the sequence of events between key press and an application
+receiving a KeyPress event:
+
+- Model: the keyboard model, which defines which keys are where
+- Layout: the keyboard layout, which defines what the keys actually are
+- Variant: slight variantions in the layout
+- Options: configurable aspects of keyboard features and possibilities
+
+Thus, with the following command line, I would select a US layout with
+international (dead) keys for my Thinkpad keyboard, and switch to an
+alternate symbol group with the windows keys (more on that later):
+
+    ::sh
+    setxkbmap -model thinkpad -layout us -variant intl -option grp:win_switch
+
+In many cases, between all combinations of the aforementioned parameters, this
+is all you ever need.
+
+But I wanted more.
+
+If you append `-print` to the above command, it will print the keymap
+it would install, rather than installing it:
+
+    ::console
+    $ setxkbmap -model thinkpad -layout us -variant intl -option grp:win_switch -print
+    xkb_keymap {
+      xkb_keycodes  { include "evdev+aliases(qwerty)"       };
+      xkb_types     { include "complete"    };
+      xkb_compat    { include "complete"    };
+      xkb_symbols   { include "pc+us(intl)+inet(evdev)+group(win_switch)"   };
+      xkb_geometry  { include "thinkpad(us)"        };
+    };
+
+There are two things to note:
+
+1. The `-option grp:win_switch` argument has been turned into an additional
+   include `group(win_switch)` on the `xkb_symbols` line, just like the model,
+   layout, and variant are responsible for other aspects in the output.
+
+2. The output seems related to what `xkbcomp` dumped into the `xkb.dump` file
+   we created earlier. Upon closer inspection, it turns out that the dump file
+   is simply a pre-processed version of the keyboard map, with `include`
+   instructions exploded.
+
+At this point, it became clear to me that this was the correct way forward,
+and I started to investigate those points in order.
+
+The translation from parameters to an `xkb_keymap` stanza by `setxkbmap` is
+actually governed by a rule file. A rule is nothing more than a set of
+criteria, and what `setxkbmap` should do in case they all match. On a Debian
+system, you can find this file in `/usr/share/X11/xkb/rules/evdev`, and
+`/usr/share/X11/xkb/rules/evdev.lst` is a listing of all available parameter
+values.
+
+The `xkb_symbols` include line in the above `xkb_keymap` output is the result
+of the following rules in the first file, which `setxkbmap` had matched (from
+top to bottom) and processed:
+
+    ::text
+    ! model         layout              =       symbols
+      [...]
+      *             *                   =       pc+%l(%v)
+
+    ! model                             =       symbols
+      *                                 =       +inet(evdev)
+
+    ! option                            =       symbols
+      [...]
+      grp:win_switch                    =       +group(win_switch)
+
+It should now not be hard to deduce the `xkb_symbols` include line quoted
+above, starting from the `setxkbmap` command line. I'll reproduce both for you
+for convenience:
+
+    ::text
+    setxkbmap -model thinkpad -layout us -variant intl -option grp:win_switch
+    xkb_symbols   { include "pc+us(intl)+inet(evdev)+group(win_switch)"   };
+
+A short note about the syntax here: `group(win_switch)` in the symbols column
+simply references the `xkb_symbols` stanza named `win_switch` in the symbols
+file `group` (`/usr/share/X11/xkb/symbols/group`).
+
+Thus, the rules file maps parameters to sets of snippets to include, and the
+output of `setxkbmap` applies those rules to create the `xkb_keymap` output,
+to be processed by `xkbcomp`—which `setxkbmap` invokes implicitly, unless
+the `-print` argument was given on invocation.
+
+It seems that for a criteria (option, model, layout, …) to be honoured, it has
+to appear in the corresponding listing file, `evdev.lst` in this case. There
+is also `evdev.xml`, but I couldn't figure out its role.
+
+# Attaching symbols to keys
+
+I ended up creating [a symbols file of reasonable size][], which I
+won't discuss here. Instead, let's solve the following two tasks for
+the purpose of this document:
+
+1. Make the Win-Hyphen key combination generate an "en" dash (–), and
+   Win-Shift-Hyphen an "em" dash (—).
+
+2. Let the Caps Lock key generate `Mod4`, which can be used e.g. to control
+   the window manager.
+
+To approach these two tasks, let's create a symbols file in
+`~/.xkb/symbols/xkbtest` and add two stanzas to it:
+
+    ::text
+    partial alphanumeric_keys
+    xkb_symbols "dashes" {
+      key <AE11> {
+        symbols[Group2] = [ endash, emdash ]
+      };
+    };
+
+    partial modifier_keys
+    xkb_symbols "caps_mod4" {
+      replace key <CAPS> {
+        [ VoidSymbol, VoidSymbol ]
+      };
+      modifier_map Mod4 { <CAPS> };
+    };
+
+Now let me explain these in turn:
+
+1. We used the option `grp:win_switch` earlier, which told `xkb` that we would
+   like to use the windows keys to switch to group 2. In the custom symbols
+   file, we now simply define the symbols to be generated for each key, when
+   the second group has been selected.
+
+   Key `<AE11>` is the hyphen key. To find out the names of all the other keys
+   on your keyboard, you can use the following command:
+
+    ::sh
+    xkbprint -label name $DISPLAY - | gv -orientation=seascape -
+
+   I had to declare the stanza `partial` because it is not a complete keyboard
+   map, but can only be used to augment/modify other maps. I also declared it
+   `alphanumeric_keys` to tell `xkb` that I would be modifying alphanumeric
+   keys inside it. If I also wanted to change modifier keys, I would *also*
+   specify `modifier_keys`.
+
+   The rest should be straight-forward. You can get the names of available
+   symbols from `keysymdef.h`,[^keysymdef] stripping the `XK_` prefix.
+
+2. The second stanza *replaces* the Caps Lock key definition and prevents it
+   from generating symbols (`VoidSymbol`).
+
+   The important aspect of the second stanza is the `modifier_map`
+   instruction, which causes the key to generate the `Mod4` modifier event,
+   which I can later use to bind key combinations for my window manager
+   ([awesome][]).
+
+   A note about `VoidSymbol` (as opposed to e.g. `Hyper L` as the symbol to be
+   generated by the caps lock key: As far as I understood, Control, Shift, and
+   Caps are necessary symbols, but all the others (including Alt and Meta) are
+   actually just symbols and independent from any other function of the keys.
+   In particular, `modifier_map` seems completely independent of the symbols.
+   As many applications use Meta/Alt, you won't get around generating those,
+   but I don't know of applications that use Super or Hyper, so I prefer not
+   to generate them.
+
+[^keysymdef]: `/usr/include/X11/keysymdef.h` on a Debian system,
+   package [x11proto-core-dev][].
+
+The easiest way to verify those changes is to put the `setxkbmap -print`
+output of the keyboard map you would like to use as a baseline into
+`~/.xkb/keymap/xkbtest`, and append snippets to be included to the
+`xkb_symbols` line, e.g.:
+
+    ::text
+    "pc+us(intl)+inet(evdev)+group(win_switch)+xkbtest(dashes)+xkbtest(caps_mod4)"
+
+When you try to load this keyboard map with `xkbcomp`, it will fail because it
+cannot find the `xkbtest` symbol definition file. You have to let the tool
+know where to look, by appending a path to its search list (note the use of
+`$HOME` instead of `~`, which [[!debbug 524513 desc="the shell would not
+expand"]]):
+
+    ::sh
+    xkbcomp -I$HOME/.xkb ~/.xkb/keymap/xkbtest $DISPLAY
+
+You can use `xev` to verify the results, or just type Win-Hyphen into a
+terminal; does it produce "–"?
+
+By the way, I found `xev` much more useful for such purposes when
+invoked as follows (thanks to [Penny][] for the idea):
+
+    ::sh
+    xev | sed -ne '/^KeyPress/,/^$/p'
+
+`xev` can also tell you which modifiers are in effect. For that, you have to
+hold the modifying key down, press another key, and take note of the `state`
+field, which is the hexadecimal sum of all modifiers in effect. The ones I
+found are:
+
+    ::text
+    0x0001 Shift
+    0x0002 Caps
+    0x0004 Control
+    0x0008 Alt
+    0x0010 NumLock
+    0x0030 Mod3
+    0x0040 Mod4
+    0x2000 Mode_switch
+
+Thanks to Marius Gedminas for the hint.
+
+# Rules again, and why I did not use them in the end
+
+Once I got this far, I proceeded to add [option-to-symbol-snippet
+mappings to the rules file][], and added [each option to the listing
+file][] too. A [few][524512] [bugs][524510] [later][524509], I finally
+had `setxkbmap` spit out the right `xkb_keymap` and could install the
+new keyboard map with `xkbcomp`, like so:
+
+    ::sh
+    setxkbmap -I$HOME/.xkb [...] -print | xkbcomp -I$HOME/xkb - :0
+
+I wrote [a small script to automatically do that at the start of the X
+session][] and could have gone to play outside, if it hadn't been for
+the itch I felt due to the entire rule file stored in my
+configuration. I certainly did not like that, but I could also not
+find a way to extend a rule file with additional rules.
+
+When I looked at the aforementioned script again, it suddenly became
+obvious that I was going a far longer path than I had to. Even though
+the rule system is powerful and allows me to e.g. automatically
+include symbol maps to remap keys on my Thinkpad, based on the
+keyboard model I configured, the benefit (if any) did not justify the
+additional complexity.
+
+In the end, I simplified [the script that loads the keyboard map][],
+and defined [a default xkb_keymap][], as well as [one for the
+Thinkpad][], which I identify by its fully-qualified hostname. If a
+specific file is available for a given host, it is used. Otherwise,
+the script uses the default.
+
+[one for the Thinkpad]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xkb/keymap/default;h=985428984ac6a63b841fb46e2f961950c4a9b5fa;hb=refs/heads/xkb
+[a default xkb_keymap]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xkb/keymap/default;h=985428984ac6a63b841fb46e2f961950c4a9b5fa;hb=refs/heads/xkb
+[the script that loads the keyboard map]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xsession.d/01-xkb;h=6d19628ee7764172377cb30fbcbac731b3bad4d6;hb=refs/heads/xkb
+[a small script to automatically do that at the start of the X session]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xsession.d/01-xkb;h=0e50c36826887ae5980c95d2befeb5391ae51c79;hb=085bf505447f79db478e369229bceacdbd317a85
+[each option to the listing file]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xkb/rules/evdev.lst;h=9c1ef1555f16f155ff8439aba86cd82ae578c2b5;hb=085bf505447f79db478e369229bceacdbd317a85
+[option-to-symbol-snippet mappings to the rules file]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xkb/rules/evdev;h=24fefc5a4205ed0402bb1caa6e5c95b27462cf22;hb=085bf505447f79db478e369229bceacdbd317a85
+[a symbols file of reasonable size]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xkb/symbols/madduck;hb=refs/heads/xkb
+[my elaborate xmodmap configuration]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xmodmap;h=bfc01f988893adedec7a70eecef46a0900b5772b
+[invoke it twice]: https://git.madduck.net/v/etc/xsession.git?a=blob;f=.xsession.d/01-xmodmap;h=a68e964fef078e7e4ab050b8cbcfd3567c071343
+[524512]: https://bugs.debian.org/524512
+[524510]: https://bugs.debian.org/524510
+[524509]: https://bugs.debian.org/524509
+[Penny]: http://archive.is/20140417152219/http://she.geek.nz/
+[x11proto-core-dev]: https://packages.debian.org/sid/x11proto-core-dev
+[awesome]: https://awesomewm.org/
+[Input Hotplug Guide]: https://wiki.debian.org/XStrikeForce/InputHotplugGuide
+[Ivan Pascal's collection of XKB documents]: http://pascal.tsu.ru/en/xkb/
+[Doug Palmer's "Unreliable Guide to XKB configuration"]: https://www.charvolant.org/doug/xkb/
+[had tried before to use per-user xkb configuration]: https://marc.info/?l=freedesktop-xorg&m=121387117830530&w=2
+[xkb]: https://www.x.org/wiki/XKB
+[X.org 7.4]: https://www.x.org/wiki/Releases/7.4
+[xmodmap]: https://manpages.debian.org/stretch/x11-xserver-utils/xmodmap.1.en.html
+
+{# Local Variables: #}
+{# mode: markdown   #}
+{# End:             #}
