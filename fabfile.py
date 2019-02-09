@@ -361,7 +361,7 @@ def build():
             abort("Build rollbacked")
 
 @task
-def push():
+def push(clean=False):
     """Push built site to production"""
     local("git push github")
 
@@ -383,6 +383,12 @@ done''')
         local("rsync --exclude=.git --exclude=media "
               "--delete-delay --copy-unsafe-links -rt "
               ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
+
+    if clean:
+        for host in hosts:
+            local("rsync --exclude=.git --copy-unsafe-links -rt "
+                  "--delete-delay --exclude=videos/\\*/ "
+                  ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
 
 @task
 def analytics():
