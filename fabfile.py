@@ -380,7 +380,8 @@ done''')
 
     # HTML
     for host in hosts:
-        local("rsync --exclude=.git --exclude=media --copy-unsafe-links -rt "
+        local("rsync --exclude=.git --exclude=media "
+              "--delete-delay --copy-unsafe-links -rt "
               ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
 
 @task
