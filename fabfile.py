@@ -400,5 +400,6 @@ def analytics():
           " | LANG=en_US.utf8 goaccess --ignore-crawlers "
           "                            --http-protocol=no "
           "                            --no-term-resolver "
+          "                            --no-ip-validation "
           "                            --log-format=COMBINED"
           "".format(" ".join(hosts)))
