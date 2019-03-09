@@ -12,6 +12,7 @@ import yaml
 import csv
 import re
 import operator
+import datetime
 
 env.shell = "/bin/sh -c"
 env.command_prefixes = ['export PATH=$HOME/.virtualenvs/hyde/bin:$PATH']
@@ -181,17 +182,17 @@ def fixlinks():
     for row in reader:
         if row['valid'] == 'True' and 'Redirected' not in row['infostring']:
             continue
-        year = None
+        year = datetime.datetime.now().year
         archive = {}
         mo = re.search(r"/blog/(\d+)-", row['parentname'])
         if seen.get(row['urlname']):
             continue
         if mo:
             year = int(mo.group(1))
-            archive = {'a': "https://archive.today/{}/{}".format(year, row['urlname']),
-                       'w': "http{}://web.archive.org/web/{}/{}".format(
-                           not row['urlname'].startswith('http:') and "s" or "",
-                           year, row['urlname'])}
+        archive = {'a': "https://archive.today/{}/{}".format(year, row['urlname']),
+                   'w': "http{}://web.archive.org/web/{}/{}".format(
+                       not row['urlname'].startswith('http:') and "s" or "",
+                       year, row['urlname'])}
         while True:
             print """
 URL:     {urlname}
