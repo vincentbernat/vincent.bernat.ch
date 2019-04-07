@@ -56,11 +56,6 @@ def sprite():
                     "--css-render-less-template=content/media/css/sprite.tmpl",
                     "--css-sprite=../images/l/sprite.svg",
                     "content/media/images/l/sprite/*.svg"]))
-    # Convert to PNG
-    with lcd("content/media/images/l"):
-        local("inkscape --without-gui --export-png=sprite.png --export-area-page sprite.svg")
-    # Add alternative to SVG
-    local(r"sed -i '2s/\(.*\)\.svg\(.*\);/\1\.png\2;\n\1.svg\2, linear-gradient(transparent,transparent);/' content/media/css/luffy.sprite.less")
 
 # For the following task, please check that the appropriate
 # fonts are installed on the system. The rendering engine of both
@@ -294,8 +289,7 @@ def build():
         subset('merriweather', 'regular')
         subset('merriweather-italic', 'regular')
         # Compute hash on various files
-        for p in ['media/images/l/sprite*.png',
-                  'media/images/l/sprite*.svg',
+        for p in ['media/images/l/sprite*.svg',
                   'media/fonts/*',
                   'media/js/*.js',
                   'media/css/*.css']:
