@@ -166,13 +166,19 @@ nul besoin de la table `local-out` :
 
 Une fois cette configuration en place, le routage est activé et le
 nombre maximal de routes IPv6 est augmenté (la valeur par défaut est
-seulement 4096) :
+seulement 4096)[^ddos] :
 
     ::sh
     sysctl -qw net.ipv4.conf.all.forwarding=1
     sysctl -qw net.ipv6.conf.all.forwarding=1
-    sysctl -qw net.ipv6.route.max_size=4194304
+    sysctl -qw net.ipv6.route.max_size=524288
 
+[^ddos]: Il ne faut pas augmenter cette value de manière trop brutale.
+    Il est possible pour un attaquant de remplir le cache assez
+    facilement. Ce cache est inclus dans la taille de la table de
+    routage. La valeur proposée ici correspond à 256 Mio de mémoire.
+    Voir « [Fonctionnement de la table de routage IPv6 sous
+    Linux][ddos-cache] » pour plus de détails.
 
 ## Routes pour les machines virtuelles
 
@@ -765,6 +771,7 @@ utilisation de BGP LLGR
 [ICMP redirect]: http://www.networksorcery.com/enp/protocol/icmp/msg5.htm "ICMP type 5, Redirect"
 [IPv4 route lookup on Linux]: [[fr/blog/2017-ipv4-table-routage-linux.html]] "Fonctionnement de la table de routage IPv4 sous Linux"
 [IPv6 route lookup on Linux]: [[fr/blog/2017-ipv6-table-routage-linux.html]] "Fonctionnement de la table de routage IPv6 sous Linux"
+[ddos-cache]: [[fr/blog/2017-ipv6-table-routage-linux.html]]#mise-en-cache "Fonctionnement de la table de routage IPv6 sous Linux"
 [Juniper QFX5100]: https://www.juniper.net/us/en/products-services/switching/qfx-series/qfx5100/ "QFX5100 10/40GbE data center switches"
 [Arista 7208SR]: https://www.arista.com/en/products/7280r-series "Arista 7280R Series"
 [Juniper MX240]: https://www.juniper.net/us/en/products-services/routing/mx-series/mx240/ "MX240 edge router"

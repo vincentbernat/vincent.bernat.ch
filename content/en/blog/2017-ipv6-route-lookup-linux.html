@@ -158,7 +158,7 @@ entries (but no more recent than 512 jiffies, which is the value of
 
 Starting from Linux 4.2 ([commit 45e4fd26683c][]), only a PMTU exception would
 create a cache entry. A router doesn't have to handle these exceptions, so only
-hosts would get cache entries. And they should be pretty rare. Martin KaFai
+hosts would get cache entries.[^ddos] And they should be pretty rare. Martin KaFai
 Lau, from Facebook, [explains][]:
 
 > Out of all IPv6 `RTF_CACHE` routes that are created, the percentage that has a
@@ -172,6 +172,11 @@ Here is how a cache entry with a PMTU exception looks like:
     $ ip -6 route show cache
     2001:db8:1::50 via 2001:db8:1::13 dev out6  metric 0
         cache  expires 573sec mtu 1400 pref medium
+
+[^ddos]: It is actually possible for an attacker to create arbitrary entries in
+    a router's cache by sending ICMP packets "message too big". This attack is
+    the origin of the [CVE-2018-19299][]. For more details, see [Marek Isalski's
+    presentation to UKNOF 43][] on the subject.
 
 # Performance
 
@@ -383,6 +388,8 @@ term of optimizations. Hopefully, things are changing as its adoption and use
 [explains]: https://www.spinics.net/lists/netdev/msg330403.html "[PATCH net-next v5 00/11] ipv6: Only create RTF_CACHE route after encountering pmtu exception"
 [Intel Core i5-4670K]: https://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
 [ipv6opt]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=feca7d8c135bc1527b244fe817b8b6498066ccec "net: ipv6: avoid overhead when no custom FIB rules are installed"
+[Marek Isalski's presentation to UKNOF 43]: https://indico.uknof.org.uk/event/46/contributions/667/ "Scanning IPv6 Address Space… and the remote vulnerabilities it uncovers"
+[CVE-2018-19299]: https://blog.mikrotik.com/software/cve-2018-19298-cve-2018-19299-ipv6-resource-exhaustion.html "CVE-2018-19298 CVE-2018-19299 IPv6 resource exhaustion"
 
 {# Local Variables:      #}
 {# mode: markdown        #}

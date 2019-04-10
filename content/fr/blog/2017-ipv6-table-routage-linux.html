@@ -164,8 +164,8 @@ de `gc_elasticity`) avec une pause de 500 ms entre chaque passage.
 
 Depuis Linux 4.2 ([commit 45e4fd26683c][]), seules les exceptions PMTU
 provoquent la création d'une entrée dans le cache. Un routeur ne gèrant pas ces
-exceptions, seuls les hôtes auront (rarement) des entrées dans le cache. Martin
-KaFai Lau, de Facebook, [explique][explains]:
+exceptions, seuls les hôtes auront (rarement) des entrées dans le cache[^ddos].
+Martin KaFai Lau, de Facebook, [explique][explains]:
 
 > De toutes les routes IPv6 de type `RTF_CACHE` qui sont créées, le pourcentage
 > qui a un MTU différent est très faible. Sur l'un de nos serveurs mandataires
@@ -179,6 +179,12 @@ Voici à quoi ressemble une entrée dans le cache avec une exception PMTU :
     $ ip -6 route show cache
     2001:db8:1::50 via 2001:db8:1::13 dev out6  metric 0
         cache  expires 573sec mtu 1400 pref medium
+
+[^ddos]: Il est en fait possible pour un attaquant de créer des entrées
+    arbitraires dans le cache d'un routeur en envoyant des paquets ICMP
+    « message trop gros ». Cette attaque est à l'origine de la
+    [CVE-2018-19299][]. Pour plus de détails, voir la [présentation de Marek
+    Isalski à l'UKNOF 43][] sur le sujet.
 
 # Performance
 
@@ -403,6 +409,8 @@ graduelle et son utilisation à l'échelle.
 [explains]: https://www.spinics.net/lists/netdev/msg330403.html "[PATCH net-next v5 00/11] ipv6: Only create RTF_CACHE route after encountering pmtu exception"
 [Intel Core i5-4670K]: https://ark.intel.com/products/75048/Intel-Core-i5-4670K-Processor-6M-Cache-up-to-3_80-GHz "Intel® Core™ i5-4670K Processor"
 [ipv6opt]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=feca7d8c135bc1527b244fe817b8b6498066ccec "net: ipv6: avoid overhead when no custom FIB rules are installed"
+[présentation de Marek Isalski à l'UKNOF 43]: https://indico.uknof.org.uk/event/46/contributions/667/ "Scanning IPv6 Address Space… and the remote vulnerabilities it uncovers"
+[CVE-2018-19299]: https://blog.mikrotik.com/software/cve-2018-19298-cve-2018-19299-ipv6-resource-exhaustion.html "CVE-2018-19298 CVE-2018-19299 IPv6 resource exhaustion"
 
 {# Local Variables:      #}
 {# mode: markdown        #}

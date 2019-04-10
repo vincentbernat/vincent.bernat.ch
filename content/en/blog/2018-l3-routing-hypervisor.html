@@ -150,13 +150,18 @@ keep a `public` table, there is no need for a `local-out` table:
     40: from all lookup public
 
 As a last step, forwarding is enabled and the number of maximum routes
-for IPv6 is increased (default is only 4096):
+for IPv6 is increased (default is only 4096):[^ddos]
 
     ::sh
     sysctl -qw net.ipv4.conf.all.forwarding=1
     sysctl -qw net.ipv6.conf.all.forwarding=1
-    sysctl -qw net.ipv6.route.max_size=4194304
+    sysctl -qw net.ipv6.route.max_size=524288
 
+[^ddos]: Do not increase this value too much. An external attacker can
+    fill the cache easily. This cache is included in the size of the
+    routing table. The value proposed here corresponds to 256 MiB of
+    memory. See « [IPv6 route lookup on Linux][ddos-cache] » for more
+    details.
 
 ## Guest routes
 
@@ -712,6 +717,7 @@ BGP resiliency with BGP LLGR
 [ICMP redirect]: http://www.networksorcery.com/enp/protocol/icmp/msg5.htm "ICMP type 5, Redirect"
 [IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
 [IPv6 route lookup on Linux]: [[en/blog/2017-ipv6-route-lookup-linux.html]] "IPv6 route lookup on Linux"
+[ddos-cache]: [[en/blog/2017-ipv6-route-lookup-linux.html]]#caching "IPv6 route lookup on Linux"
 [BGP LLGR: robust and reactive BGP sessions]: [[en/blog/2018-bgp-llgr.html]] "BGP LLGR: robust and reactive BGP sessions"
 [Juniper QFX5100]: https://www.juniper.net/us/en/products-services/switching/qfx-series/qfx5100/ "QFX5100 10/40GbE data center switches"
 [Arista 7208SR]: https://www.arista.com/en/products/7280r-series "Arista 7280R Series"
