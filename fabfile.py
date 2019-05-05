@@ -252,6 +252,8 @@ Info:    {infostring}""".format(**row)
 def build():
     """Build production content"""
     local("[ $(git rev-parse --abbrev-ref HEAD) = master ]")
+    with lcd("content/en"):
+        local("! git grep -Pw '(?i:obviously|basically|simply|clearly|everyone knows|turns out)' \\*.html")
     local("rm -rf .final/*")
     local("yarn install --frozen-lockfile")
     _hyde('gen -c %s' % conf)
