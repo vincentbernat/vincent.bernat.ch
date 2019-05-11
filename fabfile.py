@@ -398,6 +398,7 @@ def analytics():
           "                            --http-protocol=no "
           "                            --no-term-resolver "
           "                            --no-ip-validation "
+          "                            --output=goaccess.html "
           "                            --log-format=COMBINED "
           "                            --ignore-panel=KEYPHRASES "
           "                            --ignore-panel=REQUESTS_STATIC "
