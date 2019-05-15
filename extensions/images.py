@@ -292,12 +292,11 @@ class ImageFixerPlugin(Plugin):
                 img.attr.width = '{}'.format(width)
                 img.attr.height = '{}'.format(height)
 
-            # If image is a SVG in /obj/, turns into an object
+            # If image is a SVG in /obj/, turns into an iframe
             if "/obj/" in src and src.endswith(".svg"):
-                img[0].tag = 'object'
-                img.attr("type", "image/svg+xml")
-                img.attr("data", src)
-                del img.attr.src
+                img[0].tag = 'iframe'
+                img.attr("sandbox", "allow-scripts")
+                del img.attr.alt
                 img.text('&#128444; {}'.format(img.attr.alt or ""))
 
             # On-demand videos (should be in /videos)
