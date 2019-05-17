@@ -8,6 +8,7 @@ import unicodedata
 glyphs = {
     'monospace': set([
         u"\u202f",              # NARROW NO-BREAK SPACE
+        u"û",                   # SMALL LETTER U WITH CIRCUMFLEX (for août)
     ]),
     'regular': set([
         u"\u2026",              # HORIZONTAL ELLIPSIS
@@ -42,8 +43,6 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
 class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):
     def extract(self, root):
         for code in root.findall('.//code'):
-            yield code.text
-        for code in root.findall('.//time'):
             yield code.text
 
 
