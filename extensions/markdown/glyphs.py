@@ -43,6 +43,8 @@ class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):
     def extract(self, root):
         for code in root.findall('.//code'):
             yield code.text
+        for code in root.findall('.//time'):
+            yield code.text
 
 
 class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
