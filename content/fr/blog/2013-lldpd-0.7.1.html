@@ -607,18 +607,18 @@ Afin de faciliter l'installation de _lldpd_, j'ai également écrit une
 [formule][_lldpd_ formula] pour [Homebrew][] qui semble le
 gestionnaire de paquets le plus populaire actuellement pour OS X.
 
-## Support de upstart et systemd
+## Support de Upstart et systemd
 
-De nombreuses distributions proposent désormais [upstart][] ou
+De nombreuses distributions proposent désormais [Upstart][] ou
 [systemd][] en remplacement ou en alternative au système d'init
 historique. Comme de nombreux démons, `lldpd` se détache du terminal
 et tourne en tâche de fond en forkant deux fois lorsqu'il est prêt
 (pour `lldpd`, cela signifie simplement que la socket Unix a été mise
 en place). Bien qu'il soit possible de garder ce comportement avec
-_upstart_ et _systemd_, il est préférable de ne plus forker. Comment
+_Upstart_ et _systemd_, il est préférable de ne plus forker. Comment
 indiquer alors que le démon est prêt à remplir sa tâche ?
 
-Avec _upstart_, `lldpd` s'envoie le signal `SIGSTOP`. _upstart_ va
+Avec _Upstart_, `lldpd` s'envoie le signal `SIGSTOP`. _Upstart_ va
 détecter son état et lui envoyer le signal `SIGCONT`. De plus, il va
 considérer que le démon est prêt. Voici comment faire :
 
@@ -629,7 +629,7 @@ considérer que le démon est prêt. Voici comment faire :
     log_debug("main", "running with upstart, don't fork but stop");
     raise(SIGSTOP);
 
-La configuration de _upstart_ ressemble à ceci :
+La configuration de _Upstart_ ressemble à ceci :
 
     ::
     # lldpd - LLDP daemon
@@ -729,7 +729,7 @@ bibliothèque C _Bionic_, nous savons désormais que
 [pycparser]: https://github.com/eliben/pycparser "pycparser, un analyseur syntaxique du C écrit en Python"
 [21st Century C]: http://shop.oreilly.com/product/0636920025108.do?bB=g "21st Century C chez O'Reilly"
 [designated initializers]: http://gcc.gnu.org/onlinedocs/gcc/Designated-Inits.html "Initialiser les membres d'une structure dans la documentation de GCC"
-[upstart]: http://upstart.ubuntu.com/ "upstart, un init basé sur les évènements"
+[Upstart]: http://upstart.ubuntu.com/ "Upstart, un init basé sur les évènements"
 [systemd]: https://www.freedesktop.org/wiki/Software/systemd/ "systemd, un autre init basé sur les évènements"
 [type munging]: https://github.com/vincentbernat/lldpd/blob/0.5.7/m4/ethtool.m4 "'Type munging' dans linux/ethtool.h"
 [separation of kernel-only headers from user-space API headers]: https://lwn.net/Articles/507794/ "The UAPI header file split"
