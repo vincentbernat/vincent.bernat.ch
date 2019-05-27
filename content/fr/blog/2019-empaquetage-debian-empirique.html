@@ -1,20 +1,20 @@
 ---
-title: "Petit traité empirique de l'empaquetage Debian (2016)"
+title: "Petit traité empirique de l'empaquetage Debian (2019)"
 description: |
   La création de paquets Debian avec les outils officiels peut
   être aussi simple qu'avec fpm en prenant quelques libertés.
-uuid: b44f31f4-f329-46f7-b1c6-0989d77f6fba
+uuid: bf0bccf6-fac3-41fa-9f8d-b860dc8079d7
 attachments:
-  "https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016": "Exemples de paquets"
+  "https://github.com/vincentbernat/pragmatic-debian-packages": "Exemples de paquets"
 tags:
   - debian
-  - outdated
 ---
 
-!!! "Mise à jour (05.2019)" Consultez plutôt la [version
-2019]([[fr/blog/2019-empaquetage-debian-empirique.html]]) de ce guide
-si vous n'avez besoin de cibler que des distributions récentes (telles
-que Debian Stretch et Ubuntu Bionic).
+!!! "Note" Ce guide est une mise à jour d'une [version
+précédente]([[fr/blog/2016-empaquetage-debian-empirique.html]]). Si
+vous avez besoin de construire des paquets pour des distributions plus
+anciennes que Debian Stretch et Ubuntu Bionic, jetez un œil à
+l'édition précédente.
 
 Bien que la création de paquets Debian soit [abondamment][newmaint]
 [documentée][newmaint], la plupart des [tutoriaux][tutorial] ciblent
@@ -75,14 +75,14 @@ mémoire distribué. Il nous faut créer quatre fichiers :
  - `debian/control` et
  - `debian/rules`.
 
-Le premier contient uniquement `9`[^compat] :
+Le premier contient uniquement `11`[^compat] :
 
     ::sh
-    echo 9 > debian/compat
+    echo 11 > debian/compat
 
 [^compat]: Ce niveau de compatibilité est disponible à partir de
-    Debian 8 et d'Ubuntu Precise. Il couvre donc un large éventail de
-    distributions.
+    Debian 9 et d'Ubuntu Bionic. Il couvre donc les distributions
+    modernes.
 
 Le second contient ceci :
 
@@ -131,8 +131,8 @@ construire et installer son arborescence dans `debian/memcached/` :
     ::make
     #!/usr/bin/make -f
     
-    DISTRIBUTION = $(shell lsb_release -sr)
-    VERSION = 1.4.25
+    DISTRIBUTION = $(shell sed -n "s/^VERSION_CODENAME=//p" /etc/os-release)
+    VERSION = 1.5.16
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
@@ -162,8 +162,8 @@ spécifier la version[^version] sans avoir à tenir à jour
 été écrit pour `fpm` :
 
     ::sh
-    DISTRIBUTION=$(lsb_release -sr)
-    VERSION=1.4.25
+    DISTRIBUTION=$(sed -n "s/^VERSION_CODENAME=//p" /etc/os-release)
+    VERSION=1.5.16
     PACKAGEVERSION=${VERSION}-0~${DISTRIBUTION}0
     TARBALL=memcached-${VERSION}.tar.gz
     URL=http://www.memcached.org/files/${TARBALL}
@@ -207,17 +207,18 @@ ajoutant un champ `Build-Depends` dans `debian/control` :
 
     ::control
     Source: memcached
-    Build-Depends: debhelper (>= 9),
-                   wget, ca-certificates, lsb-release,
+    Build-Depends: debhelper (>= 11),
+                   wget, ca-certificates,
                    libevent-dev
 
-Il faut toujours spécifier `debhelper (>= 9)` car son utilisation est
+Il faut toujours spécifier `debhelper (>= 11)` car son utilisation est
 centrale dans `debian/rules`. Il n'y a pas besoin de dépendre de
 `make` ou d'un compilateur C car le paquet `build-essential` est
-considéré comme toujours présent et il les fournit
-indirectement. `dpkg-buildpackage` se plaindra si une des dépendances
-est manquante. Pour installer sans peine ces paquets, vous pouvez
-utiliser la commande suivante[^devscripts] :
+considéré comme toujours présent et il les fournit indirectement.
+`dpkg-buildpackage` se plaindra si une des dépendances est manquante.
+Pour installer sans peine ces paquets, par exemple depuis un
+environnement d'intégration continue, vous pouvez utiliser la commande
+suivante[^devscripts] :
 
     ::sh
     mk-build-deps \
@@ -227,8 +228,8 @@ utiliser la commande suivante[^devscripts] :
 [^devscripts]: Les paquets `devscripts` et `equivs` sont alors nécessaires.
 
 Il est aussi intéressant de se pencher sur des outils tels que
-[pbuilder][] et [sbuild][] qui permettent de construire des paquets
-dans un environnment minimal et isolé.
+[pbuilder][], [sbuild][] ou [whalebuilder][]. Ils permettent de
+construire des paquets dans un environnment minimal et isolé.
 
 ## Les dépendances binaires
 
@@ -246,80 +247,19 @@ automatiquement en utilisant des variables de substitution :
 Le paquet construit contiendra les informations suivantes :
 
     ::console
-    $ dpkg -I ../memcached_1.4.25-0\~unstable0_amd64.deb | grep Depends
-     Depends: libc6 (>= 2.17), libevent-2.0-5 (>= 2.0.10-stable)
+    $ dpkg -I ../memcached_1.5.16-0\~buster0_amd64.deb | grep Depends
+     Depends: libc6 (>= 2.17), libevent-2.1-6 (>= 2.1.8-stable)
 
 ## Intérgration avec un système de démarrage
 
 La plupart des paquets fournissant un démon incluent une intégration
 avec le système de démarrage afin de démarrer le démon au boot ou de
-le redémarrer après une mise à jour. Pour les distributions basées sur
-Debian, il existe plusieurs systèmes de démarrage. Voici les trois
-plus courants.
+le redémarrer après une mise à jour. Bien que Debian assure la prise
+en charge de plusieurs systèmes de démarrage, je pense qu'il est
+préférable de se limiter à **systemd**.
 
- - **System-V** est le système historique. Ces scripts de démarrage
-   peuvent être réutilisés par les autres systèmes. Il s'agit donc du
-   plus petit dénominateur commun.
- - **Upstart** est le système popularisé par Ubuntu. Il est utilisé
-   jusqu'à la version 14.10, incluse.
- - **systemd** est le système par défaut pour Debian depuis Jessie et
-   pour Ubuntu depuis la version 15.04.
-
-Écrire un script de démarrage pour *System-V* est une tâche
-ardue. Habituellement, je préfère donc simplement fournir un script
-pour le système de démarrage par défaut de la distribution visée
-(*Upstart* et *systemd*).
-
-### System-V
-
-Si vous voulez écrire un script de démarrage pour *System-V*,
-adaptez[^provided] le script `/etc/init.d/skeleton` de la distribution
-la plus ancienne que vous souhaitez supporter. Mettez le résultat dans
-le fichier `debian/memcached.init`. Il sera installé au bon endroit et
-invoqué lors de l'installation, mise à jour ou retrait du
-paquet. Habituellement, l'utilisateur peut personnaliser les options
-du démon en modifiant le fichier `/etc/default/memcached`. Pour en
-fournir un, placez son contenu dans le fichier `debian/memcached.default`.
-
-[^provided]: Il est également possible d'utiliser le script fourni en
-             amont. Toutefois, il n'existe pas de script universel
-             fonctionnant sur toutes les distributions. Il est donc
-             important de vérifier que ce script est adapté à Debian
-             en le comparant au squelette et en vérifiant qu'il utilise
-             bien `start-stop-daemon` et le fichier
-             `/lib/lsb/init-functions`. Si c'est le cas, vous pouvez
-             le copier vous-même dans
-             `debian/memcached/etc/init.d`. *debhelper* ajoutera les
-             scripts nécessaires à son intégration.
-
-### Upstart
-
-Fournir un script pour *Upstart* est similaire : son contenu doit être
-placé dans `debian/memcached.upstart`. Par exemple :
-
-    ::text
-    description "memcached daemon"
-    
-    start on runlevel [2345]
-    stop on runlevel [!2345]
-    respawn
-    respawn limit 5 60
-    expect daemon
-    
-    script
-      . /etc/default/memcached
-      exec memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
-    end script
-
-La directive la plus importante à surveiller est [expect][]. Ici, nous
-utilisons `expect daemon` et *memcached* est démarré avec l'option
-`-d`.
-
-### systemd
-
-Fournir un script pour *systemd* est un tout petit peu plus
-compliqué. Le contenu doit se placer dans
-`debian/memcached.service`. Par exemple :
+Pour fournir un script pour *systemd*, il convient de placer son
+contenu dans `debian/memcached.service`. Par exemple :
 
     ::ini
     [Unit]
@@ -328,104 +268,48 @@ compliqué. Le contenu doit se placer dans
     
     [Service]
     Type=forking
-    EnvironmentFile=/etc/default/memcached
-    ExecStart=/usr/bin/memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
+    Environment=PORT=11211
+    Environment=MAXCONN=1024
+    Environment=CACHESIZE=64
+    Environment=OPTIONS=
+    ExecStart=/usr/bin/memcached -d -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
     Restart=on-failure
+    User=_memcached
+    DynamicUser=yes
     
     [Install]
     WantedBy=multi-user.target
 
-Bien que cela ne soit pas considéré comme une bonne
-pratique[^default], nous réutilisons `/etc/default/memcached`. Comme
-pour *Upstart*, la directive `Type` est particulièrement
-importante. Nous utilisons `forking` car *memcached* est démarré avec
-l'option `-d`.
+La directive `Type` est la plus importante. Nous avons utilisé
+`forking` car *memcached* est démarré à l'aide de l'option `-d`. Cela
+lui indique de se mettre en arrière-plan lorsqu'il est prêt à accepter
+des requêtes. Les autres possibilités sont `notify` pour un démon
+spécifiquement prévu pour fonctionner avec *systemd* ou `simple` pour
+un démon ne passant pas en arrière-plan.
 
-[^default]: Un utilisateur désireux de modifier certaines options doit
-            plutôt utiliser `systemctl edit`.
+Si un utilisateur veut personnaliser l'une des directives
+`Environment`, il peut utiliser `systemctl edit memcached.service`
+pour créer le fichier
+`/etc/systemd/system/memcached.service.d/override.conf` qui va
+surcharger les définitions du script fourni par le paquet. `systemctl
+cat memcached.service` permet d'obtenir la définition finale du
+service.
 
-!!! "Mise à jour (11.2017)" Pour les paquets destinés à Debian Stretch
-ou Ubuntu Yaketty (ou plus récents), placez `10` dans le fichier
-`debian/compat` et ignorez les instructions suivantes.
-
-Il est également nécessaire d'ajouter une dépendance source sur
-`dh-systemd` dans `debian/control` :
-
-    ::control
-    Source: memcached
-    Build-Depends: debhelper (>= 9),
-                   wget, ca-certificates, lsb-release,
-                   libevent-dev,
-                   dh-systemd
-
-Il faut également modifier la règle par défaut dans `debian/rules` :
-
-    ::make
-    %:
-    	dh $@ --with systemd
-
-Cette complexité supplémetaire est regrettable et est dû au fait que
-l'intégration de *systemd* ne faisait pas partie de
-*debhelper*[^bug822670]. Sans ces modifications, le script sera
-installé mais l'intégration n'aura pas lieu et il ne sera pas lancé au
-démarrage de la machine.
-
-[^bug822670]: Voir [#822670](https://bugs.debian.org/cgi-bin/bugreport.cgi?archive=yes&bug=822670)
-
-## Utilisateur dédié
-
-De nombreux démons n'ont pas besoin de s'exécuter en tant que *root*
-et c'est souvent une bonne idée de fournir un utilisateur dédié. Dans
-le cas de *memcached*, nous allons fournir l'utilisateur
-`_memcached`[^naming].
-
-!!! "Mise à jour (11.2018)" Si vous utilisez exclusivement *systemd*,
-il est possible d'économiser du temps et de l'énergie en exploitant
-plutôt sa [gestion des utilisateurs dynamiques][dynamic users
-feature].
+La directive `DynamicUser` est particulièrement intéressante. Elle
+indique à *systemd* de créer dynamiquement l'utilisateur
+`_memcached`[^naming] qui sera utilisé pour faire tourner le démon.
+Cela nous libère de la gestion d'un utilisateur système !
 
 [^naming]: La charte Debian ne se prononce pas sur la convention à
-           utiliser. Il est courant de préfixer le nom du démon avec
-           un tiret bas (comme dans les BSD). Un autre usage courant
-           est d'utiliser `Debian-` comme préfixe. Cette dernière
-           méthode a l'inconvénient de produire un nom d'utilisateur
-           trop long pour être visible dans les utilitaires comme
-           `top` et `ps`.
-
-Ajoutez un fichier `debian/memcached.postinst` avec le contenu
-suivant :
-
-    ::shell
-    #!/bin/sh
+    utiliser. Il est courant de préfixer le nom du démon avec un tiret
+    bas (comme dans les BSD). Un autre usage courant est d'utiliser
+    `Debian-` comme préfixe. Cette dernière méthode a l'inconvénient
+    de produire un nom d'utilisateur trop long pour être visible dans
+    les utilitaires comme `top` et `ps`.
     
-    set -e
-    
-    case "$1" in
-        configure)
-            adduser --system --disabled-password --disabled-login --home /var/empty \
-                    --no-create-home --quiet --force-badname --group _memcached
-            ;;
-    esac
-    
-    #DEBHELPER#
-    
-    exit 0
-
-Lorsque le paquet est désinstallé, aucun ménage n'est effectué :
-
- - moins de code à écrire, moins de bugs,
- - l'utilisateur peut toujours posséder quelques fichiers sur le système.
-
-L'utilitaire `adduser` effectuera toujours la bonne action que
-l'utilisateur demandé existe déjà ou non. Il faut penser à l'ajouter
-comme dépendance binaire dans `debian/control` :
-
-    ::control
-    Package: memcached
-    Depends: ${misc:Depends}, ${shlibs:Depends}, adduser
-
-Le marqueur `#DEBHELPER#` indique le point d'insertion pour des
-scripts d'intégration supplémentaires.
+    Si la directive `User` n'est pas précisée, *systemd* utilise
+    simplement le nom du service comme nom d'utilisateur. Si cela vous
+    convient, vous pouvez alors omettre cette directive.
 
 Le résultat final est disponible sur
 [GitHub][memcached-intermediate-gh] et peut être testé avec la
@@ -501,7 +385,8 @@ correspondante et en invoquant l'utilitaire manuellement :
     	dh_auto_configure -- --with-some-grog
 
 Ainsi, `./configure` sera appelé avec l'option `--with-some-grog` mais
-aussi avec des options par défaut telles que `--prefix=/usr`.
+aussi avec des options par défaut telles que `--prefix=/usr`. Il y a
+une page de manuel pour chacun de ces outils.
 
 Dans l'exemple initial de *memcached*, ces cibles « magiques » sont
 surchargées. `dh_auto_clean`, `dh_auto_configure` et `dh_auto_build`
@@ -521,8 +406,8 @@ suivant :
     ::make
     #!/usr/bin/make -f
     
-    DISTRIBUTION = $(shell lsb_release -sr)
-    VERSION = 1.4.25
+    DISTRIBUTION = $(shell sed -n "s/^VERSION_CODENAME=//p" /etc/os-release)
+    VERSION = 1.5.16
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
@@ -585,7 +470,7 @@ minimal et de surcharger uniquement quelques cibles.
 
 ## Fichiers supplémentaires
 
-Bien que `make install` ait installé les fichiers essentiels pour
+Bien que `make install` a installé les fichiers essentiels pour
 *memcached*, il est parfois nécessaire de copier quelques fichiers
 supplémentaires dans le paquet binaire. Pour se faire, il est possible
 d'utiliser `cp` ou encore de déclarer les fichiers à copier :
@@ -633,19 +518,19 @@ l'utilisation des outils Debian est relativement simple. Mission accomplie ?
 [Debian archive]: https://www.debian.org/distrib/packages "Debian archive"
 [fpm]: https://github.com/jordansissel/fpm "Effing package management"
 [CheckInstall]: http://checkinstall.izto.org/ "CheckInstall"
-[GitHub]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016 "Dépôt GitHub rempli de paquets Debian simples à comprendre"
+[GitHub]: https://github.com/vincentbernat/pragmatic-debian-packages "Dépôt GitHub rempli de paquets Debian simples à comprendre"
 [memcached]: https://memcached.org/ "memcached - a distributed memory object caching system"
-[memcached-basic-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/memcached-basic/debian
-[memcached-intermediate-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/memcached-intermediate/debian
-[memcached-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/memcached/debian
+[memcached-basic-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached-basic/debian
+[memcached-intermediate-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached-intermediate/debian
+[memcached-gh]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/memcached/debian
 [pbuilder]: https://archive.today/d0i0A "pbuilder user's manual"
 [sbuild]: https://wiki.debian.org/sbuild "sbuild page on Debian Wiki"
+[whalebuilder]: https://www.uhoreg.ca/programming/debian/whalebuilder "Debian package builder using Docker"
 [expect]: http://upstart.ubuntu.com/cookbook/#expect "Upstart cookbook: expect stanza"
-[Java]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/riemann/debian
-[Go]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/etcd/debian
-[Python]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/puppetboard/debian
-[Node.js]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/2016/kiwiirc/debian
-[dynamic users feature]: http://0pointer.net/blog/dynamic-users-with-systemd.html "Dynamic Users with systemd"
+[Java]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/riemann/debian
+[Go]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/etcd/debian
+[Python]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/puppetboard/debian
+[Node.js]: https://github.com/vincentbernat/pragmatic-debian-packages/tree/master/kiwiirc/debian
 
 {# Local Variables:      #}
 {# mode: markdown        #}
