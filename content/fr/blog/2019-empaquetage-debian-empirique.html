@@ -190,7 +190,9 @@ spécifier la version[^version] sans avoir à tenir à jour
             à jour.
 
 Vous pouvez lire le résultat final sur [GitHub][memcached-basic-gh] et
-le construire avec la commande `dpkg-buildpackage -us -uc -b`.
+le construire avec la commande `dpkg-buildpackage -us -uc -b` ou avec
+`GIT_PBUILDER_OPTIONS=--use-network=yes DIST=bionic git-pbuilder -us
+-uc -b` si vous avez déjà mis en place un outil tel que `pbuilder`.
 
 # Ceinture jaune
 
@@ -415,7 +417,7 @@ suivant :
     %:
     	dh $@ --with systemd
     
-    override_dh_auto_clean:
+    override_dh_update_autotools_config:
     	wget -N --progress=dot:mega $(URL)
     	tar --strip-components=1 -xf $(TARBALL)
     
@@ -427,29 +429,25 @@ suivant :
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
 
-La cible `dh_auto_clean` est détournée pour effectuer le
-téléchargement et la mise en place de l'arborescence[^clean]. Ni
+La cible `dh_update_autotools_config` est détournée pour effectuer le
+téléchargement et la mise en place de l'arborescence. Ni
 `dh_auto_configure`, ni `dh_auto_build` ne sont modifiés. `dh`
-appellera `./configure` avec les options appropriées puis
-`make`. `dh_auto_test` doit exécuter la suite de tests de
-*memcached*. Toutefois, un des tests échoue en raison d'un
-fichier dans le répertoire `debian/`. Nous supprimons ce test
-récalcitrant et invoquons manuellement
-`dh_auto_test`. `dh_auto_install` n'est pas surchargé et `dh`
-exécutera alors une variante de `make install`.
-
-[^clean]: Il aurait été possible d'appeler `dh_auto_clean` à la fin de
-          la cible. Toutefois, nous nous plaçons dans l'hypothèse que
-          chaque construction est faite sur une nouvelle copie issue
-          du système de version.
+appellera `./configure` avec les options appropriées puis `make`.
+`dh_auto_test` doit exécuter la suite de tests de *memcached*.
+Toutefois, un des tests échoue en raison d'un fichier dans le
+répertoire `debian/`. Nous supprimons ce test récalcitrant et
+invoquons manuellement `dh_auto_test`. `dh_auto_install` n'est pas
+surchargé et `dh` exécutera alors une variante de `make install`.
 
 Afin de mieux apprécier la différence, la voici sous forme de patch :
 
     ::diff
-    --- memcached-intermediate/debian/rules	2016-04-30 14:02:37.425593362 +0200
-    +++ memcached/debian/rules	2016-05-01 14:55:15.815063835 +0200
-    @@ -12,10 +12,9 @@
-     override_dh_auto_clean:
+    --- memcached-intermediate/debian/rules 2019-05-31 07:28:17.404380064 +0200
+    +++ memcached/debian/rules      2019-05-31 07:28:17.404380064 +0200
+    @@ -10,14 +10,13 @@
+     	dh $@
+    
+     override_dh_update_autotools_config:
     -override_dh_auto_test:
     -override_dh_auto_build:
     -override_dh_auto_install:
@@ -463,6 +461,9 @@ Afin de mieux apprécier la différence, la voici sous forme de patch :
     +	# Don't run the whitespace test
     +	rm t/whitespace.t
     +	dh_auto_test
+    
+     override_dh_gencontrol:
+     	dh_gencontrol -- -v$(PACKAGEVERSION)
 
 Vous avez le choix de laisser `dh` faire une partie du travail ou
 non. Il est généralement possible de partir d'un `debian/rules`
@@ -505,11 +506,20 @@ visible sur [GitHub][memcached-gh].
 
 Le [dépôt GitHub][GitHub] comprend d'autres exemples. Ils suivent tous
 le même schéma et mettent en œuvre les techniques décrites dans les
-sections précédentes.
+sections précédentes :
+
+ - `dh_update_autotools_config` est surchargée pour télécharger et mettre en place les sources,
+ - `dh_gencontrol` est modifiée pour fixer la version du paquet.
 
 Il y a notamment des exemples de démons en [Java][], [Go][],
 [Python][] et [Node.js][]. Le but de ces exemples est de démontrer que
 l'utilisation des outils Debian est relativement simple. Mission accomplie ?
+
+!!! "Mise à jour (05.2019)" Ce guide a été mis à jour pour utiliser
+`override_dh_update_autotools_config` pour télécharger des fichiers à
+la place de `override_dh_auto_clean`. Cela permet une intégration plus
+simple avec la plupart des outils de construction, tels que `pbuilder`
+et `sbuild`.
 
 [policy]: https://www.debian.org/doc/debian-policy/ "La charte Debian"
 [newmaint]: https://www.debian.org/doc/manuals/maint-guide/index.fr.html "Guide des nouveaux responsables Debian"

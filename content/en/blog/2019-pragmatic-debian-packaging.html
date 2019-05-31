@@ -183,7 +183,9 @@ have done with `fpm`:
             upgraded.
 
 You can review the whole package tree on [GitHub][memcached-basic-gh]
-and build it with the `dpkg-buildpackage -us -uc -b` command.
+and build it with the `dpkg-buildpackage -us -uc -b` command or with
+`GIT_PBUILDER_OPTIONS=--use-network=yes DIST=bionic git-pbuilder -us
+-uc -b` if you already setup a tool like `pbuilder`.
 
 # Pragmatic packages 102
 
@@ -397,7 +399,7 @@ can let it handle most of the work with this `debian/rules` file:
     %:
     	dh $@ --with systemd
     
-    override_dh_auto_clean:
+    override_dh_update_autotools_config:
     	wget -N --progress=dot:mega $(URL)
     	tar --strip-components=1 -xf $(TARBALL)
     
@@ -409,8 +411,8 @@ can let it handle most of the work with this `debian/rules` file:
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
 
-The `dh_auto_clean` target is hijacked to download and setup the
-source tree.[^clean] We don't override the `dh_auto_configure` step,
+The `dh_update_autotools_config` target is hijacked to download and
+setup the source tree. We don't override the `dh_auto_configure` step,
 so `dh` will execute the `./configure` script with the appropriate
 options. We don't override the `dh_auto_build` step either: `dh` will
 execute `make`. `dh_auto_test` is invoked after the build and it will
@@ -420,17 +422,15 @@ directory. We suppress this rogue test and let `dh_auto_test` executes
 the test suite. `dh_auto_install` is not overriden either, so `dh`
 will execute some variant of `make install`.
 
-[^clean]: We could call `dh_auto_clean` at the end of the target to
-          let it invoke `make clean`. However, it is assumed that a
-          fresh checkout is used before each build.
-
 To get a better sense of the difference, here is a diff:
 
     ::diff
-    --- memcached-intermediate/debian/rules	2016-04-30 14:02:37.425593362 +0200
-    +++ memcached/debian/rules	2016-05-01 14:55:15.815063835 +0200
-    @@ -12,10 +12,9 @@
-     override_dh_auto_clean:
+    --- memcached-intermediate/debian/rules 2019-05-31 07:28:17.404380064 +0200
+    +++ memcached/debian/rules      2019-05-31 07:28:17.404380064 +0200
+    @@ -10,14 +10,13 @@
+     	dh $@
+    
+     override_dh_update_autotools_config:
     -override_dh_auto_test:
     -override_dh_auto_build:
     -override_dh_auto_install:
@@ -444,6 +444,9 @@ To get a better sense of the difference, here is a diff:
     +	# Don't run the whitespace test
     +	rm t/whitespace.t
     +	dh_auto_test
+    
+     override_dh_gencontrol:
+     	dh_gencontrol -- -v$(PACKAGEVERSION)
 
 It is up to you to decide if `dh` can do some work for you, but
 you could try to start from a minimal `debian/rules` and only override
@@ -485,13 +488,18 @@ instead. You can review the whole package tree on
 The [GitHub repository][GitHub] contains some additional
 examples. They all follow the same scheme:
 
- - `dh_auto_clean` is hijacked to download and setup the source tree
- - `dh_gencontrol` is modified to use a computed version
+ - `dh_update_autotools_config` is hijacked to download and setup the source tree,
+ - `dh_gencontrol` is modified to use a computed version.
 
 Notably, you'll find daemons in [Java][], [Go][], [Python][] and
 [Node.js][]. The goal of these examples is to demonstrate that using
 Debian tools to build Debian packages can be straightforward. Hope
 this helps.
+
+!!! "Update (2019.05)" This guide has been updated to use
+`override_dh_update_autotools_config` to fetch source files instead of
+`override_dh_auto_clean` as it interacts better with most build tools,
+like `pbuilder` and `sbuild`.
 
 *[VCS]: Version Control System
 *[CI]: Continuous integration
