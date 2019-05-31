@@ -442,15 +442,17 @@ surchargé et `dh` exécutera alors une variante de `make install`.
 Afin de mieux apprécier la différence, la voici sous forme de patch :
 
     ::diff
-    --- memcached-intermediate/debian/rules 2019-05-31 07:28:17.404380064 +0200
+    --- memcached-intermediate/debian/rules 2019-05-31 07:52:40.908868035 +0200
     +++ memcached/debian/rules      2019-05-31 07:28:17.404380064 +0200
-    @@ -10,14 +10,13 @@
+    @@ -9,15 +9,14 @@
+     %:
      	dh $@
     
-     override_dh_update_autotools_config:
+    -override_dh_auto_clean:
     -override_dh_auto_test:
     -override_dh_auto_build:
     -override_dh_auto_install:
+    +override_dh_update_autotools_config:
      	wget -N --progress=dot:mega $(URL)
      	tar --strip-components=1 -xf $(TARBALL)
     -	./configure --prefix=/usr
