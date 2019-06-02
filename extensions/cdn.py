@@ -1,26 +1,26 @@
 # -*- coding: utf-8 -*-
-"""
-Plugin to use a CDN for some static files
+"""Plugin to select CDN depending on the path of the media file.
+
+A `cdn` configuration block should be present. Depending on the path
+of the file, a different media_url will be selected.
+
 """
 
-import os
 from functools import wraps
-from urllib import quote
 
 from hyde.plugin import Plugin
-from hyde.site import Site
+from hyde.site import Site, _encode_path
 
-# Serve everything from CDN except content of files/ and videos/
-NOCDN="https://media.luffy.cx/"
+
 def decorate_media_url(media_url):
     @wraps(media_url)
     def wrapper(site, path, safe=None):
-        if path.startswith("files/") or path.startswith("videos/"):
-            # Don't use CDN for those big files
-            base = NOCDN.encode('utf-8')
-            path = path.strip().replace(os.sep, '/').encode('utf-8')
-            path = quote(path, safe) if safe is not None else quote(path)
-            return base.rstrip('/') + '/' + path.lstrip('/')
+        for block in site.config.cdn:
+            if not path.startswith(block.path):
+                continue
+            return _encode_path(block.url,
+                                path[len(block.path):],
+                                safe)
         return media_url(site, path, safe)
     return wrapper
 
