@@ -12,13 +12,19 @@ luffy.s.push(function() {
             var m3u8 = videoSource.src,
                 once = false,
                 oldVideo = videoSource.parentNode,
-                newVideo = oldVideo.cloneNode(false);
+                newVideo = oldVideo.cloneNode(true),
+                allSources = newVideo.querySelectorAll('source'); // ":scope > source" is not well-supported
 
-            // Replace video tag with our clone.
-            oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+            // Remove all sources from clone. Keep tracks.
+            [].forEach.call(allSources, function(source) {
+                source.remove();
+            });
 
             // Add an empty source (enable play event on Chromium 72+)
             newVideo.src = "about:blank";
+
+            // Replace video tag with our clone.
+            oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
             // Pass control to hls.js
             var play = function() {
