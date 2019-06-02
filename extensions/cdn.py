@@ -3,15 +3,12 @@
 Plugin to use a CDN for some static files
 """
 
-import time
-
 import os
 from functools import wraps
 from urllib import quote
 
 from hyde.plugin import Plugin
 from hyde.site import Site
-from fswrap import FS, File, Folder
 
 # Serve everything from CDN except content of files/ and videos/
 NOCDN="https://media.luffy.cx/"
