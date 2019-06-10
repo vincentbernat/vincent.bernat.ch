@@ -48,7 +48,7 @@ langage [Vala][].
         gchar **envp = g_get_environ();
         gchar **command = (gchar *[]){g_strdup(g_environ_getenv(envp, "SHELL")), NULL };
         g_strfreev(envp);
-        vte_terminal_spawn_sync(VTE_TERMINAL(terminal),
+        vte_terminal_spawn_async(VTE_TERMINAL(terminal),
             VTE_PTY_DEFAULT,
             NULL,       /* working directory  */
             command,    /* command */
@@ -56,7 +56,8 @@ langage [Vala][].
             0,          /* spawn flags */
             NULL, NULL, /* child setup */
             NULL,       /* child pid */
-            NULL, NULL);
+            -1,         /* timeout */
+            NULL, NULL, NULL);
     
         /* Connect some signals */
         g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
