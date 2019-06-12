@@ -315,19 +315,12 @@ def build():
                 if ext in [".png", ".svg", ".woff", ".woff2"]:
                     # Fix CSS
                     sed_css.append('s+{})+{})+g'.format(f, newname))
-                if ext not in [".png", ".svg", ".woff2"]:
+                if ext not in [".png", ".svg"]:
                     # Fix HTML
                     sed_html.append(
                         (r"s,"
                          r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
                          r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 crossorigin=\3anonymous\3,"
-                         r"g").format(media, f, media, newname, sha))
-                if ext in [".woff2"]:
-                    # Fix HTML
-                    sed_html.append(
-                        (r"s,"
-                         r"\([\"']\){}{}\1,"
-                         r"\1{}{}\1 integrity=\1sha256-{}\1 crossorigin=\1use-credentials\1,"
                          r"g").format(media, f, media, newname, sha))
             if sed_css:
                 local("find . -name '*.css' -type f -print0 | "
