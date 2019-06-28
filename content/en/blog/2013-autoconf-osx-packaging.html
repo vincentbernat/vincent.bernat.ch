@@ -1,12 +1,12 @@
 ---
-title: "Packaging a daemon for OS X"
+title: "Packaging a daemon for macOS"
 uuid: 0828c92d-7dcc-4721-a204-1645005231b0
 tags:
   - programming
 ---
 
 There are three main ways to distribute a command-line daemon for
-OS X:
+macOS:
 
  1. Distributing source code and instructions on how to compile it.
  2. Using a third-party package manager, like [Homebrew][].
@@ -42,13 +42,13 @@ installer package.
 
 # Building an installer package
 
-OS X comes with a graphical and a command-line installer. The
+macOS comes with a graphical and a command-line installer. The
 graphical one is run by opening a package from the [Finder][]. Then,
 the user experiences some familiar wizard allowing them to install the
 software in a matter of a few seconds.
 
-![OS X graphical installer][osx-installer]
-[osx-installer]: [[!!images/osx-installer.png]] "Example of OS X graphical installer"
+![macOS graphical installer][osx-installer]
+[osx-installer]: [[!!images/osx-installer.png]] "Example of macOS graphical installer"
 
 The documentation around how to build such a package is somewhat
 clumsy. You may find outdated information or pieces of information
@@ -58,7 +58,7 @@ accurate bits in the following context:
  1. You are packaging a pure **command-line tool**.
  2. You are using [Autoconf][] and [Automake][] as a build system.
  3. You want to support **several architectures**.
- 4. You want to support **older versions of OS X**.
+ 4. You want to support **older versions of macOS**.
 
 ## Creating a package
 
@@ -218,11 +218,11 @@ If you need to add a system user, use [dscl][].
 
 ## Dependencies
 
-There is no dependency management built into OS X
+There is no dependency management built into macOS
 installer. Therefore, you should ensure that everything is present in
 the package or in the base system. For example, `lldpd` relies on
 [libevent][], an event notification library. This library is not
-provided with OS X. When it is not found, the build system will use an
+provided with macOS. When it is not found, the build system will use an
 embedded copy. However, if you have installed _libevent_ with
 _Homebrew_, you will get binaries linked to this local _libevent_
 installation. Your package won't work on another host.
@@ -238,17 +238,18 @@ The output of `otool -L` can detect unwanted dependencies:
             /System/Library/Frameworks/Foundation.framework/Versions/C/Foundation (compatibility version 300.0.0, current version 945.18.0)
             /usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 169.3.0)
 
-## Compilation for older versions of OS X
+## Compilation for older versions of macOS
 
-The package as built above may only work on the same version of OS X
+The package as built above may only work on the same version of macOS
 that you use to compile. If you want a package that will work on
-OS X 10.6, you will need to download the appropriate SDK.[^sdk]
+Mac OS X 10.6, you will need to download the appropriate SDK.[^sdk]
 
 [^sdk]: Unfortunately, Apple makes it difficult to find them. The
-        easiest way to get the SDK for Mac OS X 10.6 is to download _Xcode_ 4.3.3,
-        mount the image and copy the SDK to `/Developer/SDKs`.
+        easiest way to get the SDK for Mac OS X 10.6 is to download
+        _Xcode_ 4.3.3, mount the image and copy the SDK to
+        `/Developer/SDKs`.
 
-Then, you need to tell the compiler the target version of OS X and the
+Then, you need to tell the compiler the target version of macOS and the
 SDK location. You can do this by setting `CFLAGS` and `LDFLAGS` (and
 `CXXFLAGS` if you use C++):
 
@@ -260,7 +261,7 @@ SDK location. You can do this by setting `CFLAGS` and `LDFLAGS` (and
 
 The `-mmacosx-version-min` flag will be used by various macros in the
 headers to mark some functions as available or not, depending on the
-version of OS X you target. It will also be used by the linker.
+version of macOS you target. It will also be used by the linker.
 
 The `-isysroot` will tell the location of the SDK. Headers and
 libraries will be looked up in this location first.
@@ -270,7 +271,7 @@ libraries will be looked up in this location first.
 Mac OS X 10.6 was available for both IA-32 and x86-64
 architectures. If you want to support both installations with a single
 package, you need to build [universal binaries][]. The Mach object
-file format, used by OS X, allows several versions of the executable
+file format, used by macOS, allows several versions of the executable
 in the same file. The operating system will select the most
 appropriate one.
 
@@ -336,7 +337,7 @@ If we want to build for several architectures, we will type `make
 ARCHS="x86_64 i386"`. Otherwise it defaults to the current host's
 architecture.
 
-We use `install-data-local` target to install files specific to OS X:
+We use `install-data-local` target to install files specific to macOS:
 
     ::make
     install-data-local:
@@ -405,7 +406,7 @@ This may seem a bit obscure, but this is really like what we have
 described previously. Note that we use `@CONFIGURE_ARGS@` which is a
 variable we have defined in `configure.ac`.
 
-Here is how a user would create its own OS X package:
+Here is how a user would create its own macOS package:
 
     ::console
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
@@ -422,8 +423,8 @@ Here is how a user would create its own OS X package:
 *[SDK]: Software Development Kit
 
 [lldpd]: https://vincentbernat.github.io/lldpd/ "lldpd: a 802.1ab implementation (LLDP)"
-[Homebrew]: https://brew.sh/ "Homebrew: the missing package manager for OS X"
-[installer package]: https://en.wikipedia.org/wiki/Installer_(OS_X) "OS X Installer on Wikipedia"
+[Homebrew]: https://brew.sh/ "Homebrew: the missing package manager for macOS"
+[installer package]: https://en.wikipedia.org/wiki/Installer_(macOS) "macOS Installer on Wikipedia"
 [Finder]: https://en.wikipedia.org/wiki/Finder_(software) "Finder on Wikipedia"
 [lot of examples available]: https://github.com/Homebrew/homebrew-core/tree/master/Formula "Homebrew available formulas"
 [Xcode]: https://itunes.apple.com/us/app/xcode/id497799835 "Xcode on Mac App Store"
