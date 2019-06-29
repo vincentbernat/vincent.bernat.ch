@@ -67,20 +67,21 @@ def screenshots():
                 "en/blog",
                 "en/projects.html",
                 "en/blog/2011-ssl-perfect-forward-secrecy.html",
-                "en/blog/2011-thinkpad-edge-11.html"]:
+                "en/blog/2011-thinkpad-edge-11.html",
+                "en/blog/2017-ipv6-route-lookup-linux.html"]:
         for width in [320, 600, 1024, 1280]:
-            for js in ['on', 'off']:
-                local("cutycapt "
-                      "--url=http://localhost:8080/{url} "
-                      "--out=screenshots/{now}/{width}px-js{js}-{slug}.png "
-                      "--delay=1000 "
-                      "--javascript={js} "
-                      "--max-wait=5000 "
-                      "--min-width={width}".format(width=width,
-                                                   now=now,
-                                                   url=url,
-                                                   js=js,
-                                                   slug=url.replace("/", "-").replace(".", "-")))
+            local("chromium "
+                  "--headless "
+                  "--hide-scrollbars "
+                  "--screenshot "
+                  "--disable-gpu "
+                  "--window-size={width},2000 "
+                  "http://localhost:8080/{url} "
+                  "&& mv screenshot.png screenshots/{now}/{width}px-{slug}.png".format(
+                      width=width,
+                      now=now,
+                      url=url,
+                      slug=url.replace("/", "-").replace(".", "-")))
 
 # Encoding of videos needs to be done with video2hls.
 """
