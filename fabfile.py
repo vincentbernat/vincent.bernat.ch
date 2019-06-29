@@ -69,7 +69,7 @@ def screenshots():
                 "en/blog/2011-ssl-perfect-forward-secrecy.html",
                 "en/blog/2011-thinkpad-edge-11.html",
                 "en/blog/2017-ipv6-route-lookup-linux.html"]:
-        for width in [320, 600, 1024, 1280]:
+        for width in [320, 600, 1024, 1280, 1900]:
             local("chromium "
                   "--headless "
                   "--hide-scrollbars "
