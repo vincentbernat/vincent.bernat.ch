@@ -57,13 +57,6 @@ def sprite():
                     "--css-sprite=../images/l/sprite.svg",
                     "content/media/images/l/sprite/*.svg"]))
 
-# For the following task, please check that the appropriate
-# fonts are installed on the system. The rendering engine of both
-# wkhtmltopdf and cutycapt is QT and it doesn't support web fonts
-# yet. There is also a bug when multiple fonts are used under the same
-# name. Here are the two relevant bugs:
-#  https://code.google.com/p/wkhtmltopdf/issues/detail?id=145
-#  https://code.google.com/p/wkhtmltopdf/issues/detail?id=783
 
 @task
 def screenshots():
