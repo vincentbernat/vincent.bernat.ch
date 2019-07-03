@@ -399,3 +399,4 @@ def analytics():
           "                            --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
           "                            --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
           "".format(" ".join(hosts)))
+    local("x-www-browser goaccess.html")
