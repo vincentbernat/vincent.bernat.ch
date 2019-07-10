@@ -276,7 +276,8 @@ def build():
         #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
-                                "--text-file=../glyphs-{}.txt".format(glyphs)])
+                                "--text-file=../glyphs-{}.txt".format(glyphs),
+                                "--no-hinting --desubroutinize"])
             local("pyftsubset media/fonts/{}.woff  --flavor=woff --with-zopfli {}".format(font, options))
             local("pyftsubset media/fonts/{}.woff2 --flavor=woff2 {}".format(font, options))
             local("mv media/fonts/{}.subset.woff  media/fonts/{}.woff".format(font, font))
