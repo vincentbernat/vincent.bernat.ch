@@ -1,0 +1,469 @@
+---
+title: "Écrire un script Python durable"
+description: |
+  Un script Python contenu dans un seul fichier peut fournir une
+  documentation et quelques tests pour rester compréhensible une année
+  plus tard.
+uuid: 40caea5c-5740-450e-86f0-071492d64c05
+attachments:
+  "https://github.com/vincentbernat/python-script/blob/master/fizzbuzz.py": "Exemple complet"
+tags:
+  - programming-python
+---
+
+Python est un excellent langage pour écrire rapidement un script entre
+une dizaine et quelques centaines de lignes de code. Une fois terminé,
+vous pouvez l'oublier et vous concentrer sur votre prochaine mission.
+
+Six mois plus tard, un collègue vous demande pourquoi ce script échoue
+et vous n'en avez aucune idée : pas de documentation, paramètres codés
+en dur, aucune trace pendant l'exécution et aucuns tests pour vous
+éclairer.
+
+Transformer un script Python « vite fait » en une version durable,
+facile à utiliser, à comprendre et à modifier par vos collègues et
+votre futur alter ego, ne demande qu'un effort modéré. À titre
+d'illustration, commençons par le script suivant pour résoudre le test
+classique « [Fizz-Buzz][Fizz-Buzz test] » :
+
+    ::python
+    import sys
+    for n in range(int(sys.argv[1]), int(sys.argv[2])):
+        if n % 3 == 0 and n % 5 == 0:
+            print("fizzbuzz")
+        elif n % 3 == 0:
+            print("fizz")
+        elif n % 5 == 0:
+            print("buzz")
+        else:
+            print(n)
+
+# Documentation
+
+Je trouve utile d'écrire de la documentation avant même d'écrire la
+première ligne de code : cela facilite la conception et m'assure de ne
+pas reporter cette tâche indéfiniment. La documentation peut être
+placée en haut du script[^francais] :
+
+    ::python
+    #!/usr/bin/env python3
+    
+    """Simple fizzbuzz generator.
+    
+    This script prints out a sequence of numbers from a provided range
+    with the following restrictions:
+    
+     - if the number is divisble by 3, then print out "fizz",
+     - if the number is divisible by 5, then print out "buzz",
+     - if the number is divisible by 3 and 5, then print out "fizzbuzz".
+    """
+
+[^francais]: La documentation est systématiquement en anglais. Dans
+    notre domaine, il paraît difficile de faire l'impasse sur ce
+    sujet.
+
+La première ligne est un bref résumé du but du script. Les autres
+paragraphes contiennent des détails supplémentaires sur son action.
+
+# Arguments en ligne de commande
+
+La deuxième étape consiste à transformer les paramètres codés en dur
+en valeurs documentées et configurables à l'aide d'arguments en ligne
+de commande, via le [module `argparse`][argparse module]. Dans notre
+exemple, nous demandons à l'utilisateur de spécifier une plage et nous
+lui permettons de modifier les valeurs modulo pour « fizz » et « buzz
+».
+
+    ::python
+    import argparse
+    import sys
+    
+    
+    class CustomFormatter(argparse.RawDescriptionHelpFormatter,
+                          argparse.ArgumentDefaultsHelpFormatter):
+        pass
+    
+    
+    def parse_args(args=sys.argv[1:]):
+        """Parse arguments."""
+        parser = argparse.ArgumentParser(
+            description=sys.modules[__name__].__doc__,
+            formatter_class=CustomFormatter)
+    
+        g = parser.add_argument_group("fizzbuzz settings")
+        g.add_argument("--fizz", metavar="N",
+                       default=3,
+                       type=int,
+                       help="Modulo value for fizz")
+        g.add_argument("--buzz", metavar="N",
+                       default=5,
+                       type=int,
+                       help="Modulo value for buzz")
+    
+        parser.add_argument("start", type=int, help="Start value")
+        parser.add_argument("end", type=int, help="End value")
+    
+        return parser.parse_args(args)
+    
+    
+    options = parse_args()
+    for n in range(options.start, options.end + 1):
+        # ...
+
+La valeur ajoutée de cette modification est considérable : les
+paramètres sont maintenant correctement documentés et peuvent être
+découverts grâce à l'option `--help`. De plus, la documentation que
+nous avons écrite dans la section précédente est également affichée :
+
+    ::console
+    $ ./fizzbuzz.py --help
+    usage: fizzbuzz.py [-h] [--fizz N] [--buzz N] start end
+    
+    Simple fizzbuzz generator.
+    
+    This script prints out a sequence of numbers from a provided range
+    with the following restrictions:
+    
+     - if the number is divisble by 3, then print out "fizz",
+     - if the number is divisible by 5, then print out "buzz",
+     - if the number is divisible by 3 and 5, then print out "fizzbuzz".
+    
+    positional arguments:
+      start         Start value
+      end           End value
+    
+    optional arguments:
+      -h, --help    show this help message and exit
+    
+    fizzbuzz settings:
+      --fizz N      Modulo value for fizz (default: 3)
+      --buzz N      Modulo value for buzz (default: 5)
+
+Le module `argparse` est assez puissant. S'il ne vous est pas
+familier, un survol de sa [documentation][argparse module] est utile.
+J'aime particulièrement la possibilité de définir des
+[sous-commandes][sub-commands] et de [grouper des options][argument
+groups].
+
+# Traces
+
+La troisième étape est d'afficher des informations durant l'exécution.
+Le [module `logging`][logging module] convient parfaitement à cet
+effet. Tout d'abord, nous définissons le « *logger* » :
+
+    ::python
+    import logging
+    import logging.handlers
+    import os
+    import sys
+    
+    logger = logging.getLogger(os.path.splitext(os.path.basename(sys.argv[0]))[0])
+
+Ensuite, nous rendons sa verbosité configurable : `logger.debug()` ne
+devrait afficher quelque chose que lorsqu'un utilisateur utilise le
+drapeau `--debug`. `--silent` devrait couper les traces sauf si une
+condition exceptionnelle se produit. Pour cela, nous ajoutons le code
+suivant dans `parse_args()` :
+
+    ::python
+    # In parse_args()
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument("--debug", "-d", action="store_true",
+                   default=False,
+                   help="enable debugging")
+    g.add_argument("--silent", "-s", action="store_true",
+                   default=False,
+                   help="don't log to console")
+
+Cette fonction permet alors de configurer les traces :
+
+    ::python
+    def setup_logging(options):
+        """Configure logging."""
+        root = logging.getLogger("")
+        root.setLevel(logging.WARNING)
+        logger.setLevel(options.debug and logging.DEBUG or logging.INFO)
+        if not options.silent:
+            ch = logging.StreamHandler()
+            ch.setFormatter(logging.Formatter(
+                "%(levelname)s[%(name)s] %(message)s"))
+            root.addHandler(ch)
+
+Le corps de notre script devient ceci :
+
+    ::python
+    if __name__ == "__main__":
+        options = parse_args()
+        setup_logging(options)
+    
+        try:
+            logger.debug("compute fizzbuzz from {} to {}".format(options.start,
+                                                                 options.end))
+            for n in range(options.start, options.end + 1):
+                # ...
+        except Exception as e:
+            logger.exception("%s", e)
+            sys.exit(1)
+        sys.exit(0)
+
+Si le script peut être exécuté non interactivement, par exemple depuis
+une *crontab*, il est possible d'envoyer les traces vers *syslog* :
+
+    ::python
+    def setup_logging(options):
+        """Configure logging."""
+        root = logging.getLogger("")
+        root.setLevel(logging.WARNING)
+        logger.setLevel(options.debug and logging.DEBUG or logging.INFO)
+        if not options.silent:
+            if not sys.stderr.isatty():
+                facility = logging.handlers.SysLogHandler.LOG_DAEMON
+                sh = logging.handlers.SysLogHandler(address='/dev/log',
+                                                    facility=facility)
+                sh.setFormatter(logging.Formatter(
+                    "{0}[{1}]: %(message)s".format(
+                        logger.name,
+                        os.getpid())))
+                root.addHandler(sh)
+            else:
+                ch = logging.StreamHandler()
+                ch.setFormatter(logging.Formatter(
+                    "%(levelname)s[%(name)s] %(message)s"))
+                root.addHandler(ch)
+
+Pour cet exemple, cela représente beaucoup de code pour un seul appel
+à `logger.debug()`, mais en situation réelle, cela est très utile pour
+aider un utilisateur à comprendre le déroulement du script.
+
+    ::console
+    $ ./fizzbuzz.py --debug 1 3
+    DEBUG[fizzbuzz] compute fizzbuzz from 1 to 3
+    1
+    2
+    fizz
+
+# Tests
+
+Les tests unitaires sont très utiles pour s'assurer qu'une application
+se comporte comme prévu. Il n'est pas courant de les utiliser dans des
+scripts, mais en écrire quelques-uns améliore grandement la qualité.
+Transformons le code contenu dans la boucle en une fonction avec
+quelques exemples interactifs d'utilisation dans sa documentation :
+
+    ::python
+    def fizzbuzz(n, fizz, buzz):
+        """Compute fizzbuzz nth item given modulo values for fizz and buzz.
+    
+        >>> fizzbuzz(5, 3, 5)
+        'buzz'
+        >>> fizzbuzz(3, 3, 5)
+        'fizz'
+        >>> fizzbuzz(15, 3, 5)
+        'fizzbuzz'
+        >>> fizzbuzz(4, 3, 5)
+        4
+        >>> fizzbuzz(4, 4, 6)
+        'fizz'
+    
+        """
+        if n % fizz == 0 and n % buzz == 0:
+            return "fizzbuzz"
+        if n % fizz == 0:
+            return "fizz"
+        if n % buzz == 0:
+            return "buzz"
+        return n
+
+[pytest][] permet de s'assurer que les résultats sont
+corrects[^extension] :
+
+    ::console
+    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    ============================ test session starts =============================
+    platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
+    cachedir: .pytest_cache
+    rootdir: /home/bernat/code/perso/python-script, inifile:
+    plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
+    collected 1 item
+    
+    fizzbuzz.py::fizzbuzz.fizzbuzz PASSED                                  [100%]
+    
+    ========================== 1 passed in 0.05 seconds ==========================
+
+[^extension]: Ceci nécessite que le nom du script se termine par
+    `.py`. Je n'aime pas ajouter une extension à un nom de script : le
+    langage est un détail technique qui ne doit pas être exposé à
+    l'utilisateur. Cependant, il semble que ce soit le moyen le plus
+    simple de permettre aux programmes tels que *pytest* de découvrir
+    les tests à exécuter.
+
+En cas d'erreur, *pytest* affiche un message décrivant la localisation
+et la nature du problème :
+
+    ::console
+    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py -k fizzbuzz.fizzbuzz
+    ============================ test session starts =============================
+    platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
+    cachedir: .pytest_cache
+    rootdir: /home/bernat/code/perso/python-script, inifile:
+    plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
+    collected 1 item
+    
+    fizzbuzz.py::fizzbuzz.fizzbuzz FAILED                                  [100%]
+    
+    ================================== FAILURES ==================================
+    ________________________ [doctest] fizzbuzz.fizzbuzz _________________________
+    100
+    101     >>> fizzbuzz(5, 3, 5)
+    102     'buzz'
+    103     >>> fizzbuzz(3, 3, 5)
+    104     'fizz'
+    105     >>> fizzbuzz(15, 3, 5)
+    106     'fizzbuzz'
+    107     >>> fizzbuzz(4, 3, 5)
+    108     4
+    109     >>> fizzbuzz(4, 4, 6)
+    Expected:
+        fizz
+    Got:
+        4
+    
+    /home/bernat/code/perso/python-script/fizzbuzz.py:109: DocTestFailure
+    ========================== 1 failed in 0.02 seconds ==========================
+
+Nous pouvons également écrire des tests unitaires sous forme de code.
+Supposons que nous voulions tester la fonction suivante :
+
+    ::python
+    def main(options):
+        """Compute a fizzbuzz set of strings and return them as an array."""
+        logger.debug("compute fizzbuzz from {} to {}".format(options.start,
+                                                             options.end))
+        return [str(fizzbuzz(i, options.fizz, options.buzz))
+                for i in range(options.start, options.end+1)]
+
+À la fin du script[^end], nous ajoutons quelques tests unitaires
+utilisant les [tests paramétrés][parametrized test functions] de
+*pytest* :
+
+    ::python
+    # Unit tests
+    import pytest                   # noqa: E402
+    import shlex                    # noqa: E402
+    
+    
+    @pytest.mark.parametrize("args, expected", [
+        ("0 0", ["fizzbuzz"]),
+        ("3 5", ["fizz", "4", "buzz"]),
+        ("9 12", ["fizz", "buzz", "11", "fizz"]),
+        ("14 17", ["14", "fizzbuzz", "16", "17"]),
+        ("14 17 --fizz=2", ["fizz", "buzz", "fizz", "17"]),
+        ("17 20 --buzz=10", ["17", "fizz", "19", "buzz"]),
+    ])
+    def test_main(args, expected):
+        options = parse_args(shlex.split(args))
+        options.debug = True
+        options.silent = True
+        setup_logging(options)
+        assert main(options) == expected
+
+[^end]: Du fait que le script se termine par un appel à `sys.exit()`,
+    le code contenant les tests n'est pas exécuté en temps normal.
+    Ainsi, `pytest` n'est pas nécessaire pour faire tourner le script.
+
+La fonction de test s'exécute une fois pour chacun des paramètres
+fournis. La partie `args` est utilisée comme entrée pour la fonction
+`parse_args()` afin d'obtenir les options à passer à la fonction
+`main()`. La partie `expected` est comparée au résultat de la fonction
+`main()`. Quand tout fonctionne comme prévu, *pytest* affiche :
+
+    ::console
+    python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    ============================ test session starts =============================
+    platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
+    cachedir: .pytest_cache
+    rootdir: /home/bernat/code/perso/python-script, inifile:
+    plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
+    collected 7 items
+    
+    fizzbuzz.py::fizzbuzz.fizzbuzz PASSED                                  [ 14%]
+    fizzbuzz.py::test_main[0 0-expected0] PASSED                           [ 28%]
+    fizzbuzz.py::test_main[3 5-expected1] PASSED                           [ 42%]
+    fizzbuzz.py::test_main[9 12-expected2] PASSED                          [ 57%]
+    fizzbuzz.py::test_main[14 17-expected3] PASSED                         [ 71%]
+    fizzbuzz.py::test_main[14 17 --fizz=2-expected4] PASSED                [ 85%]
+    fizzbuzz.py::test_main[17 20 --buzz=10-expected5] PASSED               [100%]
+    
+    ========================== 7 passed in 0.03 seconds ==========================
+
+Quand une erreur survient, *pytest* fournit une évaluation de la
+situation :
+
+    ::console hl_lines="6 23"
+    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    [...]
+    ================================== FAILURES ==================================
+    __________________________ test_main[0 0-expected0] __________________________
+    
+    args = '0 0', expected = ['0']
+    
+        @pytest.mark.parametrize("args, expected", [
+            ("0 0", ["0"]),
+            ("3 5", ["fizz", "4", "buzz"]),
+            ("9 12", ["fizz", "buzz", "11", "fizz"]),
+            ("14 17", ["14", "fizzbuzz", "16", "17"]),
+            ("14 17 --fizz=2", ["fizz", "buzz", "fizz", "17"]),
+            ("17 20 --buzz=10", ["17", "fizz", "19", "buzz"]),
+        ])
+        def test_main(args, expected):
+            options = parse_args(shlex.split(args))
+            options.debug = True
+            options.silent = True
+            setup_logging(options)
+    >       assert main(options) == expected
+    E       AssertionError: assert ['fizzbuzz'] == ['0']
+    E         At index 0 diff: 'fizzbuzz' != '0'
+    E         Full diff:
+    E         - ['fizzbuzz']
+    E         + ['0']
+    
+    fizzbuzz.py:160: AssertionError
+    ----------------------------- Captured log call ------------------------------
+    fizzbuzz.py                125 DEBUG    compute fizzbuzz from 0 to 0
+    ===================== 1 failed, 6 passed in 0.05 seconds =====================
+
+L'appel à `logger.debug()` est inclus dans la sortie. C'est une autre
+bonne raison d'émettre des traces ! Si vous voulez en savoir plus sur
+les fonctionnalités de pytest, jetez un coup d'œil à « [Test d'un
+applicatif réseau avec pytest et les espaces de noms Linux][Testing
+network software with pytest and Linux namespaces] ».
+
+---
+
+En résumé, les quatre modifications à apporter pour rendre un script
+Python plus durable sont :
+
+ 1. ajouter de la **documentation** en haut du script,
+ 2. utiliser le module `argparse` pour **documenter les différents
+    paramètres**,
+ 3. utiliser le module `logging` pour **enregistrer les détails sur
+    l'exécution**,
+ 4. ajouter quelques **tests unitaires**.
+
+L'exemple complet est disponible sur [GitHub][] et peut être utilisé
+comme modèle !
+
+[Fizz-Buzz test]: http://wiki.c2.com/?FizzBuzzTest "Fizz-Buzz test"
+[argparse module]: https://docs.python.org/3/library/argparse.html "Parser for command-line options, arguments and sub-commands"
+[logging module]: https://docs.python.org/3/library/logging.html "Logging facility for Python"
+[sub-commands]: https://docs.python.org/3/library/argparse.html#sub-commands "argparse: sub-commands"
+[argument groups]: https://docs.python.org/3/library/argparse.html#argument-groups "argparse: argument groups"
+[pytest]: https://docs.pytest.org/en/latest/ "pytest: helps you write better programs"
+[parametrized test functions]: https://docs.pytest.org/en/latest/parametrize.html "Parametrizing fixtures and test functions"
+[Testing network software with pytest and Linux namespaces]: [[fr/blog/2016-testing-pytest-linux-namespaces.html]]
+[GitHub]: https://github.com/vincentbernat/python-script/blob/master/fizzbuzz.py "Example complet avec FizzBuzz"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
