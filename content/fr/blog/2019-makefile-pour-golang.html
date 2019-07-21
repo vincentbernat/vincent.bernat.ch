@@ -1,0 +1,244 @@
+---
+title: "Makefile pour un projet Go (2019)"
+description: |
+  Alors que Go dispose désormais d'un système de gestion des dépendances
+  robuste, un Makefile reste utile pour organiser les tâches.
+uuid: 449b7cdc-59f7-4e39-93e3-146540da025c
+attachments:
+  "https://github.com/vincentbernat/hellogopher": "GitHub repository"
+tags:
+  - programming-go
+---
+
+Très tôt, j'ai pris en grippe le principe du `GOPATH` mis en avant par
+[Go][] : je ne veux en aucun cas mélanger mon propre code avec celui
+des dépendances. Je ne suis pas seul dans cette aversion et moults
+outils ou des `Makefile` ont été créés pour éviter d'organiser son
+code autour du `GOPATH`.
+
+Heureusement, depuis Go 1.11, il est possible d'utiliser les
+[modules][] pour gérer les dépendances sans obligation d'utiliser le
+`GOPATH`. Tout d'abord, votre projet doit être converti en un
+*module*[^name] :
+
+    ::console
+    $ go mod init hellogopher
+    go: creating new go.mod: module hellogopher
+    $ cat go.mod
+    module hellogopher
+
+[^name]: Pour une application qui n'est pas destinée à servir de
+    dépendance, je préfère utiliser un nom court plutôt qu'un nom
+    dérivé d'une URL, comme `github.com/vincentbernat/hellogopher`.
+    Cela rend plus aisé à lire les blocs d'import :
+    
+        ::go
+        import (
+                "fmt"
+                "os"
+                
+                "hellogopher/cmd"
+                
+                "github.com/pkg/errors"
+                "github.com/spf13/cobra"
+        )
+
+Ensuite, vous pouvez invoquer les commandes habituelles, telles que
+`go build` ou `go test`. La commande `go` va résoudre les imports en
+utilisant les versions spécifiées le fichier `go.mod`. Lorsqu'il
+rencontre un import pour un paquet non présent dans `go.mod`, il
+télécharge automatiquement la dernière version du module correspondant
+et l'ajoute dans le fichier.
+
+    ::console
+    $ go test ./...
+    go: finding github.com/spf13/cobra v0.0.5
+    go: downloading github.com/spf13/cobra v0.0.5
+    ?       hellogopher     [no test files]
+    ?       hellogopher/cmd [no test files]
+    ok      hellogopher/hello       0.001s
+    $ cat go.mod
+    module hellogopher
+    
+    require github.com/spf13/cobra v0.0.5
+
+Si vous voulez une version spécifique, vous pouvez soit éditer
+`go.mod` ou invoquer `go get` :
+
+    ::console
+    $ go get github.com/spf13/cobra@v0.0.4
+    go: finding github.com/spf13/cobra v0.0.4
+    go: downloading github.com/spf13/cobra v0.0.4
+    $ cat go.mod
+    module hellogopher
+    
+    require github.com/spf13/cobra v0.0.4
+
+Ajoutez `go.mod` à votre système de gestion des versions. Vous pouvez
+également ajouter `go.sum`, ce qui procure une sécurité contre une
+dépendance qui mute sa version. Si vous voulez inclure les dépendances
+(*vendoring*), vous pouvez lancer `go mod vendor` et ajouter le
+répertoire `vendor/` à votre système de gestion des versions.
+
+Grâce aux modules, je pense que la gestion des dépendances en Go est
+maintenant au niveau des autres langages, notamment Ruby. Bien qu'il
+soit possible d'effectuer la plupart des opérations (construction et
+tests) en utilisant uniquement la commande `go`, un `Makefile` est
+toujours utile pour organiser les tâches les plus courantes, un peu
+comme le `setup.py` de Python ou le `Rakefile` de Ruby. Je vais
+décrire le [mien][mine].
+
+# Utilisation d'outils tierces
+
+La plupart des projets vont nécessiter quelques outils pour la
+construction ou les tests. Pour éviter à l'utilisateur d'avoir à les
+installer, je propose de les **compiler à la volée**. Par exemple,
+voici comment l'analyse statique du code est effectuée avec
+[Golint][] :
+
+    ::make
+    BIN = $(CURDIR)/bin
+    $(BIN):
+    	@mkdir -p $@
+    $(BIN)/%: | $(BIN)
+    	@tmp=$$(mktemp -d); \
+    	   env GO111MODULE=off GOPATH=$$tmp GOBIN=$(BIN) go get $(PACKAGE) \
+    		|| ret=$$?; \
+    	   rm -rf $$tmp ; exit $$ret
+    
+    $(BIN)/golint: PACKAGE=golang.org/x/lint/golint
+
+    GOLINT = $(BIN)/golint
+    lint: | $(GOLINT)
+    	$(GOLINT) -set_exit_status ./...
+
+Le premier bloc définit comment l'outil tiers est fabriqué : `go get`
+est invoqué avec le nom du paquet correspondant à l'outil à installer.
+Nous ne voulons pas polluer notre gestion de dépendances pour cet
+outil et nous travaillons donc dans un `GOPATH` vide. Les binaires
+générés sont placés dans `bin/`.
+
+Le second bloc étend la règle générique définie dans le premier bloc
+en fournissant le nom du paquet pour `golint`. Pour ajouter un autre
+outil à compiler, une ligne similaire fait l'affaire.
+
+Le dernier bloc définit la recette pour analyser le code. L'outil
+utilisé par défaut est `golint` tel que construit par le premier bloc.
+Mais il est possible d'outrepasser ceci avec `make
+GOLINT=/usr/bin/golint`.
+
+# Tests
+
+Voici les règles permettant d'exécuter les tests :
+
+    ::make
+    TIMEOUT  = 20
+    PKGS     = $(or $(PKG),$(shell env GO111MODULE=on $(GO) list ./...))
+    TESTPKGS = $(shell env GO111MODULE=on $(GO) list -f \
+    			'{% raw %}{{ if or .TestGoFiles .XTestGoFiles }}{{ .ImportPath }}{{ end }}{% endraw %}' \
+    			$(PKGS))
+    
+    TEST_TARGETS := test-default test-bench test-short test-verbose test-race
+    test-bench:   ARGS=-run=__absolutelynothing__ -bench=.
+    test-short:   ARGS=-short
+    test-verbose: ARGS=-v
+    test-race:    ARGS=-race
+    $(TEST_TARGETS): test
+    check test tests: fmt lint
+    	go test -timeout $(TIMEOUT)s $(ARGS) $(TESTPKGS)
+
+L'utilisateur peut invoquer les tests de différente façon :
+
+ - `make test` lance tous les tests ;
+ - `make test TIMEOUT=10` implique une durée limite de 10 secondes par test ;
+ - `make test PKG=hellogopher/cmd` exécute les tests pour le paquet `cmd` ;
+ - `make test ARGS="-v -short"` utilise les arguments fournis ;
+ - `make test-race` exécute les tests en activant la détection des problèmes d'accès concurrents.
+
+`go test` permet également de déterminer la couverture des tests.
+Malheureusement, l'outil est très rudimentaire et ne permet de gérer
+qu'**un seul paquet à la fois**. Il faut également explicitement
+**lister tous les paquets à instrumenter**. Dans le cas contraire,
+seul le paquet testé l'est. De plus, les temps de compilation sont
+prohibitifs si trop de paquets le sont. Enfin, afin d'obtenir un
+rapport compatible avec *Jenkins*, quelques outils additionnels sont
+nécessaires.
+
+    ::make
+    COVERAGE_MODE    = atomic
+    COVERAGE_PROFILE = $(COVERAGE_DIR)/profile.out
+    COVERAGE_XML     = $(COVERAGE_DIR)/coverage.xml
+    COVERAGE_HTML    = $(COVERAGE_DIR)/index.html
+    test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) # ❶
+    test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+    test-coverage: fmt lint test-coverage-tools
+    	@mkdir -p $(COVERAGE_DIR)/coverage
+    	@for pkg in $(TESTPKGS); do \ # ❷
+    		go test \
+    			-coverpkg=$$(go list -f '{% raw %}{{ join .Deps "\n" }}{% endraw %}' $$pkg | \
+    					grep '^$(MODULE)/' | \
+    					tr '\n' ',')$$pkg \
+    			-covermode=$(COVERAGE_MODE) \
+    			-coverprofile="$(COVERAGE_DIR)/coverage/`echo $$pkg | tr "/" "-"`.cover" $$pkg ;\
+    	 done
+    	@$(GOCOVMERGE) $(COVERAGE_DIR)/coverage/*.cover > $(COVERAGE_PROFILE)
+    	@go tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
+    	@$(GOCOV) convert $(COVERAGE_PROFILE) | $(GOCOVXML) > $(COVERAGE_XML)
+
+En ❶, un certain nombre d'outils sont requis, de la même façon que
+`golint` vu précédemment :
+
+ - `gocovmerge` permet de combiner plusieurs profils en un seul,
+ - `gocov-xml` convertit le rapport au format [Cobertura][] pour
+   *Jenkins*,
+ - `gocov` convertit le rapport en un format utilisable par `gocov-xml`.
+
+En ❷, pour chaque paquet à tester, nous exécutons `go test` avec
+l'argument `-coverprofile`. La liste des paquets à instrumenter est
+donnée à l'argument `-coverpkg` en utilisant `go list` pour extraire
+les dépendances du paquet en cours de test et en ne conservant que nos
+propres paquets.
+
+# Construction
+
+Bien que l'on puisse simplement utiliser `go build` pour obtenir notre
+programme, il est assez courant d'avoir à fournir quelques arguments
+supplémentaires ou de devoir exécuter des étapes additionnelles. Dans
+l'exemple suivant, la version est extraite de l'étiquette *Git* la
+plus proche ou d'un fichier `.version` à la racine du projet. Elle
+remplace la variable `Version` dans le paquet `hellogopher/cmd`.
+
+    ::make
+    VERSION ?= $(shell git describe --tags --always --dirty --match=v* 2> /dev/null || \
+    			cat $(CURDIR)/.version 2> /dev/null || echo v0)
+    all: fmt lint | $(BIN)
+    	go build \
+    		-tags release \
+    		-ldflags '-X hellogopher/cmd.Version=$(VERSION)' \
+    		-o $(BIN)/hellogopher main.go
+
+On en profite également pour effectuer le formatage et l'analyse
+statique du code.
+
+---
+
+Les extraits fournis ci-dessus sont un brin simplifiés. Jetez un œil
+au [résultat final][me] pour plus de détails !
+
+*[CLI]: Command-line Interface
+*[VCS]: Version Control System
+
+[Go]: https://golang.org/ "The Go Programming Language"
+[modules]: https://blog.golang.org/using-go-modules "Using Go Modules"
+[gb]: https://web.archive.org/web/2017/https://getgb.io/ "gb — A project based build tool for Go"
+[Filippo Valsorda]: https://github.com/cloudflare/hellogopher "Hellogopher: just clone and make your conventional Go project"
+[me]: [[fr/blog/2019-makefile-pour-golang.html]] "Makefile pour un projet Go (2019)"
+[vendoring]: https://blog.gopheracademy.com/advent-2015/vendor-folder/ "Understanding and using the vendor folder"
+[mine]: https://github.com/vincentbernat/hellogopher "Makefile to build a Go project"
+[Golint]: https://github.com/golang/lint "Linter for Go source code"
+[Cobertura]: http://cobertura.github.io/cobertura/ "A code coverage utility for Java"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
