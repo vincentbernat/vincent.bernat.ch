@@ -252,9 +252,6 @@ def build():
     local("yarn install --frozen-lockfile")
     _hyde('gen -c %s' % conf)
     with lcd(".final"):
-        # Fix HTML (<source> is an empty tag)
-        local(r"find . -name '*.html' -print0"
-              r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
         # Optimize SVG (consider using svgcleaner instead, svgo is a bit fragile)
         local("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
