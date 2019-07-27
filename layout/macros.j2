@@ -1,10 +1,10 @@
 {# -*- web -*- #}
 
 {# List blog posts pertaining to a given language #}
-{% macro list_posts(lang, nb=-1) %}
+{% macro list_posts(lang, start=0, end=-1) %}
 <ul class="lf-list-titles robots-noindex">
 {% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
-{% for resource in sort[:nb] -%}
+{% for resource in sort[start:end] -%}
   <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
     <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
     {{ resource_short_date(resource) }}
