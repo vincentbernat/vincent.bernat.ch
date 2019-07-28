@@ -1,51 +1,51 @@
 {# -*- web -*- #}
 <nav id="lf-links">
-  {# Translations #}
-  {% if resource.translations %}
+{# Translations #}
+{% if resource.translations %}
   <div class="lf-link">
       <p>{{ resource.meta.l10n.translations|e }}</p>
       <ul>
-	{% for translation in resource.translations %}
-	<li lang="{{ translation.meta.language }}"><a href="{{ content_url(translation.url) }}">
-	    {{ languages[translation.meta.language] }}
-	</a></li>
-	{% endfor %}
+{% for translation in resource.translations %}
+        <li lang="{{ translation.meta.language }}"><a href="{{ content_url(translation.url) }}">
+            {{ languages[translation.meta.language] }}
+        </a></li>
+{% endfor %}
       </ul>
   </div>
-  {% endif %}
-  {# Tags #}
-  {% if resource.tags and resource.tags[0]|string() != 'unclassified' %}
+{% endif %}
+{# Tags #}
+{% if resource.tags and resource.tags[0]|string() != 'unclassified' %}
   <div class="lf-link">
       <p>{{ resource.meta.l10n.tags }}</p>
       <ul>
-	{% for tag in resource.tags %}
-	<li>
+{% for tag in resource.tags %}
+        <li>
           {%- set tag = tag|string() %}
           {%- set subtags = tag.split("-") %}
           {%- for subtag in subtags -%}
             {%- set subtag = subtags[:loop.index]|join('-') -%}
             {%- if tag != "outdated" %}<a href="{{ content_url(resource.meta.language + '/blog/') }}#tag-{{ subtag }}">{% endif -%}
-	      {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
-	    {%- if tag != "outdated" %}</a>{% endif %}{% if not loop.last %} > {% endif -%}
+              {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
+            {%- if tag != "outdated" %}</a>{% endif %}{% if not loop.last %} > {% endif -%}
           {%- endfor -%}
         </li>
-	{% endfor %}
+{% endfor %}
       </ul>
   </div>
-  {% endif %}
-  {# Attachments #}
-  {% if resource.meta.attachments %}
+{% endif %}
+{# Attachments #}
+{% if resource.meta.attachments %}
   <div class="lf-link">
       <p>{{ resource.meta.l10n.attachments|e }}</p>
       <ul>
-	{% for file, description in resource.meta.attachments %}
-	{% if file.startswith('http://') or file.startswith('https://') %}
-	<li><a href="{{ file }}">{{ description|e }}</a></li>
-	{% else %}
-	<li><a href="{{ media_url('files/' + file) }}">{{ description|e }}</a></li>
-	{% endif %}
-	{% endfor %}
+{% for file, description in resource.meta.attachments %}
+{% if file.startswith('http://') or file.startswith('https://') %}
+        <li><a href="{{ file }}">{{ description|e }}</a></li>
+{% else %}
+        <li><a href="{{ media_url('files/' + file) }}">{{ description|e }}</a></li>
+{% endif %}
+{% endfor %}
       </ul>
   </div>
-  {% endif %}
+{% endif %}
 </nav>

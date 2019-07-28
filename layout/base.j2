@@ -46,62 +46,67 @@
   {# Pages #}
   <main>
       <article>
-	{% block header %}
-	<header>
-	  <h1>{{resource.meta.title|amp|e}}</h1>
+{% block header %}
+        <header>
+          <h1>{{resource.meta.title|amp|e}}</h1>
           <div id="lf-sideblock">
-	  {% from "macros.j2" import resource_date with context %}
-	      <h2>{{resource.meta.author|e}} {{ resource_date(resource) }}</h2>
-              {% include "sidebar.j2" %}
+{% from "macros.j2" import resource_date with context %}
+              <h2>
+                  {{resource.meta.author|e}}
+                  {{ resource_date(resource) | indent(18) }}
+              </h2>
+              {% filter indent(14) %}{% include "sidebar.j2" %}{% endfilter %}
+
           </div>
-	</header>
-	{% endblock %}
-	{% block text %}
-	<div id="lf-text">
-	  {% mark article %}{{ formatted_article }}{% endmark %}
-	</div>
-	{% endblock %}
+        </header>
+{% endblock %}
+{% block text %}
+        <div id="lf-text">
+            {% mark article %}{{ formatted_article }}{% endmark %}
+        </div>
+{% endblock %}
       </article>
-      {% include "share.j2" %}
-      {% include "links.j2" %}
+      {% filter indent(6) %}{% include "share.j2" %}{% endfilter %}
+      {% filter indent(6) %}{% include "links.j2" %}{% endfilter %}
   </main>
 
-  {# Navigation bar #}
+{# Navigation bar #}
   <nav id="lf-navbar">
     <div id="lf-homeicon">
       <a class="lf-sprite-strawhat"
-	 href="{{ content_url( resource.meta.language ) }}">Home</a>
+         href="{{ content_url( resource.meta.language ) }}">Home</a>
     </div>
     <div id="lf-menubar">
         <form id="lf-search" action="https://duckduckgo.com/" role="search">
-	    <input type="hidden" name="kf" value="-1">
-	    <input type="hidden" name="kaf" value="1">
-	    <input type="hidden" name="k1" value="-1">
-	    <input type="hidden" name="sites" value="{{ base|replace("https://","") }}/{{ resource.meta.language }}/">
-	<input type="submit" class="lf-sprite-search" value="">
-	<input id="lf-search-query" type="text" name="q" value="" autocomplete="off" aria-label="Search">
+            <input type="hidden" name="kf" value="-1">
+            <input type="hidden" name="kaf" value="1">
+            <input type="hidden" name="k1" value="-1">
+            <input type="hidden" name="sites" value="{{ base|replace("https://","") }}/{{ resource.meta.language }}/">
+        <input type="submit" class="lf-sprite-search" value="">
+        <input id="lf-search-query" type="text" name="q" value="" autocomplete="off" aria-label="Search">
       </form>
-      {% include "menu.j2" %}
+      {% filter indent(6) %}{% include "menu.j2" %}{% endfilter %}
+
     </div>
   </nav>
 
-  {# Footer #}
+{# Footer #}
   <footer>
     <div>
       <h3>{{ resource.meta.l10n.otherlinks|e }}</h3>
       <ul>
-	<li><a href="https://github.com/{{ resource.meta.github }}">GitHub</a></li>
-	<li><a href="https://twitter.com/{{ resource.meta.twitter }}">Twitter</a></li>
+        <li><a href="https://github.com/{{ resource.meta.github }}">GitHub</a></li>
+        <li><a href="https://twitter.com/{{ resource.meta.twitter }}">Twitter</a></li>
       </ul>
     </div>
  
     <div>
       <h3>Sources</h3>
       <ul>
-	<li><a href="{{ resource.meta.sources }}">Site</a></li>
-	<li><a href="{{ resource.meta.sources }}/blob/master/content/{{ resource.relative_path }}">Page</a></li>
-	<li><a href="{{ resource.meta.sources }}/commits/master/content/{{ resource.relative_path }}">History</a></li>
-	<li><a href="{{ resource.meta.sources }}/edit/master/content/{{ resource.relative_path }}">Edit</a></li>
+        <li><a href="{{ resource.meta.sources }}">Site</a></li>
+        <li><a href="{{ resource.meta.sources }}/blob/master/content/{{ resource.relative_path }}">Page</a></li>
+        <li><a href="{{ resource.meta.sources }}/commits/master/content/{{ resource.relative_path }}">History</a></li>
+        <li><a href="{{ resource.meta.sources }}/edit/master/content/{{ resource.relative_path }}">Edit</a></li>
       </ul>
     </div>
     <address>

@@ -4,10 +4,10 @@
 {% macro list_posts(lang, start=0, end=None) %}
 <ul class="lf-list-titles robots-noindex">
 {% set sort = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
-{% for resource in sort[start:end] -%}
+{%- for resource in sort[start:end] %}
   <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
     <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
-    {{ resource_short_date(resource) }}
+    {{ resource_short_date(resource) | indent }}
   </li>
 {% endfor %}
 </ul>
@@ -35,25 +35,25 @@
 {% endfor %}
 {% endfor %}
 {% if rr and tag|string() != "outdated" %}
-<div class="lf-tag" id="tag-{{tag}}">
-  <div class="lf-one-tag">
-    {%- set tag = tag|string() %}
-    {%- set subtags = tag.split("-") %}
-    {%- for subtag in subtags -%}
-      {%- set subtag = subtags[:loop.index]|join('-') -%}
-      {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
-      {%- if not loop.last %} > {% endif -%}
-    {%- endfor -%}
+  <div class="lf-tag" id="tag-{{tag}}">
+    <div class="lf-one-tag">
+      {%- set tag = tag|string() %}
+      {%- set subtags = tag.split("-") %}
+      {%- for subtag in subtags -%}
+        {%- set subtag = subtags[:loop.index]|join('-') -%}
+        {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
+        {%- if not loop.last %} > {% endif -%}
+      {%- endfor -%}
+    </div>
+    <ul class="lf-list-titles robots-noindex">
+{% for resource in rr %}
+      <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag != "outdated" %} class="lf-outdated"{% endif %}>
+          <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
+          {{ resource_short_date(resource) | indent(10) }}
+      </li>
+{% endfor %}
+    </ul>
   </div>
-  <ul class="lf-list-titles robots-noindex">
-    {% for resource in rr %}
-    <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag != "outdated" %} class="lf-outdated"{% endif %}>
-        <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
-        {{ resource_short_date(resource) }}
-    </li>
-    {% endfor %}
-  </ul>
-</div>
 {% endif %}
 {% endfor %}
 </div>
@@ -67,7 +67,7 @@
       class="dt-published">
     {{ resource.meta.created|human_date(resource.meta.language, 'long') }}
 </time>
-{% endif %}
+{%- endif %}
 {% endmacro %}
 {% macro resource_short_date(resource) %}
 {% if resource.meta.created != None %}
@@ -76,7 +76,7 @@
       class="dt-published">
     {{ resource.meta.created|human_date(resource.meta.language) }}
 </time>
-{% endif %}
+{%- endif %}
 {% endmacro %}
 
 {# Display a photo gallery; directory may be a directory or a prefix #}
