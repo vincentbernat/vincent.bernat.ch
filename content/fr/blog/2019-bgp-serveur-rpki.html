@@ -1,0 +1,570 @@
+---
+title: "Sécuriser BGP sur le serveur avec la RPKI"
+description: |
+  Un des problèmes de router sur le serveur avec BGP est le risque d'annonces
+  frauduleuses. L'infrastructure autour de la RPKI permet de sécuriser cet aspect.
+uuid: 77e812c7-9c7a-4c51-914d-b386bc27e8f8
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-rpki": "Dépôt GitHub"
+tags:
+  - network-bgp
+---
+
+Une conception moderne pour un réseau de datacentre est le **BGP sur
+le serveur** : chaque serveur embarque un démon BGP pour annoncer les
+IP qu'il gère et reçoit les routes pour contacter ses collègues.
+Comparé à une conception L2, il est très évolutif, résilient,
+multi-constructeur et sûr à utiliser[^easy]. Jetez un coup d'œil à
+l'article « [Routage L3 jusqu'à l'hyperviseur avec BGP][L3 routing to
+the hypervisor with BGP] » pour un exemple de mise en œuvre.
+
+[^easy]: Notamment, le flux de données et le plan de contrôle sont
+    séparés. Un nœud peut se retirer du réseau en avertissant ses
+    pairs sans provoquer la perte d'un seul paquet.
+
+![Réseau de type Clos avec deux routeurs de collecte, six routeurs de
+distribution et neuf serveurs physiques. Tous les liens ont une
+session BGP établie entre leurs extrémités. Certains serveurs ont une
+bulle indiquant le préfixe IP qu'ils désirent
+s'approprier.]([[!!images/bgp-on-the-host.svg]] "BGP sur le serveur
+dans un réseau de type Clos. Une session BGP est établie sur chaque
+lien et chaque serveur annonce ses propres préfixes IP.")
+
+Bien que le routage sur le serveur élimine les problèmes de sécurité
+liés aux réseaux Ethernet, un hôte peut annoncer n'importe quel
+préfixe IP. Dans l'image ci-dessus, deux d'entre eux annoncent
+`2001:db8:cc::/64`. Il peut s'agir d'une utilisation légitime (pour un
+service distribué) ou d'un détournement de préfixe. BGP propose
+plusieurs solutions pour améliorer cet aspect et l'une d'entre elles
+est d'exploiter les fonctionnalités liées à l'infrastructure RPKI.
+
+# Courte introduction à la RPKI
+
+Sur Internet, BGP repose essentiellement sur la confiance. Cela
+contribue à divers incidents dus à des erreurs humaines, comme celui
+qui a [affecté Cloudflare il y a quelques mois][affected Cloudflare a
+few months ago], ou à des attaques malveillantes, comme lors du
+[détournement du DNS d'Amazon pour voler des portefeuilles de
+cryptomonnaies][hijack of Amazon DNS to steal cryptocurrency wallets].
+La [RFC 7454][] explique les bonnes pratiques pour éviter de tels
+problèmes.
+
+Les adresses IP sont attribuées par cinq registres régionaux (RIR).
+Chacun d'eux tient à jour une base de données des ressources Internet,
+notamment les adresses IP et les numéros d'AS associés. Ces bases de
+données ne sont pas totalement fiables, mais elles sont largement
+utilisées pour construire des listes de contrôle d'accès afin de
+vérifier les annonces d'un partenaire. Voici un exemple généré à
+l'aide de [bgpq3][] pour une liaison avec Apple[^asset] :
+
+    ::console
+    $ bgpq3 -l v6-IMPORT-APPLE -6 -R 48 -m 48 -A -J -E AS-APPLE
+    policy-options {
+     policy-statement v6-IMPORT-APPLE {
+    replace:
+      from {
+        route-filter 2403:300::/32 upto /48;
+        route-filter 2620:0:1b00::/47 prefix-length-range /48-/48;
+        route-filter 2620:0:1b02::/48 exact;
+        route-filter 2620:0:1b04::/47 prefix-length-range /48-/48;
+        route-filter 2620:149::/32 upto /48;
+        route-filter 2a01:b740::/32 upto /48;
+        route-filter 2a01:b747::/32 upto /48;
+      }
+     }
+    }
+
+[^asset]: Les gens utilisent souvent les ensembles d'AS, comme
+    `AS-APPLE` dans cet exemple, car ils sont pratiques si vous avez
+    plusieurs numéros d'AS ou des clients. Cependant, rien n'empêche
+    actuellement un acteur malhonnête d'ajouter des numéros d'AS
+    arbitraires à son ensemble d'AS.
+
+La RPKI ([RFC 6480][]) ajoute une couche de cryptographie à clé
+publique pour signer l'autorisation d'un AS à annoncer un préfixe IP.
+Cet enregistrement est une « autorisation d'origine de route » (ROA).
+Vous pouvez parcourir les bases de données de ces « ROA » par
+l'intermédiaire de l'[instance « RPKI Validator » du RIPE][RIPE's RPKI
+Validator instance] :
+
+![Capture d'écran d'une instance de RPKI Validator montrant la
+validité de 85.190.88.0/21 pour l'AS
+64476]([[!!images/rpki-validator@2x.png]] "RPKI validator montre une
+« ROA » pour 85.190.88.0/21")
+
+Les démons BGP n'ont pas besoin de télécharger ces bases de données ou
+de vérifier les signatures pour valider des préfixes reçus: ils
+délèguent ces tâches à un validateur RPKI local implémentant le
+protocole « *RPKI-to-Router Protocol* » (RTR, [RFC 6810][]).
+
+Pour plus de détails sur la RPKI, jetez un œil sur l'article « [RPKI
+and BGP: our path to securing Internet Routing][] » ou encore sur les
+articles de Stéphane Bortzmeyer sur les RFC [6480], [6481] et [6810].
+
+# Utiliser la RPKI dans un réseau interne
+
+Bien qu'il soit possible de configurer notre propre RPKI pour une
+utilisation en réseau interne, nous pouvons prendre un raccourci et
+utiliser un validateur, comme [GoRTR][], qui implémente RTR en
+acceptant une autre source de vérité. À titre d'exemple, utilisons la
+topologie suivante :
+
+![Réseau de type Clos avec deux routeurs de collecte, six routeurs de
+distribution et neuf serveurs physiques. Tous les liens ont une
+session BGP établie entre leurs extrémités. Trois des serveurs
+physiques sont en fait des validateurs et des sessions RTR sont
+établies entre ceux-ci les routeurs
+d'accès.]([[!!images/rpki-datacenter.svg]] "BGP sur le serveur avec
+validation des préfixes via RTR. Chaque serveur a son propre numéro
+d'AS. Les routeurs d'accès établissent des sessions RTR avec les
+validateurs.")
+
+Un applicatif maintient une correspondance entre les numéros d'AS
+privés et les préfixes autorisés[^asn] :
+
+| Numéro d'AS | Préfixes autorisés                        |
+|-------------|-------------------------------------------|
+| AS 65005    | `2001:db8:aa::/64`                        |
+| AS 65006    | `2001:db8:bb::/64`,<br>`2001:db8:11::/64` |
+| AS 65007    | `2001:db8:cc::/64`                        |
+| AS 65008    | `2001:db8:dd::/64`                        |
+| AS 65009    | `2001:db8:ee::/64`,<br>`2001:db8:11::/64` |
+| AS 65010    | `2001:db8:ff::/64`                        |
+
+[^asn]: Nous utilisons des numéros d'AS sur 16 bits pour la
+    lisibilité. Comme nous avons besoin d'attribuer un numéro AS
+    différent pour chaque serveur, dans un déploiement réel, nous
+    utiliserions des numéros d'AS sur 32 bits.
+
+A partir de cette table, nous construisons un fichier JSON pour
+*GoRTR*, en supposant que chaque serveur peut annoncer des préfixes
+plus longs (comme `2001:db8:aa::­42:d9ff:­fefc:287a/128` pour l'AS
+65005) :
+
+    ::json
+    {
+      "roas": [
+        {
+          "prefix": "2001:db8:aa::/64",
+          "maxLength": 128,
+          "asn": "AS65005"
+        }, {
+          "…": "…"
+        }, {
+          "prefix": "2001:db8:ff::/64",
+          "maxLength": 128,
+          "asn": "AS65010"
+        }, {
+          "prefix": "2001:db8:11::/64",
+          "maxLength": 128,
+          "asn": "AS65006"
+        }, {
+          "prefix": "2001:db8:11::/64",
+          "maxLength": 128,
+          "asn": "AS65009"
+        }
+      ]
+    }
+
+Le fichier est déployé sur tous les validateurs et servi par un
+serveur web. *GoRTR* est configuré pour le récupérer et le mettre à
+jour toutes les 10 minutes :
+
+    ::console
+    $ gortr -refresh=600 \
+            -verify=false -checktime=false \
+            -cache=http://127.0.0.1/rpki.json
+    INFO[0000] New update (7 uniques, 8 total prefixes). 0 bytes. Updating sha256 hash  -> 68a1d3b52db8d654bd8263788319f08e3f5384ae54064a7034e9dbaee236ce96
+    INFO[0000] Updated added, new serial 1
+
+L'intervalle entre deux mises à jour pourrait être réduit mais *GoRTR*
+peut aussi être notifié d'un changement en utilisant le signal
+`SIGHUP`. Les clients sont immédiatement avisés du changement.
+
+L'étape suivante consiste à configurer les routeurs d'accès pour
+valider les préfixes reçus en utilisant les validateurs. La plupart
+des constructeurs sont compatibles avec RTR :
+
+| Platform          | Over TCP? | Over SSH? |
+|-------------------|-----------|-----------|
+| [Juniper JunOS][] | ✔️         | ❌        |
+| [Cisco IOS XR][]  | ✔️         | ✔️         |
+| [Cisco IOS XE][]  | ✔️         | ❌        |
+| [Cisco IOS][]     | ✔️         | ❌        |
+| Arista EOS        | ❌        | ❌        |
+| [BIRD][]          | ✔️         | ✔️         |
+| [FRR][]           | ✔️         | ✔️         |
+
+## Configuration pour JunOS
+
+*JunOS* n'est compatible qu'avec les connextions TCP en clair. La
+première étape consiste à configurer les serveurs de validation :
+
+    ::junos
+    routing-options {
+        validation {
+            group RPKI {
+                session validator1 {
+                    hold-time 60;         # la session est morte après 1 minute
+                    record-lifetime 3600; # le cache est gardé pendant 1 heure
+                    refresh-time 30;      # le cache est mis à jour toutes les 30 secondes
+                    port 8282;
+                }
+                session validator2 { /* OMITTED */ }
+                session validator3 { /* OMITTED */ }
+            }
+        }
+    }
+
+Par défaut, au maximum deux sessions sont établies au hasard en même
+temps. C'est un bon moyen de les équilibrer entre les validateurs tout
+en conservant une bonne disponibilité. La deuxième étape consiste à
+définir la politique de validation des routes :
+
+    ::junos
+    policy-options {
+        policy-statement accept-valid {
+            term valid {
+                from {
+                    protocol bgp;
+                    validation-database valid;
+                }
+                then {
+                    validation-state valid;
+                    accept;
+                }
+            }
+            term invalid {
+                from {
+                    protocol bgp;
+                    validation-database invalid;
+                }
+                then {
+                    validation-state invalid;
+                    reject;
+                }
+            }
+        }
+        policy-statement reject-all {
+            then reject;
+        }
+    }
+
+La politique `accept-valid` transforme l'état de validation d'un
+préfixe de `unknown` à `valid` si la base de données ROA indique qu'il
+est valide. Il accepte également la route. Si le préfixe n'est pas
+valide, il est marqué comme tel et rejeté. Nous avons également
+préparé une politique `reject-all` pour refuser tout le reste,
+notamment les préfixes inconnus.
+
+Un ROA ne certifie que l'**origine** d'un préfixe. Un acteur
+malveillant peut donc ajouter le numéro d'AS attendu en fin du chemin
+d'AS pour contourner la validation. Par exemple, l'AS 65007 pourrait
+annoncer `2001:db8:dd::/64`, un préfixe attribué à l'AS 65006, en
+indiquant le chemin `65007 65006`. Pour éviter cela, nous définissons
+une politique supplémentaire pour rejeter les chemins d'AS ayant plus
+d'un AS :
+
+    ::junos
+    policy-options {
+        as-path exactly-one-asn "^.$";
+        policy-statement only-directly-connected {
+            term exactly-one-asn {
+                from {
+                    protocol bgp;
+                    as-path exactly-one-asn;
+                }
+                then next policy;
+            }
+            then reject;
+        }
+    }
+
+La dernière étape est de configurer les sessions BGP :
+
+    ::junos hl_lines="7 8"
+    protocols {
+        bgp {
+            group HOSTS {
+                local-as 65100;
+                type external;
+                # export [ … ];
+                import [ only-directly-connected accept-valid reject-all ];
+                enforce-first-as;
+                neighbor 2001:db8:42::a10 {
+                    peer-as 65005;
+                }
+                neighbor 2001:db8:42::a12 {
+                    peer-as 65006;
+                }
+                neighbor 2001:db8:42::a14 {
+                    peer-as 65007;
+                }
+            }
+        }
+    }
+
+La politique pour l'import rejette tout chemin d'AS plus long qu'un
+AS, accepte les préfixes validés et rejette tout le reste. La
+directive `enforce-first-as` est très importante : elle garantit que
+le premier (et, ici, le seul) AS dans le chemin correspond à l'AS du
+serveur. Sans cela, un hôte malveillant pourrait injecter un préfixe
+en utilisant un AS différent du sien, ce qui irait à l'encontre de
+notre objectif[^enforce].
+
+[^enforce]: Les routeurs Cisco et FRR vérifient le premier AS par
+    défaut. C'est une valeur paramétrable pour permettre l'utilisation
+    de serveurs de routes : ils distribuent des préfixes pour le
+    compte d'autres routeurs.
+
+Vérifions l'état des sessions RTR et la base de données :
+
+    ::console
+    > show validation session
+    Session                                  State   Flaps     Uptime #IPv4/IPv6 records
+    2001:db8:4242::10                        Up          0   00:16:09 0/9
+    2001:db8:4242::11                        Up          0   00:16:07 0/9
+    2001:db8:4242::12                        Connect     0            0/0
+    
+    > show validation database
+    RV database for instance master
+    
+    Prefix                 Origin-AS Session                                 State   Mismatch
+    2001:db8:11::/64-128       65006 2001:db8:4242::10                       valid
+    2001:db8:11::/64-128       65006 2001:db8:4242::11                       valid
+    2001:db8:11::/64-128       65009 2001:db8:4242::10                       valid
+    2001:db8:11::/64-128       65009 2001:db8:4242::11                       valid
+    2001:db8:aa::/64-128       65005 2001:db8:4242::10                       valid
+    2001:db8:aa::/64-128       65005 2001:db8:4242::11                       valid
+    2001:db8:bb::/64-128       65006 2001:db8:4242::10                       valid
+    2001:db8:bb::/64-128       65006 2001:db8:4242::11                       valid
+    2001:db8:cc::/64-128       65007 2001:db8:4242::10                       valid
+    2001:db8:cc::/64-128       65007 2001:db8:4242::11                       valid
+    2001:db8:dd::/64-128       65008 2001:db8:4242::10                       valid
+    2001:db8:dd::/64-128       65008 2001:db8:4242::11                       valid
+    2001:db8:ee::/64-128       65009 2001:db8:4242::10                       valid
+    2001:db8:ee::/64-128       65009 2001:db8:4242::11                       valid
+    2001:db8:ff::/64-128       65010 2001:db8:4242::10                       valid
+    2001:db8:ff::/64-128       65010 2001:db8:4242::11                       valid
+    
+      IPv4 records: 0
+      IPv6 records: 18
+
+Voici un exemple de route acceptée :
+
+    ::console hl_lines="14"
+    > show route protocol bgp table inet6 extensive all
+    inet6.0: 11 destinations, 11 routes (8 active, 0 holddown, 3 hidden)
+    2001:db8:bb::42/128 (1 entry, 0 announced)
+            *BGP    Preference: 170/-101
+                    Next hop type: Router, Next hop index: 0
+                    Address: 0xd050470
+                    Next-hop reference count: 4
+                    Source: 2001:db8:42::a12
+                    Next hop: 2001:db8:42::a12 via em1.0, selected
+                    Session Id: 0x0
+                    State: <Active NotInstall Ext>
+                    Local AS: 65006 Peer AS: 65000
+                    Age: 12:11
+                    Validation State: valid
+                    Task: BGP_65000.2001:db8:42::a12+179
+                    AS path: 65006 I
+                    Accepted
+                    Localpref: 100
+                    Router ID: 1.1.1.1
+
+Une route refusée serait similaire avec comme état de validation
+`invalid`.
+
+## Configuration de BIRD
+
+*BIRD* est compatible à la fois avec les connexions TCP en clair et
+SSH. Configurons le pour utiliser SSH. Nous devons générer des paires
+de clefs pour le routeur ainsi que pour les validateurs (ils peuvent
+se partager la même paire de clefs). Nous devons aussi créer un
+fichier `known_hosts` pour *BIRD* :
+
+    ::console
+    (validatorX)$ ssh-keygen -qN "" -t rsa -f /etc/gortr/ssh_key
+    (validatorX)$ echo -n "validatorX:8283 " ; \
+                  cat /etc/bird/ssh_key_rtr.pub
+    validatorX:8283 ssh-rsa AAAAB3[…]Rk5TW0=
+    (leaf1)$ ssh-keygen -qN "" -t rsa -f /etc/bird/ssh_key
+    (leaf1)$ echo 'validator1:8283 ssh-rsa AAAAB3[…]Rk5TW0=' >> /etc/bird/known_hosts
+    (leaf1)$ echo 'validator2:8283 ssh-rsa AAAAB3[…]Rk5TW0=' >> /etc/bird/known_hosts
+    (leaf1)$ cat /etc/bird/ssh_key.pub
+    ssh-rsa AAAAB3[…]byQ7s=
+    (validatorX)$ echo 'ssh-rsa AAAAB3[…]byQ7s=' >> /etc/gortr/authorized_keys
+
+*GoRTR* a besoin d'arguments supplémentaires pour autoriser les
+connexions via SSH :
+
+    ::console
+    $ gortr -refresh=600 -verify=false -checktime=false \
+          -cache=http://127.0.0.1/rpki.json \
+          -ssh.bind=:8283 \
+          -ssh.key=/etc/gortr/ssh_key \
+          -ssh.method.key=true \
+          -ssh.auth.user=rpki \
+          -ssh.auth.key.file=/etc/gortr/authorized_keys
+    INFO[0000] Enabling ssh with the following authentications: password=false, key=true
+    INFO[0000] New update (7 uniques, 8 total prefixes). 0 bytes. Updating sha256 hash  -> 68a1d3b52db8d654bd8263788319f08e3f5384ae54064a7034e9dbaee236ce96
+    INFO[0000] Updated added, new serial 1
+
+Ensuite, configurons *BIRD* pour utiliser ces serveurs de validation :
+
+    ::junos
+    roa6 table ROA6;
+    template rpki VALIDATOR {
+       roa6 { table ROA6; };
+       transport ssh {
+         user "rpki";
+         remote public key "/etc/bird/known_hosts";
+         bird private key "/etc/bird/ssh_key";
+       };
+       refresh keep 30;
+       retry keep 30;
+       expire keep 3600;
+    }
+    protocol rpki VALIDATOR1 from VALIDATOR {
+       remote validator1 port 8283;
+    }
+    protocol rpki VALIDATOR2 from VALIDATOR {
+       remote validator2 port 8283;
+    }
+
+Contrairement à *JunOS*, *BIRD* ne dispose pas d'une fonction
+permettant d'utiliser uniquement un sous-ensemble de validateurs. Par
+conséquent, nous ne configurons que deux validateurs. Par mesure de
+sécurité, en cas d'indisponibilité de la connexion, *BIRD* conservera
+les ROA pendant une heure.
+
+Nous pouvons vérifier l'état des sessions RTR et le contenu de la base
+de données :
+
+    ::console
+    > show protocols all VALIDATOR1
+    Name       Proto      Table      State  Since         Info
+    VALIDATOR1 RPKI       ---        up     17:28:56.321  Established
+      Cache server:     rpki@validator1:8283
+      Status:           Established
+      Transport:        SSHv2
+      Protocol version: 1
+      Session ID:       0
+      Serial number:    1
+      Last update:      before 25.212 s
+      Refresh timer   : 4.787/30
+      Retry timer     : ---
+      Expire timer    : 3574.787/3600
+      No roa4 channel
+      Channel roa6
+        State:          UP
+        Table:          ROA6
+        Preference:     100
+        Input filter:   ACCEPT
+        Output filter:  REJECT
+        Routes:         9 imported, 0 exported, 9 preferred
+        Route change stats:     received   rejected   filtered    ignored   accepted
+          Import updates:              9          0          0          0          9
+          Import withdraws:            0          0        ---          0          0
+          Export updates:              0          0          0        ---          0
+          Export withdraws:            0        ---        ---        ---          0
+    
+    > show route table ROA6
+    Table ROA6:
+        2001:db8:11::/64-128 AS65006  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:11::/64-128 AS65009  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:aa::/64-128 AS65005  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:bb::/64-128 AS65006  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:cc::/64-128 AS65007  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:dd::/64-128 AS65008  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:ee::/64-128 AS65009  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+        2001:db8:ff::/64-128 AS65010  [VALIDATOR1 17:28:56.333] * (100)
+                                      [VALIDATOR2 17:28:56.414] (100)
+
+Comme dans le cas de *JunOS*, un acteur malveillant pourrait essayer
+de contourner la validation en construisant un chemin où le dernier AS
+est l'AS légitime. *BIRD* est suffisamment flexible pour nous
+permettre d'utiliser n'importe quel AS pour vérifier le préfixe IP. Au
+lieu de vérifier l'AS d'origine, nous lui demandons de vérifier l'AS
+du serveur avec cette fonction, sans regarder le chemin :
+
+    ::junos hl_lines="2"
+    function validated(int peeras) {
+       if (roa_check(ROA6, net, peeras) != ROA_VALID) then {
+          print "Ignore invalid ROA ", net, " for ASN ", peeras;
+          reject;
+       }
+       accept;
+    }
+
+L'instance BGP est alors configurée en utilisant cette fonction comme
+politique d'import :
+
+    ::junos hl_lines="6"
+    protocol bgp PEER1 {
+       local as 65100;
+       neighbor 2001:db8:42::a10 as 65005;
+       ipv6 {
+          import keep filtered;
+          import where validated(65005);
+          # export …;
+       };
+    }
+
+Il est possible de voir les routes rejetées avec `show route
+filtered`. Toutefois *BIRD* ne stocke dans les routes aucune
+information à propos de la validation. Il est aussi possible de
+consulter les journaux :
+
+    ::text
+    2019-07-31 17:29:08.491 <INFO> Ignore invalid ROA 2001:db8:bb::40:/126 for ASN 65005
+
+Actuellement, *BIRD* ne réévalue pas les préfixes lorsque les ROA sont
+mises à jour. Des [travaux sont en cours pour y remédier][work in
+progress to fix this]. Si cette fonctionnalité est importante pour
+vous, jetez un œil à [FRR][] : il supporte également le protocole RTR
+et déclenche une reconfiguration des sessions BGP lorsque les ROA sont
+mis à jour.
+
+*[BGP]: Border Gateway Protocol
+*[RPKI]: Resource Public Key Infrastructure
+*[IRR]: Internet Routing Registries
+*[RIR]: Regional Internet Registry
+*[AS]: Autonomous System
+*[ACLs]: Access Control Lists
+*[RTR]: RPKI-to-Router Protocol
+*[ROA]: Route Origination Authorization
+
+[L3 routing to the hypervisor with BGP]: [[fr/blog/2018-routage-l3-hyperviseur.html]] "L3 routing to the hypervisor with BGP"
+[RFC 6480]: https://tools.ietf.org/html/rfc6480 "An Infrastructure to Support Secure Internet Routing"
+[RFC 6810]: https://tools.ietf.org/html/rfc6810 "The Resource Public Key Infrastructure (RPKI) to Router Protocol"
+[RFC 7454]: https://tools.ietf.org/html/rfc7454 "BGP Operations and Security"
+[affected Cloudflare a few months ago]: https://new.blog.cloudflare.com/the-deep-dive-into-how-verizon-and-a-bgp-optimizer-knocked-large-parts-of-the-internet-offline-monday/ "The deep-dive into how Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline Monday"
+[hijack of Amazon DNS to steal cryptocurrency wallets]: https://www.internetsociety.org/blog/2018/04/amazons-route-53-bgp-hijack/ "What Happened? The Amazon Route 53 BGP Hijack to Take Over Ethereum Cryptocurrency Wallets"
+[RPKI and BGP: our path to securing Internet Routing]: https://new.blog.cloudflare.com/rpki-details/ "RPKI and BGP: our path to securing Internet Routing"
+[RIPE's RPKI Validator instance]: https://rpki-validator.ripe.net/ "RPKI Validator"
+[GoRTR]: https://github.com/cloudflare/gortr "The RPKI-to-Router server used at Cloudflare"
+[Juniper JunOS]: https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html "Configuring Origin Validation for BGP on Juniper JunOS"
+[Cisco IOS XR]: https://www.cisco.com/c/en/us/td/docs/routers/asr9000/software/asr9k-r6-2/routing/configuration/guide/b-routing-cg-asr9000-62x/b-routing-cg-asr9000-62x_chapter_010.html#concept_A84818AD41744DFFBD094DA7FCD7FE8B "BGP Prefix Origin Validation Based on RPKI on Cisco IOS XR"
+[Cisco IOS XE]: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.html "BGP—Origin AS Validation on Cisco IOS XE"
+[Cisco IOS]: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/15-s/irg-15-s-book/irg-origin-as.html "BGP—Origin AS Validation on Cisco IOS"
+[BIRD]: https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.13 "RPKI on BIRD"
+[FRR]: http://docs.frrouting.org/en/latest/bgp.html#prefix-origin-validation-using-rpki "Prefix Origin Validation Using RPKI with FRR"
+[work in progress to fix this]: https://gitlab.labs.nic.cz/labs/bird/commit/f827cf11bed2212386bdf448466f715b2e07cb1e "ROA change notifications: simple variant"
+[bgpq3]: http://snar.spb.ru/prog/bgpq3/ "BGPQ3"
+[6480]: https://www.bortzmeyer.org/6480.html "RFC 6480: An Infrastructure to Support Secure Internet Routing"
+[6481]: https://www.bortzmeyer.org/6481.html "RFC 6481: A Profile for Resource Certificate Repository Structure"
+[6810]: https://www.bortzmeyer.org/6810.html "RFC 6810: The RPKI/Router Protocol"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
