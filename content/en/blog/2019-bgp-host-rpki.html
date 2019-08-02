@@ -208,7 +208,7 @@ define the policy for route validation:
 
     ::junos
     policy-options {
-        policy-statement accept-valid {
+        policy-statement ACCEPT-VALID {
             term valid {
                 from {
                     protocol bgp;
@@ -230,15 +230,15 @@ define the policy for route validation:
                 }
             }
         }
-        policy-statement reject-all {
+        policy-statement REJECT-ALL {
             then reject;
         }
     }
 
-The policy statement `accept-valid` turns the validation state of a
+The policy statement `ACCEPT-VALID` turns the validation state of a
 prefix from `unknown` to `valid` if the ROA database says it is valid.
 It also accepts the route. If the prefix is invalid, the prefix is
-marked as such and rejected. We have also prepared a `reject-all`
+marked as such and rejected. We have also prepared a `REJECT-ALL`
 statement to reject everything else, notably unknown prefixes.
 
 A ROA only certifies the **origin** of a prefix. A malicious actor can
@@ -250,12 +250,12 @@ policy statement to reject AS paths with more than one AS:
 
     ::junos
     policy-options {
-        as-path exactly-one-asn "^.$";
-        policy-statement only-directly-connected {
+        as-path EXACTLY-ONE-ASN "^.$";
+        policy-statement ONLY-DIRECTLY-CONNECTED {
             term exactly-one-asn {
                 from {
                     protocol bgp;
-                    as-path exactly-one-asn;
+                    as-path EXACTLY-ONE-ASN;
                 }
                 then next policy;
             }
@@ -272,7 +272,7 @@ The last step is to configure the BGP sessions:
                 local-as 65100;
                 type external;
                 # export [ … ];
-                import [ only-directly-connected accept-valid reject-all ];
+                import [ ONLY-DIRECTLY-CONNECTED ACCEPT-VALID REJECT-ALL ];
                 enforce-first-as;
                 neighbor 2001:db8:42::a10 {
                     peer-as 65005;

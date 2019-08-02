@@ -223,7 +223,7 @@ définir la politique de validation des routes :
 
     ::junos
     policy-options {
-        policy-statement accept-valid {
+        policy-statement ACCEPT-VALID {
             term valid {
                 from {
                     protocol bgp;
@@ -245,16 +245,16 @@ définir la politique de validation des routes :
                 }
             }
         }
-        policy-statement reject-all {
+        policy-statement REJECT-ALL {
             then reject;
         }
     }
 
-La politique `accept-valid` transforme l'état de validation d'un
+La politique `ACCEPT-VALID` transforme l'état de validation d'un
 préfixe de `unknown` à `valid` si la base de données ROA indique qu'il
 est valide. Il accepte également la route. Si le préfixe n'est pas
 valide, il est marqué comme tel et rejeté. Nous avons également
-préparé une politique `reject-all` pour refuser tout le reste,
+préparé une politique `REJECT-ALL` pour refuser tout le reste,
 notamment les préfixes inconnus.
 
 Un ROA ne certifie que l'**origine** d'un préfixe. Un acteur
@@ -267,12 +267,12 @@ d'un AS :
 
     ::junos
     policy-options {
-        as-path exactly-one-asn "^.$";
-        policy-statement only-directly-connected {
+        as-path EXACTLY-ONE-ASN "^.$";
+        policy-statement ONLY-DIRECTLY-CONNECTED {
             term exactly-one-asn {
                 from {
                     protocol bgp;
-                    as-path exactly-one-asn;
+                    as-path EXACTLY-ONE-ASN;
                 }
                 then next policy;
             }
@@ -289,7 +289,7 @@ La dernière étape est de configurer les sessions BGP :
                 local-as 65100;
                 type external;
                 # export [ … ];
-                import [ only-directly-connected accept-valid reject-all ];
+                import [ ONLY-DIRECTLY-CONNECTED ACCEPT-VALID REJECT-ALL ];
                 enforce-first-as;
                 neighbor 2001:db8:42::a10 {
                     peer-as 65005;
