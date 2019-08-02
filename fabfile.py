@@ -245,7 +245,7 @@ Info:    {infostring}""".format(**row)
 @task
 def build():
     """Build production content"""
-    local("[ $(git rev-parse --abbrev-ref HEAD) = master ]")
+    local("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
     with lcd("content/en"):
         local("! git grep -Pw '(?i:obviously|basically|simply|clearly|everyone knows|turns out)' \\*.html")
     local("rm -rf .final/*")
