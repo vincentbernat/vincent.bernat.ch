@@ -8,7 +8,7 @@ static website generator written in Python.
 Licensing is described in `content/en/licenses.html`.
 
 This site is hosted on NixOS instances. You may find the remaining
-nginx configuration on [another GitHub repository][nixos] (the other
+nginx configuration on [another Git repository][nixos] (the other
 part is in `layout/nginx.j2`).
 
 [hyde]: https://github.com/hyde/hyde
