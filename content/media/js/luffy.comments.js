@@ -14,8 +14,7 @@ luffy.s.push(function() {
 	    if (done) return;
 	    done = true;	// Don't want to load twice.
 
-            var script = document.querySelector('script[data-name="isso.js"]');
-            script.onload = function() {
+            luffy.load("isso.js", function() {
                 // Hide links
                 for (i = 0; i < links.length; i++) {
                     var parent = links[i].parentNode;
@@ -25,9 +24,7 @@ luffy.s.push(function() {
                         parent.style.visibility = 'hidden';
                     }
                 }
-            };
-            script.integrity = script.dataset.integrity || "";
-            script.src = script.dataset.src;
+            });
 	}
     }();
 
