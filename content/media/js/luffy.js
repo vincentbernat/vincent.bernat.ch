@@ -34,7 +34,8 @@ var luffy = luffy || {s: [],
   luffy.s = { push: e };        // "Like" an array.
 
   // Tell we can do JS
-  var html = document.getElementsByTagName("html")[0];
-  html.className = html.className.replace(/\bnojs\b/, 'js');
+  var cl = document.getElementsByTagName("html")[0].classList;
+  cl.remove('nojs');
+  cl.add('js');
 
 })();
