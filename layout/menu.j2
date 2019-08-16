@@ -1,7 +1,11 @@
 {# -*- web -*- #}
 <ul>
 {% for menu in resource.meta.menu %}
-  <li{% if content_url(resource.url).startswith(content_url(resource.meta.language + '/' + menu['page'])) %} class="active"{% endif %}>
+  <li{% if ".html" in menu['page']
+        and content_url(resource.url) == content_url(resource.meta.language + '/' + menu['page'])
+        or ".html" not in menu['page']
+        and content_url(resource.url).startswith(content_url(resource.meta.language + '/' + menu['page']))
+     %} class="active"{% endif %}>
     <a href="{{ content_url(resource.meta.language + '/' + menu['page']) }}">{{ menu['name']|e }}</a>
   </li>
 {% endfor %}
