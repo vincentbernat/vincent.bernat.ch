@@ -36,8 +36,6 @@ def thumb(self, defaults={}, width=None, height=None):
     if width is None and height is None:
         width, height = defaults['width'], defaults['height']
     im = Image.open(self.path)
-    if im.mode != 'RGBA':
-        im = im.convert('RGBA')
     # Convert to a thumbnail
     if width is None:
         # height is not None
