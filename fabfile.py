@@ -164,7 +164,7 @@ def fixfonts():
               '| xmlstarlet ed '
               '     -u /ttFont/post/underlineThickness/@value -v 75'
               '> {}.ttx'.format(f, f))
-        local('ttx -o {} --flavor=woff --with-zopfli {}.ttx'.format(f, f))
+        local('ttx -o {} --flavor=woff {}.ttx'.format(f, f))
         local('ttx -o {}2 --flavor=woff2 {}.ttx'.format(f, f))
         local('rm {}.ttx'.format(f))
 
