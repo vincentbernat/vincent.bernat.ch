@@ -150,6 +150,25 @@ def upload_videos(video=None):
             short=directory,
             directory=os.path.join(path, directory)))
 
+
+@task
+def fixfonts():
+    """Fix Merriweather underline thickness."""
+    for f in os.listdir('content/media/fonts'):
+        if not f.startswith('merriweather'):
+            continue
+        if not f.endswith('.woff'):
+            continue
+        f = os.path.join('content/media/fonts', f)
+        local('ttx -o - {} '
+              '| xmlstarlet ed '
+              '     -u /ttFont/post/underlineThickness/@value -v 75'
+              '> {}.ttx'.format(f, f))
+        local('ttx -o {} --flavor=woff --with-zopfli {}.ttx'.format(f, f))
+        local('ttx -o {}2 --flavor=woff2 {}.ttx'.format(f, f))
+        local('rm {}.ttx'.format(f))
+
+
 @task
 def linkcheck(remote='yes', verbose='no'):
     """Check links"""
