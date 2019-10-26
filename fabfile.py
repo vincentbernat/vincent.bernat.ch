@@ -152,21 +152,31 @@ def upload_videos(video=None):
 
 
 @task
-def fixfonts():
-    """Fix Merriweather underline thickness."""
-    for f in os.listdir('content/media/fonts'):
-        if not f.startswith('merriweather'):
-            continue
-        if not f.endswith('.woff'):
-            continue
-        f = os.path.join('content/media/fonts', f)
-        local('ttx -o - {} '
-              '| xmlstarlet ed '
-              '     -u /ttFont/post/underlineThickness/@value -v 75'
-              '> {}.ttx'.format(f, f))
-        local('ttx -o {} --flavor=woff {}.ttx'.format(f, f))
-        local('ttx -o {}2 --flavor=woff2 {}.ttx'.format(f, f))
-        local('rm {}.ttx'.format(f))
+def updatefonts():
+    """Download latest Merriweather fonts"""
+    with lcd('content/media/fonts'):
+        local('wget -O merriweather.zip https://google-webfonts-helper.herokuapp.com/api/fonts/'
+              'merriweather\\?download=zip\\&subsets=latin,latin-ext'
+              '\\&variants=300,300italic\\&formats=woff,woff2')
+        local('unzip merriweather.zip \\*.woff')
+        local('rm merriweather.zip')
+        for f in os.listdir('content/media/fonts'):
+            if not f.startswith('merriweather-v'):
+                continue
+            if not f.endswith('.woff'):
+                continue
+            target = 'merriweather-{}'.format(f.split('-')[-1])
+            target = target.replace('-300.', '.')
+            target = target.replace('-300', '-')
+            # Patch
+            local('ttx -o - {} '
+                  '| xmlstarlet ed '
+                  '     -u /ttFont/post/underlineThickness/@value -v 75'
+                  '> {}.ttx'.format(f, f))
+            local('ttx -o {} --flavor=woff {}.ttx'.format(target, f))
+            local('ttx -o {}2 --flavor=woff2 {}.ttx'.format(target, f))
+            local('rm {}.ttx'.format(f))
+            local('rm {}'.format(f))
 
 
 @task
