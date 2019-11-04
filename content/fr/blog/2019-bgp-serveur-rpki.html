@@ -264,7 +264,7 @@ d'AS pour contourner la validation. Par exemple, l'AS 65007 pourrait
 annoncer `2001:db8:dd::/64`, un préfixe attribué à l'AS 65006, en
 indiquant le chemin `65007 65006`. Pour éviter cela, nous définissons
 une politique supplémentaire pour rejeter les chemins d'AS ayant plus
-d'un AS :
+d'un ASN[^oneas] :
 
     ::junos
     policy-options {
@@ -280,6 +280,11 @@ d'un AS :
             then reject;
         }
     }
+
+[^oneas]: Cette restriction empêche également d'ajouter son propre
+    numéro d'ASN pour diminuer la priorité d'un chemin. Une
+    alternative moderne est l'utilisation de la [communauté d'arrêt
+    planifiée][graceful shutdown community], `GRACEFUL_SHUTDOWN`.
 
 La dernière étape est de configurer les sessions BGP :
 
@@ -565,6 +570,8 @@ mis à jour.
 [6480]: https://www.bortzmeyer.org/6480.html "RFC 6480: An Infrastructure to Support Secure Internet Routing"
 [6481]: https://www.bortzmeyer.org/6481.html "RFC 6481: A Profile for Resource Certificate Repository Structure"
 [6810]: https://www.bortzmeyer.org/6810.html "RFC 6810: The RPKI/Router Protocol"
+[graceful shutdown community]: https://www.bortzmeyer.org/8326.html "RFC 8326: Graceful BGP Session Shutdown"
+
 
 {# Local Variables:      #}
 {# mode: markdown        #}

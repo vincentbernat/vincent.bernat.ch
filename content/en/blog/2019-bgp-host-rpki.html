@@ -247,7 +247,7 @@ therefore prepend the expected AS number to the AS path to circumvent
 the validation. For example, AS 65007 could annonce
 `2001:db8:dd::/64`, a prefix allocated to AS 65006, by advertising it
 with the AS path `65007 65006`. To avoid that, we define an additional
-policy statement to reject AS paths with more than one AS:
+policy statement to reject AS paths with more than one ASN:[^oneas]
 
     ::junos
     policy-options {
@@ -263,6 +263,10 @@ policy statement to reject AS paths with more than one AS:
             then reject;
         }
     }
+
+[^oneas]: This restriction also prevents the peer from prepending its
+    own ASN to deprioritize a path. A modern alternative is to use the
+    [graceful shutdown community][].
 
 The last step is to configure the BGP sessions:
 
@@ -538,6 +542,7 @@ when ROAs are updated.
 [GoBGP]: https://github.com/osrg/gobgp/blob/master/docs/sources/rpki.md "RPKI on GoBGP"
 [work in progress to fix this]: https://gitlab.labs.nic.cz/labs/bird/commit/f827cf11bed2212386bdf448466f715b2e07cb1e "ROA change notifications: simple variant"
 [bgpq3]: http://snar.spb.ru/prog/bgpq3/ "BGPQ3"
+[graceful shutdown community]: https://tools.ietf.org/html/rfc8326 "RFC 8326: Graceful BGP Session Shutdown"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
