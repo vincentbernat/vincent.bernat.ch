@@ -13,12 +13,17 @@
 </ul>
 {% endmacro %}
 
+{% macro fcapitalize(text) %}
+    {{ text[0]|upper}}{{text[1:] }}
+{% endmacro %}
+
 {% macro format_tag(tag) %}
 {%- set tag = tag|string() %}
 {%- set subtags = tag.split("-") %}
 {%- for subtag in subtags -%}
     {%- set subtag = subtags[:loop.index]|join('-') -%}
-    {{- site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e }}{{ site.tagger.tags[subtag].descr|e -}}
+    {{- fcapitalize(site.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e) }}
+    {{- fcapitalize(site.tagger.tags[subtag].descr|e) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
 {% endmacro %}
