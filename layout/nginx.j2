@@ -47,7 +47,7 @@ location {{content_url('/' + code + '/404.html')}} {
 location = / {
   access_log off;
   log_not_found off;
-  set_by_lua $lang '
+  set_by_lua_block $lang {
     local supported = { {% for code, lang in languages %}{{ code }}{% if not loop.last %}, {% endif %}{% endfor %} }
     if (ngx.var.http_accept_language == nil) then
       return "en"
@@ -78,7 +78,7 @@ location = / {
     end
     
     return "en"
-  ';
+  };
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
   http2_push  /$lang;
