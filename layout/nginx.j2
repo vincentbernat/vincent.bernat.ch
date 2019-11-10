@@ -47,38 +47,13 @@ location {{content_url('/' + code + '/404.html')}} {
 location = / {
   access_log off;
   log_not_found off;
-  set_by_lua_block $lang {
-    local supported = { {% for code, lang in languages %}{{ code }}{% if not loop.last %}, {% endif %}{% endfor %} }
-    if (ngx.var.http_accept_language == nil) then
-      return "en"
-    end
-    local cleaned = ngx.re.sub(ngx.var.http_accept_language, "^.*:", "")
-    local options = {}
-    local iterator, err = ngx.re.gmatch(cleaned, "\\s*([a-z]+(?:-[a-z])*)\\s*(?:;q=([0-9]+(.[0-9]*)?))?\\s*(,|$)", "i")
-    for m, err in iterator do
-        local lang = m[1]
-        local priority = 1
-        if m[2] ~= nil then
-            priority = tonumber(m[2])
-            if priority == nil then
-            priority = 1
-            end
-        end
-        table.insert(options, {lang, priority})
-    end
-    
-    table.sort(options, function(a,b) return b[2] < a[2] end)
-    
-    for index, lang in pairs(options) do
-        for key, value in pairs(supported) do
-           if value == lang[1] then
-             return lang[1]
-           end
-        end
-    end
-    
-    return "en"
-  };
+  set $lang en;
+{% for code, lang in languages %}
+  if ($http_accept_language ~* ^{{code}}) {
+    # Not safe, but it seems to work. May change depending on the outer directives.
+    set $lang {{code}};
+  }
+{% endfor %}
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
   http2_push  /$lang;
