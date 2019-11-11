@@ -490,10 +490,11 @@ check the peer AS with this function, without looking at the AS path:
 The BGP instance is then configured to use the above function as the
 import policy:
 
-    ::junos hl_lines="6"
+    ::junos hl_lines="7"
     protocol bgp PEER1 {
        local as 65100;
        neighbor 2001:db8:42::a10 as 65005;
+       connect delay time 30;
        ipv6 {
           import keep filtered;
           import where validated(65005);
@@ -513,6 +514,12 @@ updated. There is [work in progress to fix this][]. If this feature is
 important to you, have a look at [FRR][] instead: it also supports the
 RTR protocol and triggers a soft reconfiguration of the BGP sessions
 when ROAs are updated.
+
+!!! "Update (2019.11)" There is another drawback of BIRD's
+implementation: if the ROAs are not loaded before the BGP connection
+is established, some routes may be rejected because they are unknown.
+This is the reason there is a `connect delay time` directive in the
+proposed configuration.
 
 *[BGP]: Border Gateway Protocol
 *[RPKI]: Resource Public Key Infrastructure

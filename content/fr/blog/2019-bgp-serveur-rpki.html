@@ -514,10 +514,11 @@ du serveur avec cette fonction, sans regarder le chemin :
 L'instance BGP est alors configurée en utilisant cette fonction comme
 politique d'import :
 
-    ::junos hl_lines="6"
+    ::junos hl_lines="7"
     protocol bgp PEER1 {
        local as 65100;
        neighbor 2001:db8:42::a10 as 65005;
+       connect delay time 30;
        ipv6 {
           import keep filtered;
           import where validated(65005);
@@ -539,6 +540,12 @@ progress to fix this]. Si cette fonctionnalité est importante pour
 vous, jetez un œil sur [FRR][] : il supporte également le protocole RTR
 et déclenche une reconfiguration des sessions BGP lorsque les ROA sont
 mis à jour.
+
+!!! "Mise à jour (11.2019)" Cette limitation de BIRD a un autre
+inconvénient : si les ROA ne sont pas chargées lorsque la connexion
+BGP est établie, certaines routes seront rejetées car inconnues. C'est
+pour cette raison qu'une directive `connect delay time` est ajoutée à
+la configuration proposée.
 
 *[BGP]: Border Gateway Protocol
 *[RPKI]: Resource Public Key Infrastructure
