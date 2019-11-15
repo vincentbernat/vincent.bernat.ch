@@ -245,7 +245,7 @@ Info:    {infostring}""".format(**row)
                 return
             elif ans == "r":
                 url = prompt("URL?")
-                local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
+                local("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
                     row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
@@ -253,7 +253,7 @@ Info:    {infostring}""".format(**row)
             elif ans == "p":
                 local("x-www-browser {}".format(row['parentname']))
             elif ans == "R":
-                local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
+                local("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
                     row['urlname'], row['urlname'], redirected))
                 break
             else:
@@ -263,7 +263,7 @@ Info:    {infostring}""".format(**row)
                         local("x-www-browser {}".format(archive[a]))
                         break
                     elif ans == a.upper():
-                        local("git grep -Fl '{}' | xargs -r sed -i 's+ {}+ {}+g'".format(
+                        local("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
                             row['urlname'], row['urlname'], archive[a]))
                         found = True
                         break
