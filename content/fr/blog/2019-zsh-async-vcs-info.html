@@ -1,0 +1,110 @@
+---
+title: "Invite de commande Zsh asynchrone avec statut Git"
+description: |
+  Invoquer la fonction vcs_info de Zsh avant le rendu de l'invite peut être
+  lent sur les gros dépôts. L'exécution asynchrone de cette fonction
+  permet de résoudre ce problème.
+uuid: 04d68e95-cdd7-46c2-94dc-0e929d197d3d
+cover: zsh-vcs-prompt@2x.png
+tags:
+ - desktop
+---
+
+[Zsh][] propose `vcs_info`, une fonction permettant de récupérer des
+informations liées à l'état du système de gestion des versions pour
+actif dans le répertoire en cours. Il alimente une variable qui peut
+ensuite être utilisée dans une invite de commande. Plusieurs logiciels
+sont supportés, notamment Git et SVN. Voici un exemple de
+configuration :
+
+    ::sh
+    autoload -Uz vcs_info
+    zstyle ':vcs_info:*' enable git
+
+    () {
+        local formats="${PRCH[branch]} %b%c%u"
+        local actionformats="${formats}%{${fg[default]}%} ${PRCH[sep]} %{${fg[green]}%}%a"
+        zstyle ':vcs_info:*:*' formats           $formats
+        zstyle ':vcs_info:*:*' actionformats     $actionformats
+        zstyle ':vcs_info:*:*' stagedstr         "%{${fg[green]}%}${PRCH[circle]}"
+        zstyle ':vcs_info:*:*' unstagedstr       "%{${fg[yellow]}%}${PRCH[circle]}"
+        zstyle ':vcs_info:*:*' check-for-changes true
+    }
+
+    add-zsh-hook precmd vcs_info
+
+Vous pouvez ensuite utiliser la variable `${vcs_info_msg_0_}` dans
+votre invite pour afficher la branche actuelle, la présence de
+fichiers modifiés ainsi que l'action courante[^1]. Jetez un œil à la
+[documentation][] pour plus de détails.
+
+[^1]: Les actions incluent « *merge* », « *rebase* » et « *bisect* ».
+
+![Invite comprenant des informations liées à Git telle que la
+branche]([[!!images/zsh-vcs-prompt@2x.png]] "Exemple d'invite de
+commande comprenant des informations récupérées via la fonction
+<code>vcs_info</code>.")
+
+Sur les gros dépôts, certaines informations peuvent être coûteuses à
+récupérer. Pendant que `vcs_info` interroge Git, les interactions avec
+Zsh sont bloquées. Une solution est d'exécuter `vcs_info` de manière
+asynchrone avec [zsh-async][].
+
+La première étape est de **définir un _wrapper_** autour de
+`vcs_info`. Celui-ci s'exécutera dans un processus séparé et devra
+communiquer son résultat en utilisant la sortie standard. Il attend le
+répertoire courant en premier argument.
+
+    ::sh
+    _vbe_vcs_info() {
+        cd -q $1
+        vcs_info
+        print ${vcs_info_msg_0_}
+    }
+
+La seconde étape est de **définir un _worker_**, également nommé
+`vcs_info`, et d'attacher une fonction qui traitera le résultat issu
+du _wrapper_. Cette fonction appelle `zle reset-prompt` pour forcer
+un nouvel affichage de l'invite de commande avec les informations à
+jour issues de `${vcs_info_msg_0_}`.
+
+    ::sh
+    async_init
+    async_start_worker vcs_info
+    async_register_callback vcs_info _vbe_vcs_info_done
+
+    _vbe_vcs_info_done() {
+        local stdout=$3
+        vcs_info_msg_0_=$stdout
+        zle reset-prompt
+    }
+
+La dernière étape est de **demander l'exécution du _wrapper_ au
+_worker_** avant d'afficher le prompt. Cela remplace l'invocation
+synchrone de `vcs_info` :
+
+    ::sh
+    add-zsh-hook precmd (){
+        async_job vcs_info _vbe_vcs_info $PWD
+    }
+
+C'est tout !
+
+Sans se reposer sur `vcs_info`, il serait possible d'améliorer
+l'expérience en consultant le nom de la branche courante avant de
+récupérer les informations plus coûteuses. Cependant, avec peu
+d'efforts, cette intégration simple permet de répondre l'invite plus
+rapide ! Jetez un œil au [code complet][complete code] : il contient
+quelques améliorations.
+
+*[VCS]: Version Control System
+
+[Zsh]: http://www.zsh.org/ "Zsh website" "Zsh website"
+[documentation]: http://zsh.sourceforge.net/Doc/Release/User-Contributions.html#Version-Control-Information "Zsh documentation: Gathering information from version control systems"
+[zsh-async]: https://github.com/mafredri/zsh-async "zsh-async: Because your terminal should be able to perform tasks asynchronously without external tools!"
+[complete code]: https://github.com/vincentbernat/zshrc/blob/d66fd6b6ea5b3c899efb7f36141e3c8eb7ce348b/rc/vcs.zsh "Zsh code to fetch asynchronously the Git status"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

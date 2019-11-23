@@ -1,0 +1,105 @@
+---
+title: "Asynchronous Zsh prompt with Git status"
+description: |
+  Invoking Zsh vcs_info function before rendering the prompt
+  can be a bit slow on large repositories. Executing it asynchronously
+  solves this issue.
+uuid: 04d68e95-cdd7-46c2-94dc-0e929d197d3d
+cover: zsh-vcs-prompt@2x.png
+tags:
+ - desktop
+---
+
+[Zsh][] ships `vcs_info`, a function fetching information about the
+VCS state for the current directory and populating a variable that can
+be used in a shell prompt. It supports several VCS, including Git and
+SVN. Here is an example of configuration:
+
+    ::sh
+    autoload -Uz vcs_info
+    zstyle ':vcs_info:*' enable git
+
+    () {
+        local formats="${PRCH[branch]} %b%c%u"
+        local actionformats="${formats}%{${fg[default]}%} ${PRCH[sep]} %{${fg[green]}%}%a"
+        zstyle ':vcs_info:*:*' formats           $formats
+        zstyle ':vcs_info:*:*' actionformats     $actionformats
+        zstyle ':vcs_info:*:*' stagedstr         "%{${fg[green]}%}${PRCH[circle]}"
+        zstyle ':vcs_info:*:*' unstagedstr       "%{${fg[yellow]}%}${PRCH[circle]}"
+        zstyle ':vcs_info:*:*' check-for-changes true
+    }
+
+    add-zsh-hook precmd vcs_info
+
+You can use `${vcs_info_msg_0_}` in your prompt to display the current
+branch, the presence of staged and unstaged changes, as well as the
+ongoing action.[^1] Have a look at the [documentation][] for more
+details.
+
+[^1]: Actions include "merge," "rebase" and "bisect."
+
+![Prompt with Git-related information, including branch name and
+presence of tracked and untracked
+changes]([[!!images/zsh-vcs-prompt@2x.png]] "Example of prompt
+including information from the <code>vcs_info</code> function.")
+
+On large repositories, some information are expensive to fetch. While
+`vcs_info` queries Git, interactions with Zsh are stuck. A possible
+solution is to execute `vcs_info` asynchronously with [zsh-async][].
+
+The first step is to **define a wrapper** around `vcs_info`. This
+wrapper will run into a separate process and should communicate its
+result using the standard output. It expects the current directory as
+its first argument.
+
+    ::sh
+    _vbe_vcs_info() {
+        cd -q $1
+        vcs_info
+        print ${vcs_info_msg_0_}
+    }
+
+The second step is to **define a worker**, `vcs_info`, and attach a
+function to handle the result received from the wrapper. The
+registered function calls `zle reset-prompt` to force a refresh of the
+prompt with the updated information from `${vcs_info_msg_0_}`.
+
+    ::sh
+    async_init
+    async_start_worker vcs_info
+    async_register_callback vcs_info _vbe_vcs_info_done
+
+    _vbe_vcs_info_done() {
+        local stdout=$3
+        vcs_info_msg_0_=$stdout
+        zle reset-prompt
+    }
+
+The last step is to **schedule the wrapper function** in the worker
+queue before displaying the prompt. This replaces the synchronous
+invocation of `vcs_info`:
+
+    ::sh
+    add-zsh-hook precmd (){
+        async_job vcs_info _vbe_vcs_info $PWD
+    }
+
+That's it!
+
+Without relying on `vcs_info`, it should be possible to have a better
+experience by fetching the current branch name before retrieving the
+more expensive information. However, without much effort, this simple
+integration can make your prompt snappier! Have a look at the
+[complete code][]: it contains some small enhancements.
+
+*[VCS]: Version Control System
+
+[Zsh]: http://www.zsh.org/ "Zsh website" "Zsh website"
+[documentation]: http://zsh.sourceforge.net/Doc/Release/User-Contributions.html#Version-Control-Information "Zsh documentation: Gathering information from version control systems"
+[zsh-async]: https://github.com/mafredri/zsh-async "zsh-async: Because your terminal should be able to perform tasks asynchronously without external tools!"
+[complete code]: https://github.com/vincentbernat/zshrc/blob/d66fd6b6ea5b3c899efb7f36141e3c8eb7ce348b/rc/vcs.zsh "Zsh code to fetch asynchronously the Git status"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
