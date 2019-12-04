@@ -326,7 +326,7 @@ class ImageFixerPlugin(Plugin):
                 for vtt in vtts:
                     code = vtt.name[len(id)+1:-4]
                     track = pq('<track>')
-                    track.attr.src = self.site.media_url(vtt.relative_path[5:])
+                    track.attr.src = self.site.media_url(vtt.relative_path[6:])
                     track.attr.kind = 'subtitles'
                     track.attr.srclang = code
                     if '-' not in code:
