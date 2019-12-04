@@ -113,6 +113,8 @@ done <<EOF
 2018-opl2-audio-board-2.mp4      --video-bitrate-factor 0.6 \
                                  --poster-seek 10% \
                                  --audio-bitrate 128 --audio-only
+2019-self-hosted-videos-subtitles.webm \
+                                 --poster-seek 15s
 EOF
 """
 

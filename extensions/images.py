@@ -5,20 +5,21 @@ Contains classes to handle images related things
 # Requires PIL/Pillow
 """
 
-from hyde.plugin import Plugin
-from fswrap import File, Folder
-
-import xml.etree.ElementTree as ET
-import lxml.html
-from pyquery import PyQuery as pq
-
-from PIL import Image
-from pymediainfo import MediaInfo
 import new
 import os
 import re
 import urllib
+import xml.etree.ElementTree as ET
+import lxml.html
 from functools import partial
+
+from hyde.plugin import Plugin
+from fswrap import File, Folder
+
+from pyquery import PyQuery as pq
+from PIL import Image
+from pymediainfo import MediaInfo
+import langcodes
 
 
 class Thumb(object):
@@ -300,6 +301,7 @@ class ImageFixerPlugin(Plugin):
                 img[0].tag = 'video'
                 img[0].set("controls", None)
                 img.attr("preload", "none")
+                img.attr("crossorigin", "anonymous")
                 img.attr("poster", self.site.media_url(
                     'images/posters/{}.jpg'.format(id)))
                 del img.attr.src
@@ -315,6 +317,27 @@ class ImageFixerPlugin(Plugin):
                     'videos/{}/progressive.mp4'.format(id))
                 progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
                 img.append(progressive)
+                # Add subtitle tracks if any
+                vtts = [v
+                        for v in self.site.content.node_from_relative_path(
+                                os.path.dirname(src)[1:]).walk_resources()
+                        if v.name.endswith('.vtt')
+                        and v.name.startswith('{}.'.format(id))]
+                for vtt in vtts:
+                    code = vtt.name[len(id)+1:-4]
+                    track = pq('<track>')
+                    track.attr.src = self.site.media_url(vtt.relative_path[5:])
+                    track.attr.kind = 'subtitles'
+                    track.attr.srclang = code
+                    if '-' not in code:
+                        track.attr.label = langcodes.get(code).autonym()
+                    else:
+                        details = langcodes.get(code).describe(code)
+                        lang = details['language']
+                        del details['language']
+                        track.attr.label = u"{} ({})".format(
+                            lang, u", ".join(details.values()))
+                    img.append(track)
 
             # If image is a video not in /videos turn into a simple
             # video tag like an animated GIF.

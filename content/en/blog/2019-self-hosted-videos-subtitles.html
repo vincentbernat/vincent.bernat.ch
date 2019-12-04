@@ -1,0 +1,67 @@
+---
+title: "Self-hosted videos with HLS: subtitles"
+description: |
+  Using HLS, it is possible to self-host videos, including subtitles,
+  while being bandwidth-friendly.
+uuid: 82880752-6d7a-4b67-ad27-3faceda05a55
+tags:
+  - web
+---
+
+In a [previous article][], I have described a solution to self-host
+videos while offering a delivery adapted to each user's bandwith,
+thanks to HLS and [hls.js][]. Subtitles[^captions] were not part of
+the game. While they can be declared inside the HLS manifest or
+embedded into the video, it is easier to include them directly in the
+`<video>` element, using the [WebVTT format][]:
+
+    ::html hl_lines="7 8 9 10"
+    <video poster="poster.jpg"
+           controls preload="none">
+      <source src="index.m3u8"
+              type="application/vnd.apple.mpegurl">
+      <source src="progressive.mp4"
+              type='video/mp4; codecs="avc1.4d401f, mp4a.40.2"'>
+      <track src="de.vtt"
+             kind="subtitles" srclang="de" label="Deutsch">
+      <track src="en.vtt"
+             kind="subtitles" srclang="en" label="English">
+    </video>
+
+[^captions]: Some people may be picky over [the difference between
+    closed captions and subtitles][]. *Closed captions* are usually
+    targeted at people with hearing impairment and they include
+    non-speech information like sound effects. *Subtitles* assume the
+    viewer can hear but may not understand the language.
+
+Watch the following demonstration, featuring [Agent 327: Operation
+Barbershop][], a video created by [Blender Animation Studio][] and
+currently released under the [Creative Commons Attribution No
+Derivatives 2.0][] license:
+
+![]([[!!videos/2019-self-hosted-videos-subtitles.m3u8]])
+
+You may want to jump to [0:12](#video-seek-12) for the first subtitle.
+Most browsers should display a widget to toggle subtitles. This works
+just fine with *Chromium* but *Firefox* will [not show the menu until
+the video starts playing][], unless you enable preloading. Another
+annoyance: there is no simple way to specify safe margins for
+subtitles and they get stuck at the bottom. These two issues seem
+minor enough to not warrant pulling hundred of kilobytes of JavaScript
+for a custom player.
+
+*[HLS]: HTTP Live Streaming
+
+[previous article]: [[en/blog/2018-self-hosted-videos.html]] "Self-hosted videos with HLS"
+[hls.js]: https://github.com/video-dev/hls.js/ "JavaScript HLS client using Media Source Extension"
+[WebVTT format]: https://en.wikipedia.org/wiki/WebVTT "WebVTT on Wikipedia"
+[Agent 327: Operation Barbershop]: https://agent327.com/
+[Blender Animation Studio]: https://blender.studio/
+[Creative Commons Attribution No Derivatives 2.0]: https://spdx.org/licenses/CC-BY-ND-2.0.html "Creative Commons Attribution No Derivatives 2.0"
+[not show the menu until the video starts playing]: https://bugzilla.mozilla.org/show_bug.cgi?id=1566199 "Subtitle selection widget not displayed with preload='none'"
+[the difference between closed captions and subtitles]: https://blog.amara.org/2019/09/05/subtitles-vs-captions-what-is-the-difference/ "Subtitles vs. Captions: What’s the Difference?"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

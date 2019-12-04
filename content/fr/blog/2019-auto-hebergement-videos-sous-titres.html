@@ -1,0 +1,61 @@
+---
+title: "Auto-hébergement de vidéos avec HLS : sous-titres"
+description: |
+  Avec l'aide de HLS, il est possible d'auto-héberger des vidéos
+  incluant des sous-titres tout en ménageant la bande passante.
+uuid: 82880752-6d7a-4b67-ad27-3faceda05a55
+tags:
+  - web
+---
+
+Dans un [article précédent][previous article], j'ai décrit une
+solution pour héberger soi-même des vidéos tout en adaptant la bande
+passante de chaque utilisateur à l'aide de HLS et [hls.js][]. Le
+résultat faisait l'impasse sur les sous-titres. Bien que ceux-ci
+puissent être déclarés dans le manifeste HLS ou intégrés directement
+dans la vidéo, il est plus simple de les inclure dans l'élément
+`<video>` en utilisant le [format WebVTT][WebVTT format]:
+
+    ::html hl_lines="7 8 9 10"
+    <video poster="poster.jpg"
+           controls preload="none">
+      <source src="index.m3u8"
+              type="application/vnd.apple.mpegurl">
+      <source src="progressive.mp4"
+              type='video/mp4; codecs="avc1.4d401f, mp4a.40.2"'>
+      <track src="de.vtt"
+             kind="subtitles" srclang="de" label="Deutsch">
+      <track src="en.vtt"
+             kind="subtitles" srclang="en" label="English">
+    </video>
+
+Voici un exemple présentant [Agent 327: Operation Barbershop][], une
+video créée par [Blender Animation Studio][] et actuellement publiée
+sous la licence [Creative Commons Attribution No Derivatives 2.0][] :
+
+![]([[!!videos/2019-self-hosted-videos-subtitles.m3u8]])
+
+Le premier sous-titre se trouve à [0:12](#video-seek-12). La plupart
+des navigateurs proposent un menu pour choisir les sous-titres. Cela
+fonctionne avec *Chromium* mais *Firefox* [n'affiche pas ce menu avant
+de jouer la vidéo][], à moins d'autoriser le préchargement. Autre
+inconvénient, il n'y a pas de moyen simple de spécifier une marge de
+sécurité et les sous-titres restent coincés contre le bas de la vidéo.
+Ces deux problèmes restent suffisamment mineurs pour ne pas justifier
+le téléchargement de plusieurs centaines de kibioctets de JavaScript
+pour un lecteur tiers.
+
+*[HLS]: HTTP Live Streaming
+
+[previous article]: [[fr/blog/2018-auto-hebergement-videos.html]] "Auto-hébergement de vidéos avec HLS"
+[hls.js]: https://github.com/video-dev/hls.js/ "JavaScript HLS client using Media Source Extension"
+[WebVTT format]: https://en.wikipedia.org/wiki/WebVTT "WebVTT on Wikipedia"
+[Agent 327: Operation Barbershop]: https://agent327.com/
+[Blender Animation Studio]: https://blender.studio/
+[Creative Commons Attribution No Derivatives 2.0]: https://spdx.org/licenses/CC-BY-ND-2.0.html "Creative Commons Attribution No Derivatives 2.0"
+[n'affiche pas ce menu avant de jouer la vidéo]: https://bugzilla.mozilla.org/show_bug.cgi?id=1566199 "Subtitle selection widget not displayed with preload='none'"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
