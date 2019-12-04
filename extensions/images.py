@@ -320,7 +320,7 @@ class ImageFixerPlugin(Plugin):
                 # Add subtitle tracks if any
                 vtts = [v
                         for v in self.site.content.node_from_relative_path(
-                                os.path.dirname(src)[1:]).walk_resources()
+                                "media/videos").walk_resources()
                         if v.name.endswith('.vtt')
                         and v.name.startswith('{}.'.format(id))]
                 for vtt in vtts:
