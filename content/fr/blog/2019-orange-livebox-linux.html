@@ -1,0 +1,291 @@
+---
+title: "Remplacer la Livebox d'Orange par un routeur sous Linux"
+description: |
+  Remplacer la Livebox d'Orange par un autre routeur est abondamment
+  documenté mais souvent exécuté de manière peu élégante. Je propose
+  mon approche.
+uuid: 0249724c-de4a-48b4-b22b-267e8e131396
+cover: ont-box-orange@2x.jpg
+tags:
+  - network
+---
+
+Il y a quelques mois, je suis rentré en France et j'ai opté pour
+Orange en tant que FAI avec un forfait combinant Internet et
+abonnement mobile. En Suisse, j'utilisais [mon propre routeur][own
+router] à la place du boîtier fourni par Swisscom. Bien qu'il existe
+une [documentation abondante][abundant documentation] pour remplacer
+la Livebox fournie par Orange, les [instructions autour d'un routeur
+Linux][instructions around a plain Linux box] sont souvent peu
+élégantes. J'expose ici ma propre variation. Je ne suis intéressé que
+par un accès IPv4/IPv6 : pas de téléphone, pas de télé.
+
+# Matériel
+
+Orange utilise [GPON][] pour son déploiement FTTH. Par conséquent, un
+ONT est nécessaire pour encapsuler et décapsuler les trames Ethernet
+en trames GPON. Deux formats sont disponibles. Il peut s'agir d'un
+petit boîtier Huawei HG8010H servant également de convertisseur vers
+Ethernet 1000BASE-T :
+
+![Huawei ONT rebranded as Orange]([[!!images/ont-box-orange@2x.jpg]]
+"Le Huawei HG8010H fait office d'ONT et de convertisseur fibre/cuivre")
+
+Avec une Livebox récente, Orange opte généralement pour un SFP à
+brancher dans la Livebox. Pour une raison inconnue, j'ai obtenu l'ONT
+sous forme de boîtier au lieu de la version SFP. Comme j'ai un
+[Netgear GS110TP][] avec deux ports SFP, j'ai aussi acheté un [SFP
+GPON FGS202][] sur eBay. C'est le même modèle qu'Orange inclus avec sa
+Livebox 4. Cependant, je n'ai pas eu le temps de le tester[^key].
+
+[^key]: Comme Orange utilise le numéro de série comme identifiant, mon
+    plan est d'appeler le service client Orange, de prétendre que j'ai
+    obtenu un échange et de fournir le nouveau numéro de série.
+
+![Sercomm SFP ONT]([[!!images/ont-sfp-orange@2x.jpg]]
+"Le GPON SFP ONT Sercomm FGS202")
+
+# Configuration IPv4
+
+Internet est disponible via le VLAN 832 et paramétré avec DHCPv4. La
+première étape consiste à configurer le client DHCP pour envoyer
+quelques informations supplémentaires, dont la chaîne
+d'authentification [RFC 3118][] : elle est construite à partir de
+l'identifiant de connexion alphanumérique préfixé par `fti/` et envoyé
+par courrier postal. Le fichier `/etc/dhcp/dhclient.conf` ressemble à
+ceci :
+
+    ::text hl_lines="8 9 10"
+    option rfc3118-authentication code 90 = string;
+    interface "internet" {
+      timeout 60;
+      retry 1;
+      select-timeout 0;
+      send vendor-class-identifier "sagem";
+      send user-class "+FSVDSL_livebox.Internet.softathome.Livebox4";
+      # L'identifiant fti/xxxxxx est converti en hexadécimal avec :
+      #  echo -n 123456 | od -A n -t x1
+      send rfc3118-authentication 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
+      request subnet-mask, routers,
+              domain-name-servers, domain-name,
+              broadcast-address,
+              dhcp-lease-time, dhcp-renewal-time, dhcp-rebinding-time,
+              rfc3118-authentication;
+    }
+
+Orange requiert que certains paquets de contrôle, notamment DHCP,
+soient marqués avec 802.1p PCP 6. Il s'agit d'un champ de 3 bits à
+côté du numéro de VLAN dans la trame Ethernet. Par défaut, Linux
+laisse ce champ vide. Avec `ip link`, nous pouvons traduire le
+`skb->priority` interne de Linux en un PCP. Sur Debian, voici comment
+déclarer l'interface VLAN[^egress] :
+
+    ::text hl_lines="3"
+    auto internet
+    iface internet inet dhcp
+      pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
+      pre-up    /etc/firewall/run
+      post-down ip link del internet
+
+[^egress]: Il n'est pas nécessaire d'avoir le numéro VLAN dans le nom
+    de l'interface. Je le laisse généralement de côté car cela n'aide
+    pas à décrire l'interface. Le numéro de VLAN peut toujours être
+    obtenu avec `ip -d link show`.
+
+La dernière étape consiste à ajouter le code approprié dans
+`/etc/firewall/run` pour s'assurer que les paquets DHCP, ARP, IGMP et
+ICMP ont une priorité interne de 6. la cible `CLASSIFY` de *Netfilter*
+serait la solution la plus simple. Cependant, le client DHCP ISC
+utilise des chaussettes de bas niveau et les paquets qu'il envoie ne
+passent pas par *Netfilter*. Une solution propre est d'utiliser `tc`
+pour modifier les paquets juste avant de les confier à la carte
+réseau. L'action [skbedit][] permet de changer la priorité associée à
+un paquet :
+
+    ::sh hl_lines="9"
+    # We need a qdisc to set filters
+    tc qdisc replace dev internet root handle 1: prio
+    tc filter del dev internet
+    
+    # DHCP (raw sockets, do not specify "protocol ip")
+    tc filter add dev internet parent 1: prio 1 u32 \
+         match ip protocol 17 ff \
+         match ip dport 67 ffff \
+         action skbedit priority 0:6
+    # ARP
+    tc filter add dev internet parent 1: prio 2 protocol 0x806 u32 \
+         match u32 0 0 \
+         action skbedit priority 0:6
+    # IGMP
+    tc filter add dev internet parent 1: prio 3 protocol ip u32 \
+         match ip protocol 2 ff \
+         action skbedit priority 0:6
+    # ICMP
+    tc filter add dev internet parent 1: prio 4 protocol ip u32 \
+         match ip protocol 1 ff \
+         action skbedit priority 0:6
+
+Avec cette configuration en place, `ifup internet` devrait retourner
+une connexion IPv4 fonctionnelle.
+
+# Configuration IPv6
+
+IPv6 est également disponible sur le même VLAN. L'autoconfiguration
+via SLAAC doit être utilisée pour obtenir une route par défaut, mais
+pas l'adresse IP. Au lieu de cela, Orange fournit un préfixe /60 via
+une « délégation de préfixes » DHCPv6.
+
+La configuration DHCP est finalisée pour envoyer les équivalents
+DHCPv6 de la configuration DHCPv4 :
+
+    ::text
+    # […]
+    option dhcp6.auth code 11 = string;
+    option dhcp6.userclass code 15 = string;
+    option dhcp6.vendorclass code 16 = string;
+    interface "internet" {
+      timeout 60;
+      retry 1;
+      select-timeout 0;
+      # […]
+      send dhcp6.vendorclass 00:00:04:0e:00:05:73:61:67:65:6d;
+      send dhcp6.userclass 00:2b:46:53:56:44:53:4c:5f:6c:69:76:65:62:6f:78:2e:49:6e:74:65:72:6e:65:74:2e:73:6f:66:74:61:74:68:6f:6d:65:2e:6c:69:76:65:62:6f:78:34;
+      send dhcp6.auth 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
+      also request dhcp6.auth, dhcp6.vendorclass, dhcp6.userclass;
+    }
+
+Le script de configuration du pare-feu est modifié pour classifier les
+paquets DHCPv6 et ICMPv6 avec une priorité 6 :
+
+    ::sh
+    # DHCPv6
+    tc filter add dev internet parent 1: prio 5 protocol ipv6 u32 \
+         match ip6 protocol 17 ff \
+         match ip6 dport 547 ffff \
+         action skbedit priority 0:6
+    # ICMPv6
+    tc filter add dev internet parent 1: prio 6 protocol ipv6 u32 \
+         match ip6 protocol 58 ff \
+         action skbedit priority 0:6
+
+La définition de l'interface `internet` est complétée pour invoquer le
+client DHCPv6 :
+
+    ::text hl_lines="6 7 8 9 10"
+    auto internet
+    iface internet inet dhcp
+      pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
+      pre-up    /etc/firewall/run
+      post-down ip link del internet
+      post-up   /lib/ifupdown/wait-for-ll6.sh && \
+                dhclient -6 -P -pf /run/dhclient6.$IFACE.pid \
+                               -lf /var/lib/dhcp/dhclient6.$IFACE.leases \
+                               -df /var/lib/dhcp/dhclient.$IFACE.leases \
+                               $IFACE
+      post-down dhclient -6 -r -pf /run/dhclient6.$IFACE.pid dhclient \
+                               -lf /var/lib/dhcp/dhclient6.$IFACE.leases \
+                               -df /var/lib/dhcp/dhclient.$IFACE.leases \
+                               $IFACE || true
+
+Le script `/lib/ifupdown/wait-for-ll6.sh` attend que l'interface soit
+fonctionnelle avant de continuer. L'option `-P` pour le client DHCPv6
+permet d'activer la délégation de préfixe et de désactiver l'obtention
+d'une adresse classique.
+
+Ce n'est pas fini : le client DHCPv6 va recevoir un préfixe /60 mais
+rien n'est configuré pour en faire usage. Un [script][] à placer dans
+`/etc/dhcp/dhclient-exit-hooks.d` est nécessaire pour distribuer ce
+préfixe. Voici une version simplifiée et non testée de ce script :
+
+    ::sh
+    #!/bin/sh
+    IA_PD_IFACES="lan-trusted lan-guest lan-games"
+
+    case $reason in
+      BOUND6|EXPIRE6|REBIND6|REBOOT6|RENEW6)
+        offset=0
+        for iface in $IA_PD_IFACES; do
+          # Remove old /64 prefix if there is a change
+          [ -n "$old_ip6_prefix" ] && \
+            [ "$old_ip6_prefix" != "$new_ip6_prefix" ] && \
+            ip -6 addr flush dev $iface scope global
+          # Compute and add new /64 prefix
+          [ -n "$new_ip6_prefix" ] && {
+            offset=$((offset + 1))
+            address=$(sipcalc --v6split=64 --split-verbose "$new_ip6_prefix" \
+                       | grep '^Compressed' \
+                       | awk "(NR == $offset)"' { print $NF }')1/64
+            ! ip -6 addr show dev $iface | grep -qwF $address || \
+              ip -6 addr add $address dev $iface
+        done
+    esac
+
+En haut du script, la valeur de `IA_PD_IFACES` représente la liste des
+interfaces internes. À partir du /60 fourni dans la variable
+`$new_ip6_prefix`, le script assignera un /64 à chacun d'entre eux
+(ainsi que la première adresse). Par exemple, si on nous attribue
+`2001:db8:f:b00::/60`, on obtient :
+
+    ::console
+    $ ip -brief -6 a show scope global
+    lan-trusted@eno1  UP  2001:db8:f:b00::1/64
+    lan-guest@eno1    UP  2001:db8:f:b01::1/64
+    lan-games@eno1    UP  2001:db8:f:b02::1/64
+
+J'utilise [dnsmasq][] pour annoncer la présence d'un routeur IPv6 aux
+hôtes de chacun des réseaux internes. Cela se configure via la
+directive `dhcp-range` :
+
+    ::text
+    dhcp-range=::,constructor:lan-trusted,ra-names
+    dhcp-range=::,constructor:lan-guest,ra-names
+    dhcp-range=::,constructor:lan-games,ra-names
+
+Ce script configure également la route par défaut pour l'interface
+`internet` en demandant au noyau d'accepter explicitement les annonces
+du routeur distant et en envoyant un paquet de découverte à l'aide de
+[rdisc6][]:
+
+    ::sh
+    case $old_ip6_prefix,$new_ip6_prefix in
+      *,)
+        # No IPv6 prefix delegation, remove old route
+        sysctl -qw net/ipv6/conf/$interface/accept_ra=0
+        ip -6 route del default proto ra || true
+        ;;
+      *)
+        # Otherwise, get a default route
+        sysctl -qw net/ipv6/conf/$interface/accept_ra=2
+        rdisc6 $interface
+        ;;
+    esac
+
+Jetez un œil au [script complet][script] plutôt que de recopier la
+version raccourcie ci-dessus ! Si après un `ifdown internet && ifup
+internet`, vous n'obtenez pas le préfixe /60, il peut être nécessaire
+de redémarrer l'ONT pour résilier un éventuel ancien bail DHCP.
+
+*[ISP]: Internet Service Provider
+*[GPON]: Gigabit-capable Passive Optical Network
+*[FTTH]: Fiber To The Home
+*[ONT]: Optical Network Terminal
+*[SFP]: Small Form-factor Pluggable
+*[PCP]: Priority Code Point
+
+[own router]: [[en/blog/2014-swisscom-router.html]] "Replacing Swisscom router by a Linux box"
+[abundant documentation]: https://lafibre.info/remplacer-livebox/ "La Fibre.info: Remplacer la Livebox par un routeur"
+[instructions around a plain Linux box]: https://lafibre.info/remplacer-livebox/remplacer-la-livebox-sans-pppoe/ "La Fibre.info: Remplacer la livebox avec DHCP+DHCPv6-pd (linux/openbsd)"
+[GPON]: https://en.wikipedia.org/wiki/G.984 "GPON on Wikipedia"
+[Netgear GS110TP]: https://www.netgear.com/support/product/GS110TP "Netgear GS110TP"
+[SFP GPON FGS202]: https://www.ebay.fr/itm/Adaptateur-Fibre-SFP-GPON-FGS202/264232974099 "SFP GPON FGS202 on eBay"
+[RFC 3004]: https://tools.ietf.org/html/rfc3004 "RFC 3004: The User Class Option for DHCP"
+[RFC 3118]: https://tools.ietf.org/html/rfc3118 "RFC 3118: Authentication for DHCP Messages"
+[skbedit]: https://manpages.debian.org/buster/iproute2/tc-skbedit.8.en.html "skbedit - SKB editing action"
+[rdisc6]: https://manpages.debian.org/buster/ndisc6/rdisc6.8.en.html "rdisc6 - ICMPv6 Router Discovery tool"
+[script]: https://github.com/vincentbernat/puppet-eizo/blob/master/local-modules/eizo/templates/interfaces/ipv6-pd "DHCPv6 prefix delegation script"
+[dnsmasq]: http://www.thekelleys.org.uk/dnsmasq/doc.html "Dnsmasq documentation"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
