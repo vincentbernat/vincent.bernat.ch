@@ -125,7 +125,7 @@ connected through IPv4.
 
 Native IPv6 is also available over the same VLAN. SLAAC
 autoconfiguration should be used to get a default route, but not the
-IP address. Instead, Orange is providing a /60 prefix through DHCPv6
+IP address. Instead, Orange is providing a /56 prefix through DHCPv6
 "prefix delegation."
 
 The DHCP configuration is completed to send the DHCPv6 equivalents for
@@ -185,7 +185,7 @@ get a link-local address before continuing. The `-P` option for the
 DHCPv6 client enables prefix delegation and disables the normal
 address query.
 
-It is not over: the DHCPv6 client will receive a /60 prefix but there
+It is not over: the DHCPv6 client will receive a /56 prefix but there
 is nothing configured to make use of it. You need to drop a [script][]
 in `/etc/dhcp/dhclient-exit-hooks.d` to actually distribute this
 prefix to your internal network. Here is a simplified non-tested
@@ -215,10 +215,10 @@ version of this script:
     esac
 
 At the top of the script, the `IA_PD_IFACES` variable contains the
-list of internal interfaces. From the /60 provided in
+list of internal interfaces. From the /56 provided in
 `$new_ip6_prefix`, the script will assign a /64 to each of them—along
 with the first address. For example, when being assigned
-`2001:db8:f:b00::/60`, we get:
+`2001:db8:f:b00::/56`, we get:
 
     ::console
     $ ip -brief -6 a show scope global
@@ -255,7 +255,7 @@ packet using [rdisc6][]:
 
 Be sure to use the [complete script][script] instead of the shortened
 code above! If after `ifdown internet && ifup internet`, you don't get
-a /60 prefix, you may have to reboot the ONT to clear an old DHCP
+a /56 prefix, you may have to reboot the ONT to clear an old DHCP
 lease.
 
 *[ISP]: Internet Service Provider

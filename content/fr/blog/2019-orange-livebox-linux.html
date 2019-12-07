@@ -132,7 +132,7 @@ une connexion IPv4 fonctionnelle.
 
 IPv6 est également disponible sur le même VLAN. L'autoconfiguration
 via SLAAC doit être utilisée pour obtenir une route par défaut, mais
-pas l'adresse IP. Au lieu de cela, Orange fournit un préfixe /60 via
+pas l'adresse IP. Au lieu de cela, Orange fournit un préfixe /56 via
 une « délégation de préfixes » DHCPv6.
 
 La configuration DHCP est finalisée pour envoyer les équivalents
@@ -192,7 +192,7 @@ fonctionnelle avant de continuer. L'option `-P` pour le client DHCPv6
 permet d'activer la délégation de préfixe et de désactiver l'obtention
 d'une adresse classique.
 
-Ce n'est pas fini : le client DHCPv6 va recevoir un préfixe /60 mais
+Ce n'est pas fini : le client DHCPv6 va recevoir un préfixe /56 mais
 rien n'est configuré pour en faire usage. Un [script][] à placer dans
 `/etc/dhcp/dhclient-exit-hooks.d` est nécessaire pour distribuer ce
 préfixe. Voici une version simplifiée et non testée de ce script :
@@ -221,10 +221,10 @@ préfixe. Voici une version simplifiée et non testée de ce script :
     esac
 
 En haut du script, la valeur de `IA_PD_IFACES` représente la liste des
-interfaces internes. À partir du /60 fourni dans la variable
+interfaces internes. À partir du /56 fourni dans la variable
 `$new_ip6_prefix`, le script assignera un /64 à chacun d'entre eux
 (ainsi que la première adresse). Par exemple, si on nous attribue
-`2001:db8:f:b00::/60`, on obtient :
+`2001:db8:f:b00::/56`, on obtient :
 
     ::console
     $ ip -brief -6 a show scope global
@@ -262,7 +262,7 @@ du routeur distant et en envoyant un paquet de découverte à l'aide de
 
 Jetez un œil au [script complet][script] plutôt que de recopier la
 version raccourcie ci-dessus ! Si après un `ifdown internet && ifup
-internet`, vous n'obtenez pas le préfixe /60, il peut être nécessaire
+internet`, vous n'obtenez pas le préfixe /56, il peut être nécessaire
 de redémarrer l'ONT pour résilier un éventuel ancien bail DHCP.
 
 *[ISP]: Internet Service Provider
