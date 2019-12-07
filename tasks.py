@@ -379,7 +379,7 @@ def build(c):
               "  | xargs -0 -I'{}' ln -sf $PWD/../content/'{}' '{}'")
 
         c.run("git add *")
-        c.run("git diff --stat HEAD || true")
+        c.run("git diff --stat HEAD || true", pty=True)
         if confirm("More diff?", default=True):
             c.run("git diff --word-diff HEAD || true", pty=True)
         if confirm("Keep?", default=True):
