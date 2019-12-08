@@ -166,7 +166,7 @@ def upload_videos(c, video=None):
 
 
 @task
-def updatefonts(c):
+def update_fonts(c):
     """Download latest Merriweather fonts"""
     with c.cd('content/media/fonts'):
         c.run('wget -O merriweather.zip https://google-webfonts-helper.herokuapp.com/api/fonts/'
