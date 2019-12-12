@@ -301,6 +301,7 @@ class ImageFixerPlugin(Plugin):
                 img[0].tag = 'video'
                 img[0].set("controls", None)
                 img.attr("preload", "none")
+                img.attr("crossorigin", "anonymous")
                 img.attr("poster", self.site.media_url(
                     'images/posters/{}.jpg'.format(id)))
                 del img.attr.src
