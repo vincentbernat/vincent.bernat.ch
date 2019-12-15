@@ -374,10 +374,6 @@ def build(c):
         c.run(r"find * -type f -print0 | xargs -r0 chmod a+r")
         c.run(r"find * -type d -print0 | xargs -r0 chmod a+rx")
 
-        # For videos and files, use symlinks
-        c.run("find media/files media/videos -type f -print0 "
-              "  | xargs -0 -I'{}' ln -sf $PWD/../content/'{}' '{}'")
-
         c.run("git add *")
         c.run("git diff --stat HEAD || true", pty=True)
         if confirm("More diff?", default=True):
