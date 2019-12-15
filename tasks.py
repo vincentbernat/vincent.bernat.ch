@@ -383,7 +383,7 @@ def build(c):
         else:
             c.run("git reset --hard")
             c.run("git clean -d -f")
-            raise("Build rollbacked")
+            raise RuntimeError("Build rollbacked")
 
 @task
 def push(c, clean=False):
