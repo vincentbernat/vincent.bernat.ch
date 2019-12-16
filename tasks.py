@@ -395,7 +395,7 @@ def push(c, clean=False):
         # history too often)
         c.run('''
 for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
-    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") "$f";
+    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") -h "$f";
 done''')
 
     # media
