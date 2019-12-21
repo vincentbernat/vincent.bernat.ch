@@ -58,7 +58,6 @@ l'identifiant de connexion alphanumérique préfixé par `fti/` et envoyé
 par courrier postal. Le fichier `/etc/dhcp/dhclient.conf` ressemble à
 ceci :
 
-    ::text hl_lines="8 9 10"
     option rfc3118-authentication code 90 = string;
     interface "internet" {
       timeout 60;
@@ -83,7 +82,6 @@ laisse ce champ vide. Avec `ip link`, nous pouvons traduire le
 `skb->priority` interne de Linux en un PCP. Sur Debian, voici comment
 déclarer l'interface VLAN[^egress] :
 
-    ::text hl_lines="3"
     auto internet
     iface internet inet dhcp
       pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
@@ -141,7 +139,6 @@ une « délégation de préfixes » DHCPv6.
 La configuration DHCP est finalisée pour envoyer les équivalents
 DHCPv6 de la configuration DHCPv4 :
 
-    ::text
     # […]
     option dhcp6.auth code 11 = string;
     option dhcp6.userclass code 15 = string;
@@ -174,7 +171,6 @@ paquets DHCPv6 et ICMPv6 avec une priorité 6 :
 La définition de l'interface `internet` est complétée pour invoquer le
 client DHCPv6 :
 
-    ::text hl_lines="6 7 8 9 10"
     auto internet
     iface internet inet dhcp
       pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
@@ -239,7 +235,6 @@ J'utilise [dnsmasq][] pour annoncer la présence d'un routeur IPv6 aux
 hôtes de chacun des réseaux internes. Cela se configure via la
 directive `dhcp-range` :
 
-    ::text
     dhcp-range=::,constructor:lan-trusted,ra-names
     dhcp-range=::,constructor:lan-guest,ra-names
     dhcp-range=::,constructor:lan-games,ra-names

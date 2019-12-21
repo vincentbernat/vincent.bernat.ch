@@ -50,7 +50,6 @@ information, notably the [RFC 3118][] authentication string. It
 includes the alphanumeric connection identifier prefixed by `fti/` and
 provided by snail mail. `/etc/dhcp/dhclient.conf` looks like this:
 
-    ::text hl_lines="8 9 10"
     option rfc3118-authentication code 90 = string;
     interface "internet" {
       timeout 60;
@@ -74,7 +73,6 @@ using VLANs. By default, Linux leaves this field blank. With `ip
 link`, we can translate Linux's `skb->priority` to a PCP. On Debian,
 here is how to declare the VLAN interface:[^egress]
 
-    ::text hl_lines="3"
     auto internet
     iface internet inet dhcp
       pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
@@ -131,7 +129,6 @@ IP address. Instead, Orange is providing a /56 prefix through DHCPv6
 The DHCP configuration is completed to send the DHCPv6 equivalents for
 vendor class, user class and authentication string:
 
-    ::text
     # […]
     option dhcp6.auth code 11 = string;
     option dhcp6.userclass code 15 = string;
@@ -164,7 +161,6 @@ with priority 6:
 The definition of the `internet` interface is updated to invoke the
 DHCPv6 client:
 
-    ::text hl_lines="6 7 8 9 10"
     auto internet
     iface internet inet dhcp
       pre-up    ip link add link eno1 name internet type vlan id 832 egress-qos-map 0:0 6:6
@@ -229,7 +225,6 @@ with the first address. For example, when being assigned
 I am using [dnsmasq][] to offer IPv6 router advertisements to hosts in
 each network. This is done through the `dhcp-range` directive:
 
-    ::text
     dhcp-range=::,constructor:lan-trusted,ra-names
     dhcp-range=::,constructor:lan-guest,ra-names
     dhcp-range=::,constructor:lan-games,ra-names
