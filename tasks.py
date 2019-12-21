@@ -8,7 +8,6 @@ import yaml
 import csv
 import re
 import datetime
-import subprocess
 
 os.environ["PATH"] = os.path.expanduser('~/.virtualenvs/hyde/bin') \
     + os.pathsep + os.environ["PATH"]
@@ -42,15 +41,18 @@ def gen(c):
     """Generate dev content"""
     c.run('hyde -x gen')
 
+
 @task(post=[gen])
 def regen(c):
     """Regenerate dev content"""
     c.run('rm -rf deploy')
 
+
 @task
 def serve(c):
     """Serve dev content"""
     c.run('hyde -x serve -a 0.0.0.0')
+
 
 @task
 def sprite(c):
@@ -89,11 +91,13 @@ def screenshots(c):
                   "--disable-gpu "
                   "--window-size={width},2000 "
                   "http://localhost:8080/{url} "
-                  "&& mv screenshot.png screenshots/{now}/{width}px-{slug}.png".format(
+                  "&& mv screenshot.png "
+                  "   screenshots/{now}/{width}px-{slug}.png".format(
                       width=width,
                       now=now,
                       url=url,
                       slug=url.replace("/", "-").replace(".", "-")))
+
 
 # Encoding of videos needs to be done with video2hls.
 """
@@ -136,10 +140,12 @@ EOF
 
 # When possible, normalize videos to -2.0dB for peaks. Use the
 # following command to get the peak volume:
-#  ffmpeg -loglevel info -i indy3-dosbox-opl2lpt.mkv -af "volumedetect" -vn -sn -dn -f null /dev/null
+#  ffmpeg -loglevel info -i indy3-dosbox-opl2lpt.mkv -af "volumedetect" \
+#         -vn -sn -dn -f null /dev/null
 #
 # Then, in Blender, you can increase the volume (use
 # http://www.redwirez.com/pcalc.jsp to convert dB to percents).
+
 
 @task
 def upload_videos(c, video=None):
@@ -152,24 +158,28 @@ def upload_videos(c, video=None):
             continue
         # Upload
         for host in hosts:
-            c.run("rsync -a {directory}/ {host}:/data/webserver/media.luffy.cx/videos/{short}/".format(
-                host=host,
-                short=directory,
-                directory=os.path.join(path, directory)))
+            c.run("rsync -a {directory}/ {host}:"
+                  "/data/webserver/media.luffy.cx/videos/{short}/".format(
+                      host=host,
+                      short=directory,
+                      directory=os.path.join(path, directory)))
         # Copy poster and index.m3u8
-        c.run("cp {directory}/poster.jpg content/media/images/posters/{short}.jpg".format(
-            short=directory,
-            directory=os.path.join(path, directory)))
-        c.run("cp {directory}/index.m3u8 content/media/videos/{short}.m3u8".format(
-            short=directory,
-            directory=os.path.join(path, directory)))
+        c.run("cp {directory}/poster.jpg "
+              "content/media/images/posters/{short}.jpg".format(
+                  short=directory,
+                  directory=os.path.join(path, directory)))
+        c.run("cp {directory}/index.m3u8 "
+              "content/media/videos/{short}.m3u8".format(
+                  short=directory,
+                  directory=os.path.join(path, directory)))
 
 
 @task
 def update_fonts(c):
     """Download latest Merriweather fonts"""
     with c.cd('content/media/fonts'):
-        c.run('wget -O merriweather.zip https://google-webfonts-helper.herokuapp.com/api/fonts/'
+        c.run('wget -O merriweather.zip '
+              'https://google-webfonts-helper.herokuapp.com/api/fonts/'
               'merriweather\\?download=zip\\&subsets=latin,latin-ext'
               '\\&variants=300,300italic\\&formats=woff,woff2')
         c.run('unzip merriweather.zip \\*.woff')
@@ -204,11 +214,13 @@ def linkcheck(c, remote='yes', verbose='no'):
     if result.failed:
         fixlinks(c)
 
+
 @task
 def fixlinks(c):
     """Try to fix links"""
     fp = open("linkchecker-out.csv")
-    reader = csv.DictReader(filter(lambda row: row[0]!='#', fp), delimiter=';')
+    reader = csv.DictReader(filter(lambda row: row[0] != '#', fp),
+                            delimiter=';')
     seen = {}
     for row in reader:
         if row['valid'] == 'True' and 'Redirected' not in row['infostring']:
@@ -220,7 +232,8 @@ def fixlinks(c):
             continue
         if mo:
             year = int(mo.group(1))
-        archive = {'a': "https://archive.today/{}/{}".format(year, row['urlname']),
+        archive = {'a': "https://archive.today/{}/{}".format(year,
+                                                             row['urlname']),
                    'w': "http{}://web.archive.org/web/{}/{}".format(
                        not row['urlname'].startswith('http:') and "s" or "",
                        year, row['urlname'])}
@@ -244,7 +257,8 @@ Info:    {infostring}""".format(**row))
                 valid += a
                 valid += a.upper()
             if 'Redirected' in row['infostring']:
-                mo = re.search(r'.*Redirected to `(.*?)\'\.', row['infostring'],
+                mo = re.search(r'.*Redirected to `(.*?)\'\.',
+                               row['infostring'],
                                flags=re.DOTALL)
                 if mo:
                     redirected = mo.group(1)
@@ -260,16 +274,18 @@ Info:    {infostring}""".format(**row))
                 return
             elif ans == "r":
                 url = input("URL? ")
-                c.run("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
-                    row['urlname'], row['urlname'], url))
+                c.run("git grep -Fl '{}'"
+                      "| xargs -r sed -i 's, {}, {},g'".format(
+                          row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
                 c.run("x-www-browser {}".format(row['urlname']))
             elif ans == "p":
                 c.run("x-www-browser {}".format(row['parentname']))
             elif ans == "R":
-                c.run("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
-                    row['urlname'], row['urlname'], redirected))
+                c.run("git grep -Fl '{}'"
+                      "| xargs -r sed -i 's, {}, {},g'".format(
+                          row['urlname'], row['urlname'], redirected))
                 break
             else:
                 found = False
@@ -278,20 +294,24 @@ Info:    {infostring}""".format(**row))
                         c.run("x-www-browser {}".format(archive[a]))
                         break
                     elif ans == a.upper():
-                        c.run("git grep -Fl '{}' | xargs -r sed -i 's, {}, {},g'".format(
-                            row['urlname'], row['urlname'], archive[a]))
+                        c.run("git grep -Fl '{}'"
+                              "| xargs -r sed -i 's, {}, {},g'".format(
+                                  row['urlname'], row['urlname'], archive[a]))
                         found = True
                         break
                 if found:
                     break
         seen[row['urlname']] = True
 
+
 @task
 def build(c):
     """Build production content"""
     c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
     with c.cd("content/en"):
-        c.run("! git grep -Pw '(?i:obviously|basically|simply|clearly|everyone knows|turns out)' \\*.html")
+        c.run("! git grep -Pw '(?i:"
+              "obviously|basically|simply|clearly|everyone knows|turns out"
+              ")' \\*.html")
     c.run("rm -rf .final/*")
     c.run("yarn install --frozen-lockfile")
     c.run('hyde -x gen -c %s' % conf)
@@ -301,11 +321,13 @@ def build(c):
               r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
         c.run(r"find . -name '*.html' -print0"
               r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'")
-        # Optimize SVG (consider using svgcleaner instead, svgo is a bit fragile)
+        # Optimize SVG (consider using svgcleaner instead, svgo is a
+        # bit fragile)
         c.run("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
-              "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo --quiet --disable=mergePaths")
+              "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo "
+              "        --quiet --disable=mergePaths")
         c.run("find media/images -type f -name '*.svg'"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
@@ -314,20 +336,26 @@ def build(c):
               " | xargs -0 -n10 -P4 jpegoptim --max=84 --strip-all")
         c.run("find media/images -type f -name '*.jpg' -print0"
               " | xargs -0 -n1 -I'{}' -P4 jpegtran -optimize -progressive "
-              "                                    -copy none -outfile '{}' '{}'")
+              "                                    -copy none"
+              "                                    -outfile '{}' '{}'")
         # Optimize PNG
         c.run("find media/images -type f -name '*.png' -print0"
               " | xargs -0 -n10 -P4 optipng -quiet")
+
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs):
             options = " ".join(["--name-IDs+=0,4,6",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
                                 "--no-hinting --desubroutinize"])
-            c.run("pyftsubset media/fonts/{}.woff  --flavor=woff --with-zopfli {}".format(font, options))
-            c.run("pyftsubset media/fonts/{}.woff2 --flavor=woff2 {}".format(font, options))
-            c.run("mv media/fonts/{}.subset.woff  media/fonts/{}.woff".format(font, font))
-            c.run("mv media/fonts/{}.subset.woff2 media/fonts/{}.woff2".format(font, font))
+            c.run("pyftsubset media/fonts/{}.woff "
+                  "--flavor=woff --with-zopfli {}".format(font, options))
+            c.run("pyftsubset media/fonts/{}.woff2 "
+                  "--flavor=woff2 {}".format(font, options))
+            c.run("mv media/fonts/{}.subset.woff "
+                  "media/fonts/{}.woff".format(font, font))
+            c.run("mv media/fonts/{}.subset.woff2 "
+                  "media/fonts/{}.woff2".format(font, font))
         subset('iosevka-term', 'monospace')
         subset('merriweather', 'regular')
         subset('merriweather-italic', 'regular')
@@ -341,8 +369,10 @@ def build(c):
             files = c.run("echo %s" % p, hide=True).stdout.strip().split(" ")
             for f in files:
                 # Compute hash
-                md5 = c.run("md5sum %s" % f, hide="out").stdout.split(" ")[0][:14]
-                sha = c.run("openssl dgst -sha256 -binary %s | openssl enc -base64 -A" % f,
+                md5 = c.run("md5sum %s" % f,
+                            hide="out").stdout.split(" ")[0][:14]
+                sha = c.run("openssl dgst -sha256 -binary %s"
+                            "| openssl enc -base64 -A" % f,
                             hide="out").stdout.strip()
                 # New name
                 root, ext = os.path.splitext(f)
@@ -359,7 +389,8 @@ def build(c):
                     sed_html.append(
                         (r"s,"
                          r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
-                         r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 crossorigin=\3anonymous\3,"
+                         r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
+                         r"crossorigin=\3anonymous\3,"
                          r"g").format(media, f, media, newname, sha))
             if sed_css:
                 c.run("find . -name '*.css' -type f -print0 | "
@@ -384,6 +415,7 @@ def build(c):
             c.run("git reset --hard")
             c.run("git clean -d -f")
             raise RuntimeError("Build rollbacked")
+
 
 @task
 def push(c, clean=False):
@@ -413,7 +445,9 @@ done''')
         for host in hosts:
             c.run("rsync --exclude=.git --copy-unsafe-links -rt "
                   "--delete-delay --exclude=videos/\\*/ "
-                  ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
+                  ".final/media/ "
+                  "{}:/data/webserver/media.luffy.cx/".format(host))
+
 
 @task
 def analytics(c):
@@ -422,22 +456,23 @@ def analytics(c):
           "do ssh $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
           "   | grep -v atom.xml;"
           "done"
-          " | LANG=en_US.utf8 goaccess --ignore-crawlers "
-          "                            --http-protocol=no "
-          "                            --no-term-resolver "
-          "                            --no-ip-validation "
-          "                            --output=goaccess.html "
-          "                            --log-format=COMBINED "
-          "                            --ignore-panel=KEYPHRASES "
-          "                            --ignore-panel=REQUESTS_STATIC "
-          "                            --ignore-panel=GEO_LOCATION "
-          "                            --sort-panel=REQUESTS,BY_VISITORS,DESC "
-          "                            --sort-panel=NOT_FOUND,BY_VISITORS,DESC "
-          "                            --sort-panel=HOSTS,BY_VISITORS,DESC "
-          "                            --sort-panel=OS,BY_VISITORS,DESC "
-          "                            --sort-panel=BROWSERS,BY_VISITORS,DESC "
-          "                            --sort-panel=REFERRERS,BY_VISITORS,DESC "
-          "                            --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
-          "                            --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
+          " | LANG=en_US.utf8 goaccess "
+          "       --ignore-crawlers "
+          "       --http-protocol=no "
+          "       --no-term-resolver "
+          "       --no-ip-validation "
+          "       --output=goaccess.html "
+          "       --log-format=COMBINED "
+          "       --ignore-panel=KEYPHRASES "
+          "       --ignore-panel=REQUESTS_STATIC "
+          "       --ignore-panel=GEO_LOCATION "
+          "       --sort-panel=REQUESTS,BY_VISITORS,DESC "
+          "       --sort-panel=NOT_FOUND,BY_VISITORS,DESC "
+          "       --sort-panel=HOSTS,BY_VISITORS,DESC "
+          "       --sort-panel=OS,BY_VISITORS,DESC "
+          "       --sort-panel=BROWSERS,BY_VISITORS,DESC "
+          "       --sort-panel=REFERRERS,BY_VISITORS,DESC "
+          "       --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
+          "       --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
           "".format(" ".join(hosts)))
     c.run("x-www-browser goaccess.html")
