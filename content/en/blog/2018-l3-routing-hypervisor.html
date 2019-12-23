@@ -353,9 +353,13 @@ Another important point of this setup is how to quickly react to
 link may be detected immediately and the associated BGP sessions will
 be brought down. This may not always be reliable. Moreover, in our
 case, BGP sessions are established over several switches: a link down
-on a path may be left undetected until the hold timer
-expires. Therefore, in ❹, we enable BFD, a protocol to quickly detect
+on a path may be left undetected until the hold timer expires.
+Therefore, in ❹, we enable BFD, a protocol to quickly[^minimum] detect
 faults in path between two BGP peers ([RFC 5880][]).
+
+[^minimum]: On the QFX5000 Series switches, the minimum interval is
+    [officially][] one second. This is quite unfortunate as it makes
+    BFD mostly useless.
 
 A last point to consider is whetever you want to **allow anycast** on
 your network: if an IP is advertised from more than one hypervisor,
@@ -753,6 +757,7 @@ See "[Securing BGP on the host with origin validation][]."
 [rr-bird]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird.RR1.conf "BIRD configuration as a route reflector"
 [rr-gobgp]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/gobgpd.public-ipv4.yaml "GoBGP configuration as a route reflector"
 [rr-juniper]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/junos-RR3.conf "JunOS configuration as a route reflector"
+[officially]: https://www.juniper.net/documentation/en_US/junos/topics/concept/bfd-understanding-qfx-series.html "Understanding Bidirectional Forwarding Detection (BFD)"
 
 {# Local Variables:      #}
 {# mode: markdown        #}

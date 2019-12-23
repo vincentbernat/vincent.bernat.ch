@@ -382,8 +382,12 @@ connectées, un lien défaillant peut être détecté immédiatement et la
 session BGP est aussitôt invalidée. Cela n'est pas toujours fiable et
 dans notre cas, cela ne fonctionne pas en raison de la présence de
 commutateurs sur les chemins. En ❹, nous activons BFD, un protocole
-qui permet de détecter en moins d'une seconde un problème entre deux
-pairs BGP ([RFC 5880][]).
+qui permet de détecter en moins d'une seconde[^minimum] un problème
+entre deux pairs BGP ([RFC 5880][]).
+
+[^minimum]: Sur la série de commutateurs QFX5000, l'interval minimal
+    est [officiellement][offically] d'une seconde. C'est regrettable
+    car cela rend BFD quasiment inutile.
 
 Un dernier point à prendre en compte est la possibilité de faire du
 **routage anycast** : si une IP est publiée sur plusieurs
@@ -809,6 +813,7 @@ serveur avec la validation de l'origine][] ».
 [rr-bird]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird.RR1.conf "Configuration de BIRD en réflecteur"
 [rr-gobgp]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/gobgpd.public-ipv4.yaml "Configuration de GoBGP en réflecteur"
 [rr-juniper]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/junos-RR3.conf "Configuration de JunOS en réflecteur"
+[officially]: https://www.juniper.net/documentation/en_US/junos/topics/concept/bfd-understanding-qfx-series.html "Understanding Bidirectional Forwarding Detection (BFD)"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
