@@ -175,7 +175,43 @@ def upload_videos(c, video=None):
 
 
 @task
-def update_fonts(c):
+def update_monospace_fonts(c):
+    """Build latest Iosevka fonts with Nix"""
+    c.run("""
+nix-build -E '((import <nixpkgs>{}).iosevka.override {
+  privateBuildPlan = {
+    family = "Iosevka Custom";
+    design = ["custom" "term" "ss05" "v-asterisk-low"];
+    slants = {
+      upright = "upright";
+    };
+    weights = {
+      regular = {
+        shape = 300;
+        menu = 400;
+        css = 400;
+      };
+    };
+  };
+  set = "custom";
+}).overrideAttrs(oldAttrs: {
+  postConfigure = "cat <<EOF > private.toml
+[custom]
+xheight = 560
+cap = 775
+EOF";
+})'
+""")
+    c.run("cp result/share/fonts/iosevka-custom/*.ttf content/media/fonts/.")
+    c.run("rm result")
+    with c.cd("content/media/fonts"):
+        c.run("woff iosevka-custom*.ttf")
+        c.run("woff2_compress iosevka-custom*.ttf")
+        c.run("rm iosevka-custom*.ttf")
+
+
+@task
+def update_text_fonts(c):
     """Download latest Merriweather fonts"""
     with c.cd('content/media/fonts'):
         c.run('wget -O merriweather.zip '
@@ -356,7 +392,7 @@ def build(c):
                   "media/fonts/{}.woff".format(font, font))
             c.run("mv media/fonts/{}.subset.woff2 "
                   "media/fonts/{}.woff2".format(font, font))
-        subset('iosevka-term', 'monospace')
+        subset('iosevka-custom-regular', 'monospace')
         subset('merriweather', 'regular')
         subset('merriweather-italic', 'regular')
         # Compute hash on various files
