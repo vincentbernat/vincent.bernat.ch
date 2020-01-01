@@ -11,9 +11,8 @@ tags:
 ---
 
 !!! "Deprecation notice" The information presented in this article are
-outdated since the route cache has been [removed from Linux
-3.6][removed]. Instead, take a look at “[IPv4 route lookup on
-Linux][].”
+outdated since the route cache was [removed from Linux 3.6][removed].
+Instead, take a look at “[IPv4 route lookup on Linux][].”
 
 The route cache is a Linux kernel component enabling route lookups to
 be faster by caching the results in some table and checking it before
@@ -38,7 +37,7 @@ and I will cover only the **IPv4** version here.
           2.6.38, 2.6.39, 3.0 and 3.1. There are some clues for Linux
           2.6.35, 2.6.36 and 2.6.37 as well as for Linux 3.2, 3.3, 3.4
           and 3.5. Starting from Linux 3.6, the whole
-          [route cache has been removed][removed].
+          [route cache was removed][removed].
 
 [^dst]: Linux provides a protocol-independent destination cache
         subsystem (DST). This component is not a generic cache layer
@@ -105,11 +104,11 @@ table). Each bucket is a chained list of route cache entries.
 ![Schema of the route cache hash table][rthashtable]
 [rthashtable]: [[!!images/linux/routing-cache.png]] "Partial view of the route cache hash table with three cached entries"
 
-Once an entry has been added to the route cache, there are several
-ways to remove it. Most entries are removed by the
-[garbage collector][gc] which will scan the route cache and remove
-invalid and older entries. It will be triggered when the route cache
-is full or at regular interval, once a certain threshold has been met.
+Once an entry is added to the route cache, there are several ways to
+remove it. Most entries are removed by the [garbage collector][gc]
+which scans the route cache and removes invalid and older entries. It
+is triggered when the route cache is full or at regular interval, once
+a certain threshold is met.
 
 ## Available knobs
 
@@ -148,14 +147,14 @@ There are several values you can tune. Most of them are available in
 
 You may find documentation about these obsolete *sysctl* values:
 
- - `net.ipv4.route.secret_interval` has been
-   [removed in Linux 2.6.35][secret]; it was used to trigger an
-   asynchronous flush at fixed interval to avoid to fill the cache.
- - `net.ipv4.route.gc_interval` has been
-   [removed in Linux 2.6.38][gcinterval]. It is still present until
-   Linux 3.2 but has no effect. It was used to trigger an asynchronous
-   cleanup of the route cache. The garbage collector is now considered
-   efficient enough for the job.
+ - `net.ipv4.route.secret_interval` was [removed in Linux
+   2.6.35][secret]; it was used to trigger an asynchronous flush at
+   fixed interval to avoid to fill the cache.
+ - `net.ipv4.route.gc_interval` was [removed in Linux
+   2.6.38][gcinterval]. It is still present until Linux 3.2 but has no
+   effect. It was used to trigger an asynchronous cleanup of the route
+   cache. The garbage collector is now considered efficient enough for
+   the job.
 
 !!! "Update (2011.12)" `net.ipv4.route.gc_interval` [is back for Linux
 3.2][gcinterval2]. It is still needed to avoid exhausting the
@@ -298,7 +297,7 @@ them. The garbage collector is triggered when a new entry needs to be
 added to the cache and the number of entries is superior to
 `net.ipv4.route.gc_thresh`. It is implemented in
 [`rt_garbage_collect()` function][rtgarbagecollect]. It will do
-nothing if it has been called less than
+nothing if it was called less than
 `net.ipv4.route.gc_interval_ms` milliseconds and the cache is not full
 (more than `net.ipv4.route.max_size` entries).
 
@@ -330,7 +329,7 @@ garbage collector sets its goal to 262,144. From this point, the number
 of entries oscillates around 2 millions entries.
 
 On the second plot, `rhash_entries` is now equal to 1,048,576 but
-`net.ipv4.route.gc_elasticity` has been set to 2. Therefore, the
+`net.ipv4.route.gc_elasticity` was set to 2. Therefore, the
 aggressive part of the garbage collectors kicks at the same threshold
 than for the previous plot. However, its goal is now four times larger
 and the oscillations have a larger amplitude. The fact that the
@@ -385,7 +384,7 @@ been removed (and was never really used) and asynchronous cleanup
 (`rt_periodic_timer`) does not exist anymore.
 
 !!! "Update (2011.12)" As stated earlier, `net.ipv4.route.gc_interval`
-has been [reinstantiated in Linux 3.2][gcinterval2]. The cleanup is a
+was [reinstantiated in Linux 3.2][gcinterval2]. The cleanup is a
 bit different of what is done by the garbage collector but have some
 similarities. It is run every `net.ipv4.route.gc_interval` seconds
 (even when there is less than `net.ipv4.route.gc_threshold`
