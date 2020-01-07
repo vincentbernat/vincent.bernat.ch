@@ -278,7 +278,7 @@ quelques exemples interactifs d'utilisation dans sa documentation :
 corrects[^extension] :
 
     ::console
-    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    $ python3 -m pytest -v --log-level=debug --doctest-modules ./fizzbuzz.py
     ============================ test session starts =============================
     platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
     cachedir: .pytest_cache
@@ -301,7 +301,7 @@ En cas d'erreur, *pytest* affiche un message décrivant la localisation
 et la nature du problème :
 
     ::console
-    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py -k fizzbuzz.fizzbuzz
+    $ python3 -m pytest -v --log-level=debug --doctest-modules ./fizzbuzz.py -k fizzbuzz.fizzbuzz
     ============================ test session starts =============================
     platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
     cachedir: .pytest_cache
@@ -362,9 +362,6 @@ utilisant les [tests paramétrés][parametrized test functions] de
     ])
     def test_main(args, expected):
         options = parse_args(shlex.split(args))
-        options.debug = True
-        options.silent = True
-        setup_logging(options)
         assert main(options) == expected
 
 [^end]: Du fait que le script se termine par un appel à `sys.exit()`,
@@ -378,7 +375,7 @@ fournis. La partie `args` est utilisée comme entrée pour la fonction
 `main()`. Quand tout fonctionne comme prévu, *pytest* affiche :
 
     ::console
-    python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    python3 -m pytest -v --log-level=debug --doctest-modules ./fizzbuzz.py
     ============================ test session starts =============================
     platform linux -- Python 3.7.4, pytest-3.10.1, py-1.8.0, pluggy-0.8.0 -- /usr/bin/python3
     cachedir: .pytest_cache
@@ -400,7 +397,7 @@ Quand une erreur survient, *pytest* fournit une évaluation de la
 situation :
 
     ::console hl_lines="6 23"
-    $ python3 -m pytest -v --doctest-modules ./fizzbuzz.py
+    $ python3 -m pytest -v --log-level=debug --doctest-modules ./fizzbuzz.py
     [...]
     ================================== FAILURES ==================================
     __________________________ test_main[0 0-expected0] __________________________
@@ -417,9 +414,6 @@ situation :
         ])
         def test_main(args, expected):
             options = parse_args(shlex.split(args))
-            options.debug = True
-            options.silent = True
-            setup_logging(options)
     >       assert main(options) == expected
     E       AssertionError: assert ['fizzbuzz'] == ['0']
     E         At index 0 diff: 'fizzbuzz' != '0'
@@ -437,6 +431,10 @@ bonne raison d'émettre des traces ! Si vous voulez en savoir plus sur
 les fonctionnalités de *pytest*, jetez un coup d'œil sur « [Test d'un
 applicatif réseau avec *pytest* et les espaces de noms Linux][Testing
 network software with pytest and Linux namespaces] ».
+
+!!! "Mise à jour (01.2020)" L'article a été mis à jour pour invoquer
+*pytest* avec l'argument `--log-level=debug` au lieu d'appeler
+`setup_logging()` dans chaque test.
 
 ---
 
