@@ -8,8 +8,10 @@
 <html lang="{{ resource.meta.language }}" class="nojs">
 <head>
   <meta charset="utf-8">
-  <title>{{ resource.meta.title|e }} | {{ resource.meta.author|e }}</title>
+  <title>{{ resource.meta.title|e }}{% if resource.meta.author %} | {{ resource.meta.author|e }}{% endif %}</title>
+{% if resource.meta.author %}
   <meta name="author" content="{{ resource.meta.author|e }}">
+{% endif %}
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
 {% if resource.meta.noindex %}
   <meta name="robots" content="noindex,follow">
@@ -51,7 +53,7 @@
           <div id="lf-sideblock">
 {% from "macros.j2" import resource_date with context %}
               <h2>
-                  {{resource.meta.author|e}}
+                  {{resource.meta.author|default("", true)|e}}
                   {{ resource_date(resource) | indent(18) }}
               </h2>
               {% filter indent(14) %}{% include "sidebar.j2" %}{% endfilter %}
