@@ -269,7 +269,7 @@ class ImageFixerPlugin(Plugin):
 
             # Adapt width/height if this is a scaled image (something@2x.jpg)
             mo = re.match(r'.*@(\d+)x\.[^.]*$', src)
-            if mo:
+            if mo and width is not None:
                 factor = int(mo.group(1))
                 width /= factor
                 height /= factor
