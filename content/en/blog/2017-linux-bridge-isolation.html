@@ -226,6 +226,20 @@ happens:
     
 In my opinion, this is the second most efficient method.
 
+!!! "Update (2020.01)" Since [Linux 4.2][], it is possible to use
+*Netfilter* to setup the ingress policy with the same efficiency. This
+can be done through [nftables][]:
+
+    ::console
+    # nft -f - <<EOF
+    > table netdev firewall {
+    >   chain ingress {
+    >     type filter hook ingress device br0 priority 0; policy drop;
+    >     log
+    >   }
+    > }
+    > EOF
+
 ### Using `ebtables`
 
 Just before re-delivering the frame to `netif_receive_skb()`,
@@ -435,6 +449,8 @@ using
 [rpfilter match]: https://manpages.debian.org/jessie/iptables/iptables-extensions.8.en.html#rpfilter "iptables rpfilter match extension"
 [RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
 [MACVLAN]: https://hicu.be/bridge-vs-macvlan "Hi Cube: Bridge vs Macvlan"
+[Linux 4.2]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e687ad60af09010936bbd0b2a3b5d90a8ee8353c "netfilter: add netfilter ingress hook after handle_ing() under unique static key"
+[nftables]: https://wiki.nftables.org/wiki-nftables/index.php/Main_Page "nftables wiki"
 
 {# Local Variables:      #}
 {# mode: markdown        #}
