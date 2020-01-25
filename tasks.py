@@ -346,7 +346,8 @@ def build(c):
     c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
     with c.cd("content/en"):
         c.run("! git grep -Pw '(?i:"
-              "obviously|basically|simply|clearly|everyone knows|turns out"
+              "obviously|basically|simply|clearly|everyone knows|turns out|"
+              "Thinkpad"
               ")' \\*.html")
     c.run("rm -rf .final/*")
     c.run("yarn install --frozen-lockfile")
