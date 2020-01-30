@@ -1,0 +1,82 @@
+---
+title: "Rétrogradage des paquets Debian à une date précise"
+description: |
+  Un petit guide pour rétrograder tous les paquets Debian à
+  une date spécifique à l'aide de snapshot.debian.org.
+uuid: 941ed2c7-5316-4126-9912-8e8a15925177
+tags:
+  - debian
+---
+
+
+Contrairement à [NixOS][], Debian ne dispose pas d'un mécanisme
+intégré permettant de remonter le temps à un moment précis. Cependant,
+grâce à [snapshot.debian.org][], une archive des paquets Debian, il
+est possible de rétrograder tous les paquets vers les versions
+présentes à une date choisie.
+
+Supposons que nous voulions retrouver l'état au 20 janvier 2020. Dans
+`/etc/apt/sources.list.d/snapshot.list`, nous ajoutons une source
+correspondant à cette date :
+
+    ::sources.list
+    deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20200120T111800Z/ unstable main contrib non-free
+
+Dans `/etc/apt/preferences.d/snapshot.pref`, nous définissons la
+priorité de tous les paquets issus de cette source à 1001. C'est
+au-dessus de la priorité par défaut de 500 et au-dessus de 1000 pour
+autoriser à revenir à une version plus ancienne. La [page de manuel de
+`apt_preferences(5)`][man] contient les explications associées.
+
+    ::control
+    Package: *
+    Pin: origin snapshot.debian.org
+    Pin-Priority: 1001
+
+Après avoir exécuté `apt update`, nous pouvons vérifier le résultat avec `apt policy`:
+
+    ::console
+    $ apt policy
+    Package files:
+     100 /var/lib/dpkg/status
+         release a=now
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/non-free amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=non-free,b=amd64
+         origin snapshot.debian.org
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/contrib amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=contrib,b=amd64
+         origin snapshot.debian.org
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/main amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=main,b=amd64
+         origin snapshot.debian.org
+    […]
+
+En demandant une *mise à jour*, on se voit proposer de revenir sur les
+versions présentes à l'instant choisi :
+
+    ::console hl_lines="8"
+    $ sudo apt upgrade
+    Reading package lists... Done
+    Building dependency tree
+    Reading state information... Done
+    Calculating upgrade... Done
+    The following NEW packages will be installed:
+      libdns-export1104 libgspell-1-1 libiptc0 libisc-export1100
+    The following packages will be DOWNGRADED:
+      bash-completion bear binutils binutils-common binutils-dev binutils-doc
+      binutils-x86-64-linux-gnu bison blackbird-gtk-theme blender blender-data
+      clang-6.0 clang-7 clang-8 clang-tools-8 cpp-9 cppcheck cpuid cups
+      […]
+    0 upgraded, 4 newly installed, 451 downgraded, 0 to remove and 0 not upgraded.
+    Need to get 1,053 MB/1,060 MB of archives.
+    After this operation, 9,282 kB disk space will be freed.
+    Do you want to continue? [Y/n]
+
+[NixOS]: https://nixos.org/ "Linux distribution with a unique approach to package and configuration management"
+[snapshot.debian.org]: http://snapshot.debian.org/
+[man]: https://manpages.debian.org/buster/apt/apt_preferences.5.en.html#How_APT_Interprets_Priorities "apt_preferences(5)"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

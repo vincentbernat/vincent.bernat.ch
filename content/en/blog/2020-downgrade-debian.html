@@ -1,0 +1,80 @@
+---
+title: "Downgrade all Debian packages to a specific date"
+description: |
+  A small howto to downgrade all Debian packages to
+  a specific date using snapshot.debian.org.
+uuid: 941ed2c7-5316-4126-9912-8e8a15925177
+tags:
+  - debian
+---
+
+Unlike [NixOS][], Debian doesn't have a builtin mechanism to rollback
+an installation to a specific point in time. However, thanks to
+[snapshot.debian.org][], a wayback machine for Debian packages, it is
+possible to downgrade all packages to the versions from a chosen
+date.
+
+Let's suppose we want to go back to January, 20<sup>th</sup> 2020. In
+`/etc/apt/sources.list.d/snapshot.list`, we add a date-specific
+snapshot as a source:
+
+    ::sources.list
+    deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20200120T111800Z/ unstable main contrib non-free
+
+In `/etc/apt/preferences.d/snapshot.pref`, we set the priority of all
+packages from this source to 1001. This is above the default priority
+of 500 and over 1000 to allow downgrade. See [`apt_preferences(5)`
+manual page][man] for more details.
+
+    ::control
+    Package: *
+    Pin: origin snapshot.debian.org
+    Pin-Priority: 1001
+
+After running `apt update`, we can check the result with `apt policy`:
+
+    ::console
+    $ apt policy
+    Package files:
+     100 /var/lib/dpkg/status
+         release a=now
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/non-free amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=non-free,b=amd64
+         origin snapshot.debian.org
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/contrib amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=contrib,b=amd64
+         origin snapshot.debian.org
+    1001 https://snapshot.debian.org/archive/debian/20200120T111800Z unstable/main amd64 Packages
+         release o=Debian,a=unstable,n=sid,l=Debian,c=main,b=amd64
+         origin snapshot.debian.org
+    […]
+
+When requesting an *upgrade*, we will effectively be proposed to
+downgrade everything to the versions in the snapshot:
+
+    ::console hl_lines="8"
+    $ sudo apt upgrade
+    Reading package lists... Done
+    Building dependency tree
+    Reading state information... Done
+    Calculating upgrade... Done
+    The following NEW packages will be installed:
+      libdns-export1104 libgspell-1-1 libiptc0 libisc-export1100
+    The following packages will be DOWNGRADED:
+      bash-completion bear binutils binutils-common binutils-dev binutils-doc
+      binutils-x86-64-linux-gnu bison blackbird-gtk-theme blender blender-data
+      clang-6.0 clang-7 clang-8 clang-tools-8 cpp-9 cppcheck cpuid cups
+      […]
+    0 upgraded, 4 newly installed, 451 downgraded, 0 to remove and 0 not upgraded.
+    Need to get 1,053 MB/1,060 MB of archives.
+    After this operation, 9,282 kB disk space will be freed.
+    Do you want to continue? [Y/n]
+
+[NixOS]: https://nixos.org/ "Linux distribution with a unique approach to package and configuration management"
+[snapshot.debian.org]: http://snapshot.debian.org/
+[man]: https://manpages.debian.org/buster/apt/apt_preferences.5.en.html#How_APT_Interprets_Priorities "apt_preferences(5)"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
