@@ -1,86 +1,68 @@
 ---
-title: Projets
+title: Projects
 uuid: 2d33c4ab-0986-4815-87c9-8833aa1eb148
 created:
 ---
-Les projets auxquels je contribue sont hébergés sur
-[GitHub](https://github.com/vincentbernat). En voici quelques uns :
 
-# lldpd
+Tous mes projets sont hébergés sur [GitHub][]. En voici une sélection :
 
-*[lldpd][1]* est un démon implémentant la norme [802.1AB][2]. Il
-permet d'envoyer des trames *LLDP* afin de notifier aux équipements
-connectés à la machine des informations telles que le nom de la
-machine, le nom du port, les VLAN présents, etc. Il gère également
-la réception ce qui autorise à déterminer que la machine est
-branchée sur tel port de tel équipement. Parmi les fonctionnalités
-intéressantes de ce démon, on notera le support de SNMP ainsi que
-des protocoles [CDP][3], SONMP et EDP.
+ - [lldpd][1] est un démon pour la norme [802.1AB][2]. Il permet
+   d'envoyer des trames *LLDP* afin de notifier aux équipements
+   connectés des informations telles que le nom de l'hôte, le nom du
+   port, les VLAN présents, etc.
 
-Voici un exemple de sortie :
+ - [Snimpy][6] est un outil Pytjon destiné à faciliter la création
+   d'outils simples utilisant des requêtes SNMP. Son interface est
+   très naturelle pour les habitués de Python. Jetez un œil sur
+   « [Snimpy: SNMP & Python][] » pour plus de détails.
 
-    Interface:    eth0, via: LLDP, RID: 1, Time: 0 day, 00:00:33
-      Chassis:
-        ChassisID:    mac 00:00:00:00:00:02
-        SysName:      ns-2.example.com
-        SysDescr:     Spectacular GNU/Linux 2016 Linux 4.19.0-6-amd64 #1 SMP Debian 4.19.67-2+deb10u2 (2019-11-11) x86_64
-        MgmtIP:       fe80::200:ff:fe00:2
-        MgmtIface:    2
-        Capability:   Bridge, off
-        Capability:   Router, off
-        Capability:   Wlan, off
-        Capability:   Station, on
-      Port:
-        PortID:       mac 00:00:00:00:00:02
-        PortDescr:    eth1
-        TTL:          120
-        PMD autoneg:  supported: no, enabled: no
-        MAU oper type: 10GigBaseCX4 - X copper over 8 pair 100-Ohm balanced cable
+ - [hellogopher][7] est un `Makefile` pour des applications en Go.
+   « [Makefile pour un projet Go][] » contient des détails
+   supplémentaires à ce sujet.
 
-{% from "macros.j2" import listing with context %}
-{{ listing("files/lldpd", -20) }}
+ - [Dashkiosk][4] est une solution de gestion de tableaux de bord sur
+   plusieurs écrans. Il fournit une interface d'administration ainsi
+   qu'un ensemble de récepteurs (web, Android, Chromecast). Lisez
+   « [Dashkiosk : gestion d’écrans pour tableaux de bord][] » pour
+   plus de détails.
 
-# Dashkiosk
+ - [eudyptula-boot][9] démarre un noyau Linux dans une machine
+   virtuelle sans nécessiter d'image. C'est utile pour des tests
+   rapides ou pour développer autour du noyau Linux. Plus de détails
+   dans « [Eudyptula Challenge : démarrage rapide d’un noyau
+   Linux][] ».
 
-*[Dashkiosk][4]* est une solution de gestion de tableaux de bord sur
- plusieurs écrans. Il est divisé en quatre composants :
+ - [network-lab][8] est un ensemble disparates de labos réseau que
+   j'utilise pour tester diverses choses. Beaucoup d'articles sur mon
+   blog s'appuient sur un tel lab. L'article « [Labo virtuel avec
+   QEMU][] » contient des détails supplémentaires.
 
- - le serveur va gérer les écrans en leur indiquant quel tableau de
-   bord afficher et en fournissant une interface d'administration,
- - le récepteur qui tourne dans un navigateur et se connecte au
-   serveur pour savoir quel tableau de bord afficher,
- - une application Android qui permet de faire tourner le récepteur,
- - une application Chromecast qui permet de faire tourner le récepteur.
+ - [Wiremaps][9] est une application de découverte du réseau. Via
+   SNMP, il parcourt votre réseau à la recherche des informations
+   stockées sur les routeurs, telle que les tables LLDP, EDP, CDP, FDB
+   et ARP. Il y a également un mécanisme de remontée dans le temps
+   pour savoir où un équipement particulier était branché hier.
 
-La vidéo ci-dessous démontre les capacités de _Dashkiosk_ en quelques
-minutes.
+ - [jchroot][10] est un utilitaire pour isoler un exécutable en le
+   confinant dans un répertoire particulier et en le restreignant à
+   l'aide des espaces de noms Linux. Lisez « [jchroot : chroot avec
+   isolation améliorée][] » pour plus de détails.
 
-![]([[!!videos/2014-dashkiosk.m3u8]])
-
-# Snimpy
-
-*[Snimpy][6]* est un outil Python destiné à faciliter la création
-d'outils simples utilisant des requêtes SNMP. Son interface est
-très naturelle. Voici un exemple d'utilisation :
-
-    ::python
-    load("IP-FORWARD-MIB")
-    m=M()
-
-    print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
-    routes = m.ipCidrRouteNextHop
-    for x in routes:
-         net, netmask, tos, src = x
-         print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
-
-Jetez un œil sur « [Snimpy : SNMP & Python][] » pour plus de détails.
-
+[GitHub]: https://github.com/vincentbernat
 [1]: https://vincentbernat.github.io/lldpd/
-[2]: https://fr.wikipedia.org/wiki/Link_Layer_Discovery_Protocol
-[3]: https://fr.wikipedia.org/wiki/Cisco_Discovery_Protocol
+[2]: https://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol
 [4]: https://dashkiosk.readthedocs.io/en/latest/
-[6]: https://github.com/vincentbernat/snimpy
-[Snimpy : SNMP & Python]: [[fr/blog/2013-snimpy.html]]
+[6]: https://snimpy.readthedocs.io/en/latest/
+[7]: https://github.com/vincentbernat/hellogopher
+[8]: https://github.com/vincentbernat/network-lab
+[9]: https://github.com/vincentbernat/wiremaps
+[10]: https://github.com/vincentbernat/jchroot
+[Snimpy: SNMP & Python]: [[fr/blog/2013-snimpy.html]]
+[Dashkiosk : gestion d’écrans pour tableaux de bord]: [[fr/blog/2014-dashkiosk.html]]
+[Makefile pour un projet Go]: [[fr/blog/2019-makefile-pour-golang.html]]
+[Labo virtuel avec QEMU]: [[fr/blog/2012-lab-reseau-kvm.html]]
+[Eudyptula Challenge : démarrage rapide d’un noyau Linux]: [[fr/blog/2014-eudyptula-boot.html]]
+[jchroot : chroot avec isolation améliorée]: [[fr/blog/2011-jchroot.html]]
 
 {# Local Variables: #}
 {# mode: markdown   #}

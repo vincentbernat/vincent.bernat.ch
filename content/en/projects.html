@@ -3,82 +3,67 @@ title: Projects
 uuid: 2d33c4ab-0986-4815-87c9-8833aa1eb148
 created:
 ---
-All my projects are hosted on
-[GitHub](https://github.com/vincentbernat). Here are a few of them:
 
-# lldpd
+All my projects are hosted on [GitHub][]. Here are a few of them:
 
-*[lldpd][1]* is a [802.1AB][2] daemon. It sends and receives *LLDP*
-frames which enables remote L2 equipments to determine which equipment
-is remotely present. These frames contain information like the
-equipment name, the port name, VLAN, etc. This daemon features SNMP
-support and also supports additional protocols like [CDP][3], SONMP
-and EDP.
+ - [lldpd][1] is a [802.1AB][2] daemon. It sends and receives *LLDP*
+   frames which enables remote L2 equipments to determine which
+   equipment is remotely present. These frames contain information
+   like the equipment name, the port name, VLAN, etc.
 
-Here is an example of output:
+ - [Snimpy][6] is a Python tool targeted at writting simple tools
+   using SNMP queries. It features a very pythonic interface and any
+   Python developer should feel at home with it. Have a look at
+   "[Snimpy: SNMP & Python][]" for more details.
 
-    Interface:    eth0, via: LLDP, RID: 1, Time: 0 day, 00:00:33
-      Chassis:
-        ChassisID:    mac 00:00:00:00:00:02
-        SysName:      ns-2.example.com
-        SysDescr:     Spectacular GNU/Linux 2016 Linux 4.19.0-6-amd64 #1 SMP Debian 4.19.67-2+deb10u2 (2019-11-11) x86_64
-        MgmtIP:       fe80::200:ff:fe00:2
-        MgmtIface:    2
-        Capability:   Bridge, off
-        Capability:   Router, off
-        Capability:   Wlan, off
-        Capability:   Station, on
-      Port:
-        PortID:       mac 00:00:00:00:00:02
-        PortDescr:    eth1
-        TTL:          120
-        PMD autoneg:  supported: no, enabled: no
-        MAU oper type: 10GigBaseCX4 - X copper over 8 pair 100-Ohm balanced cable
+ - [hellogopher][7] is a `Makefile` for Go projects. See "[A Makefile
+   for your Go project][]" for details.
+
+ - [Dashkiosk][4] is is a solution to manage dashboards on multiple
+   screens. It provides an administration interface and a set of
+   receivers, including a web application, an Android application, and
+   a Chromecast application. See "[Dashkiosk: manage dashboards on
+   multiple displays][]" for more details.
+
+ - [eudyptula-boot][9] boots a Linux kernel in a VM without a
+   dedicated root filesystem. It's useful for quick tests or to
+   develop and debug around the Linux kernel. See "[Eudyptula
+   Challenge: superfast Linux kernel booting][]" for more details.
+
+ - [network-lab][8] is a disparate set of networking labs I maintain
+   to test various stuff. Many articles on my blog are backed by such
+   a lab. See "[Network lab with QEMU][]" for more details.
+
+ - [Wiremaps][9] is a network discovery application. It will browse
+   your network and gather information from LLDP, EDP, CDP, FDB and
+   ARP tables using SNMP. It also includes a wayback machine to know
+   where an equipment was plugged before it disappeared. It's
+   unfortunately currently unmaintained.
+
+ - [jchroot][10] is an enhanced chroot using Linux namespaces to
+   provide more isolation. See "[jchroot: chroot with more
+   isolation][]" for more details.
+
+---
 
 {% from "macros.j2" import listing with context %}
-{{ listing("files/lldpd", -20) }}
+{{ listing("files/lldpd", -10) }}
 
-# Dashkiosk
-
-*[Dashkiosk][4]* is a solution to manage dashboards on multiple
- screens. There are four components:
-
- - the server which will manage the screens by sending them what they
-   should display; the server also provides an administration
-   interface,
- - the receiver running in a browser and connecting to the server to
-   know which dashboard should be displayed,
- - an Android application running the receiver,
- - a Chromecast application running the receiver.
-
-For a demo, have a look at the following video:
-
-![]([[!!videos/2014-dashkiosk.m3u8]])
-
-# Snimpy
-
-*[Snimpy][6]* is a Python tool targeted at writting simple tools using
-SNMP queries. It features a very pythonic interface and any Python
-developer should feel at home with it. Here is a use example:
-
-    ::python
-    load("IP-FORWARD-MIB")
-    m=M()
-
-    print "Using IP-FORWARD-MIB::ipCidrRouteTable..."
-    routes = m.ipCidrRouteNextHop
-    for x in routes:
-         net, netmask, tos, src = x
-         print "%15s/%-15s via %-15s src %-15s" % (net, netmask, routes[x], src)
-
-Have a look at "[Snimpy: SNMP & Python][]" for more details.
-
+[GitHub]: https://github.com/vincentbernat
 [1]: https://vincentbernat.github.io/lldpd/
 [2]: https://en.wikipedia.org/wiki/Link_Layer_Discovery_Protocol
-[3]: https://en.wikipedia.org/wiki/Cisco_Discovery_Protocol
 [4]: https://dashkiosk.readthedocs.io/en/latest/
-[6]: https://github.com/vincentbernat/snimpy
+[6]: https://snimpy.readthedocs.io/en/latest/
+[7]: https://github.com/vincentbernat/hellogopher
+[8]: https://github.com/vincentbernat/network-lab
+[9]: https://github.com/vincentbernat/wiremaps
+[10]: https://github.com/vincentbernat/jchroot
 [Snimpy: SNMP & Python]: [[en/blog/2013-snimpy.html]]
+[Dashkiosk: manage dashboards on multiple displays]: [[en/blog/2014-dashkiosk.html]]
+[A Makefile for your Go project]: [[en/blog/2019-makefile-build-golang.html]]
+[Network lab with QEMU]: [[en/blog/2012-network-lab-kvm.html]]
+[Eudyptula Challenge: superfast Linux kernel booting]: [[en/blog/2014-eudyptula-boot.html]]
+[jchroot: chroot with more isolation]: [[en/blog/2011-jchroot-isolation.html]]
 
 {# Local Variables: #}
 {# mode: markdown   #}
