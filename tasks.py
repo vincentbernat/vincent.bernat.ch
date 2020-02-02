@@ -344,6 +344,7 @@ Info:    {infostring}""".format(**row))
 def build(c):
     """Build production content"""
     c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
+    c.run("git annex lock")
     with c.cd("content/en"):
         c.run("! git grep -Pw '((?i:"
               "obviously|basically|simply|clearly|everyone knows|turns out"
