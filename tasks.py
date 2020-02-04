@@ -315,9 +315,9 @@ Info:    {infostring}""".format(**row))
                           row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
-                c.run("x-www-browser {}".format(row['urlname']))
+                c.run("xdg-open {}".format(row['urlname']))
             elif ans == "p":
-                c.run("x-www-browser {}".format(row['parentname']))
+                c.run("xdg-open {}".format(row['parentname']))
             elif ans == "R":
                 c.run("git grep -Fl '{}'"
                       "| xargs -r sed -i 's, {}, {},g'".format(
@@ -327,7 +327,7 @@ Info:    {infostring}""".format(**row))
                 found = False
                 for a in archive:
                     if ans == a:
-                        c.run("x-www-browser {}".format(archive[a]))
+                        c.run("xdg-open {}".format(archive[a]))
                         break
                     elif ans == a.upper():
                         c.run("git grep -Fl '{}'"
@@ -512,4 +512,4 @@ def analytics(c):
           "       --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
           "       --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
           "".format(" ".join(hosts)))
-    c.run("x-www-browser goaccess.html")
+    c.run("xdg-open goaccess.html")
