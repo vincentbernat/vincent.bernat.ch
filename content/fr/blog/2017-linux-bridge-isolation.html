@@ -88,6 +88,10 @@ le pilote réseau transfère ce dernier à la fonction
  3. délégation de la trame à la **fonction de réception** associée à l'interface, si elle existe ;
  4. délégation de la trame à une **fonction de protocole** (IPv4, ARP, IPv6).
 
+!!! "Mise à jour (03.2020)" Depuis [Linux 4.14][], le réception
+générique XDP est évaluée. Cela permet de rejetter encore plus tôt les
+paquets. Je n'ai pas encore étudié cette option.
+
 Pour une interface membre d'un pont, le noyau a configuré une fonction
 de réception : `br_handle_frame()`. Cette fonction ne laissera pas la
 trame continuer plus loin, à l'exception des trames STP ou LLDP ou si
@@ -110,7 +114,7 @@ effectuée. Le tampon réseau est rattaché au pont (`br0`) plutôt qu'à
 l'interface physique (`eth0`). La trame est évaluée par *Netfilter*
 puis retransmise à la fonction `netif_receive_skb()` où elle va
 repasser les quatre étapes.
-    
+
 ## Traitement IPv4
 
 Si une fonction de réception n'est pas attachée à l'interface réseau,
@@ -453,6 +457,7 @@ d'isoler correctement ce type d'interfaces.
 [RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
 [MACVLAN]: https://hicu.be/bridge-vs-macvlan "Hi Cube: Bridge vs Macvlan"
 [Linux 4.2]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e687ad60af09010936bbd0b2a3b5d90a8ee8353c "netfilter: add netfilter ingress hook after handle_ing() under unique static key"
+[Linux 4.14]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d445516966dcb2924741b13b27738b54df2af01a "net: xdp: support xdp generic on virtual devices"
 [nftables]: https://wiki.nftables.org/wiki-nftables/index.php/Main_Page "nftables wiki"
 
 {# Local Variables:      #}

@@ -73,7 +73,7 @@ There are two main factors of this behavior:
  2. **An interface doesn't need an IP address to process incoming IP
     traffic**. Additionally, by default, Linux accepts to answer ARP
     requests independently from the incoming interface.
-    
+
 ## Bridge processing
 
 After turning an incoming Ethernet frame into a socket buffer, the
@@ -87,6 +87,10 @@ function. The following actions are executed:
     any,
  4. hand over the frame to a global or device-specific **protocol
     handler** (e.g. IPv4, ARP, IPv6).
+
+!!! "Update (2020.03)" Since [Linux 4.14][], as step 0, generic XDP
+receive hooks are evaluated. This gives an early option to drop
+packets. I didn't investigate this option yet.
 
 For a bridged interface, the kernel has configured a device-specific
 receive handler, `br_handle_frame()`. This function won't allow any
@@ -111,7 +115,7 @@ buffer is attached to the bridge interface (`br0`) instead of the
 physical interface (`eth0`), is evaluated by *Netfilter* and sent back
 to `netif_receive_skb()`. It will go through the four steps a second
 time.
-    
+
 ## IPv4 processing
 
 When a device doesn't have a protocol-independent receive handler, a
@@ -450,6 +454,7 @@ using
 [RFC 3704]: https://tools.ietf.org/html/rfc3704 "RFC 3704: Ingress Filtering for Multihomed Networks"
 [MACVLAN]: https://hicu.be/bridge-vs-macvlan "Hi Cube: Bridge vs Macvlan"
 [Linux 4.2]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e687ad60af09010936bbd0b2a3b5d90a8ee8353c "netfilter: add netfilter ingress hook after handle_ing() under unique static key"
+[Linux 4.14]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=d445516966dcb2924741b13b27738b54df2af01a "net: xdp: support xdp generic on virtual devices"
 [nftables]: https://wiki.nftables.org/wiki-nftables/index.php/Main_Page "nftables wiki"
 
 {# Local Variables:      #}
