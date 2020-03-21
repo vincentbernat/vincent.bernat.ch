@@ -82,15 +82,12 @@ Après réception d'une trame Ethernet et son placement dans un tampon,
 le pilote réseau transfère ce dernier à la fonction
 `netif_receive_skb()`. Les actions suivantes sont exécutées :
 
- 1. copie de la trame vers les **TAP** globaux ou associés à
+ 1. évaluation des **programmes XDP** associés à l'interface ;
+ 2. copie de la trame vers les **TAP** globaux ou associés à
     l'interface (par exemple, `tcpdump`) ;
- 2. évaluation de la **politique de réception** (configurée avec `tc`) ;
- 3. délégation de la trame à la **fonction de réception** associée à l'interface, si elle existe ;
- 4. délégation de la trame à une **fonction de protocole** (IPv4, ARP, IPv6).
-
-!!! "Mise à jour (03.2020)" Depuis [Linux 4.14][], le réception
-générique XDP est évaluée. Cela permet de rejetter encore plus tôt les
-paquets. Je n'ai pas encore étudié cette option.
+ 3. évaluation de la **politique de réception** (configurée avec `tc`) ;
+ 4. délégation de la trame à la **fonction de réception** associée à l'interface, si elle existe ;
+ 5. délégation de la trame à une **fonction de protocole** (IPv4, ARP, IPv6).
 
 Pour une interface membre d'un pont, le noyau a configuré une fonction
 de réception : `br_handle_frame()`. Cette fonction ne laissera pas la
@@ -212,19 +209,58 @@ sur les ports du pont. Cela permet d'éviter tout trafic local :
 C'est la méthode la plus efficace car la trame est rejetée directement
 dans la fonction `br_pass_frame_up()`.
 
-### Utilisation de la politique de réception
+### Utilisation des programmes XDP
 
 Une autre possibilité est de rejeter la trame juste après son second
-passage dans la fonction `netif_receive_skb()`. La politique de
-réception d'une interface est évaluée au tout début. Les commandes
-suivantes s'assurent donc qu'aucune livraison locale (c'est-à-dire
-attachée à l'interface du pont) n'aura lieu :
+passage dans la fonction `netif_receive_skb()`. Les programmes XDP
+attachés à l'interface sont évalués avant très tôt. Voici le code de
+`xdp_drop_all.c` :
+
+    ::c
+    #include <linux/bpf.h>
+    
+    int main()
+    {
+        return XDP_DROP;
+    }
+
+Il peut être compilé et installé avec les commandes suivantes :
+
+    ::console
+    $ clang -O2 -target bpf -c xdp_drop_all.c -o xdp_drop_all.o
+    $ sudo ip link set dev br0 xdp obj xdp_drop_all.o sec .text
+
+Cela nécessite [Linux 4.14][] et c'est la seconde méthode la plus
+efficace. Cependant, ce n'est pas forcément très pratique en raison de
+la nécessité d'un compilateur[^ebpf].
+
+[^ebpf]: Le programme ci-dessus est si simple qu'il pourrait être
+    construit sans l'aide d'un compilateur :
+    
+        ::console
+        $ ip -d l l dev br0 | tail -1
+            prog/xdp id 1 tag 57cd311f2e27366b
+        $ bpftool prog dump xlated id 1
+           0: (b7) r0 = 1
+           1: (95) exit
+        $ readelf -x .text xdp_drop_all_kern.o
+        b7000000 01000000 95000000 00000000
+
+    Cependant, `ip link` requiert un objet au format ELF.
+
+### Utilisation de la politique de réception
+
+La politique de réception d'une interface est évaluée très peu de
+temps après les programmes XDP. Les commandes suivantes s'assurent
+donc qu'aucune livraison locale (c'est-à-dire attachée à l'interface
+du pont) n'aura lieu :
 
     ::console
     # tc qdisc add dev br0 handle ffff: ingress
-    # tc filter add dev br0 parent ffff: u32 match u8 0 0 action drop
+    # tc filter add dev br0 parent ffff: matchall action drop
 
-À mon sens, il s'agit de la seconde méthode la plus efficace.
+Il s'agit de la troisième méthode la plus efficace. Elle est toutefois
+plus commode et ne nécessite que quelques cycles CPU supplémentaires.
 
 !!! "Mise à jour (01.2020)" Depuis [Linux 4.2][], il est possible
 d'utiliser *Netfilter* pour configurer la politique de réception avec

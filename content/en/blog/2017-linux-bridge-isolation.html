@@ -80,17 +80,14 @@ After turning an incoming Ethernet frame into a socket buffer, the
 network driver transfers the buffer to the `netif_receive_skb()`
 function. The following actions are executed:
 
- 1. copy the frame to any registered global or per-device **taps**
+ 1. evaluate the **XDP receive hooks**,
+ 2. copy the frame to any registered global or per-device **taps**
     (e.g. `tcpdump`),
- 2. evaluate the **ingress policy** (configured with `tc`),
- 3. hand over the frame to the device-specific **receive handler**, if
+ 3. evaluate the **ingress policy** (configured with `tc`),
+ 4. hand over the frame to the device-specific **receive handler**, if
     any,
- 4. hand over the frame to a global or device-specific **protocol
+ 5. hand over the frame to a global or device-specific **protocol
     handler** (e.g. IPv4, ARP, IPv6).
-
-!!! "Update (2020.03)" Since [Linux 4.14][], as step 0, generic XDP
-receive hooks are evaluated. This gives an early option to drop
-packets. I didn't investigate this option yet.
 
 For a bridged interface, the kernel has configured a device-specific
 receive handler, `br_handle_frame()`. This function won't allow any
@@ -215,20 +212,58 @@ ports. This can be used to prevent any local traffic:
 This is the most efficient method since the frame is dropped directly
 in `br_pass_frame_up()`.
 
-### Using ingress policy
+### Using XDP receive hooks
 
 It's also possible to drop the bridged frame early after it has been
-re-delivered to `netif_receive_skb()` by `br_pass_frame_up()`. The
-ingress policy of an interface is evaluated before any
-handler. Therefore, the following commands will ensure no local
-delivery (the source interface of the packet is the bridge interface)
-happens:
+re-delivered to `netif_receive_skb()` by `br_pass_frame_up()`. The XDP
+hooks attached to an interface are evaluated before taps, ingress
+policy and handlers. A very simple `xdp_drop_all.c` program would
+look like this:
+
+    ::c
+    #include <linux/bpf.h>
+    
+    int main()
+    {
+        return XDP_DROP;
+    }
+
+It can be compiled and installed with:
+
+    ::console
+    $ clang -O2 -target bpf -c xdp_drop_all.c -o xdp_drop_all.o
+    $ sudo ip link set dev br0 xdp obj xdp_drop_all.o sec .text
+
+This requires [Linux 4.14][] and this is the second most efficient
+method but a bit inconvenient as it needs a compiler.[^ebpf]
+
+[^ebpf]: The above program is so simple it could be written without a
+    compiler:
+    
+        ::console
+        $ ip -d l l dev br0 | tail -1
+            prog/xdp id 1 tag 57cd311f2e27366b
+        $ bpftool prog dump xlated id 1
+           0: (b7) r0 = 1
+           1: (95) exit
+        $ readelf -x .text xdp_drop_all_kern.o
+        b7000000 01000000 95000000 00000000
+
+    However, `ip link` requires an ELF object.
+
+### Using ingress policy
+
+The ingress policy of an interface is evaluated just a bit later but
+before any handler. Therefore, the following commands will ensure no
+local delivery (the source interface of the packet is the bridge
+interface) happens:
 
     ::console
     # tc qdisc add dev br0 handle ffff: ingress
-    # tc filter add dev br0 parent ffff: u32 match u8 0 0 action drop
-    
-In my opinion, this is the second most efficient method.
+    # tc filter add dev br0 parent ffff: matchall action drop
+
+This is the third most efficient method, but is more convenient than
+the previous one for a very tiny additional overhead.
 
 !!! "Update (2020.01)" Since [Linux 4.2][], it is possible to use
 *Netfilter* to setup the ingress policy with the same efficiency. This
@@ -255,7 +290,7 @@ to drop the frame:
 
 However, to the best of my knowledge, this part of *Netfilter* is
 known to be inefficient.
-    
+
 ### Using namespaces
 
 Isolation can also be obtained by moving all the bridged interfaces
