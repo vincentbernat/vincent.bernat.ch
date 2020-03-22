@@ -37,4 +37,4 @@ def same_tag(resource, attribute, skip=0):
 def include_file(ctx, name):
     target = os.path.join(str(ctx.parent['node']), name)
     with open(target, "r") as f:
-        return jinja2.Markup(f.read())
+        return jinja2.Markup(f.read().decode('utf8'))
