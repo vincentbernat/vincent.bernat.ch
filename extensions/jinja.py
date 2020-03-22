@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import os
+import jinja2
 from babel.dates import format_date
 
 
@@ -29,3 +31,10 @@ def same_tag(resource, attribute, skip=0):
         if len(tags & ctags) > 0:
             break
     return candidate
+
+
+@jinja2.contextfunction
+def include_file(ctx, name):
+    target = os.path.join(str(ctx.parent['node']), name)
+    with open(target, "r") as f:
+        return jinja2.Markup(f.read())
