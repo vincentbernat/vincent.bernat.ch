@@ -251,7 +251,7 @@ too:
                 oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
                 // Add an empty source (enable play event on Chromium 72+)
-                newVideo.src = "about:blank";
+                newVideo.src = "data:";
 
                 // On play, initialize hls.js, once.
                 newVideo.addEventListener('play',function() {
@@ -271,7 +271,7 @@ too:
 
 !!! "Update (2018.12)" Starting from Chromium 72, a video without a
 source (like built with the snippet above) cannot trigger a play event
-anymore. Therefore, we use a dummy source using `about:blank`.
+anymore. Therefore, we use a dummy source using `data:`.
 
 Here is the result, featuring [*Caminandes 3: Llamigos*][video], a
 video created by Pablo Vasquez, produced by the [Blender Foundation][]
@@ -334,7 +334,7 @@ With *hls.js*, things are more complex. Ideally, the following
 policy should also be applied:
 
  - `worker-src blob:` for the transmuxing web worker,
- - `media-src blob: about:` for the transmuxed segments,
+ - `media-src blob: data:` for the transmuxed segments,
  - `connect-src https://hls-videos.sos-ch-dk-2.exo.io` to
    fetch playlists and media segments from JavaScript.
 
@@ -352,7 +352,7 @@ not needed:
     Content-Security-Policy: 
       default-src 'self' blob:;
       image-src 'self' https://hls-videos.sos-ch-dk-2.exo.io;
-      media-src blob: about: https://hls-videos.sos-ch-dk-2.exo.io;
+      media-src blob: data: https://hls-videos.sos-ch-dk-2.exo.io;
       connect-src https://hls-videos.sos-ch-dk-2.exo.io;
       worker-src blob:;
 

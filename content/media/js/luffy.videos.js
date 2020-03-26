@@ -21,7 +21,7 @@ luffy.s.push(function() {
             });
 
             // Add an empty source (enable play event on Chromium 72+)
-            newVideo.src = "about:blank";
+            newVideo.src = "data:";
 
             // Replace video tag with our clone.
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
