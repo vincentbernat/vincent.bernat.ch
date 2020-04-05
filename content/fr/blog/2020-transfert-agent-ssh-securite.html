@@ -1,0 +1,93 @@
+---
+title: "Atténuation des risques liés au transfert d'agent SSH"
+description: |
+  Le transfert de l'agent SSH vers une machine distante est une pratique
+  dangereuse. Toutefois, l'utilisation d'un agent dédié peut atténuer
+  ce risque.
+uuid: 6297a17f-bef6-4bb4-812e-fd59ba904e2d
+tags:
+  - desktop
+---
+
+`ssh-agent` est un programme permettant de conserver en mémoire les
+clés privées utilisées lors de l'authentification à clé publique de
+SSH. Lorsque l'agent est présent, `ssh` lui transmet les demandes de
+signature du serveur. L'agent effectue les opérations sur la clé
+privée et renvoie les résultats à `ssh`. Cela est utile si vous
+conservez vos clés privées chiffrées sur le disque et que vous ne
+souhaitez pas taper le mot de passe à chaque connexion. La sécurité de
+l'agent est essentielle : une personne capable de communiquer avec lui
+peut s'authentifier en votre nom sur des serveurs distants.
+
+`ssh` offre également la possibilité de *transférer l'agent* vers un
+serveur distant. Depuis celui-ci, vous pouvez vous authentifier sur un
+autre serveur en utilisant votre agent local, sans avoir à copier
+votre clé privée sur le serveur intermédiaire. Comme indiqué dans la
+[page du manuel][ssh-A], cela peut être dangereux !
+
+> La transmission de l'agent doit être activée avec prudence. Les
+> utilisateurs ayant la possibilité de contourner les autorisations
+> sur l'hôte distant (pour la chaussette UNIX de l'agent) peuvent
+> accéder à l'agent local via la connexion transférée. Un attaquant ne
+> peut pas obtenir de clé de l'agent, mais il peut effectuer des
+> opérations sur les clés qui lui permettent de s'authentifier en
+> utilisant les identités chargées dans l'agent. Une alternative plus
+> sûre peut être d'utiliser un serveur relais (voir `-J`).
+
+Comme indiqué, une meilleure alternative est d'utiliser la fonction de
+*serveur relais* : la connexion SSH à l'hôte cible est encapsulée au
+travers de la connexion SSH au serveur relais. Voir la [page du
+manuel][ssh-J] et [ce billet][jump host] pour plus de détails.
+
+[ssh-A]: https://manpages.debian.org/buster/openssh-client/ssh.1.en.html#A "ssh(1)"
+[ssh-J]: https://manpages.debian.org/buster/openssh-client/ssh.1.en.html#J "ssh(1)"
+[jump host]: https://www.redhat.com/sysadmin/ssh-proxy-bastion-proxyjump "SSH to remote hosts though a proxy or bastion with ProxyJump"
+
+---
+
+Si vous avez *vraiment* besoin d'utiliser le transfert d'agent SSH,
+vous pouvez le sécuriser un peu grâce à un agent dédié avec deux
+caractéristiques principales :
+
+ - il ne détient que la clé privée pour se connecter à l'hôte cible ;
+-  il requiert une confirmation pour chaque signature demandée.
+
+La fonction suivante autour de la commande `ssh` crée un tel agent
+éphémère :
+
+    ::sh
+    assh() {
+      (
+        # On s'assure que l'on n'utilise l'agent principal.
+        unset SSH_AUTH_SOCK
+        # Invocation d'un nouvel agent vide.
+        eval $(ssh-agent)
+        [ -n "$SSH_AUTH_SOCK" ] || exit 1
+        # À la fin du script, terminaison de l'agent.
+        trap "ssh-agent -k > /dev/null" EXIT
+        # Appel de SSH avec le transfert d'agent activé
+        # et l'ajout automatique de la clef privée
+        # dans l'agent en mode "confirmation".
+        ssh -o AddKeysToAgent=confirm \
+            -o ForwardAgent=yes \
+            "$@"
+      )
+    }
+
+Avec la directive `-o AddKeysToAgent=confirm`, `ssh` ajoute la clé
+privée non chiffrée dans l'agent mais chaque utilisation doit être
+confirmée[^ssh-add]. Une fois connecté, vous obtenez une invite de mot
+de passe pour chaque demande de signature[^confirm] :
+
+![Invite de confirmation avec l'empreinte de la clef]([[!!images/ssh-agent-prompt@2x.png]]
+"Invite de la part de l'agent pour confirmer l'utilisation de la clef privée")
+
+[^ssh-add]: Une autre possibilité est d'ajouter les clefs avec `ssh-add -c`.
+[^confirm]: Malheureusement, la réponse par défaut de cette invite est « Oui ».
+
+Mais, encore une fois, évitez d'utiliser le transfert d'agent ! ☠️
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

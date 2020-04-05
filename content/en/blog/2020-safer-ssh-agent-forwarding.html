@@ -1,0 +1,89 @@
+---
+title: "Safer SSH agent forwarding"
+description: |
+  Using SSH agent forwarding is dangerous. However, a dedicated
+  agent can mitigate the risks.
+uuid: 6297a17f-bef6-4bb4-812e-fd59ba904e2d
+tags:
+  - desktop
+---
+
+`ssh-agent` is a program to hold in memory the private keys used by
+SSH for public-key authentication. When the agent is running, `ssh`
+forwards to it the signature requests from the server. The agent
+performs the private key operations and returns the results to `ssh`.
+It is useful if you keep your private keys encrypted on disk and you
+don't want to type the password at each connection. Keeping the agent
+secure is critical: someone able to communicate with the agent can
+authenticate on your behalf on remote servers.
+
+`ssh` also provides the ability to *forward the agent* to a remote
+server. From this remote server, you can authenticate to another
+server using your local agent, without copying your private key on the
+intermediate server. As stated in the [manual page][ssh-A], this is
+dangerous!
+
+> Agent forwarding should be enabled with caution. Users with the
+> ability to bypass file permissions on the remote host (for the
+> agent's UNIX-domain socket) can access the local agent through the
+> forwarded connection. An attacker cannot obtain key material from
+> the agent, however they can perform operations on the keys that
+> enable them to authenticate using the identities loaded into the
+> agent. A safer alternative may be to use a jump host (see `-J`).
+
+As mentioned, a better alternative is to use the *jump host* feature:
+the SSH connection to the target host is tunneled through the SSH
+connection to the jump host. See the [manual page][ssh-J] and this
+[blog post][jump host] for more details.
+
+[ssh-A]: https://manpages.debian.org/buster/openssh-client/ssh.1.en.html#A "ssh(1)"
+[ssh-J]: https://manpages.debian.org/buster/openssh-client/ssh.1.en.html#J "ssh(1)"
+[jump host]: https://www.redhat.com/sysadmin/ssh-proxy-bastion-proxyjump "SSH to remote hosts though a proxy or bastion with ProxyJump"
+
+---
+
+If you *really* need to use SSH agent forwarding, you can secure it a
+bit through a dedicated agent with two main attributes:
+
+ - it holds only the private key to connect to the target host, and
+ - it asks confirmation for each requested signature.
+
+The following wrapper around the `ssh` command will spawn such an
+ephemeral agent:
+
+    ::sh
+    assh() {
+      (
+        # Ensure we don't use the "regular" agent.
+        unset SSH_AUTH_SOCK
+        # Spawn a new, empty, agent.
+        eval $(ssh-agent)
+        [ -n "$SSH_AUTH_SOCK" ] || exit 1
+        # On exit, kill the agent.
+        trap "ssh-agent -k > /dev/null" EXIT
+        # Invoke SSH with agent forwarding enabled and
+        # automatically add the needed private key in
+        # the agent, with "confirm" mode.
+        ssh -o AddKeysToAgent=confirm \
+            -o ForwardAgent=yes \
+            "$@"
+      )
+    }
+
+With the `-o AddKeysToAgent=confirm` directive, `ssh` adds the
+unencrypted private key to the agent but each use must be
+confirmed.[^ssh-add] Once connected, you get a password prompt for
+each signature request:[^confirm]
+
+![ssh-agent prompt confirmation with fingerprint and yes/no buttons]([[!!images/ssh-agent-prompt@2x.png]]
+"Request for the agent to use the specified private key")
+
+[^ssh-add]: Alternatively, you can add the keys with `ssh-add -c`.
+[^confirm]: Unfortunately, the dialog box default answer is "Yes."
+
+But, again, avoid using agent forwarding! ☠️
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
