@@ -50,27 +50,11 @@ caractéristiques principales :
  - il ne détient que la clé privée pour se connecter à l'hôte cible ;
 -  il requiert une confirmation pour chaque signature demandée.
 
-La fonction suivante autour de la commande `ssh` crée un tel agent
-éphémère :
+L'alias suivant autour de la commande `ssh` crée un tel agent
+éphémère :
 
     ::sh
-    assh() {
-      (
-        # On s'assure que l'on n'utilise l'agent principal.
-        unset SSH_AUTH_SOCK
-        # Invocation d'un nouvel agent vide.
-        eval $(ssh-agent)
-        [ -n "$SSH_AUTH_SOCK" ] || exit 1
-        # À la fin du script, terminaison de l'agent.
-        trap "ssh-agent -k > /dev/null" EXIT
-        # Appel de SSH avec le transfert d'agent activé
-        # et l'ajout automatique de la clef privée
-        # dans l'agent en mode "confirmation".
-        ssh -o AddKeysToAgent=confirm \
-            -o ForwardAgent=yes \
-            "$@"
-      )
-    }
+    alias assh="ssh-agent ssh -o AddKeysToAgent=confirm -o ForwardAgent=yes"
 
 Avec la directive `-o AddKeysToAgent=confirm`, `ssh` ajoute la clé
 privée non chiffrée dans l'agent mais chaque utilisation doit être

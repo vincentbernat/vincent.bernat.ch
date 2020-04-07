@@ -46,27 +46,11 @@ bit through a dedicated agent with two main attributes:
  - it holds only the private key to connect to the target host, and
  - it asks confirmation for each requested signature.
 
-The following wrapper around the `ssh` command will spawn such an
+The following alias around the `ssh` command will spawn such an
 ephemeral agent:
 
     ::sh
-    assh() {
-      (
-        # Ensure we don't use the "regular" agent.
-        unset SSH_AUTH_SOCK
-        # Spawn a new, empty, agent.
-        eval $(ssh-agent)
-        [ -n "$SSH_AUTH_SOCK" ] || exit 1
-        # On exit, kill the agent.
-        trap "ssh-agent -k > /dev/null" EXIT
-        # Invoke SSH with agent forwarding enabled and
-        # automatically add the needed private key in
-        # the agent, with "confirm" mode.
-        ssh -o AddKeysToAgent=confirm \
-            -o ForwardAgent=yes \
-            "$@"
-      )
-    }
+    alias assh="ssh-agent ssh -o AddKeysToAgent=confirm -o ForwardAgent=yes"
 
 With the `-o AddKeysToAgent=confirm` directive, `ssh` adds the
 unencrypted private key to the agent but each use must be
