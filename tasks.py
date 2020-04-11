@@ -377,7 +377,9 @@ def build(c):
               "                                    -outfile '{}' '{}'")
         # Optimize PNG
         c.run("find media/images -type f -name '*.png' -print0"
-              " | xargs -0 -n10 -P4 optipng -quiet")
+              " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
+              "                              --quiet --ext .png --force "
+              "|| true")
 
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
