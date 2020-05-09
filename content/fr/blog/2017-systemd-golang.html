@@ -115,8 +115,8 @@ paquet [go-systemd][] s'occupe des détails pour nous :
     	if err != nil {
     		log.Panicf("cannot listen: %s", err)
     	}
-    	daemon.SdNotify(false, "READY=1") // ❶
-    	http.Serve(l, nil)                // ❷
+    	daemon.SdNotify(false, daemon.SdNotifyReady) // ❶
+    	http.Serve(l, nil)                           // ❷
     }
 
 Il est important de placer la notification après `net.Listen()` (en
@@ -146,7 +146,7 @@ Nous pourrions inclure le code suivant juste avant `http.Serve()` :
             return
         }
         for {
-            daemon.SdNotify(false, "WATCHDOG=1")
+            daemon.SdNotify(false, daemon.SdNotifyWatchdog)
             time.Sleep(interval / 3)
         }
     }()
@@ -163,7 +163,7 @@ par ce code :
     for {
         _, err := http.Get("http://127.0.0.1:8081") // ❸
         if err == nil {
-            daemon.SdNotify(false, "WATCHDOG=1")
+            daemon.SdNotify(false, daemon.SdNotifyWatchdog)
         }
         time.Sleep(interval / 3)
     }
