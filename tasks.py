@@ -213,30 +213,20 @@ EOF";
 @task
 def update_text_fonts(c):
     """Download latest Merriweather fonts"""
+    url = "https://github.com/SorkinType/Merriweather/raw/master/fonts/woff2"
     with c.cd('content/media/fonts'):
-        c.run('wget -O merriweather.zip '
-              'https://google-webfonts-helper.herokuapp.com/api/fonts/'
-              'merriweather\\?download=zip\\&subsets=latin,latin-ext'
-              '\\&variants=300,300italic\\&formats=woff,woff2')
-        c.run('unzip merriweather.zip \\*.woff')
-        c.run('rm merriweather.zip')
-        for f in os.listdir('content/media/fonts'):
-            if not f.startswith('merriweather-v'):
-                continue
-            if not f.endswith('.woff'):
-                continue
-            target = 'merriweather-{}'.format(f.split('-')[-1])
-            target = target.replace('-300.', '.')
-            target = target.replace('-300', '-')
+        for source, target in [("Merriweather-Light", "merriweather"),
+                               ("Merriweather-LightItalic", "merriweather-italic")]:
+            c.run("wget -O {}.woff2 "
+                  "{}/{}.woff2".format(target, url, source))
             # Patch
-            c.run('ttx -o - {} '
+            c.run('ttx -o - {}.woff2 '
                   '| xmlstarlet ed '
-                  '     -u /ttFont/post/underlineThickness/@value -v 75'
-                  '> {}.ttx'.format(f, f))
-            c.run('ttx -o {} --flavor=woff {}.ttx'.format(target, f))
-            c.run('ttx -o {}2 --flavor=woff2 {}.ttx'.format(target, f))
-            c.run('rm {}.ttx'.format(f))
-            c.run('rm {}'.format(f))
+                  '     -u /ttFont/post/underlineThickness/@value -v 75 '
+                  '> {}.ttx'.format(target, target))
+            c.run('ttx -o {}.woff --flavor=woff {}.ttx'.format(target, target))
+            c.run('ttx -o {}.woff2 --flavor=woff2 {}.ttx'.format(target, target))
+            c.run('rm {}.ttx'.format(target))
 
 
 @task
