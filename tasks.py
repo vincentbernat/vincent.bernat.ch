@@ -231,7 +231,7 @@ def update_text_fonts(c):
             # Patch
             c.run('ttx -o - {} '
                   '| xmlstarlet ed '
-                  '     -u /ttFont/post/underlineThickness/@value -v 75'
+                  '     -u /ttFont/post/underlineThickness/@value -v 75 '
                   '> {}.ttx'.format(f, f))
             c.run('ttx -o {} --flavor=woff {}.ttx'.format(target, f))
             c.run('ttx -o {}2 --flavor=woff2 {}.ttx'.format(target, f))
