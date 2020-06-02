@@ -37,11 +37,13 @@ luffy.s.push(function() {
     window.addEventListener("hashchange", onHashChange);
     onHashChange();
 
-    // Load when it becomes visible
+    // Load when it becomes visible and user is not at the bottom (CLS)
     if ('IntersectionObserver' in window && links) {
         var observer = new window.IntersectionObserver(function(entries, observer) {
             for (i = 0; i < entries.length; i++) {
                 if (!entries[i].isIntersecting)
+                    continue;
+                if (window.innerHeight + window.scrollY >= document.body.offsetHeight)
                     continue;
                 observer.unobserve(links[0]);
                 load();
