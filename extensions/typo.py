@@ -18,7 +18,7 @@ class TypographyPlugin(Plugin):
         # Patch typogrify
         from typogrify import filters
         original_process_ignores = filters.process_ignores
-        filters.applyfilters = lambda text: self.owntypo(filters.smartypants(filters.amp(text)))
+        filters.applyfilters = lambda text: self.owntypo(filters.smartypants(text))
         filters.process_ignores = self.process_ignores(original_process_ignores)
 
         # Don't use widont
