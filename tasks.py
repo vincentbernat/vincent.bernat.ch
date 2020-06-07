@@ -205,7 +205,6 @@ EOF";
     c.run("cp result/share/fonts/iosevka-custom/*.ttf content/media/fonts/.")
     c.run("rm result")
     with c.cd("content/media/fonts"):
-        c.run("woff iosevka-custom*.ttf")
         c.run("woff2_compress iosevka-custom*.ttf")
         c.run("rm iosevka-custom*.ttf")
 
@@ -217,13 +216,13 @@ def update_text_fonts(c):
         c.run('wget -O merriweather.zip '
               'https://google-webfonts-helper.herokuapp.com/api/fonts/'
               'merriweather\\?download=zip\\&subsets=latin,latin-ext'
-              '\\&variants=300,300italic\\&formats=woff,woff2')
-        c.run('unzip merriweather.zip \\*.woff')
+              '\\&variants=300,300italic\\&formats=woff2')
+        c.run('unzip merriweather.zip \\*.woff2')
         c.run('rm merriweather.zip')
         for f in os.listdir('content/media/fonts'):
             if not f.startswith('merriweather-v'):
                 continue
-            if not f.endswith('.woff'):
+            if not f.endswith('.woff2'):
                 continue
             target = 'merriweather-{}'.format(f.split('-')[-1])
             target = target.replace('-300.', '.')
@@ -233,8 +232,7 @@ def update_text_fonts(c):
                   '| xmlstarlet ed '
                   '     -u /ttFont/post/underlineThickness/@value -v 75 '
                   '> {}.ttx'.format(f, f))
-            c.run('ttx -o {} --flavor=woff {}.ttx'.format(target, f))
-            c.run('ttx -o {}2 --flavor=woff2 {}.ttx'.format(target, f))
+            c.run('ttx -o {} --flavor=woff2 {}.ttx'.format(target, f))
             c.run('rm {}.ttx'.format(f))
             c.run('rm {}'.format(f))
 
@@ -387,12 +385,8 @@ def build(c):
             options = " ".join(["--name-IDs+=0,4,6",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
                                 "--no-hinting --desubroutinize"])
-            c.run("pyftsubset media/fonts/{}.woff "
-                  "--flavor=woff --with-zopfli {}".format(font, options))
             c.run("pyftsubset media/fonts/{}.woff2 "
                   "--flavor=woff2 {}".format(font, options))
-            c.run("mv media/fonts/{}.subset.woff "
-                  "media/fonts/{}.woff".format(font, font))
             c.run("mv media/fonts/{}.subset.woff2 "
                   "media/fonts/{}.woff2".format(font, font))
         subset('iosevka-custom-regular', 'monospace')
@@ -420,7 +414,7 @@ def build(c):
                 # Remove deploy/media
                 f = f[len('media/'):]
                 newname = newname[len('media/'):]
-                if ext in [".png", ".svg", ".woff", ".woff2"]:
+                if ext in [".png", ".svg", ".woff2"]:
                     # Fix CSS
                     sed_css.append('s+{})+{})+g'.format(f, newname))
                 if ext not in [".png", ".svg"]:
