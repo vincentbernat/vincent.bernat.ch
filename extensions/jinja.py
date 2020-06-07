@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import jinja2
-import base64
 from babel.dates import format_date
 
 
@@ -39,10 +38,3 @@ def include_file(ctx, name):
     target = os.path.join(str(ctx.parent['node']), name)
     with open(target, "r") as f:
         return jinja2.Markup(f.read().decode('utf8'))
-
-
-@jinja2.contextfunction
-def include_file_base64(ctx, name):
-    target = os.path.join(str(ctx.parent['node']), name)
-    with open(target, "r") as f:
-        return jinja2.Markup(base64.b64encode(f.read()).decode('ascii'))
