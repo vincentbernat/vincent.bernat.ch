@@ -398,12 +398,6 @@ def build(c):
         subset('iosevka-custom-regular', 'monospace')
         subset('merriweather', 'regular')
         subset('merriweather-italic', 'regular')
-        # Replace use of some of webfonts by data URI
-        for font in ["merriweather",
-                     "merriweather-italic",
-                     "iosevka-custom-regular"]:
-            c.run('sed -i "s@../fonts/{}.woff2@data:font/woff2;base64,$(openssl enc -base64 -A < media/fonts/{}.woff2)@" '
-                  'media/css/luffy.css'.format(font, font))
         # Compute hash on various files
         for p in ['media/images/l/sprite*.svg',
                   'media/fonts/*',
