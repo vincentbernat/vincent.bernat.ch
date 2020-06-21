@@ -9,48 +9,31 @@ tags:
  - linux
 ---
 
-!!! "TL;DR" Do not enable `net.ipv4.tcp_tw_recycle`.
-
----
+!!! "TL;DR" Do not enable `net.ipv4.tcp_tw_recycle`—it doesn't even
+exist anymore since Linux 4.12.
 
 The Linux kernel documentation is not very helpful about what
-`net.ipv4.tcp_tw_recycle` does:
-
-> Enable fast recycling `TIME-WAIT` sockets. Default value is 0.  It
-> should not be changed without advice/request of technical experts.
-
-Its sibling, `net.ipv4.tcp_tw_reuse` is a little bit more documented
-but the language is about the same:
-
-> Allow to reuse `TIME-WAIT` sockets for new connections when it is
-> safe from protocol viewpoint. Default value is 0.  It should not be
-> changed without advice/request of technical experts.
-
-The mere result of this lack of documentation is that we find numerous
-tuning guides advising to set both these settings to 1 to reduce the
-number of entries in the `TIME-WAIT` state. However, as stated by
-`tcp(7)` manual page, the `net.ipv4.tcp_tw_recycle` option is quite
-problematic for public-facing servers as it won't handle connections
-from two different computers behind the same NAT device, which is a
-problem hard to detect and waiting to bite you:
+`net.ipv4.tcp_tw_recycle` and `net.ipv4.tcp_tw_reuse` do. This lack of
+documentation opens the path to numerous tuning guides advising to set
+both these settings to 1 to reduce the number of entries in the
+`TIME-WAIT` state. However, as stated by `tcp(7)` manual page, the
+`net.ipv4.tcp_tw_recycle` option is quite problematic for
+public-facing servers as it won't handle connections from two
+different computers behind the same NAT device, which is a problem
+hard to detect and waiting to bite you:
 
 > Enable fast recycling of `TIME-WAIT` sockets.  Enabling this option
 > is not recommended since this causes problems when working with NAT
 > (Network Address Translation).
 
-I will provide here a more detailed explanation in the hope to teach
-people who are wrong on the Internet.
+I will provide here a more detailed explanation on how to properly
+handle the `TIME-WAIT` state. Also, keep in mind we are looking at the
+TCP stack of Linux. This is completely unrelated to _Netfilter_
+connection tracking which may be tweaked in other ways.[^netfilter]
 
-![xkcd illustration]([[!!images/duty_calls.png]] "<a href='https://xkcd.com/386/'>xkcd: Duty Calls</a>—Someone is wrong on the Internet")
-
-As a sidenote, despite the use of `ipv4` in its name, the
-`net.ipv4.tcp_tw_recycle` control also applies to IPv6. Also, keep in
-mind we are looking at the TCP stack of Linux. This is completely
-unrelated to _Netfilter_ connection tracking which may be tweaked in
-other ways.[^netfilter]
-
-[^netfilter]: Notably, fiddling with `net.netfilter.nf_conntrack_tcp_timeout_time_wait`
-              won't change anything on how the TCP stack will handle the `TIME-WAIT` state.
+[^netfilter]: Notably, fiddling with
+    `net.netfilter.nf_conntrack_tcp_timeout_time_wait` won't change
+    anything on how the TCP stack will handle the `TIME-WAIT` state.
 
 [TOC]
 
