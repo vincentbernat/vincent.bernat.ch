@@ -369,8 +369,11 @@ def build(c):
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
         # Optimize JPG
+        jpegoptim = c.run("nix-build --no-out-link "
+                          "  -E 'with (import <nixpkgs>{}); "
+                          "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
         c.run("find media/images -type f -name '*.jpg' -print0"
-              " | xargs -0 -n10 -P4 jpegoptim --max=84 --all-progressive --strip-all")
+              f" | xargs -0 -n10 -P4 {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
         # Optimize PNG
         c.run("find media/images -type f -name '*.png' -print0"
               " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
