@@ -370,11 +370,7 @@ def build(c):
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
         # Optimize JPG
         c.run("find media/images -type f -name '*.jpg' -print0"
-              " | xargs -0 -n10 -P4 jpegoptim --max=84 --strip-all")
-        c.run("find media/images -type f -name '*.jpg' -print0"
-              " | xargs -0 -n1 -I'{}' -P4 jpegtran -optimize -progressive "
-              "                                    -copy none"
-              "                                    -outfile '{}' '{}'")
+              " | xargs -0 -n10 -P4 jpegoptim --max=84 --all-progressive --strip-all")
         # Optimize PNG
         c.run("find media/images -type f -name '*.png' -print0"
               " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
