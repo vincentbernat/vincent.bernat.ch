@@ -330,6 +330,8 @@ class ImageFixerPlugin(Plugin):
                     track.attr.src = self.site.media_url(vtt.relative_path[6:])
                     track.attr.kind = 'subtitles'
                     track.attr.srclang = code
+                    if resource.meta.language == code:
+                        track[0].set("default", None)
                     if '-' not in code:
                         track.attr.label = langcodes.get(code).autonym()
                     else:
