@@ -240,11 +240,11 @@ def update_text_fonts(c):
 
 
 @task
-def linkcheck(c, remote='yes', verbose='no'):
+def linkcheck(c, remote=True, verbose=False):
     """Check links"""
     result = c.run("linkchecker -f ./linkcheckerrc {} {}".format(
-        verbose == 'yes' and '--verbose' or '',
-        remote == 'yes' and
+        verbose and '--verbose' or '',
+        remote and
         'https://vincent.bernat.ch/' or
         'http://localhost:8080/'), warn=True)
     if result.failed:
