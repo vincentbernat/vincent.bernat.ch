@@ -36,4 +36,17 @@ luffy.s.push(function() {
     };
     window.addEventListener("hashchange", onHashChange);
     onHashChange();
+
+    // Load when it becomes visible
+    if ('IntersectionObserver' in window && links) {
+        var observer = new window.IntersectionObserver(function(entries, observer) {
+            for (i = 0; i < entries.length; i++) {
+                if (!entries[i].isIntersecting)
+                    continue;
+                observer.unobserve(links[0]);
+                load();
+            }
+        });
+        observer.observe(links[0]);
+    }
 });
