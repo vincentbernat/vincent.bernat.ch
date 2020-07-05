@@ -348,6 +348,7 @@ def build(c):
     with c.cd("content/en"):
         c.run("! git grep -Pw '((?i:"
               "obviously|basically|simply|clearly|everyone knows|turns out"
+              "|explicitely|overriden|accross"
               ")|Thinkpad)' \\*.html")
     c.run("rm -rf .final/*")
     c.run("yarn install --frozen-lockfile")

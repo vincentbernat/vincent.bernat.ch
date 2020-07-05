@@ -66,7 +66,7 @@ as supported):
 	RENEGOTIATING
 	140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
 
-Disabling renegotation is not trivial with OpenSSL. As an example, I
+Disabling renegotiation is not trivial with OpenSSL. As an example, I
 have pushed a [patch to disable renegotiation in _stud_][studreneg],
 the scalable TLS unwrapping daemon.
 
@@ -92,7 +92,7 @@ TCP packet flagged with "push."
 	::sh
 	# Access to TCP payload (if not fragmented)
 	payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
-	iptables -A LIMIT_RENEGOCIATION \
+	iptables -A LIMIT_RENEGOTIATION \
 		-p tcp --dport 443 \
 		--tcp-flags SYN,FIN,RST,PSH PSH \
 		-m u32 \
@@ -123,11 +123,11 @@ handshake has been done and forbid any subsequent handshakes.[^noo]
         second solution, we assume that the first encrypted handshake
         record is packed in the same TCP segment than the client key
         exchange. If it comes in its own TCP segment, it would be seen
-        as a renegociation while it is not. The state machine needs to
+        as a renegotiation while it is not. The state machine needs to
         be improved to detect the first encrypted handshake at the
         beginning of a TLS record or in the middle of it.
 
-If you happen to disable TLS renegociation, you can still use some
+If you happen to disable TLS renegotiation, you can still use some
 Netfilter rule to limit the number of TLS handshakes by limiting the
 number of TCP connections from one IP:
 
@@ -242,7 +242,7 @@ key:
 So, why is decryption more expensive? In fact, the key pair is not
 really generated like I said above. Usually, ·e· is a small fixed
 prime number with a lot of 0, like 17 (`0x11`) or 65537 (`0x10001`)
-and ·p· and ·q· are choosen such that ·\varphi(n)· is coprime with
+and ·p· and ·q· are chosen such that ·\varphi(n)· is coprime with
 ·e·. This allows encryption to be fast using
 [exponentiation by squaring][squaring]. On the other hand, its inverse
 ·d· is a big number with no special property and therefore,
@@ -313,7 +313,7 @@ messages, I have found that if the key exchange message is sent before
 the server send the answer, the connection will be aborted. Therefore,
 I quickly parse the server's answer to check if I can continue. Eric
 also says a bogus key exchange message can be sent since the server
-will have to decrypt it before discovering it is bogus. I have choosen
+will have to decrypt it before discovering it is bogus. I have chosen
 to build a valid key exchange message during the first handshake
 (using the certificate presented by the server) and replay it on
 subsequent handshakes because I think the server may dismiss the
