@@ -18,7 +18,7 @@
 {% endmacro %}
 
 {% macro format_tag(tag) %}
-{%- set tag = tag|string() %}
+{%- set tag = tag|string %}
 {%- set subtags = tag.split("-") %}
 {%- for subtag in subtags -%}
     {%- set subtag = subtags[:loop.index]|join('-') -%}
@@ -35,8 +35,8 @@
 {% do tags.append((site.tagger.tags[tag].order or 0, tag)) %}
 {% endfor %}
 <div class="toc"><ul>
-{% for tag in tags|sort if tag[1]|string() != "outdated" %}
-    <li><a href="#tag-{{tag[1]}}">{{ format_tag(tag[1]|string()) }}</a></li>
+{% for tag in tags|sort if tag[1]|string != "outdated" %}
+    <li><a href="#tag-{{tag[1]}}">{{ format_tag(tag[1]|string) }}</a></li>
 {% endfor %}
 </ul></div>
 <div class="lf-list-tags">
@@ -46,16 +46,16 @@
 {% for resource in site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
 {% for rtag in resource.meta.tags
    if (rtag == tag or rtag.startswith(tag + "-") or
-       (tag|string() == "unclassified" and
-        rtag|string() == "outdated" and
+       (tag|string == "unclassified" and
+        rtag|string == "outdated" and
         resource.meta.tags|length == 1)) and
       resource not in rr %}
 {% do rr.append(resource) %}
 {% endfor %}
 {% endfor %}
-{% if rr and tag|string() != "outdated" %}
+{% if rr and tag|string != "outdated" %}
   <div class="lf-tag" id="tag-{{tag}}">
-    <h2>{{ format_tag(tag|string()) }}</h2>
+    <h2>{{ format_tag(tag|string) }}</h2>
     <ul class="lf-list-titles">
 {% for resource in rr %}
       <li{% if resource.tags and "outdated" in resource.tags|map('string') and tag != "outdated" %} class="lf-outdated"{% endif %}>
