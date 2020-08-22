@@ -362,7 +362,7 @@ IP address to the neighbor routers.
 
 Additionally, *IPVS* needs to be configured to continue routing packets from a
 flow moved from another L4 load-balancer. It should also continue routing
-packets from unavailable destinations to ensure we can drain properly a L7
+packets from unavailable destinations to ensure we can drain properly an L7
 load-balancer.
 
     ::sh
@@ -425,36 +425,36 @@ reasons:
     only the third tier, existing flows will be correctly directed according to
     the connection table.
 
-If we add or remove a L4 load-balancer, existing flows are not impacted because
+If we add or remove an L4 load-balancer, existing flows are not impacted because
 each load-balancer takes the same decision, as long as they see the same set of
 L7 load-balancers:
 
 ![L4 load-balancing instability 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
-"Loosing a L4 load-balancer has no impact on existing flows. Each arrow is an
+"Loosing an L4 load-balancer has no impact on existing flows. Each arrow is an
 example of flow. The dots are flow endpoints bound to the associated
 load-balancer. If they had moved to another load-balancer, connection
 would have been lost.")
 
-If we add a L7 load-balancer, existing flows are not impacted either because
+If we add an L7 load-balancer, existing flows are not impacted either because
 only new connections will be scheduled to it. For existing connections, *IPVS*
 will look at its local connection table and continue to forward packets to the
-original destination. Similarly, if we remove a L7 load-balancer, only existing
+original destination. Similarly, if we remove an L7 load-balancer, only existing
 flows terminating at this load-balancer are impacted. Other existing connections
 will be forwarded correctly:
 
 ![L4 load-balancing instability 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
-"Loosing a L7 load-balancer only impacts the flows bound to it.")
+"Loosing an L7 load-balancer only impacts the flows bound to it.")
 
 We need to have simultaneous changes on both levels to get a noticeable impact.
-For example, when adding both a L4 load-balancer and a L7 load-balancer, only
-connections moved to a L4 load-balancer without state _and_ scheduled to the new
+For example, when adding both an L4 load-balancer and an L7 load-balancer, only
+connections moved to an L4 load-balancer without state _and_ scheduled to the new
 load-balancer will be broken. Thanks to the consistent hashing algorithm, other
 connections will stay bound to the right L7 load-balancer. During a planned
 change, this disruption can be minimized by adding the new L4 load-balancers
 first, waiting a few minutes, then adding the new L7 load-balancers.
 
 ![L4 load-balancing instability 3/3]([[!!images/multitier-lb-l4-failure3.svg]]
-"Both a L4 load-balancer and a L7 load-balancer come back to life. The
+"Both an L4 load-balancer and an L7 load-balancer come back to life. The
 consistent hash algorithm ensures that only one fifth of the existing
 connections would be moved to the incoming L7 load-balancer. Some of them
 continue to be routed through their original L4 load-balancer, which mitigates
