@@ -1,0 +1,175 @@
+---
+title: "Mise à jour et configuration automatique pour Cisco IOS"
+description: |
+  Comment configurer ISC DHCP server pour la mise à jour et la configuration
+  automatique des commutateurs basés sur Cisco IOS.
+uuid: fd1d7058-0d13-4f11-aa2f-10689c39660d
+tags:
+  - network
+---
+
+La [documentation officielle][official documentation] permettant de
+mettre à niveau et de configurer automatiquement au premier démarrage
+un commutateur Cisco fonctionnant sous IOS, comme ceux de la série
+*Cisco Catalyst 2960-X*, est avare sur les détails. Cette note
+explique comment configurer le [serveur ISC DHCP][ISC DHCP Server] à
+cette fin.
+
+---
+
+Lors du premier démarrage, Cisco IOS envoie une demande DHCP
+sur tous les ports :
+
+    ::text hl_lines="32 35 37"
+    Dynamic Host Configuration Protocol (Discover)
+        Message type: Boot Request (1)
+        Hardware type: Ethernet (0x01)
+        Hardware address length: 6
+        Hops: 0
+        Transaction ID: 0x0000117c
+        Seconds elapsed: 0
+        Bootp flags: 0x8000, Broadcast flag (Broadcast)
+        Client IP address: 0.0.0.0
+        Your (client) IP address: 0.0.0.0
+        Next server IP address: 0.0.0.0
+        Relay agent IP address: 0.0.0.0
+        Client MAC address: Cisco_6c:12:c0 (b4:14:89:6c:12:c0)
+        Client hardware address padding: 00000000000000000000
+        Server host name not given
+        Boot file name not given
+        Magic cookie: DHCP
+        Option: (53) DHCP Message Type (Discover)
+        Option: (57) Maximum DHCP Message Size
+        Option: (61) Client identifier
+            Length: 25
+            Type: 0
+            Client Identifier: cisco-b414.896c.12c0-Vl1
+        Option: (55) Parameter Request List
+            Length: 12
+            Parameter Request List Item: (1) Subnet Mask
+            Parameter Request List Item: (66) TFTP Server Name
+            Parameter Request List Item: (6) Domain Name Server
+            Parameter Request List Item: (15) Domain Name
+            Parameter Request List Item: (44) NetBIOS over TCP/IP Name Server
+            Parameter Request List Item: (3) Router
+            Parameter Request List Item: (67) Bootfile name
+            Parameter Request List Item: (12) Host Name
+            Parameter Request List Item: (33) Static Route
+            Parameter Request List Item: (150) TFTP Server Address
+            Parameter Request List Item: (43) Vendor-Specific Information
+            Parameter Request List Item: (125) V-I Vendor-specific Information
+        Option: (255) End
+
+Le commutateur demande un certain nombre d'options, notamment
+l'[option 67 pour le nom du fichier d'amorçage][Bootfile name option
+67], l'[option 150 pour l'adresse du serveur TFTP][TFTP server address
+option 150] et l'[option 125 pour les informations spécifiques au
+fournisseur][RFC 3925], abbrégée en VIVSO. L'option 67 fournit le nom
+du fichier de configuration situé sur le serveur TFTP identifié par
+l'option 150. L'option 125 est le nom du fichier décrivant l'image IOS
+à utiliser pour la mise à niveau du commutateur. Ce fichier ne
+contient que le nom de l'archive au format TAR contenant
+l'image[^why].
+
+[^why]: La raison de cette indirection me laisse encore perplexe. Je
+    suppose que cela pourrait être dû au fait que la mise à jour du
+    nom de l'image directement dans l'option 125 est assez
+    fastidieuse.
+
+Il est assez simple de configurer le serveur *ISC DHCP* pour qu'il
+réponde avec l'adresse du serveur TFTP et le nom du fichier de
+configuration :
+
+    ::junos
+    filename "ob2-p2.example.com";
+    option tftp-server-address 172.16.15.253;
+
+Toutefois, si vous souhaitez également fournir l'image pour la mise à
+jour, vous devez spécifier une chaîne codée en hexadécimal[^info] :
+
+    ::junos
+    option vivso 00:00:00:09:24:05:22:63:32:39:36:30:2d:6c:61:6e:62:61:73:65:6b:39:2d:74:61:72:2e:31:35:30:2d:32:2e:53:45:31:31:2e:74:78:74;
+
+[^info]: Elle contient les informations suivantes :
+
+    - `0x00000009`: [numéro d'entreprise][Enterprise Number] attribué à Cisco,
+    - `0x24`: longueur des données incluses,
+    - `0x05`: sous-option pour la mise à jour,
+    - `0x22`: longueur de la sous-option,
+    - nom du fichier décrivant l'image (`c2960-lanbasek9-tar.150-2.SE11.txt`).
+
+Le fait d'avoir une grande chaîne codée en hexadécimal dans un fichier
+de configuration est peu satisfaisant. Le serveur *ISC DHCP* permet
+d'exprimer cette information de manière plus lisible en utilisant la
+directive `option space` :
+
+    ::junos
+    # Create option space for Cisco and encapsulate it in VIVSO/vendor space
+    option space cisco code width 1 length width 1;
+    option cisco.auto-update-image code 5 = text;
+    option vendor.cisco code 9 = encapsulate cisco;
+    
+    # Image description for Cisco IOS ZTP
+    option cisco.auto-update-image = "c2960-lanbasek9-tar.150-2.SE11.txt";
+    
+    # Workaround for VIVSO option 125 not being sent
+    option vivso.iana code 0 = string;
+    option vivso.iana = 01:01:01;
+
+Sans le correctif mentionné dans le dernier bloc, le serveur *ISC
+DHCP* ne renverrait pas l'option 125. Avec une telle configuration, il
+renvoie la réponse suivante, incluant une entreprise 0, superflue mais
+inoffensive, encapsulée dans l'option 125 :
+
+    ::text hl_lines="27 28 30 31 32 33 34"
+    Dynamic Host Configuration Protocol (Offer)
+        Message type: Boot Reply (2)
+        Hardware type: Ethernet (0x01)
+        Hardware address length: 6
+        Hops: 0
+        Transaction ID: 0x0000117c
+        Seconds elapsed: 0
+        Bootp flags: 0x8000, Broadcast flag (Broadcast)
+        Client IP address: 0.0.0.0
+        Your (client) IP address: 172.16.15.6
+        Next server IP address: 0.0.0.0
+        Relay agent IP address: 0.0.0.0
+        Client MAC address: Cisco_6c:12:c0 (b4:14:89:6c:12:c0)
+        Client hardware address padding: 00000000000000000000
+        Server host name not given
+        Boot file name: ob2-p2.example.com
+        Magic cookie: DHCP
+        Option: (53) DHCP Message Type (Offer)
+        Option: (54) DHCP Server Identifier (172.16.15.252)
+        Option: (51) IP Address Lease Time
+        Option: (1) Subnet Mask (255.255.248.0)
+        Option: (6) Domain Name Server
+        Option: (3) Router
+        Option: (150) TFTP Server Address
+            Length: 4
+            TFTP Server Address: 172.16.15.252
+        Option: (125) V-I Vendor-specific Information
+            Length: 49
+            Enterprise: Reserved (0)
+            Enterprise: ciscoSystems (9)
+                Length: 36
+                Option 125 Suboption: 5
+                    Length: 34
+                    Data: 63323936302d6c616e626173656b392d7461722e3135302d…
+        Option: (255) End
+
+*[VIVSO]: Vendor-Identifying Vendor-Specific Information Option
+
+[official documentation]: https://www.cisco.com/c/en/us/td/docs/switches/lan/catalyst2960x/software/15-0_2_EX/security/configuration_guide/b_consolidated_152ex_2960-X_cg/b_consolidated_152ex_2960-X_cg_chapter_0110101.html "Cisco 2960-X Switch Series Configuration Guide, Cisco IOS Release 15.0(2)EX "
+[Antik IT Blog]: http://itblog.antik.sk/?p=3 "How to set up a DHCP server to auto install new firmware image and config for Cisco (ME3400/ME2400/Catalyst Blade 3020/Catalyst 2960/Catalyst 3750/Catalyst ME3750) on boot"
+[client-identifier option 61]: https://tools.ietf.org/html/rfc2132#section-9.14 "RFC 2132: DHCP Options and BOOTP Vendor Extensions: Client-identifier"
+[TFTP server address option 150]: https://tools.ietf.org/html/rfc5859 "RFC 5859: TFTP Server Address Option for DHCPv4"
+[Bootfile name option 67]: https://tools.ietf.org/html/rfc2132#section-9.5 "RFC 2132: DHCP Options and BOOTP Vendor Extensions: Bootfile name"
+[RFC 3925]: https://tools.ietf.org/html/rfc3925 "RFC 3925: Vendor-Identifying Vendor Options for Dynamic Host Configuration Protocol version 4 (DHCPv4)"
+[Enterprise Number]: https://www.iana.org/assignments/enterprise-numbers/enterprise-numbers "IANA private enterprise numbers"
+[ISC DHCP Server]: https://www.isc.org/dhcp/ "ISC DHCP"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
