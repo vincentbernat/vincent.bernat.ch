@@ -5,12 +5,12 @@ Contains classes to handle images related things
 # Requires PIL/Pillow
 """
 
-import new
 import os
 import re
 import urllib
 import xml.etree.ElementTree as ET
 import lxml.html
+import types
 from functools import partial
 
 from hyde.plugin import Plugin
@@ -40,10 +40,10 @@ def thumb(self, defaults={}, width=None, height=None):
     # Convert to a thumbnail
     if width is None:
         # height is not None
-        width = im.size[0]*height/im.size[1] + 1
+        width = im.size[0]*height//im.size[1] + 1
     elif height is None:
         # width is not None
-        height = im.size[1]*width/im.size[0] + 1
+        height = im.size[1]*width//im.size[0] + 1
     im.thumbnail((width, height), Image.ANTIALIAS)
     # Prepare path
     path = os.path.join(os.path.dirname(self.get_relative_deploy_path()),
@@ -86,10 +86,11 @@ class ImageThumbnailsPlugin(Plugin):
         """
         # Grab default values from config
         config = self.site.config
-        defaults = { "width": None,
-                     "height": 40,
-                     "prefix": 'thumb_',
-                     }
+        defaults = {
+            "width": None,
+            "height": 40,
+            "prefix": 'thumb_',
+        }
         if hasattr(config, 'thumbnails'):
             defaults.update(config.thumbnails)
         # Make the thumbnailing function
@@ -102,7 +103,7 @@ class ImageThumbnailsPlugin(Plugin):
                 if resource.source_file.kind not in ["jpg", "png"]:
                     continue
                 self.logger.debug("Adding thumbnail function to [%s]" % resource)
-                resource.thumb = new.instancemethod(thumbfn, resource, resource.__class__)
+                resource.thumb = types.MethodType(thumbfn, resource)
 
 
 class ImageFixerPlugin(Plugin):
@@ -191,9 +192,9 @@ class ImageFixerPlugin(Plugin):
         if new_width is None or new_height is None:
             return None
         if width is not None:
-            return (width, int(width) * new_height / new_width)
+            return (width, int(width) * new_height // new_width)
         elif height is not None:
-            return (int(height) * new_width / new_height, height)
+            return (int(height) * new_width // new_height, height)
         return (new_width, new_height)
 
     def _resize(self, source, destination, factor):
@@ -240,7 +241,7 @@ class ImageFixerPlugin(Plugin):
                                   ratio=False)
                 c.text = d.html()
             return u'<?xml version="1.0" encoding="UTF-8"?>\n{}'.format(
-                ET.tostring(root, encoding='utf-8').decode('utf-8'))
+                ET.tostring(root, encoding='unicode'))
         if not resource.source_file.kind == 'html':
             return
 
@@ -253,7 +254,7 @@ class ImageFixerPlugin(Plugin):
             width = img.attr.width
             height = img.attr.height
             src = img.attr.src
-            src = urllib.unquote(src)
+            src = urllib.parse.unquote(src)
             if src is None:
                 self.logger.warn(
                     "[%s] has an img tag without src attribute" % resource)
@@ -271,8 +272,8 @@ class ImageFixerPlugin(Plugin):
             mo = re.match(r'.*@(\d+)x\.[^.]*$', src)
             if mo and width is not None:
                 factor = int(mo.group(1))
-                width /= factor
-                height /= factor
+                width //= factor
+                height //= factor
                 srcset = ['{} {}x'.format(src, factor)]
                 for f in reversed(range(1, factor)):
                     tname = src.replace('@{}x.'.format(factor),
@@ -391,6 +392,7 @@ class ImageFixerPlugin(Plugin):
                 else:
                     inner.append(img)
                 # Replace parent with our enclosure
-                parent.replace_with(lxml.html.tostring(figure[0]))
+                parent.replace_with(lxml.html.tostring(figure[0],
+                                                       encoding='unicode'))
 
         return d

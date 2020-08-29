@@ -7,19 +7,19 @@ import unicodedata
 
 glyphs = {
     'monospace': set([
-        u"\u202f",              # NARROW NO-BREAK SPACE
-        u"û",                   # SMALL LETTER U WITH CIRCUMFLEX (for août)
+        "\u202f",              # NARROW NO-BREAK SPACE
+        "û",                   # SMALL LETTER U WITH CIRCUMFLEX (for août)
     ]),
     'regular': set([
-        u"\u2026",              # HORIZONTAL ELLIPSIS
-        u"\u2019",              # RIGHT SINGLE QUOTATION MARK
-        u"\u200b",              # ZERO WIDTH SPACE
-        u"\ufeff",              # ZERO WIDTH NO-BREAK SPACE
+        "\u2026",              # HORIZONTAL ELLIPSIS
+        "\u2019",              # RIGHT SINGLE QUOTATION MARK
+        "\u200b",              # ZERO WIDTH SPACE
+        "\ufeff",              # ZERO WIDTH NO-BREAK SPACE
     ])
 }
 
-for c in xrange(sys.maxunicode+1):
-    u = unichr(c)
+for c in range(sys.maxunicode+1):
+    u = chr(c)
     if unicodedata.category(u) == 'Zs':
         glyphs['regular'].add(u)
 
@@ -36,7 +36,7 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
             self.glyphs |= set(glyph
                                for glyph in glyphs
                                if ord(glyph) >= 0x20)
-        with open(self.output, "w") as f:
+        with open(self.output, "wb") as f:
             f.write("".join(sorted(self.glyphs)).encode('utf-8'))
 
 

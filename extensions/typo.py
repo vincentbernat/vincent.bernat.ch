@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Plugin to handle some typography stuff (monkey-patch typogrify).
 """
@@ -42,7 +41,7 @@ class TypographyPlugin(Plugin):
         space_after_punct_finder = re.compile(r"""([«])(\s|&nbsp;)""", re.UNICODE)
         space_between_figures_finder = re.compile(r"""([0-9]|^)(\s|&nbsp;)([0-9]+(?:\W|$))""", re.UNICODE)
         version_number_finder = re.compile(r"""(\b[A-Z][a-zA-Z]+)(\s|&nbsp;)([0-9]+(?:\W|$))""", re.UNICODE)
-        si_unit_finder = re.compile(ur"""(\b[0-9,.]+)( |&nbsp;)(\w|€)""", re.UNICODE)  # Cheating, nbsp already here...
+        si_unit_finder = re.compile(r"""(\b[0-9,.]+)( |&nbsp;)(\w|€)""", re.UNICODE)  # Cheating, nbsp already here...
         intra_tag_finder = re.compile(r'(?P<prefix>(%s)?)(?P<text>([^<]*))(?P<suffix>(%s)?)' % (tag_pattern, tag_pattern))
 
         def _process(groups):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import subprocess
-import HTMLParser
+import html.parser
 
 from pyquery import PyQuery as pq
 from hyde.plugin import Plugin
@@ -55,26 +55,26 @@ process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(
   process.stdout.write('\\0');
 });
 """
-    RE = re.compile(ur'(?<!\\)·(.+?)·', re.DOTALL)
+    RE = re.compile(r'(?<!\\)·(.+?)·', re.DOTALL)
     PR = None
 
     def katex_render(self, mo):
-        formula = HTMLParser.HTMLParser().unescape(mo.group(1))
+        formula = html.parser.HTMLParser().unescape(mo.group(1))
         if self.PR is None:
             self.PR = subprocess.Popen(['node', '-e', self.JS],
                                        stdin=subprocess.PIPE,
                                        stdout=subprocess.PIPE)
         # Assume input is small enough
         self.PR.stdin.write(formula.encode('utf-8'))
-        self.PR.stdin.write('\0')
+        self.PR.stdin.write(b'\0')
         self.PR.stdin.flush()
         # Get answer
-        answer = ""
+        answer = b""
         while True:
             char = self.PR.stdout.read(1)
-            if char == '':
+            if char == b'':
                 raise RuntimeError('unexpected stream end')
-            if char == '\0':
+            if char == b'\0':
                 break
             answer += char
         answer = answer.decode('utf-8')
