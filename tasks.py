@@ -51,7 +51,7 @@ def regen(c):
 @task
 def serve(c):
     """Serve dev content"""
-    c.run('hyde -x serve -a 0.0.0.0')
+    c.run('hyde -x serve -a 0.0.0.0', pty=True)
 
 
 @task
