@@ -1,0 +1,247 @@
+---
+title: "Écrire un module Ansible sur mesure"
+description: |
+ Bien qu'il existe de nombreux modules tiers pour Ansible, certaines situations
+ sont plus faciles à résoudre avec un module Ansible sur mesure.
+uuid: ce4e8517-63ef-4697-943b-b1aaff552c0e
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/custom_module.py": Squelette du module
+tags:
+  - programming-python
+---
+
+Ansible dispose de nombreux modules que vous pouvez combiner pour vos
+besoins. Toutefois, la qualité de ces modules peut varier
+considérablement. Parfois, il peut être plus simple et plus robuste
+d'écrire votre propre module au lieu de chercher et d'assembler des
+modules existants[^dependencies].
+
+[^dependencies]: De plus, en utilisant les modules d'[Ansible
+    Galaxy][], vous introduisez une dépendance à un tiers. Ce n'est
+    pas quelque chose qui doit être décidé à la légère : cela peut
+    casser plus tard, cela peut ne répondre qu'à 80% des besoins, cela
+    peut ajouter des bugs.
+
+À mon avis, un module robuste répond aux caractéristiques suivantes :
+
+- idempotence,
+- affichage des différences (`--diff`),
+- compatibilité avec le mode simulation (`--check`),
+- indication s'il y a eu des changements,
+- gestion du cycle de vie des objets.
+
+En bref, cela signifie que le module est capable de fonctionner avec
+`--diff --check` et d'afficher les changements qu'il appliquerait.
+Quand il est lancé deux fois de suite, aucun changement n'est appliqué
+ni signalé lors de la seconde exécution. Le dernier point suggère que
+le module devrait être capable de supprimer les objets obsolètes mis
+en place lors des exécutions précédentes[^terraform].
+
+[^terraform]: Certains systèmes déclaratifs, comme [Terraform][], sont
+    fondés sur ces comportements.
+
+Le code du module doit être minimal et adapté à *vos* besoins. Rendre
+le module générique pour qu'il puisse être utilisé par d'autres
+utilisateurs n'est pas un objectif. Moins de code signifie
+généralement moins de problèmes et plus de facilité à relire.
+
+Je n'aborde pas la problématique des tests ici. Il s'agit
+indéniablement d'une bonne pratique, mais cela nécessite un effort
+important. À mon sens, il est préférable d'avoir un module bien écrit
+répondant aux caractéristiques ci-dessus plutôt qu'un module bien
+testé mais sans celles-ci ou un module nécessitant un assemblage
+supplémentaire (sans tests) pour correspondre à vos besoins.
+
+# Squelette du module
+
+La documentation d'Ansible contient des [instructions pour construire
+un module][instructions to build a module], ainsi que quelques [bonnes
+pratiques][best practices]. Comme la distribution du module ne fait
+pas partie de nos objectifs, nous avons choisi de prendre quelques
+raccourcis. Supposons que nous construisions un module avec la
+signature suivante :
+
+    ::yaml
+    custom_module:
+      user: "quelqu'un"
+      password: quelque chose
+      data: "une chaîne au hasard"
+
+
+Il y a plusieurs endroits où vous pouvez placer un module dans
+Ansible. Une possibilité courante est de l'inclure dans un rôle. Dans
+un sous-répertoire `library/`, créez un fichier vide `__init__.py` et
+un fichier `custom_module.py` avec le [code suivant][following
+code][^shebang] :
+
+    ::python
+    #!/usr/bin/python
+    
+    import yaml
+    from ansible.module_utils.basic import AnsibleModule
+    
+    
+    def main():
+        # Définissez les options acceptées par le module. ❶
+        module_args = dict(
+            user=dict(type='str', required=True),
+            password=dict(type='str', required=True, no_log=True),
+            data=dict(type='str', required=True),
+        )
+    
+        module = AnsibleModule(
+            argument_spec=module_args,
+            supports_check_mode=True
+        )
+        
+        result = dict(
+            changed=False
+        )
+    
+        got = {}
+        wanted = {}
+    
+        # Renseignez les variables `got` et `wanted`. ❷
+        # [...]
+    
+        if got != wanted:
+            result['changed'] = True
+            result['diff'] = dict(
+                before=yaml.safe_dump(got),
+                after=yaml.safe_dump(wanted)
+            )
+    
+        if module.check_mode or not result['changed']:
+            module.exit_json(**result)
+    
+        # Appliquez les changements. ❸
+        # [...]
+    
+        module.exit_json(**result)
+    
+    
+    if __name__ == '__main__':
+        main()
+
+[^shebang]: Ne vous inquiétez pas pour le *shebang*. Il est codé en
+    dur avec `/usr/bin/python`. Ansible le modifiera pour qu'il
+    corresponde à l'interpréteur choisi sur l'hôte distant. Vous
+    pouvez écrire du code Python 3 si `ansible_python_interpreter`
+    correspond à Python 3.
+
+En ❶, nous définissons le module avec les **options acceptées**.
+Reportez-vous à la [documentation de `argument_spec`][argument_spec]
+pour plus de détails.
+
+En ❷, nous construisons deux variables: `got` and `wanted`. `got`
+représente l'**état actuel** tandis que `wanted` est l'**état cible**.
+Par exemple, si vous avez besoin de modifier des enregistrements dans
+un serveur de base de données, `got` contient les lignes actuelles
+tandis que `wanted` contient celles après modification. Ensuite, nous
+comparons `got` et `wanted`. S'il y a une différence, `changed` passe à
+`True` et nous créons l'objet `diff`. Ansible l'utilise pour afficher
+les différences entre les deux états. Si nous sommes en mode
+simulation ou si aucun changement n'est détecté, nous nous arrêtons
+là.
+
+En ❸, on **applique les changements**. En général, cela signifie qu'il
+faut itérer sur les deux structures pour détecter les différences et
+créer les éléments manquants, supprimer ceux non désirés et mettre à
+jour ceux existants.
+
+## Documentation
+
+Ansible fournit une page assez complète sur la façon de [documenter un
+module][how to document a module]. Je vous conseille une approche plus
+minimale en ne documentant chaque option qu'avec
+parcimonie[^repetition], en sautant les exemples et en ne documentant
+les valeurs de retour que si cela s'avère nécessaire. Je me limite
+généralement à quelque chose de ce genre :
+
+    ::python
+    DOCUMENTATION = """
+    ---
+    module: custom_module.py
+    short_description: Pass provided data to remote service
+    description:
+      - Mention anything useful for your workmate.
+      - Also mention anything you want to remember in 6 months.
+    options:
+      user:
+        description:
+          - user to identify to remote service
+      password:
+        description:
+          - password for authentication to remote service
+      data:
+        description:
+          - data to send to remote service
+    """
+
+[^repetition]: Le principal inconvénient de cette approche non
+    programmatique de la documentation est qu'elle répète les
+    informations contenues dans `argument_spec`. Je pense qu'une
+    structure auto-documentatée permettrait d'éviter cela.
+
+## Gestion des erreurs
+
+En cas d'erreur, vous pouvez arrêter l'exécution avec
+`module.fail_json()` :
+
+    ::python
+    module.fail_json(
+        msg=f"remote service answered with {code}: {message}",
+        **result
+    )
+
+Il n'y a pas d'obligation à intercepter toutes les erreurs. Parfois,
+ne pas neutraliser une exception fournit une meilleure information que
+le remplacement par un message générique.
+
+## Retourner des valeurs supplémentaires
+
+Un module peut renvoyer des informations supplémentaires qui peuvent
+être enregistrées pour être utilisées dans une autre tâche par le
+biais de la [directive `register`][register]. À cette fin, vous pouvez
+ajouter des champs arbitraires au dictionnaire `result`. Consultez la
+documentation à propos des [valeurs standards de retour][common return
+values]. Vous devez essayer d'ajouter ces champs avant de quitter le
+module en mode simulation. Les valeurs de retour peuvent être
+[documentées][how to document a module].
+
+# Exemples
+
+Voici plusieurs exemples de modules sur mesure suivant l'approche
+documentée ci-dessus. Chaque exemple indique la raison pour laquelle
+on préfère écrire un nouveau module plutôt que de combiner des modules
+existants. ⚙️
+
+ - [Synchroniser les clefs SSH sur Cisco IOS-XR][]
+ - [Synchroniser des tables MySQL][]
+ - Synchroniser NetBox (non publié)
+ - Synchroniser les objets RIPE, ARIN et APNIC (non publié)
+ - Synchroniser des tunnels IPsec GCP (non réalisé)
+
+*[GCP]: Google Cloud Platform
+*[RIPE]: Réseaux IP Européens
+*[ARIN]: American Registry for Internet Numbers
+*[APNIC]: Asia Pacific Network Information Center
+
+[Ansible Galaxy]: https://galaxy.ansible.com/ "Ansible Galaxy"
+[instructions to build a module]: https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_general.html "Ansible module development: getting started"
+[best practices]: https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_best_practices.html "Conventions, tips, and pitfalls"
+[how to document a module]: https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_documenting.html "Module format and documentation"
+[argument_spec]: https://docs.ansible.com/ansible/latest/dev_guide/developing_program_flow_modules.html#argument-spec "Ansible module architecture"
+[register]: https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#registering-variables "Using Variables"
+[common return values]: https://docs.ansible.com/ansible/latest/reference_appendices/common_return_values.html "Return Values"
+[still favor]: https://docs.ansible.com/ansible/latest/reference_appendices/interpreter_discovery.html "Interpreter Discovery"
+[Ansible defaults to Python 3 for Debian 10]: https://github.com/ansible/ansible/pull/63097 "Default to python3 on Debian 10 (PR #63097)"
+[Synchroniser les clefs SSH sur Cisco IOS-XR]: [[fr/blog/2020-synchro-clefs-ssh-iosxr-ansible.html]] "Synchroniser les clefs SSH sur Cisco IOS-XR avec un module Ansible sur mesure"
+[Synchroniser des tables MySQL]: [[fr/blog/2020-synchro-tables-mysql-ansible.html]] "Synchroniser des tables MySQL avec un module Ansible sur mesure"
+[Terraform]: https://www.terraform.io/ "Terraform by HashiCorp"
+[following code]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/custom_module.py "Skeleton for an Ansible module"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
