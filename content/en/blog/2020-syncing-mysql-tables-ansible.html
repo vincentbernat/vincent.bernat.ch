@@ -1,0 +1,193 @@
+---
+title: "Syncing MySQL tables with a custom Ansible module"
+description: |
+ This post describes a short module to import data into a MySQL
+ table with a custom Ansible module.
+uuid: 920d3b69-7c23-4189-96e4-52becb2baced
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/mysql_import.py": Module code
+tags:
+  - programming-python
+---
+
+
+The [`community.mysql` collection][collection] from [Ansible Galaxy][]
+provides a `mysql_query` module to run arbitrary MySQL queries.
+Unfortunately, it does not support check mode nor the `--diff` flag.
+It is also unable to tell if there was a change. Let's write a
+specific Ansible module to workaround these issues.
+
+!!! "Notice" I recommend that you read "[Writing a custom Ansible
+module][]" as an introduction.
+
+# Code
+
+The [module][] has the following signature and it executes the
+provided SQL statements in a single transaction. It needs a list of
+the affected tables to be able to detect and show the changes.
+
+    ::yaml
+    mysql_sync:
+      sql: |
+        DELETE FROM rules WHERE name LIKE 'CMDB:%';
+        INSERT INTO rules (name, rule) VALUES
+          ('CMDB: check for cats', ':is(object, "CAT")'),
+          ('CMDB: check for dogs', ':is(object, "DOG")');
+        REPLACE INTO webhooks (name, url) VALUES
+          ('OpsGenie', 'https://opsgenie/something/token'),
+          ('Slack', 'https://slack/something/token');
+      user: monitoring
+      password: Yooghah5
+      database: monitoring
+      tables:
+        - rules
+        - webhooks
+
+## Prerequisites
+
+The module does not enforce idempotency, but it is expected you
+provide appropriate SQL queries. In the above example, idempotency is
+achieved because the content of the `rules` table is deleted and
+recreated from scratch while the rows in the `webhooks` table are
+replaced if they already exist.
+
+You need the [PyMySQL][] package.
+
+## Module definition
+
+Starting from the skeleton described in the [previous article][Writing
+a custom Ansible module], here is the module definition:
+
+    ::python
+    module_args = dict(
+        sql=dict(type='str', required=True),
+        user=dict(type='str', required=True),
+        password=dict(type='str', required=True, no_log=True),
+        database=dict(type='str', required=True),
+        tables=dict(type='list', required=True, elements='str'),
+    )
+
+    result = dict(
+        changed=False
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+The password is marked with `no_log` to ensure it won't be displayed
+or stored, notably when `ansible-playbook` runs in verbose mode. There
+is no `host` option as the module is executed on the MySQL host.
+Strong authentication using certificates is not implemented either.
+This matches our goal with custom modules: only implement what you
+strictly need.
+
+## Getting the current rows
+
+The next step is to retrieve the records currently in the database.
+The `got` dictionary is a mapping from table names to the list of rows
+they contain:
+
+    ::python
+    got = {}
+    tables = module.params['tables']
+
+    connection = pymysql.connect(
+        user=module.params['user'],
+        password=module.params['password'],
+        db=module.params['database'],
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+    with connection.cursor() as cursor:
+        for table in tables:
+            cursor.execute("SELECT * FROM {}".format(table))
+            got[table] = cursor.fetchall()
+
+## Computing the changes
+
+Let's now build the `wanted` dictionary. The trick is to execute the
+SQL statements in a transaction without issuing a final commit. The
+changes will be invisible[^transaction] to other readers and we can
+compare the final rows with the rows collected in `got`:
+
+    ::python
+    wanted = {}
+    sql = module.params['sql']
+    statements = [statement.strip()
+                  for statement in sql.split(";\n")
+                  if statement.strip()]
+
+    with connection.cursor() as cursor:
+        for statement in statements:
+            try:
+                cursor.execute(statement)
+            except pymysql.OperationalError as err:
+                code, message = err.args
+                result['msg'] = "MySQL error for {}: {}".format(
+                    statement,
+                    message)
+                module.fail_json(**result)
+        for table in tables:
+            cursor.execute("SELECT * FROM {}".format(table))
+            wanted[table] = cursor.fetchall()
+
+[^transaction]: The tables need to use the InnoDB storage engine.
+    Moreover, MySQL does not know how to use transactions with DDL
+    statements: do not modify table definitions!
+
+The first `for` loop executes each statement. On error, we return a
+helpful message containing the faulty one. The second `for` loop
+records the final rows of each table in `wanted`.
+
+## Applying changes
+
+Back to the skeleton described in the [previous article][Writing a
+custom Ansible module], the last step is to apply the changes if there
+is a difference between `got` and `wanted` when not running with check
+mode. The `diff` object is a bit more elaborate as it is built table
+by table. This enables Ansible to display the name of each table
+before the diff representation:
+
+    ::python
+    if got != wanted:
+        result['changed'] = True
+        result['diff'] = [dict(
+            before_header=table,
+            after_header=table,
+            before=yaml.safe_dump(got[table]),
+            after=yaml.safe_dump(wanted[table]))
+                          for table in tables
+                          if got[table] != wanted[table]]
+
+    if module.check_mode or not result['changed']:
+        module.exit_json(**result)
+
+Applying the changes is quite trivial: just commit them! Otherwise,
+they are lost when the module exits.
+
+    ::python
+    connection.commit()
+
+---
+
+The complete code is available on [GitHub][module]. Compared to the
+`mysql_query` module, this one supports the check mode, signals
+correctly if there is a change and displays the differences. However,
+it should not be used with huge tables, as it would try to load them
+in memory.
+
+*[DDL]: Data Definition Language
+
+[Writing a custom Ansible module]: [[en/blog/2020-custom-ansible-module.html]] "Writing a custom Ansible module"
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[collection]: https://galaxy.ansible.com/community/mysql "Ansible Galaxy: community.mysql collection"
+[module]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/mysql_import.py
+[PyMySQL]: https://pypi.org/project/PyMySQL/ "PyMySQL on PyPI"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

@@ -1,0 +1,200 @@
+---
+title: "Synchroniser des tables MySQL avec un module Ansible sur mesure"
+description: |
+ Cet article décrit un court module pour importer des données dans
+ des tables MySQL à l'aide d'un module Ansible.
+uuid: 920d3b69-7c23-4189-96e4-52becb2baced
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/mysql_import.py": Code du module
+tags:
+  - programming-python
+---
+
+
+La [collection `community.mysql`][collection] d'[Ansible Galaxy][]
+fournit un module `mysql_query` permettant d'exécuter des requêtes
+MySQL arbitraires. Malheureusement, il ne supporte ni `--check`, ni
+`--diff`. Il est aussi incapable de savoir s'il a provoqué un
+changement. Écrivons un module Ansible ad-hoc corrigeant ces
+problèmes.
+
+!!! "Note" Je vous recommande de lire « [Écrire un module Ansible sur
+mesure][] » en introduction.
+
+# Code
+
+Le [module][] a la signature suivante et exécute les instructions SQL
+dans une transaction. Il a besoin d'une liste des tables qui sont
+modifiées pour être capable de détecter et montrer les changements.
+
+    ::yaml
+    mysql_sync:
+      sql: |
+        DELETE FROM rules WHERE name LIKE 'CMDB:%';
+        INSERT INTO rules (name, rule) VALUES
+          ('CMDB: check for cats', ':is(object, "CAT")'),
+          ('CMDB: check for dogs', ':is(object, "DOG")');
+        REPLACE INTO webhooks (name, url) VALUES
+          ('OpsGenie', 'https://opsgenie/something/token'),
+          ('Slack', 'https://slack/something/token');
+      user: monitoring
+      password: Yooghah5
+      database: monitoring
+      tables:
+        - rules
+        - webhooks
+
+## Prérequis
+
+Le module n'est pas idempotent par lui-même, mais il est prévu que
+l'utilisateur lui fournisse des instructions SQL adaptées. Dans
+l'exemple ci-dessus, l'idempotence dérive du fait que le contenu de la
+table `rules` est supprimé et recréé de zéro tandis que les lignes de
+la table `webhooks` sont remplacées si elles existent déjà.
+
+Vous avez besoin du paquet [PyMySQL][].
+
+## Définition du module
+
+En se basant sur le squelette présenté dans l'[article
+précédent][Écrire un module ansible sur mesure], nous définissons le
+module :
+
+    ::python
+    module_args = dict(
+        sql=dict(type='str', required=True),
+        user=dict(type='str', required=True),
+        password=dict(type='str', required=True, no_log=True),
+        database=dict(type='str', required=True),
+        tables=dict(type='list', required=True, elements='str'),
+    )
+
+    result = dict(
+        changed=False
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+Le mot de passe est marqué avec `no_log` pour s'assurer qu'il ne sera
+ni affiché, ni stocké, notamment quand `ansible-playbook` tourne en
+mode verbeux. Il n'y a pas d'option `host` car le module s'exécute
+directement sur l'hôte faisant tourner MySQL. Il n'y a pas non plus de
+possibilité d'authentification forte par certificat. Cela correspond à
+notre philisophie du module sur mesure : n'implémenter que ce dont on
+a strictement besoin.
+
+## Obtenir les données actuelles
+
+L'étape suivante consiste à récupérer les enregistrements qui se
+trouvent actuellement dans la base de données. Le dictionnaire `got`
+associe des noms de tables avec la liste des lignes qu'elles
+contiennent :
+
+    ::python
+    got = {}
+    tables = module.params['tables']
+
+    connection = pymysql.connect(
+        user=module.params['user'],
+        password=module.params['password'],
+        db=module.params['database'],
+        charset='utf8mb4',
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+    with connection.cursor() as cursor:
+        for table in tables:
+            cursor.execute("SELECT * FROM {}".format(table))
+            got[table] = cursor.fetchall()
+
+## Calculer les changements
+
+Construisons maintenant le dictionnaire `wanted`. L'astuce consiste à
+exécuter les instructions SQL dans une transaction sans la finaliser
+avec `COMMIT`. Les modifications seront invisibles[^transaction] pour
+les autres lecteurs et nous pourrons comparer les lignes finales avec
+les lignes collectées dans `got` :
+
+    ::python
+    wanted = {}
+    sql = module.params['sql']
+    statements = [statement.strip()
+                  for statement in sql.split(";\n")
+                  if statement.strip()]
+
+    with connection.cursor() as cursor:
+        for statement in statements:
+            try:
+                cursor.execute(statement)
+            except pymysql.OperationalError as err:
+                code, message = err.args
+                result['msg'] = "MySQL error for {}: {}".format(
+                    statement,
+                    message)
+                module.fail_json(**result)
+        for table in tables:
+            cursor.execute("SELECT * FROM {}".format(table))
+            wanted[table] = cursor.fetchall()
+
+[^transaction]: Les tables doivent utiliser le moteur de stockage
+    InnoDB. De plus, MySQL ne sait pas comment utiliser les
+    transactions avec les instructions de type DDL : ne modifiez pas
+    les définitions des tables.
+
+La première boucle `for` exécute chaque instruction. En cas d'erreur,
+nous retournons un message un brin détaillé. La seconde boucle remplit
+le dictionnaire `wanted` avec les enregistrements modifiés.
+
+## Appliquer les changements
+
+Pour revenir au squelette décrit dans l'[article précédent][Écrire un
+module ansible sur mesure], la dernière étape est d'appliquer les
+changements quand il y a une différence entre `got` et `wanted` et
+quand on n'est pas en mode simulation. L'objet `diff` est un peu plus
+élaboré car il est construit table par table. Ansible affiche alors le
+nom de chaque table avant la représentation de la différence.
+
+    ::python
+    if got != wanted:
+        result['changed'] = True
+        result['diff'] = [dict(
+            before_header=table,
+            after_header=table,
+            before=yaml.safe_dump(got[table]),
+            after=yaml.safe_dump(wanted[table]))
+                          for table in tables
+                          if got[table] != wanted[table]]
+
+    if module.check_mode or not result['changed']:
+        module.exit_json(**result)
+
+Appliquer les changements est plutôt simple : il suffit de finaliser
+la transaction ! Sinon, ils sont perdus quand le module finit son
+exécution.
+
+    ::python
+    connection.commit()
+
+---
+
+Le code complet est disponible sur [GitHub][module]. Par rapport au
+module `mysql_query`, celui-là supporte `--diff` et `--check` et
+signale correctement s'il y a eu des changements. Toutefois, il ne
+faut pas l'utiliser sur des tables gigantesques car elles sont
+chargées en mémoire.
+
+*[DDL]: Data Definition Language
+
+[Écrire un module Ansible sur mesure]: [[fr/blog/2020-ecrire-module-ansible.html]] "Écrire un module Ansible sur mesure"
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[collection]: https://galaxy.ansible.com/community/mysql "Ansible Galaxy: community.mysql collection"
+[module]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/mysql_import.py
+[PyMySQL]: https://pypi.org/project/PyMySQL/ "PyMySQL on PyPI"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
