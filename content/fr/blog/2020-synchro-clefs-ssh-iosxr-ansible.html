@@ -1,0 +1,284 @@
+---
+title: "Synchroniser les clefs SSH sur Cisco IOS-XR avec un module Ansible sur mesure"
+description: |
+ Cet article décrit un module Ansible permettant de synchronizer les clefs SSH
+ avec un équipement tournant sous Cisco IOS-XR.
+uuid: 3c24dda3-b566-4ced-a4b3-998e6bd74e48
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/iosxr_sshkeys.py": Code du module
+tags:
+  - network-automation
+  - programming-python
+---
+
+La [collection `cisco.iosxr`][collection] d'[Ansible Galaxy][] fournit
+un [module `iosxr_user`][iosxr_user] pour gérer les utilisateurs
+locaux, ainsi que leurs clés SSH. Cependant, le module est plutôt
+lent, n'affiche pas les différences pour les clés SSH, ne signale pas
+de changement lorsqu'une clé est modifiée, et ne gère pas le retrait
+des clefs obsolètes. Écrivons un module Ansible gérant uniquement les
+clefs SSH tout en résolvant ces limitations.
+
+!!! "Note" Je vous recommande de lire « [Écrire un module Ansible sur
+mesure][] » en introduction.
+
+# Comment ajouter une clé SSH à un utilisateur
+
+L'ajout de clés SSH aux utilisateurs dans Cisco IOS-XR est assez peu
+documenté. Tout d'abord, vous devez encoder la clé au [format
+ASN.1]["ssh-rsa" key ASN.1 format], comme une clé publique OpenSSH,
+mais sans l'encodage base64 :
+
+    ::console
+    $ awk '{print $2}' id_rsa.pub \
+        | base64 -d \
+        > publickey_vincent.raw
+
+Ensuite, vous devez envoyer la clé en SCP sur
+`harddisk:/publickey_vincent.raw` et l'importer pour l'utilisateur
+connecté avec la commande IOS suivante :
+
+    ::text
+    crypto key import authentication rsa harddisk:/publickey_vincent.b64
+
+Toutefois, pour importer la clef pour un autre utilisateur, vous devez
+faire partie du groupe `root-system` :
+
+    ::cisco
+    username vincent
+     group root-lr
+     group root-system
+
+La commande suivante permet alors d'attacher la clef à un autre
+utilisateur :
+
+    ::text
+    admin crypto key import authentication rsa username cedric harddisk:/publickey_cedric.b64
+
+# Code
+
+Le [module][] a la signature suivante et installe pour chaque
+utilisateur la clef spécifiée. Il retire également les clefs des
+utilisateurs inconnus.
+
+    ::yaml
+    iosxr_users:
+      keys:
+        vincent: ssh-rsa AAAAB3NzaC1yc2EAA[…]ymh+YrVWLZMJR
+        cedric:  ssh-rsa AAAAB3NzaC1yc2EAA[…]RShPA8w/8eC0n
+
+## Prérequis
+
+Contrairement au module `iosxr_user`, notre module ne gère que les
+clés SSH, une seule par utilisateur. Par conséquent, les utilisateurs
+doivent déjà être définis dans la configuration en cours[^why]. De
+plus, l'utilisateur défini par `ansible_user` doit se trouver dans le
+groupe `root-system`. La collection `cisco.iosxr` doit également être
+installée car le module repose sur son code.
+
+[^why]: Dans notre environnement, Ansible déploie une configuration
+    complète, comprenant la définition des utilisateurs. Ensuite, il
+    synchronise les clés SSH.
+
+Lors de l'exécution du module, `ansible_connection` doit être défini à
+`network_cli` et `ansible_network_os` à `iosxr`. Ces variables sont
+généralement déclarées dans l'inventaire.
+
+## Définition du module
+
+En se basant sur le squelette présenté dans l'[article
+précédent][Écrire un module ansible sur mesure], nous définissons le
+module :
+
+    ::python
+    module_args = dict(
+        keys=dict(type='dict', elements='str', required=True),
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+    result = dict(
+        changed=False
+    )
+
+## Obtenir les clefs installées
+
+L'étape suivante consiste à récupérer les clefs déjà installées, ce
+qui peut être fait avec la commande suivante :
+
+    ::console
+    # show crypto key authentication rsa all
+    Key label: vincent
+    Type     : RSA public key authentication
+    Size     : 2048
+    Imported : 16:17:08 UTC Tue Aug 11 2020
+    Data     :
+     30820122 300D0609 2A864886 F70D0101 01050003 82010F00 3082010A 02820101
+     00D81E5B A73D82F3 77B1E4B5 949FB245 60FB9167 7CD03AB7 ADDE7AFE A0B83174
+     A33EC0E6 1C887E02 2338367A 8A1DB0CE 0C3FBC51 15723AEB 07F301A4 B1A9961A
+     2D00DBBD 2ABFC831 B0B25932 05B3BC30 B9514EA1 3DC22CBD DDCA6F02 026DBBB6
+     EE3CFADA AFA86F52 CAE7620D 17C3582B 4422D24F D68698A5 52ED1E9E 8E41F062
+     7DE81015 F33AD486 C14D0BB1 68C65259 F9FD8A37 8DE52ED0 7B36E005 8C58516B
+     7EA6C29A EEE0833B 42714618 50B3FFAC 15DBE3EF 8DA5D337 68DAECB9 904DE520
+     2D627CEA 67E6434F E974CF6D 952AB2AB F074FBA3 3FB9B9CC A0CD0ADC 6E0CDB2A
+     6A1CFEBA E97AF5A9 1FE41F6C 92E1F522 673E1A5F 69C68E11 4A13C0F3 0FFC782D
+     27020301 0001
+    
+    […]
+
+`ansible_collections.cisco.iosxr.plugins.module_utils.network.iosxr.iosxr`
+contient une fonction `run_commands()` que nous pouvons utiliser :
+
+    ::python
+    command = "show crypto key authentication rsa all"
+    out = run_commands(module, command)
+    out = out[0].replace(' \n', '\n')
+
+Une bibliothèque assez courante pour extraire des informations du
+résultat d'une commande est [textfsm][] : un module Python utilisant
+une machine à état basée sur des patrons pour analyser un texte
+semi-formaté.
+
+    ::python
+    template = r"""
+    Value Required Label (\w+)
+    Value Required,List Data ([A-F0-9 ]+)
+    
+    Start
+     ^Key label: ${Label}
+     ^Data\s+: -> GetData
+    
+    GetData
+     ^ ${Data}
+     ^$$ -> Record Start
+    """.lstrip()
+    
+    re_table = textfsm.TextFSM(io.StringIO(template))
+    got = {data[0]: "".join(data[1]).replace(' ', '')
+           for data in re_table.ParseText(out)}
+
+`got` est un dictionnaire associant des noms de clefs, assimilés à des
+noms d'utilisateurs, avec une représentation hexadécimale de la clef
+publique actuellement installée. Il ressemble à ceci :
+
+    ::pycon
+    >>> pprint(got)
+    {'alfred': '30820122300D0609[…]6F0203010001',
+     'cedric': '30820122300D0609[…]710203010001',
+     'vincent': '30820122300D0609[…]270203010001'}
+
+## Comparer avec l'état cible
+
+Construisons le dictionnaire `wanted` avec une structure similaire.
+Dans `module.params['keys']`, nous avons un dictionnaire associant les
+noms d'utilisateurs aux clefs publiques SSH au format OpenSSH :
+
+    ::pycon
+    >>> pprint(module.params['keys'])
+    {'cedric': 'ssh-rsa AAAAB3NzaC1yc2[…]',
+     'vincent': 'ssh-rsa AAAAB3NzaC1yc2[…]'}
+
+Nous devons les convertir en utilisant la représentation hexadécimale
+utilisée par Cisco. La commande `ssh-keygen` et un peu d'huile de
+coude permettent de faire cette conversion[^pkcs8] :
+
+    ::console
+    $ ssh-keygen -f id_rsa.pub -e -mPKCS8 \
+       | grep -v '^---' \
+       | base64 -d \
+       | hexdump -e '4/1 "%0.2X"'
+    30820122300D06092[…]782D270203010001
+
+[^pkcs8]: Malgré l'argument fourni à `ssh-keygen`, le format utilisé
+    par Cisco n'est pas PKCS#8. Il s'agit de la représentation ASN.1
+    d'une structure *Subject Public Key Info*, telle que définie dans
+    la [RFC 2459][]. De plus, PKCS#8 est un format pour une clé
+    privée, et non une clé publique.
+
+En supposant que nous avons une fonction `ssh2cisco()` pour faire
+cette conversion, nous pouvons construire le dictionnaire `wanted` :
+
+    ::python
+    wanted = {k: ssh2cisco(v)
+              for k, v in module.params['keys'].items()}
+
+## Appliquer les changements
+
+Pour revenir au squelette décrit dans l'[article précédent][Écrire un
+module ansible sur mesure], la dernière étape consiste à appliquer les
+changements s'il y a une différence entre `got` et `wanted` lorsqu'on
+ne fonctionne pas en mode vérification. La partie comparant `got` et
+`wanted` ne contient pas de modifications par rapport au squelette :
+
+    ::python
+    if got != wanted:
+        result['changed'] = True
+        result['diff'] = dict(
+            before=yaml.safe_dump(got),
+            after=yaml.safe_dump(wanted)
+        )
+
+    if module.check_mode or not result['changed']:
+        module.exit_json(**result)
+
+Copions les nouvelles clefs ou celles qui ont changé et attachons les
+à leur utilisateurs respectifs. À cet effet, nous réutilisons les
+fonctions `get_connection()` et `copy_file()` de
+`ansible_collections.cisco.iosxr.plugins.module_utils.network.iosxr.iosxr`.
+
+    ::python hl_lines="3 10 13"
+    conn = get_connection(module)
+    for user in wanted:
+        if user not in got or wanted[user] != got[user]:
+            dst = f"/harddisk:/publickey_{user}.raw"
+            with tempfile.NamedTemporaryFile() as src:
+                decoded = base64.b64decode(
+                    module.params['keys'][user].split()[1])
+                src.write(decoded)
+                src.flush()
+                copy_file(module, src.name, dst)
+        command = ("admin crypto key import authentication rsa "
+                   f"username {user} {dst}")
+        conn.send_command(command, prompt="yes/no", answer="yes")
+
+Enfin, retirons les clefs obsolètes :
+
+    ::python hl_lines="2 5"
+    for user in got:
+        if user not in wanted:
+            command = ("admin crypto key zeroize authentication rsa "
+                       f"username {user}")
+            conn.send_command(command, prompt="yes/no", answer="yes")
+
+---
+
+Le code complet est disponible sur [GitHub][module]. Par rapport au
+[module `iosxr_user`][iosxr_user], ce module affiche les différentces
+lorsqu'il est lancé avec `--diff`, signale correctement les
+changements, est plus rapide[^faster] et supprime les clés SSH indésirables.
+Cependant, il est incapable de créer des utilisateurs et ne peut pas
+définir des mots de passe ou plusieurs clefs SSH pour un même
+utilisateur.
+
+[^faster]: Les principales différences expliquant cette amélioration
+    des performances sont de :
+
+      - ne pas créer des utilisateurs,
+      - ne pas renvoyer les clefs existantes.
+
+[collection]: https://galaxy.ansible.com/cisco/iosxr "Ansible Galaxy: cisco.iosxr collection"
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[iosxr_user]: https://github.com/ansible-collections/cisco.iosxr/blob/main/docs/cisco.iosxr.iosxr_user_module.rst
+["ssh-rsa" key ASN.1 format]: https://tools.ietf.org/html/rfc4253#section-6.6 "RFC 4253: The Secure Shell (SSH) Transport Layer Protocol"
+[module]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/iosxr_sshkeys.py
+[textfsm]: https://github.com/google/textfsm "TextFSM"
+[RFC 2459]: https://tools.ietf.org/html/rfc2459#section-4.1.2.7 "RFC 2459: Internet X.509 Public Key Infrastructure Certificate and CRL Profile"
+[Écrire un module Ansible sur mesure]: [[fr/blog/2020-ecrire-module-ansible.html]] "Écrire un module Ansible sur mesure"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
