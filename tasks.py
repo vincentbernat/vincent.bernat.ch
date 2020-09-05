@@ -242,7 +242,7 @@ def update_text_fonts(c):
 @task
 def linkcheck(c, remote=True, verbose=False):
     """Check links"""
-    result = c.run("linkchecker -f ./linkcheckerrc {} {}".format(
+    result = c.run("nix run nixpkgs.linkchecker -c linkchecker -f ./linkcheckerrc {} {}".format(
         verbose and '--verbose' or '',
         remote and
         'https://vincent.bernat.ch/' or
