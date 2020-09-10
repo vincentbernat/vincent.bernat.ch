@@ -22,6 +22,8 @@ class TypographyPlugin(Plugin):
 
         # Don't use widont
         filters.widont = lambda t: t
+        # Don't use amp
+        filters.amp = lambda t: t
 
     def process_ignores(self, orig):
         def process(text, ignore_tags=None):
