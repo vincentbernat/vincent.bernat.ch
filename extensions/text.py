@@ -33,10 +33,10 @@ class FootnotesPlugin(Plugin):
             for i in range(len(parents)-1):
                 if parents.eq(i).attr.id == 'lf-text':
                     parent = parents.eq(i+1)
-            sidenote = pq('<aside/>')
+            sidenote = pq('<aside>')
             sidenote.attr.role = "note"
-            sidenote.attr['hidden'] = "hidden"
             sidenote.attr.class_ = "lf-sidenote"
+            sidenote[0].set('hidden', None)
             sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
                 ref.text(), fn.html()))
             sidenote("a.footnote-backref").remove()
