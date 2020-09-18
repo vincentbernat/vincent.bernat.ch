@@ -33,6 +33,13 @@ langage [Vala][].
     ::c
     #include <vte/vte.h>
     
+    static void
+    child_ready(VteTerminal *terminal, GPid pid, GError *error, gpointer user_data)
+    {
+        if (!terminal) return;
+        if (pid == -1) gtk_main_quit();
+    }
+
     int
     main(int argc, char *argv[])
     {
@@ -50,14 +57,16 @@ langage [Vala][].
         g_strfreev(envp);
         vte_terminal_spawn_async(VTE_TERMINAL(terminal),
             VTE_PTY_DEFAULT,
-            NULL,       /* working directory  */
-            command,    /* command */
-            NULL,       /* environment */
-            0,          /* spawn flags */
-            NULL, NULL, /* child setup */
-            NULL,       /* child pid */
-            -1,         /* timeout */
-            NULL, NULL, NULL);
+            NULL,         /* working directory  */
+            command,      /* command */
+            NULL,         /* environment */
+            0,            /* spawn flags */
+            NULL, NULL,   /* child setup */
+            NULL,         /* child pid */
+            -1,           /* timeout */
+            NULL,         /* cancellable */
+            child_ready,  /* callback */
+            NULL);        /* user_data */
     
         /* Connect some signals */
         g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
