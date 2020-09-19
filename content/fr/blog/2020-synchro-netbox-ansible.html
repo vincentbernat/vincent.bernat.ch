@@ -1,0 +1,522 @@
+---
+title: "Synchroniser NetBox avec un module Ansible sur mesure"
+description: |
+ Cet article décrit un module Ansible permettant de synchroniser
+ équipements et adresses IP.
+uuid: 2830aeef-b92f-4d1a-9b35-2ec78c78dc15
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/netbox_sync.py": Code du module
+tags:
+  - network-automation
+  - programming-python
+---
+
+La [collection `netbox.netbox`][collection] d'[Ansible Galaxy][]
+fournit divers modules pour mettre à jour des objets dans [NetBox][]:
+
+    ::yaml
+    - name: create a device in NetBox
+      netbox_device:
+        netbox_url: http://netbox.local
+        netbox_token: s3cret
+        data:
+          name: to3-p14.sfo1.example.com
+          device_type: QFX5110-48S
+          device_role: Compute Switch
+          site: SFO1
+
+Cependant, si *NetBox* n'est **pas votre source de vérité**, vous
+voudrez vous assurer qu'il reste synchronisé avec votre base de
+gestion de configuration[^cmdb] en supprimant les équipements ou les
+adresses IP obsolètes. Alors qu'il devrait être possible de bricoler
+un *playbook* avec une requête, une boucle et des filtres pour
+supprimer les éléments indésirables, cela semble fastidieux,
+inefficace et constitue un détournement de YAML comme langage de
+programmation. Un module Ansible ad hoc résout ce problème et est
+probablement plus flexible.
+
+[^cmdb]: À mon avis, une bonne option pour une *source de vérité* est
+    d'utiliser des fichiers YAML dans un dépôt *Git*. La gestion des
+    versions est offerte et l'utilisation d'un éditeur de texte est le
+    seul savoir-faire nécessaire.
+
+!!! "Note" Je vous recommande de lire « [Écrire un module Ansible sur
+mesure][] » en introduction, ainsi que « [Synchroniser des tables
+MySQL][] » pour un premier exemple plus abordable.
+
+# Code
+
+Le [module][] expose la signature suivante et synchronise *NetBox*
+avec le contenu du fichier YAML fourni :
+
+    ::yaml
+    netbox_sync:
+      source: netbox.yaml
+      api: https://netbox.example.com
+      token: s3cret
+
+Les objets synchronisés sont :
+
+ - les sites,
+ - les constructeurs,
+ - les types d'équipements,
+ - les rôles des équipements,
+ - les équipements,
+ - les adresses IP.
+
+Dans notre environnement, le fichier YAML est généré à partir de notre
+source de vérité et contient un ensemble d'équipements et une liste
+d'adresses IP :
+
+    ::yaml
+    devices:
+      ad2-p6.sfo1.example.com:
+         datacenter: sfo1
+         manufacturer: Cisco
+         model: Catalyst 2960G-48TC-L
+         role: net_tor_oob_switch
+      to1-p6.sfo1.example.com:
+         datacenter: sfo1
+         manufacturer: Juniper
+         model: QFX5110-48S
+         role: net_tor_gpu_switch
+    # […]
+    ips:
+      - device: ad2-p6.example.com
+        ip: 172.31.115.18/21
+        interface: oob
+      - device: to1-p6.example.com
+        ip: 172.31.115.33/21
+        interface: oob
+      - device: to1-p6.example.com
+        ip: 172.31.254.33/32
+        interface: lo0.0
+    # […]
+
+L'équipe réseau n'est le seul utilisateur de *NetBox*. Si l'ajout de
+nouveaux objets ou la modification d'objets existants est peu risqué,
+la suppression d'objets indésirables peut être hasardeuse. Le module
+ne supprime que les objets qu'il a créés ou modifiés. Pour les
+identifier, il les marque avec une étiquette spécifique, `cmdb`. La
+plupart des objets de *NetBox* acceptent les étiquettes.
+
+## Définition du module
+
+En se basant sur le squelette présenté dans l'[article
+précédent][Écrire un module ansible sur mesure], nous définissons le
+module :
+
+    ::python
+    module_args = dict(
+        source=dict(type='path', required=True),
+        api=dict(type='str', required=True),
+        token=dict(type='str', required=True, no_log=True),
+        max_workers=dict(type='int', required=False, default=10)
+    )
+
+    result = dict(
+        changed=False
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+Il contient un argument supplémentaire optionnel définissant le nombre
+de requêtes à envoyer en parallèle à *NetBox* pour la récupération des
+objets existants afin d'accélérer l'exécution.
+
+## Abstraction du processus de synchronisation
+
+Nous devons synchroniser différents types d'objets, mais une fois que
+nous avons une liste des objets que nous voulons dans *NetBox*, le
+travail est toujours le même :
+
+- vérifier si les objets existent déjà ;
+- les récupérer et les mettre sous une forme permettant de les comparer ;
+- récupérer les objets dont nous ne voulons plus ;
+- comparer les deux ensembles ;
+- ajouter les objets manquants, mettre à jour les objets existants,
+  supprimer les objets en trop.
+
+Ces comportements sont codés dans une classe abstraite `Synchronizer`.
+Pour chaque type d'objet, une classe concrète est construite avec les
+[attributs][class attributes] appropriés pour adapter son comportement
+et une méthode `wanted()` pour fournir les objets désirés.
+
+Je ne détaille pas ici le code de la classe abstraite. Jetez un coup
+d'œil aux [sources][module] si nécessaire.
+
+### Synchroniser les étiquettes et les tenants
+
+Pour commencer, voici comment nous définissons la classe synchronisant
+les étiquettes :
+
+    ::python
+    class SyncTags(Synchronizer):
+        app = "extras"
+        table = "tags"
+        key = "name"
+    
+        def wanted(self):
+            return {"cmdb": dict(
+                slug="cmdb",
+                color="8bc34a",
+                description="synced by network CMDB")}
+
+Les attributs `app` et `table` définissent les objets *NetBox* que
+nous voulons manipuler. L'attribut `key` est utilisé pour déterminer
+comment rechercher des objets existants. Dans cet exemple, nous
+voulons rechercher des étiquettes en utilisant leurs noms.
+
+La méthode `wanted()` doit renvoyer un dictionnaire qui associe les
+clés des objets à la liste des attributs désirés. Ici, les clés sont
+le nom des étiquettes et nous ne créons qu'une seule étiquette,
+`cmdb`, avec la couleur et la description fournies. C'est cette
+étiquette que nous utiliserons pour marquer les objets que nous
+créerons ou modifierons.
+
+Si l'étiquette n'existe pas, elle est créée. Si elle existe, les
+attributs fournis sont mis à jour. Les autres attributs ne sont pas
+modifiés.
+
+Nous voulons également créer un tenant spécifique pour les objets
+acceptant un tel attribut (équipements et adresses IP) :
+
+    ::python
+    class SyncTenants(Synchronizer):
+        app = "tenancy"
+        table = "tenants"
+        key = "name"
+    
+        def wanted(self):
+            return {"Network": dict(slug="network",
+                                    description="Network team")}
+
+### Synchroniser les sites
+
+Nous devons également synchroniser la liste des sites. Cette fois, la
+méthode `wanted()` utilise les informations fournies dans le fichier
+YAML : elle parcourt les équipements et construit la liste des centres
+de données.
+
+    ::python
+    class SyncSites(Synchronizer):
+    
+        app = "dcim"
+        table = "sites"
+        key = "name"
+        only_on_create = ("status", "slug")
+    
+        def wanted(self):
+            result = set(details["datacenter"]
+                         for details in self.source['devices'].values()
+                         if "datacenter" in details)
+            return {k: dict(slug=k,
+                            status="planned")
+                    for k in result}
+
+Grâce à l'utilisation de l'attribut `only_on_create`, les attributs
+spécifiés ne sont pas mis à jour s'ils sont différents. Le but de ce
+synchroniseur est surtout de collecter les références aux différents
+sites pour les utiliser dans d'autres objets.
+
+    ::pycon
+    >>> pprint(SyncSites(**sync_args).wanted())
+    {'sfo1': {'slug': 'sfo1', 'status': 'planned'},
+     'chi1': {'slug': 'chi1', 'status': 'planned'},
+     'nyc1': {'slug': 'nyc1', 'status': 'planned'}}
+
+### Synchroniser les constructeurs, les types d'équipements et les rôles des équipements
+
+La synchronisation des constructeurs est très similaire, sauf que nous
+n'avons pas besoin de l'attribut `only_on_create` :
+
+    ::python
+    class SyncManufacturers(Synchronizer):
+    
+        app = "dcim"
+        table = "manufacturers"
+        key = "name"
+    
+        def wanted(self):
+            result = set(details["manufacturer"]
+                         for details in self.source['devices'].values()
+                         if "manufacturer" in details)
+            return {k: {"slug": slugify(k)}
+                    for k in result}
+
+Concernant les types d'équipements, nous utilisons l'attribut
+`foreign` indiquant le lien entre un attribut *NetBox* et le
+synchroniseur qui le gère.
+
+    ::python
+    class SyncDeviceTypes(Synchronizer):
+    
+        app = "dcim"
+        table = "device_types"
+        key = "model"
+        foreign = {"manufacturer": SyncManufacturers}
+    
+        def wanted(self):
+            result = set((details["manufacturer"], details["model"])
+                         for details in self.source['devices'].values()
+                         if "model" in details)
+            return {k[1]: dict(manufacturer=k[0],
+                               slug=slugify(k[1]))
+                    for k in result}
+
+La méthode `wanted()` renvoie des références aux constructeurs en
+utilisant les valeurs contenues dans l'attribut `key`. Dans ce cas, il
+s'agit du nom du constructeur.
+
+    ::pycon
+    >>> pprint(SyncManufacturers(**sync_args).wanted())
+    {'Cisco': {'slug': 'cisco'},
+     'Dell': {'slug': 'dell'},
+     'Juniper': {'slug': 'juniper'}}
+    >>> pprint(SyncDeviceTypes(**sync_args).wanted())
+    {'ASR 9001': {'manufacturer': 'Cisco', 'slug': 'asr-9001'},
+     'Catalyst 2960G-48TC-L': {'manufacturer': 'Cisco',
+                               'slug': 'catalyst-2960g-48tc-l'},
+     'MX10003': {'manufacturer': 'Juniper', 'slug': 'mx10003'},
+     'QFX10002-36Q': {'manufacturer': 'Juniper', 'slug': 'qfx10002-36q'},
+     'QFX10002-72Q': {'manufacturer': 'Juniper', 'slug': 'qfx10002-72q'},
+     'QFX5110-32Q': {'manufacturer': 'Juniper', 'slug': 'qfx5110-32q'},
+     'QFX5110-48S': {'manufacturer': 'Juniper', 'slug': 'qfx5110-48s'},
+     'QFX5200-32C': {'manufacturer': 'Juniper', 'slug': 'qfx5200-32c'},
+     'S4048-ON': {'manufacturer': 'Dell', 'slug': 's4048-on'},
+     'S6010-ON': {'manufacturer': 'Dell', 'slug': 's6010-on'}}
+
+Les rôles des équipements sont, quant à eux, définis ainsi :
+
+    ::python
+    class SyncDeviceRoles(Synchronizer):
+    
+        app = "dcim"
+        table = "device_roles"
+        key = "name"
+    
+        def wanted(self):
+            result = set(details["role"]
+                         for details in self.source['devices'].values()
+                         if "role" in details)
+            return {k: dict(slug=slugify(k),
+                            color="8bc34a")
+                    for k in result}
+
+### Synchroniser les équipements
+
+Un équipement est essentiellement un nom avec des références à un
+rôle, un modèle, un site et un tenant. Ces références sont déclarées
+comme des clés étrangères en référence aux synchroniseurs définis
+précédemment.
+
+    ::python
+    class SyncDevices(Synchronizer):
+        app = "dcim"
+        table = "devices"
+        key = "name"
+        foreign = {"device_role": SyncDeviceRoles,
+                   "device_type": SyncDeviceTypes,
+                   "site": SyncSites,
+                   "tenant": SyncTenants}
+        remove_unused = 10
+    
+        def wanted(self):
+            return {name: dict(device_role=details["role"],
+                               device_type=details["model"],
+                               site=details["datacenter"],
+                               tenant="Network")
+                    for name, details in self.source['devices'].items()
+                    if {"datacenter", "model", "role"} <= set(details.keys())}
+
+L'attribut `remove_unused` est un garde-fou provoquant un échec si
+nous devons supprimer plus de 10 équipements : cela peut être
+l'indication qu'il y a un problème quelque part ou un important départ
+de feu dans l'un des sites.
+
+    ::pycon
+    >>> pprint(SyncDevices(**sync_args).wanted())
+    {'ad2-p6.sfo1.example.com': {'device_role': 'net_tor_oob_switch',
+                                 'device_type': 'Catalyst 2960G-48TC-L',
+                                 'site': 'sfo1',
+                                 'tenant': 'Network'},
+     'to1-p6.sfo1.example.com': {'device_role': 'net_tor_gpu_switch',
+                                 'device_type': 'QFX5110-48S',
+                                 'site': 'sfo1',
+                                 'tenant': 'Network'},
+    […]
+
+### Synchroniser les adresses IP
+
+La dernière étape consiste à synchroniser les adresses IP. Nous ne les
+attachons pas à un équipement[^devices]. Nous spécifions plutôt leurs
+noms dans la description :
+
+    ::python
+    class SyncIPs(Synchronizer):
+        app = "ipam"
+        table = "ip-addresses"
+        key = "address"
+        foreign = {"tenant": SyncTenants}
+        remove_unused = 1000
+    
+        def wanted(self):
+            wanted = {}
+            for details in self.source['ips']:
+                if details['ip'] in wanted:
+                    wanted[details['ip']]['description'] = \
+                        f"{details['device']} (and others)"
+                else:
+                    wanted[details['ip']] = dict(
+                        tenant="Network",
+                        status="active",
+                        dns_name="",        # information is present in DNS
+                        description=f"{details['device']}: {details['interface']}",
+                        role=None,
+                        vrf=None)
+            return wanted
+
+[^devices]: Cette lacune est principalement de la feignantise : nous
+    ne nous soucions pas vraiment de cette information. Notre
+    principale motivation pour mettre des adresses IP dans *NetBox*
+    est de garder une trace des adresses IP utilisées. Cependant, si
+    une adresse IP est déjà attachée à une interface, nous ne touchons
+    pas à cette association.
+
+Il y a une petite difficulté : *NetBox* autorise les addresses IP en
+double. Une simple recherche ne suffit donc pas. En cas de multiples
+résultats, nous choisissons le meilleur en préférant ceux marqués par
+l'étiquette `cmdb`, puis ceux déjà attachées à une interface :
+
+    ::python
+    def get(self, key):
+        """Grab IP address from NetBox."""
+        # There may be duplicate. We need to grab the "best".
+        results = super(Synchronizer, self).get(key)
+        if len(results) == 0:
+            return None
+        if len(results) == 1:
+            return results[0]
+        scores = [0]*len(results)
+        for idx, result in enumerate(results):
+            if "cmdb" in result.tags:
+                scores[idx] += 10
+            if result.interface is not None:
+                scores[idx] += 5
+        return sorted(zip(scores, results),
+                      reverse=True, key=lambda k: k[0])[0][1]
+
+
+## Calculer les états actuels et attendus
+
+Chaque synchroniseur est initialisé avec une référence au module
+Ansible, une référence à [pynetbox][], les données contenues dans le
+fichier YAML fourni et deux dictionnaires vides pour les états actuels
+et attendus :
+
+    ::python
+    source = yaml.safe_load(open(module.params['source']))
+    netbox = pynetbox.api(module.params['api'],
+                          token=module.params['token'])
+
+    sync_args = dict(
+        module=module,
+        netbox=netbox,
+        source=source,
+        before={},
+        after={}
+    )
+    synchronizers = [synchronizer(**sync_args) for synchronizer in [
+        SyncTags,
+        SyncTenants,
+        SyncSites,
+        SyncManufacturers,
+        SyncDeviceTypes,
+        SyncDeviceRoles,
+        SyncDevices,
+        SyncIPs
+    ]]
+
+Chaque synchroniseur a une méthode `prepare()` dont le but est de
+calculer l'état source et l'état cible. Elle renvoie `True` en cas de
+différence.
+
+    ::python
+    # Check what needs to be synchronized
+    try:
+        for synchronizer in synchronizers:
+            result['changed'] |= synchronizer.prepare()
+    except AnsibleError as e:
+        result['msg'] = e.message
+        module.fail_json(**result)
+
+## Appliquer les changements
+
+Pour revenir au squelette décrit dans l'[article précédent][Écrire un
+module ansible sur mesure], la dernière étape est d'appliquer les
+changements quand une différence est détectée. Chaque synchroniseur
+consigne les états actuels et attendus dans, respectivement,
+`sync_args["before"][table]` et `sync_args["after"][table]` où `table`
+est le nom de la table correspondant au type d'objet *NetBox*. L'objet
+`diff` est un peu plus élaboré car il est construit table par table.
+Ansible affiche alors le nom de chaque table avant la représentation
+de la différence :
+
+    ::python
+    # Compute the diff
+    if module._diff and result['changed']:
+        result['diff'] = [
+            dict(
+                before_header=table,
+                after_header=table,
+                before=yaml.safe_dump(sync_args["before"][table]),
+                after=yaml.safe_dump(sync_args["after"][table]))
+            for table in sync_args["after"]
+            if sync_args["before"][table] != sync_args["after"][table]
+        ]
+
+    # Stop here if check mode is enabled or if no change
+    if module.check_mode or not result['changed']:
+        module.exit_json(**result)
+
+Chaque synchroniseur expose également une méthode `synchronize()` pour
+appliquer les changements et une méthode `cleanup()` pour supprimer
+les objets indésirables. L'ordre est important en raison de la
+relation entre les objets.
+
+    ::python
+    # Synchronize
+    for synchronizer in synchronizers:
+        synchronizer.synchronize()
+    for synchronizer in synchronizers[::-1]:
+        synchronizer.cleanup()
+    module.exit_json(**result)
+
+---
+
+Le code complet est disponible sur [GitHub][module]. Par rapport à
+l'utilisation de la [collection `netbox.netbox`][collection], la
+logique est écrite en Python au lieu d'essayer d'assembler des tâches
+Ansible. Je pense que cela est à la fois plus flexible et plus facile
+à lire, notamment lorsque l'on essaie de supprimer des objets
+obsolètes. Bien que je n'aie pas testé, cela devrait également être
+plus rapide. Une alternative aurait été de réutiliser le code de la
+collection `netbox.netbox`, car il contient des primitives similaires.
+Malheureusement, je n'y ai pas pensé jusqu'à présent. 😶
+
+[collection]: https://netbox-ansible-collection.readthedocs.io/en/latest/ "netbox.netbox Ansible Collection's documentation"
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[Écrire un module Ansible sur mesure]: [[fr/blog/2020-ecrire-module-ansible.html]] "Écrire un module Ansible sur mesure"
+[Synchroniser des tables MySQL]: [[fr/blog/2020-synchro-tables-mysql-ansible.html]] "Synchroniser des tables MySQL avec un module Ansible sur mesure"
+[module]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/netbox_sync.py
+[class attributes]: https://www.attrs.org/en/stable/index.html "attrs: Classes Without Boilerplate"
+[pynetbox]: https://pynetbox.readthedocs.io/en/latest/
+[NetBox]: https://netbox.readthedocs.io/en/stable/ "NetBox documentation"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
