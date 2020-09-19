@@ -1,0 +1,123 @@
+---
+title: "Keepalived et unicast avec plusieurs interfaces"
+description: |
+  Lorsque Keepalived est configuré pour envoyer des paquets VRRP unicast,
+  il ne gère qu'une seule interface pour la transmission et la réception.
+  Voici un paliatif utilisant VXLAN.
+uuid: 0409988d-965a-457d-8e46-87f95043332d
+tags:
+ - network-vxlan
+attachments:
+ "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-unicast": "Dépôt Git"
+---
+
+[Keepalived][] est une implémentation Linux de [VRRP][]. Le rôle
+habituel de VRRP est de **partager une adresse IP virtuelle** entre un
+ensemble de routeurs. Pour chaque instance VRRP, un hôte primaire est
+élu et prend en charge l'adresse IP, assurant ainsi la haute
+disponibilité du service associé. *Keepalived* peut également être
+utilisé pour une **élection primaire/secondaire générique**, grâce à
+sa capacité à utiliser des scripts pour tester le bon fonctionnement
+du service et à exécuter des commandes lors d'un changement d'état.
+
+Une configuration basique ressemble à ceci :
+
+    ::junos
+    vrrp_instance gateway1 {
+      state BACKUP          # ❶
+      interface eth0        # ❷
+      virtual_router_id 12  # ❸
+      priority 101          # ❹
+      virtual_ipaddress {
+        2001:db8:ff/64
+      }
+    }
+
+Le mot-clé `state`, en ❶, indique à *Keepalived* de ne pas prendre le
+rôle primaire au démarrage. Sinon, les nouveaux nœuds créent une
+perturbation temporaire en reprenant l'adresse IP jusqu'à ce que
+l'élection soit terminée. Le mot-clé `interface`, en ❷, définit
+l'interface pour l'envoi et la réception des paquets VRRP. C'est
+également l'interface par défaut pour configurer l'adresse IP
+virtuelle. La directive `virtual_router_id`, en ❸, est commune à tous
+les nœuds qui partagent l'IP virtuelle. Le mot-clé `priority`, en ❹,
+détermine l'élection du routeur primaire. Si vous avez besoin de plus
+d'informations sur *Keepalived*, consultez la [documentation][].
+
+La conception de VRRP est étroitement liée aux réseaux Ethernet et
+nécessite un réseau avec le support du multicast pour la communication
+entre les nœuds. Dans certains environnements, notamment les nuages
+publics, le multicast est indisponible. Dans ce cas, *Keepalived* peut
+envoyer des paquets VRRP en unicast :
+
+    ::junos hl_lines="6 7 8 9"
+    vrrp_instance gateway1 {
+      state BACKUP
+      interface eth0
+      virtual_router_id 12
+      priority 101
+      unicast_peer {
+        2001:db8::11
+        2001:db8::12
+      }
+      virtual_ipaddress {
+        2001:db8:ff/64 dev lo
+      }
+    }
+
+Un autre processus, comme un démon BGP, doit annoncer l'adresse IP
+virtuelle au « réseau ». Au besoin, *Keepalived* peut déclencher toute
+action nécessaire à cet effet en utilisant les scripts `notify_*`.
+
+Jusqu'à la version 2.21 (pas encore publiée), la directive `interface`
+est obligatoire et *Keepalived* transmettra et recevra des paquets
+VRRP sur cette interface uniquement. Si les autres nœuds sont
+joignables par plusieurs interfaces, comme avec [BGP sur le
+serveur][BGP on the host], il faut trouver une alternative. Une
+solution simple consiste à utiliser une interface VXLAN :
+
+    ::console
+    $ ip -6 link add keepalived6 type vxlan id 6 dstport 4789 local 2001:db8::10 nolearning
+    $ bridge fdb append 00:00:00:00:00:00 dev keepalived6 dst 2001:db8::11
+    $ bridge fdb append 00:00:00:00:00:00 dev keepalived6 dst 2001:db8::12
+    $ ip link set up dev keepalived6
+
+L'apprentissage des adresses MAC est désactivé et une entrée générique
+pour chaque nœud distant est ajouté dans la base de données de
+transmission de l'interface : les **paquets transmis sont diffusés à
+tous les pairs**, notamment les paquets VRRP. Consultez « [VXLAN &
+Linux][] » pour plus de détails.
+
+    ::junos hl_lines="3 4"
+    vrrp_instance gateway1 {
+      state BACKUP
+      interface keepalived6
+      mcast_src_ip 2001:db8::10
+      virtual_router_id 12
+      priority 101
+      virtual_ipaddress {
+        2001:db8:ff/64 dev lo
+      }
+    }
+
+À partir de la version 2.21 de *Keepalived*, `unicast_peer` peut être
+utilisé [sans la directive `interface`][commit]. Je pense que
+l'utilisation de VXLAN reste néanmoins une astuce intéressante
+applicable à d'autres situations où la communication par diffusion ou
+multicast est nécessaire, alors que le réseau sous-jacent ne le permet
+pas.
+
+*[VRRP]: Virtual Router Redundancy Protocol
+*[VXLAN]: Virtual eXtensible LAN
+
+[Keepalived]: https://www.keepalived.org "Keepalived for Linux"
+[VRRP]: https://en.wikipedia.org/wiki/Virtual_Router_Redundancy_Protocol "Virtual Router Redundancy Protocol"
+[documentation]: https://manpages.debian.org/buster/keepalived/keepalived.conf.5.en.html "keepalived.conf(5) manual page"
+[BGP on the host]: [[fr/blog/2018-routage-l3-hyperviseur.html]] "Routage L3 jusqu'à l'hyperviseur avec BGP"
+[VXLAN & Linux]: [[fr/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
+[commit]: https://github.com/acassen/keepalived/pull/1610 "Allow not specifying interface for unicast vrrp instances #1610"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}

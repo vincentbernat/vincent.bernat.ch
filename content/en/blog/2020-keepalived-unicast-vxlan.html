@@ -1,0 +1,119 @@
+---
+title: "Keepalived and unicast over multiple interfaces"
+description: |
+  When Keepalived is configured to send unicast VRRP packets, it
+  only handles one interface for transmit and receive. Here is
+  a workaround using VXLAN.
+uuid: 0409988d-965a-457d-8e46-87f95043332d
+tags:
+ - network-vxlan
+attachments:
+ "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-unicast": "Git repository"
+---
+
+[Keepalived][] is a Linux implementation of [VRRP][]. The usual role
+of VRRP is to **share a virtual IP** across a set of routers. For each
+VRRP instance, a leader is elected and gets to serve the IP address,
+ensuring the high availability of the attached service. *Keepalived*
+can also be used for a **generic leader election**, thanks to its
+ability to use scripts for healthchecking and run commands on state
+change.
+
+A simple configuration looks like this:
+
+    ::junos
+    vrrp_instance gateway1 {
+      state BACKUP          # ❶
+      interface eth0        # ❷
+      virtual_router_id 12  # ❸
+      priority 101          # ❹
+      virtual_ipaddress {
+        2001:db8:ff/64
+      }
+    }
+
+The `state` keyword in ❶ instructs *Keepalived* to not take the leader
+role when starting. Otherwise, incoming nodes create a temporary
+disruption by taking over the IP address until the election settles.
+The `interface` keyword in ❷ defines the interface for sending and
+receiving VRRP packets. It is also the default interface to configure
+the virtual IP address. The `virtual_router_id` directive in ❸ is
+common to all nodes sharing the virtual IP. The `priority` keyword in
+❹ helps choosing which router will be elected as leader. If you need
+more information around *Keepalived*, be sure to check the
+[documentation][].
+
+
+VRRP design is tied to Ethernet networks and requires a
+multicast-enabled network for communication between nodes. In some
+environments, notably public clouds, multicast is unavailable. In this
+case, *Keepalived* can send VRRP packets using unicast:
+
+    ::junos hl_lines="6 7 8 9"
+    vrrp_instance gateway1 {
+      state BACKUP
+      interface eth0
+      virtual_router_id 12
+      priority 101
+      unicast_peer {
+        2001:db8::11
+        2001:db8::12
+      }
+      virtual_ipaddress {
+        2001:db8:ff/64 dev lo
+      }
+    }
+
+Another process, like a BGP daemon, should advertise the virtual IP
+address to the "network". If needed, *Keepalived* can trigger whatever
+action is needed for this by using `notify_*` scripts.
+
+Until version 2.21 (not released yet), the `interface` directive is
+mandatory and *Keepalived* will transmit and receive VRRP packets on
+this interface only. If peers are reachable through several
+interfaces, like on a [BGP on the host][] setup, you need a
+workaround. A simple one is to use a VXLAN interface:
+
+    ::console
+    $ ip -6 link add keepalived6 type vxlan id 6 dstport 4789 local 2001:db8::10 nolearning
+    $ bridge fdb append 00:00:00:00:00:00 dev keepalived6 dst 2001:db8::11
+    $ bridge fdb append 00:00:00:00:00:00 dev keepalived6 dst 2001:db8::12
+    $ ip link set up dev keepalived6
+
+Learning of MAC addresses is disabled and one generic entry for each
+peer is added in the forwarding database: **transmitted packets are
+broadcasted to all peers**, notably VRRP packets. Have a look at
+"[VXLAN & Linux][]" for additional details.
+
+    ::junos hl_lines="3 4"
+    vrrp_instance gateway1 {
+      state BACKUP
+      interface keepalived6
+      mcast_src_ip 2001:db8::10
+      virtual_router_id 12
+      priority 101
+      virtual_ipaddress {
+        2001:db8:ff/64 dev lo
+      }
+    }
+
+Starting from *Keepalived* 2.21, `unicast_peer` can be used [without
+the `interface` directive][commit]. I think using VXLAN is still a
+neat trick applicable to other situations where communication using
+broadcast or multicast is needed, while the underlying network provide
+no support for this.
+
+*[VRRP]: Virtual Router Redundancy Protocol
+*[VXLAN]: Virtual eXtensible LAN
+
+[Keepalived]: https://www.keepalived.org "Keepalived for Linux"
+[VRRP]: https://en.wikipedia.org/wiki/Virtual_Router_Redundancy_Protocol "Virtual Router Redundancy Protocol"
+[documentation]: https://manpages.debian.org/buster/keepalived/keepalived.conf.5.en.html "keepalived.conf(5) manual page"
+[BGP on the host]: [[en/blog/2018-l3-routing-hypervisor.html]] "L3 routing to the hypervisor with BGP"
+[VXLAN & Linux]: [[en/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
+[commit]: https://github.com/acassen/keepalived/pull/1610 "Allow not specifying interface for unicast vrrp instances #1610"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
