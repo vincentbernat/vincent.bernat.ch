@@ -208,19 +208,9 @@ and a memento for the external resources a site will use. Mine is
 moderately complex and shows what to expect from a privacy point of
 view:[^cdn]
 
+    ::text
     Content-Security-Policy:
-      default-src 'self' blob:;
-      script-src  'self' blob: https://d1g3mdmxf8zbo9.cloudfront.net/js/;
-      object-src  'self' https://d1g3mdmxf8zbo9.cloudfront.net/images/;
-      img-src     'self' data: https://d1g3mdmxf8zbo9.cloudfront.net/images/;
-      frame-src   https://d1g3mdmxf8zbo9.cloudfront.net/images/;
-      style-src   'self' 'unsafe-inline' https://d1g3mdmxf8zbo9.cloudfront.net/css/;
-      font-src    'self' data: https://d1g3mdmxf8zbo9.cloudfront.net/fonts/;
-      worker-src  blob:;
-      media-src   'self' blob: about: https://media.luffy.cx/videos/ https://d1g3mdmxf8zbo9.cloudfront.net/images/;
-      connect-src 'self' https://media.luffy.cx/videos/ https://comments.luffy.cx;
-      frame-ancestors 'none';
-      block-all-mixed-content;
+      {% from "nginx.j2" import csp with context %}{{ csp()|indent(6) }}
 
 [^cdn]: I don't have an issue with using a CDN like [CloudFront][]: it
     is a paid service and Amazon is not in the business of tracking

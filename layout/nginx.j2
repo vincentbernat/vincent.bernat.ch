@@ -1,4 +1,20 @@
 {# nginx configuration to be included at the "server" level #}
+{% macro csp() %}
+default-src     'self' blob:;
+script-src      'self' blob: {{ media_url('js/') }};
+object-src      'self' {{ media_url('images/') }};
+img-src         'self' data: {{ media_url('images/') }}; frame-src {{ media_url('images/') }};
+style-src       'self' 'unsafe-inline' {{ media_url('css/') }};
+font-src        'self' data: {{ media_url('fonts/') }};
+worker-src      blob:;
+media-src       'self' blob: about: {{ media_url('videos/') }} {{ media_url('images/') }};
+connect-src     'self' {{ media_url('videos/') }} https://comments.luffy.cx;
+base-uri        'none';
+frame-ancestors 'none';
+form-action     https://duckduckgo.com;
+block-all-mixed-content;
+{% endmacro %}
+
 index         index.html;
 error_page    404 {{content_url('/en/404.html')}};
 expires       6h;
@@ -6,30 +22,7 @@ add_header    "Cache-Control" "max-age=21600";
 add_header    "X-Content-Type-Options" "nosniff";
 add_header    "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
 add_header    "Referrer-Policy" "no-referrer-when-downgrade";
-add_header    "Content-Security-Policy" "{% filter striptags %}
-   default-src 'self' blob:;
-   script-src  'self' blob: 
-               {{ media_url('js/') }};
-   object-src  'self' {{ media_url('images/') }};
-   img-src     'self' data:
-               {{ media_url('images/') }};
-   frame-src   {{ media_url('images/') }};
-   style-src   'self' 'unsafe-inline'
-               {{ media_url('css/') }};
-   font-src    'self' data: {{ media_url('fonts/') }};
-   worker-src  blob:;
-   media-src   'self' blob: about:
-               {{ media_url('videos/') }}
-               {{ media_url('images/') }};
-   connect-src 'self'
-               {{ media_url('videos/') }}
-               https://comments.luffy.cx;
-
-   base-uri 'none';
-   form-action https://duckduckgo.com;
-   frame-ancestors 'none';
-   block-all-mixed-content;
-{% endfilter %}";
+add_header    "Content-Security-Policy" "{{ csp()|striptags }}";
 
 location = /nginx.conf {
   expires     max;
