@@ -374,8 +374,7 @@ def build(c):
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs, options=[]):
-            options = " ".join(["--name-IDs+=0,4,6",
-                                "--layout-features=liga",
+            options = " ".join(["--layout-features=liga",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
                                 "--no-hinting --desubroutinize",
                                 *options])
