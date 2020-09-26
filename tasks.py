@@ -373,10 +373,12 @@ def build(c):
 
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
-        def subset(font, glyphs):
+        def subset(font, glyphs, options=[]):
             options = " ".join(["--name-IDs+=0,4,6",
+                                "--layout-features-=kern",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
-                                "--no-hinting --desubroutinize"])
+                                "--no-hinting --desubroutinize",
+                                *options])
             c.run("pyftsubset media/fonts/{}.woff "
                   "--flavor=woff --with-zopfli {}".format(font, options))
             c.run("pyftsubset media/fonts/{}.woff2 "
@@ -386,8 +388,8 @@ def build(c):
             c.run("mv media/fonts/{}.subset.woff2 "
                   "media/fonts/{}.woff2".format(font, font))
         subset('iosevka-custom-regular', 'monospace')
-        subset('merriweather', 'regular')
-        subset('merriweather-italic', 'regular')
+        subset('merriweather', 'regular', ["--layout-features+=ss01"])
+        subset('merriweather-italic', 'regular', ["--layout-features+=ss01"])
         # Compute hash on various files
         for p in ['media/images/l/sprite*.svg',
                   'media/fonts/*',
