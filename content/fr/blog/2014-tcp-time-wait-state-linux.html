@@ -10,7 +10,9 @@ tags:
 ---
 
 !!! "En bref" N'activez pas `net.ipv4.tcp_tw_recycle` (qui n'existe
-même plus depuis Linux 4.12) !
+même plus depuis Linux 4.12) ! La plupart du temps, les connexions
+dans l'état `TIME-WAIT` sont inoffensives. Dans le cas contraire,
+sautez au [résumé](#resume) pour les solutions recommandées.
 
 La documentation du noyau Linux n'est pas très prolixe sur les effets
 de `net.ipv4.tcp_tw_recycle` et de `net.ipv4.tcp_tw_reuse`. Ce manque
@@ -502,9 +504,8 @@ La solution universelle est d'**augmenter le nombre de combinaisons
 possibles pour les quadruplets** en utilisant, par exemple, plusieurs
 ports côté serveur.
 
-**Côté serveur**, ne pas activer `net.ipv4.tcp_tw_recycle` <del>à moins
-d'être sûr de ne jamais avoir à interagir avec des machines se
-partageant la même IP</del>. Activer `net.ipv4.tcp_tw_reuse` est sans
+**Côté serveur**, ne jamais activer `net.ipv4.tcp_tw_recycle` en
+raison des effets de bord. Activer `net.ipv4.tcp_tw_reuse` est sans
 effet sur les connexions entrantes.
 
 **Côté client**, activer `net.ipv4.tcp_tw_reuse` est une solution

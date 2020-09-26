@@ -10,7 +10,9 @@ tags:
 ---
 
 !!! "TL;DR" Do not enable `net.ipv4.tcp_tw_recycle`—it doesn't even
-exist anymore since Linux 4.12.
+exist anymore since Linux 4.12. Most of the time, `TIME-WAIT` sockets
+are harmless. Otherwise, jump to [summary](#summary) for the
+recommended solutions.
 
 The Linux kernel documentation is not very helpful about what
 `net.ipv4.tcp_tw_recycle` and `net.ipv4.tcp_tw_reuse` do. This lack of
@@ -519,10 +521,9 @@ quadruplets** by using, for example, more server ports. This will
 allow you to not exhaust the possible connections with `TIME-WAIT`
 entries.
 
-On the **server side**, do not enable `net.ipv4.tcp_tw_recycle` <del>unless
-you are pretty sure you will never have NAT devices in the
-mix</del>. Enabling `net.ipv4.tcp_tw_reuse` is useless for incoming
-connections.
+On the **server side**, never enable `net.ipv4.tcp_tw_recycle` due to
+its side effects. Enabling `net.ipv4.tcp_tw_reuse` is useless for
+incoming connections.
 
 On the **client side**, enabling `net.ipv4.tcp_tw_reuse` is another
 almost-safe solution. Enabling `net.ipv4.tcp_tw_recycle` in addition
