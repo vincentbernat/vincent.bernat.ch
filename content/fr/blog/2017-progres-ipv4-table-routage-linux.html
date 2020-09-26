@@ -88,7 +88,9 @@ Quelques noyaux apportent un progrès notable :
    n'est utilisée. Pour le trafic non local, ces deux tables étaient
    successivement consultées.
 
-!!! "Mise à jour (04.2018)" Voici un graphique pour des noyaux plus
+# Mise à jour à mi-2018
+
+Voici un graphique pour des noyaux plus
 récents. Les performances sont plutôt stables. Les recherches sont
 mesurées par lot de cinq pour réduire les coûts. Les petites
 régressions des versions 4.2 et 4.16 peuvent ou non être
@@ -98,24 +100,25 @@ le cache de niveau 2).
 ![Performance de la table de routage IPv4 sur des noyaux récents][i4]
 [i4]: [[!!images/linux/lpc-trie-perf-recent-v2.svg]] "Temps de recherche d'une route pour diverses versions du noyau Linux. La table de routage contient 500 000 routes. Les zones ombragées représentent l'écart absolu médian."
 
-!!! "Mise à jour (04.2018)" Les récentes [vulnérabilités Meltdown et
+Les récentes [vulnérabilités Meltdown et
 Spectre][Meltdown and Spectre exploits] ont défrayé la chronique en
 raison de l'impact sur les performances des correctifs. La recherche
 d'une route s'effectuant intégralement dans le noyau, les correctifs
 devraient n'avoir aucun effet, comme confirmé sur les graphiques
-ci-dessous. Les mesures ont été faites sur une machine virtuelle avec
-un seul vCPU. L'hôte est un [Intel Core i5-4670K][]
-(micro-architecture *Haswell*) tournant à 3,4 GHz avec un microcode à
-jour et un noyau 4.16 de Debian. Lorsqu'il est protégé, l'hôte utilise
-PTI, *retpoline* et IBPB. Dans le cas contraire, l'hôte tourne avec un
-ancien microcode et les protections sont désactivées au niveau de la
-ligne de commande (`nopti nospectre_v2`). Les noyaux pour la machine
-virtuelle sont compilés avec GCC 7.3 qui inclus le support de
-*retpoline*.
+ci-dessous:
 
 ![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v1.svg]] "Temps de recherche d'une route pour des versions du noyau Linux fin 2017 et début 2018. La table de routage contient 500 000 routes. Les noyaux sont ordonnés par leur date de publication. La zone ombragée contient les noyaux sans correctifs pour Spectre et Meltdown.")
 
 ![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v3.svg]] "Graphique similaire au précédent mais les noyaux sont ordonnés par version.")
+
+Les mesures ont été faites sur une machine virtuelle avec un seul
+vCPU. L'hôte est un [Intel Core i5-4670K][] (micro-architecture
+*Haswell*) tournant à 3,4 GHz avec un microcode à jour et un noyau
+4.16 de Debian. Lorsqu'il est protégé, l'hôte utilise PTI, *retpoline*
+et IBPB. Dans le cas contraire, l'hôte tourne avec un ancien microcode
+et les protections sont désactivées au niveau de la ligne de commande
+(`nopti nospectre_v2`). Les noyaux pour la machine virtuelle sont
+compilés avec GCC 7.3 qui inclus le support de *retpoline*.
 
 *[TSC]: Time Stamp Counter
 

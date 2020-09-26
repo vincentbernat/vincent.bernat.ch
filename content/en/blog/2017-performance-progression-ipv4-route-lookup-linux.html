@@ -85,31 +85,33 @@ The following kernel versions bring a notable performance improvement:
    configured. For non-local traffic, both these tables were looked
    up.
 
-!!! "Update (2018-04)" Here is a graph for more recent
-kernels. Performance is mostly stable. Measures are done in a batch
-of 5 successful lookups to reduce overhead. Small regressions in 4.2
-and 4.16 may or may not be significant—a 5 ns variation matches an L2
-cache lookup.
+# Mid-2018 update
+
+Here is a graph for more recent kernels. Performance is mostly stable.
+Measures are done in a batch of 5 successful lookups to reduce
+overhead. Small regressions in 4.2 and 4.16 may or may not be
+significant—a 5 ns variation matches an L2 cache lookup.
 
 ![IPv4 route lookup performance with recent kernels][i4]
 [i4]: [[!!images/linux/lpc-trie-perf-recent-v2.svg]] "Route lookup times for more recent Linux kernel versions. Lookup is done on a table with 500,000 routes. The shaded surfaces represent the median absolute deviation."
 
-!!! "Update (2018-04)" The recent [Meltdown and Spectre exploits][]
-have made headlines due the performance impact of the various
-mitigations. Because route lookup happens entirely in the kernel, the
-mitigations should have no effect, as confirmed in the graphs
-below. Measures are done in a virtual machine with one vCPU. The host
-is an [Intel Core i5-4670K][]—*Haswell* microarchitecture—running at
-3.4 GHz with an up-to-date microcode and a Linux 4.16 kernel from
-Debian. When protected, host is using PTI, full generic retpoline and
-IBPB. When unprotected, the host is running with an out-of-date
-microcode and mitigations are disabled on the command line (`nopti
-nospectre_v2`). Kernels for the guest are compiled with GCC 7.3—with
-*retpoline* support.
+The recent [Meltdown and Spectre exploits][] have made headlines due
+the performance impact of the various mitigations. Because route
+lookup happens entirely in the kernel, the mitigations should have no
+effect, as confirmed in the graphs below:
 
 ![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v1.svg]] "Route lookup times for more Linux kernel versions from late 2017 and early 2018. Lookup is done on a table with 500,000 routes. The kernels are ordered by their release date. The shaded area contains kernels without Spectre/Meltdown mitigations.")
 
 ![IPv4 route lookup performance with kernels around the Meltdown/Spectre era]([[!!images/linux/lpc-trie-perf-meltdown-v3.svg]] "Same graph as previously but the kernels are ordered by their versions.")
+
+Measures are done in a virtual machine with one vCPU. The host is an
+[Intel Core i5-4670K][]—*Haswell* microarchitecture—running at 3.4 GHz
+with an up-to-date microcode and a Linux 4.16 kernel from Debian. When
+protected, host is using PTI, full generic retpoline and IBPB. When
+unprotected, the host is running with an out-of-date microcode and
+mitigations are disabled on the command line (`nopti nospectre_v2`).
+Kernels for the guest are compiled with GCC 7.3—with *retpoline*
+support.
 
 *[TSC]: Time Stamp Counter
 

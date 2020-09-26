@@ -41,17 +41,23 @@ There are three notable performance changes:
    which effectively removes creation of cache entries, except for PMTU
    exceptions.
 
-!!! "Update (2018-08)" Here is a graph for more recent kernels.
-Measures were performed on an [Intel Xeon Gold 6148][][^xeon] running
-at 2.4 GHz, with GCC 6.3 from Debian Stretch. Performance regressions
-in **4.4.147** and **4.9.119** are solely due to the Spectre
-mitigations.[^meltdown] The small performance increase in Linux
-**4.14** is from my own [commit feca7d8c135b][] which optimizes the
-case without custom routing rules. In Linux **4.15**, the most notable
-improvement can be traced to [commit 66f5d6ce53e6][]: Wei Wang
-replaces the read-write lock by an RCU and a spinlock. In Linux
-**4.18**, David Ahern [improved the data structures used by route
-lookup][]. While the gain is meager, this should bring more
+# Mid-2018 update
+
+Here is a graph for more recent kernels. Measures were performed on an
+[Intel Xeon Gold 6148][][^xeon] running at 2.4 GHz, with GCC 6.3 from
+Debian Stretch:
+
+![IPv6 route lookup performance with recent kernels][i4]
+[i4]: [[!!images/linux/ipv6-radix-perf-recent-v2.svg]] "IPv6 route lookup times for various Linux kernel versions. Lookup is done on a table with 40,000 routes. The shaded surfaces represent the median absolute deviation."
+
+Performance regressions in **4.4.147** and **4.9.119** are solely due
+to the Spectre mitigations.[^meltdown] The small performance increase
+in Linux **4.14** is from my own [commit feca7d8c135b][] which
+optimizes the case without custom routing rules. In Linux **4.15**,
+the most notable improvement can be traced to [commit 66f5d6ce53e6][]:
+Wei Wang replaces the read-write lock by an RCU and a spinlock. In
+Linux **4.18**, David Ahern [improved the data structures used by
+route lookup][]. While the gain is meager, this should bring more
 performance improvements in the future. This also allows a fairer
 comparison between IPv4 and IPv6.
 
@@ -60,9 +66,6 @@ comparison between IPv4 and IPv6.
 [^meltdown]: These LTS kernels received a backport of the mitigations
     found in more recent kernels. For IPv4, the impact was
     [non-existent][].
-
-![IPv6 route lookup performance with recent kernels][i4]
-[i4]: [[!!images/linux/ipv6-radix-perf-recent-v2.svg]] "IPv6 route lookup times for various Linux kernel versions. Lookup is done on a table with 40,000 routes. The shaded surfaces represent the median absolute deviation."
 
 *[LTS]: Long Term Support
 *[RCU]: Read-Copy-Update
