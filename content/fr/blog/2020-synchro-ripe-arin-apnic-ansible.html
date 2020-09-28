@@ -1,0 +1,402 @@
+---
+title: "Synchroniser des objets RIPE, ARIN et APNIC avec un module Ansible sur mesure"
+description: |
+ Cet article décrit un module Ansible permettant de synchroniser
+ les objets RIPE, ARIN et APNIC.
+uuid: 8e95d250-a7b1-4a79-b5e1-4d45643c8062
+attachments:
+  "https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/irr_sync.py": Code du module
+tags:
+  - network-automation
+  - programming-python
+---
+
+L'Internet est divisé en cinq [registres Internet régionaux][regional
+Internet registry] : AFRINIC, ARIN, APNIC, LACNIC et RIPE. Chacun de
+ces RIR gère un [registre de routage Internet][Internet Routing
+Registry]. Un tel IRR permet de publier des **informations sur le
+routage des ressources Internet**[^others]. Les opérateurs l'utilisent
+pour déterminer le propriétaire d'une adresse IP et pour construire et
+maintenir des **filtres de routage**. Pour que vos routes soient
+largement acceptées, il est important de tenir à jour les préfixes que
+vous annoncez dans un IRR.
+
+[^others]: D'autres IRR existent en dehors de ceux maintenus par les
+    RIR. Le plus connu est [RADb][].
+
+Il existe deux outils courants pour interroger cette base de données :
+`whois` et `bgpq4`. Le premier vous permet d'effectuer une requête
+avec le [protocole WHOIS][WHOIS protocol] :
+
+    ::console
+    $ whois -BrG 2a0a:e805:400::/40
+    […]
+    inet6num:       2a0a:e805:400::/40
+    netname:        FR-BLADE-CUSTOMERS-DE
+    country:        DE
+    geoloc:         50.1109 8.6821
+    admin-c:        BN2763-RIPE
+    tech-c:         BN2763-RIPE
+    status:         ASSIGNED
+    mnt-by:         fr-blade-1-mnt
+    remarks:        synced with cmdb
+    created:        2020-05-19T08:04:58Z
+    last-modified:  2020-05-19T08:04:58Z
+    source:         RIPE
+    
+    route6:         2a0a:e805:400::/40
+    descr:          Blade IPv6 - AMS1
+    origin:         AS64476
+    mnt-by:         fr-blade-1-mnt
+    remarks:        synced with cmdb
+    created:        2019-10-01T08:19:34Z
+    last-modified:  2020-05-19T08:05:00Z
+    source:         RIPE
+
+Le second permet de construire des filtres de routage en utilisant les
+informations contenues dans la base de données IRR :
+
+    ::console
+    $ bgpq4 -6 -S RIPE -b AS64476
+    NN = [
+        2a0a:e805::/40,
+        2a0a:e805:100::/40,
+        2a0a:e805:300::/40,
+        2a0a:e805:400::/40,
+        2a0a:e805:500::/40
+    ];
+
+Il n'y a pas de module disponible sur [Ansible Galaxy][] pour gérer
+ces objets. Chaque IRR a différentes façons d'être mis à jour.
+Certains RIR proposent une API, mais d'autres non. Si l'on se limite
+au RIPE, à l'ARIN et à l'APNIC, la seule méthode commune de mise à
+jour des objets est la [mise à jour par courrier électronique][email
+updates], authentifié par un mot de passe ou une signature GPG[^arin].
+Écrivons un module Ansible à cet effet !
+
+[^arin]: L'ARIN abandonne progressivement cette méthode au profit de
+    [IRR-online][]. RIPE dispose d'une [API][REST API], mais les mises
+    à jour par courrier électronique sont toujours prises en charge et
+    il n'est pas prévu de les faire disparaître. L'APNIC prévoit
+    d'exposer une [API][APNIC API].
+
+!!! "Note" Je vous recommande de lire « [Écrire un module Ansible sur
+mesure][] » en introduction, ainsi que « [Synchroniser des tables
+MySQL][] » pour un premier exemple plus didactique.
+
+# Code
+
+Le [module][] prend une liste d'objets RPSL à synchroniser et renvoie
+le contenu d'un courrier électronique pour mise à jour si un changement
+est nécessaire :
+
+    ::yaml
+    - name: prepare RIPE objects
+      irr_sync:
+        irr: RIPE
+        mntner: fr-blade-1-mnt
+        source: whois-ripe.txt
+      register: irr
+
+## Prérequis
+
+Le fichier source doit être un ensemble d'objets à synchroniser en
+utilisant le [langage RPSL][RPSL language]. Il s'agirait du même
+contenu que celui que vous enverriez manuellement par courrier
+électronique. Tous les objets doivent être gérés par le même
+mainteneur, également fourni en paramètre.
+
+La signature et l'envoi du résultat ne relèvent pas de la
+responsabilité de ce module. Vous avez besoin de deux tâches
+supplémentaires à cette fin :
+
+    ::yaml hl_lines="4 5 18"
+    - name: sign RIPE objects
+      shell:
+        cmd: gpg --batch --user noc@example.com --clearsign
+        stdin: "{% raw %}{{ irr.objects }}{% endraw %}"
+      register: signed
+      check_mode: false
+      changed_when: false
+    
+    - name: update RIPE objects by email
+      mail:
+        subject: "NEW: update for RIPE"
+        from: noc@example.com
+        to: "auto-dbm@ripe.net"
+        cc: noc@example.com
+        host: smtp.example.com
+        port: 25
+        charset: us-ascii
+        body: "{% raw %}{{ signed.stdout }}{% endraw %}"
+
+Vous devez aussi autoriser la clef PGP utilisée pour signer les mises
+à jour en créant un objet `key-cert` et en l'ajoutant comme méthode
+d'authentification pour l'objet `mntner` correspondant :
+
+    ::yaml
+    key-cert:  PGPKEY-A791AAAB
+    certif:    -----BEGIN PGP PUBLIC KEY BLOCK-----
+    certif:    
+    certif:    mQGNBF8TLY8BDADEwP3a6/vRhEERBIaPUAFnr23zKCNt5YhWRZyt50mKq1RmQBBY
+    […]
+    certif:    -----END PGP PUBLIC KEY BLOCK-----
+    mnt-by:    fr-blade-1-mnt
+    source:    RIPE
+    
+    mntner:    fr-blade-1-mnt
+    […]
+    auth:      PGPKEY-A791AAAB
+    mnt-by:    fr-blade-1-mnt
+    source:    RIPE
+
+## Définition du module
+
+En se basant sur le squelette présenté dans l'[article
+précédent][Écrire un module ansible sur mesure], nous définissons le
+module :
+
+    ::python
+    module_args = dict(
+        irr=dict(type='str', required=True),
+        mntner=dict(type='str', required=True),
+        source=dict(type='path', required=True),
+    )
+
+    result = dict(
+        changed=False,
+    )
+
+    module = AnsibleModule(
+        argument_spec=module_args,
+        supports_check_mode=True
+    )
+
+## Obtenir les objets existants
+
+Pour récupérer les objets existants, la commande `whois` recherche
+tous les objets attachés au mainteneur fourni en paramètre du module.
+
+    ::python
+    # Per-IRR variations:
+    # - whois server
+    whois = {
+        'ARIN': 'rr.arin.net',
+        'RIPE': 'whois.ripe.net',
+        'APNIC': 'whois.apnic.net'
+    }
+    # - whois options
+    options = {
+        'ARIN': ['-r'],
+        'RIPE': ['-BrG'],
+        'APNIC': ['-BrG']
+    }
+    # - objects excluded from synchronization
+    excluded = ["domain"]
+    if irr == "ARIN":
+        # ARIN does not return these objects
+        excluded.extend([
+            "key-cert",
+            "mntner",
+        ])
+
+    # Grab existing objects
+    args = ["-h", whois[irr],
+            "-s", irr,
+            *options[irr],
+            "-i", "mnt-by",
+            module.params['mntner']]
+    proc = subprocess.run("whois", *args, capture_output=True)
+    if proc.returncode != 0:
+        raise AnsibleError(
+            f"unable to query whois: {args}")
+    output = proc.stdout.decode('ascii')
+    got = extract(output, excluded)
+
+La première partie du code introduit des constantes spécifiques à
+chaque IRR : le serveur à interroger, les options à fournir à la
+commande `whois` et les objets à exclure de la synchronisation. La
+seconde partie invoque la commande `whois` qui récupère tous les
+objets dont le champ `mnt-by` correspond au mainteneur fourni. Voici
+un exemple de sortie :
+
+    ::console
+    $ whois -h whois.ripe.net -s RIPE -BrG -i mnt-by fr-blade-1-mnt
+    […]
+    
+    inet6num:       2a0a:e805:300::/40
+    netname:        FR-BLADE-CUSTOMERS-FR
+    country:        FR
+    geoloc:         48.8566 2.3522
+    admin-c:        BN2763-RIPE
+    tech-c:         BN2763-RIPE
+    status:         ASSIGNED
+    mnt-by:         fr-blade-1-mnt
+    remarks:        synced with cmdb
+    created:        2020-05-19T08:04:59Z
+    last-modified:  2020-05-19T08:04:59Z
+    source:         RIPE
+    
+    […]
+    
+    route6:         2a0a:e805:300::/40
+    descr:          Blade IPv6 - PA1
+    origin:         AS64476
+    mnt-by:         fr-blade-1-mnt
+    remarks:        synced with cmdb
+    created:        2019-10-01T08:19:34Z
+    last-modified:  2020-05-19T08:05:00Z
+    source:         RIPE
+    
+    […]
+
+Le résultat est transmis à la fonction `extract()`. Elle analyse et
+normalise les résultats dans un dictionnaire qui met en correspondance
+les noms d'objets et les objets. Nous stockons le résultat dans la
+variable `got`.
+
+    ::python
+    def extract(raw, excluded):
+        """Extract objects."""
+        # First step, remove comments and unwanted lines
+        objects = "\n".join([obj
+                             for obj in raw.split("\n")
+                             if not obj.startswith((
+                                     "#",
+                                     "%",
+                             ))])
+        # Second step, split objects
+        objects = [RPSLObject(obj.strip())
+                   for obj in re.split(r"\n\n+", objects)
+                   if obj.strip()
+                   and not obj.startswith(
+                       tuple(f"{x}:" for x in excluded))]
+        # Last step, put objects in a dict
+        objects = {repr(obj): obj
+                   for obj in objects}
+        return objects
+
+`RPSLObject()` est la classe qui permet de normaliser et comparer les
+objets. Regardez le [code du module][module] pour plus de détails.
+
+    ::pycon
+    >>> output="""
+    ... inet6num:       2a0a:e805:300::/40
+    ... […]
+    ... """
+    >>> pprint({k: str(v) for k,v in extract(output, excluded=[])})
+    {'<Object:inet6num:2a0a:e805:300::/40>':
+       'inet6num:       2a0a:e805:300::/40\n'
+       'netname:        FR-BLADE-CUSTOMERS-FR\n'
+       'country:        FR\n'
+       'geoloc:         48.8566 2.3522\n'
+       'admin-c:        BN2763-RIPE\n'
+       'tech-c:         BN2763-RIPE\n'
+       'status:         ASSIGNED\n'
+       'mnt-by:         fr-blade-1-mnt\n'
+       'remarks:        synced with cmdb\n'
+       'source:         RIPE',
+     '<Object:route6:2a0a:e805:300::/40>':
+       'route6:         2a0a:e805:300::/40\n'
+       'descr:          Blade IPv6 - PA1\n'
+       'origin:         AS64476\n'
+       'mnt-by:         fr-blade-1-mnt\n'
+       'remarks:        synced with cmdb\n'
+       'source:         RIPE'}
+
+## Comparer avec les objets souhaités
+
+Construisons maintenant le dictionnaire `wanted` en réutilisant la
+fonction `extract()` :
+
+    ::python
+    with open(module.params['source']) as f:
+        source = f.read()
+    wanted = extract(source, excluded)
+
+L'étape suivante est de comparer `got` et `wanted` pour construire les
+différences :
+
+    ::python
+    if got != wanted:
+        result['changed'] = True
+        if module._diff:
+            result['diff'] = [
+                dict(before_header=k,
+                     after_header=k,
+                     before=str(got.get(k, "")),
+                     after=str(wanted.get(k, "")))
+                for k in set((*wanted.keys(), *got.keys()))
+                if k not in wanted or k not in got or wanted[k] != got[k]]
+
+## Retourner les mises à jour
+
+Le module n'a pas d'effet de bord. S'il y a une différence, nous
+retournons les mises à jour à envoyer par courrier électronique. Nous
+choisissons d'inclure tous les objets souhaités dans les mises à jour
+(contenus dans la variable `source`) et de laisser l'IRR ignorer les
+objets non modifiés. Nous ajoutons également les objets à supprimer en
+ajoutant un attribut `delete:` à chacun d'entre eux.
+
+    ::python
+    # We send all source objects and deleted objects.
+    deleted_mark = f"{'delete:':16}deleted by CMDB"
+    deleted = "\n\n".join([f"{got[k].raw}\n{deleted_mark}"
+                           for k in got
+                           if k not in wanted])
+    result['objects'] = f"{source}\n\n{deleted}"
+    
+    module.exit_json(**result)
+
+---
+
+Le code complet est disponible sur [GitHub][module]. Le module prend
+en charge les options `--diff` et `--check`. Il ne renvoie rien si
+aucun changement n'est détecté. Il peut fonctionner avec l'APNIC, le
+RIPE et l'ARIN. Il n'est pas parfait : il peut ne pas détecter
+certains changements[^changes], il n'est pas capable de modifier des
+objets n'appartenant pas au mainteneur fourni[^mntner] et certains
+attributs refusent les mises à jour, ce qui nécessite de supprimer et
+de recréer manuellement l'objet[^modify]. Cependant, ce module devrait
+automatiser 95% de vos besoins.
+
+[^changes]: Pour l'ARIN, nous ne pouvons pas interroger les objets
+    `key-cert` et `mntner` et donc nous ne pouvons pas détecter les
+    changements qui s'y produisent. Il n'est pas non plus possible de
+    détecter les modifications des mécanismes d'authentification d'un
+    objet `mntner`.
+
+
+[^mntner]: L'APNIC n'attribue pas les objets de plus haut niveau au
+    mainteneur associé au propriétaire.
+
+[^modify]: Pour modifier le statut d'un objet `inetnum`, il faut
+    supprimer et recréer l'objet.
+
+*[RIR]: Regional Internet Registry
+*[IRR]: Internet Routing Registry
+*[AFRINIC]: African Network Information Center
+*[ARIN]: American Registry for Internet Numbers
+*[APNIC]: Asia-Pacific Network Information Centre
+*[RIPE]: Réseaux IP Européens Network Coordination Centre
+*[LACNIC]: Latin America and Caribbean Network Information Centre
+*[RPSL]: Routing Policy Specification Language
+
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[Écrire un module Ansible sur mesure]: [[fr/blog/2020-ecrire-module-ansible.html]] "Écrire un module Ansible sur mesure"
+[Synchroniser des tables MySQL]: [[fr/blog/2020-synchro-tables-mysql-ansible.html]] "Synchroniser des tables MySQL avec un module Ansible sur mesure"
+[module]: https://github.com/vincentbernat/ansible-custom-module-examples/blob/main/irr_sync.py
+[regional Internet registry]: https://en.wikipedia.org/wiki/Regional_Internet_registry "Regional Internet registry on Wikipedia"
+[Internet Routing Registry]: https://en.wikipedia.org/wiki/Internet_Routing_Registry "Internet Routing Registry on Wikipedia"
+[WHOIS protocol]: https://tools.ietf.org/html/rfc3912 "RFC 3912: WHOIS Protocol Specification"
+[REST API]: https://www.ripe.net/manage-ips-and-asns/db/support/documentation/ripe-database-documentation/updating-objects-in-the-ripe-database/6-1-restful-api "RIPE Database RESTful API"
+[email updates]: https://www.ripe.net/manage-ips-and-asns/db/support/documentation/ripe-database-documentation/updating-objects-in-the-ripe-database/6-4-email-updates "RIPE NCC: Email Updates"
+[IRR-online]: https://www.arin.net/resources/manage/irr/irr-online-implementation/#using-the-web-based-interface-irr-online "ARIN: Using the Web-Based Interface (IRR-online)"
+[APNIC API]: https://www.apnic.net/manage-ip/apnic-services/services-roadmap/public-api-draft-for-members/ "APNIC: Public API Draft (for Members)"
+[RPSL language]: https://tools.ietf.org/html/rfc2622 "RFC 2622: Routing Policy Specification Language (RPSL)"
+[RADb]: https://www.radb.net/ "RADb"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
