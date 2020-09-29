@@ -1,0 +1,85 @@
+---
+title: "Speeding up bgpq4 with IRRd in a container"
+description: |
+  Use of bgpq4 to build route filters can be quite slow when relying
+  on a remote WHOIS server. Running IRRd in a container can help.
+uuid: 1bb8dfcc-bea9-402a-ab74-a772ed9eafb6
+attachments:
+  "https://github.com/vincentbernat/irrd-legacy/tree/blade/master": GitHub repository
+tags:
+  - network-automation
+  - network-bgp
+---
+
+When building route filters with [bgpq4][] or [bgpq3][], the speed of
+`rr.ntt.net` or `whois.radb.net` can be a bottleneck. Updating many
+filters may take several tens of minutes, depending on the load:
+
+    ::console
+    $ time bgpq4 -h whois.radb.net AS-HURRICANE | wc -l
+    909869
+    1.96s user 0.15s system 2% cpu 1:17.64 total
+    $ time bgpq4 -h rr.ntt.net AS-HURRICANE | wc -l
+    927865
+    1.86s user 0.08s system 12% cpu 14.098 total
+
+A possible solution is to have your own [IRRd][] instance in your
+network, mirroring the main [routing registries][]. A close
+alternative is to **bundle *IRRd* with all the data in a
+ready-to-use Docker image**. This also has the advantage of easy
+integration into a Docker-based CI/CD pipeline.
+
+    ::console
+    $ git clone https://github.com/vincentbernat/irrd-legacy.git -b blade/master
+    $ cd irrd-legacy
+    $ docker build . -t irrd-snapshot:latest
+    […]
+    Successfully built 58c3e83a1d18
+    Successfully tagged irrd-snapshot:latest
+    $ docker container run --rm --detach --publish=43:43 irrd-snapshot
+    4879cfe7413075a0c217089dcac91ed356424c6b88808d8fcb01dc00eafcc8c7
+    $ time bgpq4 -h localhost AS-HURRICANE | wc -l
+    904137
+    1.72s user 0.11s system 96% cpu 1.881 total
+
+The [Dockerfile][] contains three stages:
+
+1. building *IRRd*,[^legacy]
+1. retrieving various IRR databases, and
+1. assembling the final container with the result of the two previous stages.
+
+[^legacy]: Instead of using the latest version of *IRRd*, the image
+    relies on an older version that does not require a *PostgreSQL*
+    instance and uses flat files instead.
+
+The second stage fetches the [databases used by `rr.ntt.net`][ntt]:
+NTTCOM, RADB, RIPE, ALTDB, BELL, LEVEL3, RGNET, APNIC, JPIRR, ARIN,
+BBOI, TC, and AFRINIC. However, it misses some of the databases as I
+was unable to locate them: ARIN-WHOIS, RPKI,[^rpki] and REGISTROBR.
+Feel free to adapt!
+
+[^rpki]: Unlike the others, the RPKI database is built from the
+    published RPKI ROAs.
+
+The image can be scheduled to be rebuilt daily or weekly, depending of
+your needs. The repository includes a [`.gitlab-ci.yaml`
+file][gitlab-ci] automating the build and triggering the compilation
+of all filters by your CI/CD upon success.
+
+*[IRR]: Internet Routing Registry
+*[RPKI]: Resource Public Key Infrastructure
+*[ROAs]: Route Origination Authorizations
+*[CI/CD]: Continuous Integration/Continuous Deployment
+
+[bgpq4]: https://github.com/bgp/bgpq4 "bgpq4: BGP filtering automation tool"
+[bgpq3]: https://github.com/snar/bgpq3 "bgpq3: BGP filtering automation tool"
+[IRRd]: https://irrd.readthedocs.io/en/stable/ "IRRd documentation"
+[routing registries]: http://www.irr.net/docs/list.html "List of Routing Registries"
+[gitlab-ci]: https://github.com/vincentbernat/irrd-legacy/blob/blade/master/.gitlab-ci.yml
+[Dockerfile]: https://github.com/vincentbernat/irrd-legacy/blob/blade/master/Dockerfile
+[ntt]: https://www.gin.ntt.net/support-center/policies-procedures/routing-registry/ "NTT-GIN: Routing Registry"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
