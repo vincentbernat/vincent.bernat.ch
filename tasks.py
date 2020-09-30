@@ -354,6 +354,7 @@ def build(c):
         c.run("find media/images -type f -name '*.svg'"
               "| sed 's+/[^/]*$++' | sort | uniq"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
+              "| sort "
               "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo "
               "        --quiet --disable=mergePaths")
         c.run("find media/images -type f -name '*.svg'"
@@ -364,9 +365,11 @@ def build(c):
                           "  -E 'with (import <nixpkgs>{}); "
                           "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
         c.run("find media/images -type f -name '*.jpg' -print0"
+              "  | sort -z "
               f" | xargs -0 -n10 -P4 {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
         # Optimize PNG
         c.run("find media/images -type f -name '*.png' -print0"
+              " | sort -z "
               " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
               "                              --quiet --ext .png --force "
               "|| true")
