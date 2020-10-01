@@ -15,3 +15,6 @@ part is in `layout/nginx.j2`).
 [cc1]: http://creativecommons.org/licenses/by-nc-sa/3.0/
 [cc2]: http://creativecommons.org/licenses/by/3.0/
 [nixos]: https://github.com/vincentbernat/nixos-take1/tree/master/web.nix
+
+Hope this helps you.
+Stay tuned.
