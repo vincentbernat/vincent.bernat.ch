@@ -1,4 +1,4 @@
-vincent.bernat.ch
+Source Code 
 =================
 
 This is the source code of my website. You can find the result at
