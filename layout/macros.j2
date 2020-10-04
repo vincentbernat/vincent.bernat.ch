@@ -1,18 +1,26 @@
 {# -*- web -*- #}
 
-{% macro format_resource(resource) -%}
+{% macro format_resource(ctx, resource) -%}
 <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
   <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
-  {{ resource_short_date(resource) | indent(2) }}
+{% if ctx.meta.language != resource.meta.language %}
+ ({{ ctx.meta.l10n.language[resource.meta.language] }})
+{% endif %}
+  {{ resource_short_date(ctx.meta.language, resource) | indent(2) }}
 </li>
 {%- endmacro %}
 
 {# List blog posts pertaining to a given language #}
 {% macro list_posts(lang, start=0, end=None) %}
 <ul class="lf-list-titles">
-{% set resources = site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
+{% set ctx = resource %}
+{% set resources = [] %}
+{% for resource in site.content|attr("walk_resources_sorted_by_time")()
+   if resource.meta.language == lang or lang not in resource.translations|map(attribute="meta")|map(attribute="language") %}
+{% do resources.append(resource) %}
+{% endfor %}
 {%- for resource in resources[start:end] %}
-  {{ format_resource(resource)|indent(2) }}
+  {{ format_resource(ctx, resource)|indent(2) }}
 {% endfor %}
 </ul>
 {% endmacro %}
@@ -34,6 +42,7 @@
 
 {# Display all the categories #}
 {% macro list_tags(lang) %}
+{% set ctx = resource %}
 {% set tags = [] %}
 {% for tag, resources in site.tagger.tags %}
 {% do tags.append((site.tagger.tags[tag].order or 0, tag)) %}
@@ -47,7 +56,8 @@
 {% for tag in tags|sort %}
 {% set tag = tag[1] %}
 {% set rr = [] %}
-{% for resource in site.content|attr("walk_resources_sorted_by_time_" + lang)() %}
+{% for resource in site.content|attr("walk_resources_sorted_by_time")()
+   if resource.meta.language == lang or lang not in resource.translations|map(attribute="meta")|map(attribute="language") %}
 {% for rtag in resource.meta.tags
    if (rtag == tag or rtag.startswith(tag + "-") or
        (tag|string == "unclassified" and
@@ -62,7 +72,7 @@
     <h2>{{ format_tag(tag|string) }}</h2>
     <ul class="lf-list-titles">
 {% for resource in rr %}
-      {{ format_resource(resource)|indent(6) }}
+      {{ format_resource(ctx, resource)|indent(6) }}
 {% endfor %}
     </ul>
   </div>
@@ -73,20 +83,20 @@
 {% endmacro %}
 
 {# Display date of the resource #}
-{% macro resource_date(resource) %}
+{% macro resource_date(lang, resource) %}
 {% if resource.meta.created != None %}
 <time datetime="{{ resource.meta.created|xmldatetime }}"
       class="dt-published">
-    {{ resource.meta.created|human_date(resource.meta.language, 'long') }}
+    {{ resource.meta.created|human_date(lang, 'long') }}
 </time>
 {%- endif %}
 {% endmacro %}
-{% macro resource_short_date(resource) %}
+{% macro resource_short_date(lang, resource) %}
 {% if resource.meta.created != None %}
 <time datetime="{{ resource.meta.created|xmldatetime }}"
-      title="{{ resource.meta.created|human_date(resource.meta.language, 'long') }}"
+      title="{{ resource.meta.created|human_date(lang, 'long') }}"
       class="dt-published">
-  {{ resource.meta.created|human_date(resource.meta.language) }}
+  {{ resource.meta.created|human_date(lang) }}
 </time>
 {%- endif %}
 {% endmacro %}
