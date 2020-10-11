@@ -27,7 +27,7 @@ class TypographyPlugin(Plugin):
         def process(text, ignore_tags=None):
             if ignore_tags is None:
                 ignore_tags = []
-            ignore_tags.append("latex")
+            ignore_tags.append("x-latex")
             return orig(text, ignore_tags)
         return process
 

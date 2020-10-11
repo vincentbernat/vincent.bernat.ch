@@ -15,7 +15,7 @@ class MathJaxPattern(markdown.inlinepatterns.Pattern):
         markdown.inlinepatterns.Pattern.__init__(self, r'(?<!\\)(··?)(.+?)\2')
 
     def handleMatch(self, m):
-        node = etree.Element("latex")
+        node = etree.Element("x-latex")
         node.text = markdown.util.AtomicString(m.group(2) +
                                                m.group(3) +
                                                m.group(2))
