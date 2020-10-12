@@ -2,7 +2,9 @@
 
 {% macro format_resource(ctx, resource) -%}
 <li{% if resource.tags and "outdated" in resource.tags|map('string') %} class="lf-outdated"{% endif %}>
-  <a href="{{ content_url(resource.url) }}" class="lf-title">{{ resource.meta.title|e }}</a>
+  <a href="{{ content_url(resource.url) }}" {% if ctx.meta.language != resource.meta.language -%}
+ lang="{{ resource.meta.language }}"
+{%- endif %} class="lf-title">{{ resource.meta.title|e }}</a>
 {% if ctx.meta.language != resource.meta.language %}
  ({{ ctx.meta.l10n.language[resource.meta.language] }})
 {% endif %}
