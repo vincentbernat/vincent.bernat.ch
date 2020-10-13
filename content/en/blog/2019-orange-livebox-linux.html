@@ -91,7 +91,7 @@ However, ISC DHCP client is using raw sockets and the packets it sent
 won't pass through *Netfilter*. A clean solution is to use `tc` to
 modify packets just before handing them to the network card. The
 [skbedit][] action allows one to change the priority associated to a
-packet:
+packet:[^tc]
 
     ::sh hl_lines="9"
     # We need a qdisc to set filters
@@ -118,6 +118,11 @@ packet:
 
 With this configuration in place, `ifup internet` should get you
 connected through IPv4.
+
+[^tc]: The first filter only works if the physical interface supports
+    VLAN offloading. You can check this is the case with `ethtool -k
+    eno1 | grep rx-vlan-offload`. Otherwise, the installed filter does
+    not skip the VLAN header and does not match the targeted packets.
 
 # IPv6 configuration
 

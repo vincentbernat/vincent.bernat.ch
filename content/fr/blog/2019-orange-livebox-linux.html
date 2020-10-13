@@ -101,7 +101,7 @@ utilise des chaussettes de bas niveau et les paquets qu'il envoie ne
 passent pas par *Netfilter*. Une solution propre est d'utiliser `tc`
 pour modifier les paquets juste avant de les confier à la carte
 réseau. L'action [skbedit][] permet de changer la priorité associée à
-un paquet :
+un paquet[^tc] :
 
     ::sh hl_lines="9"
     # We need a qdisc to set filters
@@ -128,6 +128,13 @@ un paquet :
 
 Avec cette configuration en place, `ifup internet` devrait retourner
 une connexion IPv4 fonctionnelle.
+
+[^tc]: Le premier filtre ne fonctionne que si l'interface physique
+    prend en charge l'accélération des VLAN. Vous pouvez vérifier que
+    c'est le cas avec `ethtool -k eno1 | grep rx-vlan-offload`. Dans
+    le cas contraire, le filtre installé ne saute pas l'entête VLAN et
+    n'identifie pas correctement les paquets. Voir les commentaires
+    pour plus de détails.
 
 # Configuration IPv6
 
