@@ -333,13 +333,14 @@ Info:    {infostring}""".format(**row))
 @task
 def build(c):
     """Build production content"""
-    c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
-    c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     with c.cd("content/en"):
         c.run("! git grep -Pw '((?i:"
               "obviously|basically|simply|clearly|everyone knows|turns out"
               "|explicitely|overriden|accross"
               ")|Thinkpad)' \\*.html")
+        c.run("! git grep -E '\"[.](\s|$)' \\*.html")
+    c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
+    c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     c.run("yarn install --frozen-lockfile")
     c.run('hyde -x gen -c %s' % conf)
