@@ -1,5 +1,5 @@
 ---
-title: "Syncing RIPE, ARIN and APNIC objects with a custom Ansible module"
+title: "Syncing RIPE, ARIN, and APNIC objects with a custom Ansible module"
 description: |
  This post describes a custom Ansible module to synchronize RIPE,
  ARIN and APNIC objects.
@@ -12,14 +12,14 @@ tags:
 ---
 
 Internet is split into five [regional Internet registry][]: AFRINIC,
-ARIN, APNIC, LACNIC and RIPE. Each RIR maintains an [Internet Routing
+ARIN, APNIC, LACNIC, and RIPE. Each RIR maintains an [Internet Routing
 Registry][]. An IRR allows one to publish **information about the
 routing of Internet number resources**.[^others] Operators use this to
 determine the owner of an IP address and to construct and maintain
 **routing filters**. To ensure your routes are widely accepted, it is
 important to keep the prefixes you announce up-to-date in an IRR.
 
-[^others]: Other IRRs exist without being attached to a RIR. The most
+[^others]: Other IRRs exist without being attached to an RIR. The most
     notable one is [RADb][].
 
 There are two common tools to query this database: `whois` and
@@ -66,7 +66,7 @@ contained in the IRR database:
 
 There is no module available on [Ansible Galaxy][] to manage these
 objects. Each IRR has different ways of being updated. Some RIRs
-propose an API but some don't. If we restrict ourselves to RIPE, ARIN
+propose an API but some don't. If we restrict ourselves to RIPE, ARIN,
 and APNIC, the only common method to update objects is [email
 updates][], authenticated with a password or a GPG signature.[^arin]
 Let's write a custom Ansible module for this purpose!
@@ -325,7 +325,7 @@ The module does not have a side effect. If there is a difference, we
 return the updates to send by email. We choose to include all wanted
 objects in the updates (contained in the `source` variable) and let
 the IRR ignore unmodified objects. We also append the objects to be
-deleted by adding a `delete:` attribute to each them them.
+deleted by adding a `delete:` attribute to each of them.
 
     ::python
     # We send all source objects and deleted objects.
@@ -341,7 +341,7 @@ deleted by adding a `delete:` attribute to each them them.
 
 The complete code is available on [GitHub][module]. The module
 supports both `--diff` and `--check` flags. It does not return
-anything if no change is detected. It can work with APNIC, RIPE and
+anything if no change is detected. It can work with APNIC, RIPE, and
 ARIN. It is not perfect: it may not detect some changes,[^changes] it
 is not able to modify objects not owned by the provided
 maintainer[^mntner] and some attributes cannot be modified, requiring
@@ -353,7 +353,7 @@ this module should automate 95% of your needs.
     possible to detect changes to the auth mechanisms of a `mntner`
     object.
 
-[^mntner]: APNIC do not assign top-level objects to the maintainer
+[^mntner]: APNIC does not assign top-level objects to the maintainer
     associated with the owner.
 
 [^modify]: Changing the status of an `inetnum` object requires

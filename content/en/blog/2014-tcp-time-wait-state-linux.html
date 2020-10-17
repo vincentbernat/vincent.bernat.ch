@@ -11,7 +11,7 @@ tags:
 
 !!! "TL;DR" Do not enable `net.ipv4.tcp_tw_recycle`—it doesn't even
 exist anymore since Linux 4.12. Most of the time, `TIME-WAIT` sockets
-are harmless. Otherwise, jump to [summary](#summary) for the
+are harmless. Otherwise, jump to [the summary](#summary) for the
 recommended solutions.
 
 The Linux kernel documentation is not very helpful about what
@@ -28,7 +28,7 @@ hard to detect and waiting to bite you:
 > is not recommended since this causes problems when working with NAT
 > (Network Address Translation).
 
-I will provide here a more detailed explanation on how to properly
+I will provide here a more detailed explanation of how to properly
 handle the `TIME-WAIT` state. Also, keep in mind we are looking at the
 TCP stack of Linux. This is completely unrelated to _Netfilter_
 connection tracking which may be tweaked in other ways.[^netfilter]
@@ -77,7 +77,7 @@ There are two purposes for the `TIME-WAIT` state:
     destination port). The sequence number also needs to be in a
     certain range to be accepted. This narrows a bit the problem but
     it still exists, especially on fast connections with large receive
-    windows. [RFC 1337][] explains in details what happens when the
+    windows. [RFC 1337][] explains in detail what happens when the
     `TIME-WAIT` state is deficient.[^rfc1337] Here is an example of
     what could be avoided if the `TIME-WAIT` state wasn't shortened:
 
@@ -125,7 +125,7 @@ thing.
 Now, let's see why this state can be annoying on a server handling a
 lot of connections. There are three aspects of the problem:
 
- - the slot taken in the connection table preventing **new
+ - the slot used in the connection table preventing **new
    connections** of the same kind,
  - the **memory** occupied by the socket structure in the kernel, and
  - the additional **CPU usage**.
@@ -136,7 +136,7 @@ se!
 ### Connection table slot
 
 A connection in the `TIME-WAIT` state is kept for one minute in the
-connection table. This means, another connection with the same
+connection table. This means another connection with the same
 _quadruplet_ (source address, source port, destination address,
 destination port) cannot exist.
 
@@ -200,7 +200,7 @@ several ways (in the order of difficulty to setup):
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
 [11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
 
-A last solution is to tweak `net.ipv4.tcp_tw_reuse` and
+The last solution is to tweak `net.ipv4.tcp_tw_reuse` and
 `net.ipv4.tcp_tw_recycle`. Don't do that yet, we will cover these
 settings later.
 
@@ -269,7 +269,7 @@ purposes):
 
  2. A **set of lists of connections**, called the "death row," is used
     to expire the connections in the `TIME-WAIT` state. They are
-    ordered by how much time left before expiration.
+    ordered by how much time is left before expiration.
     
     It uses the same memory space as for the entries in the hash table
     of connections. This is the `struct hlist_node tw_death_node`
@@ -277,7 +277,7 @@ purposes):
 
  3. A **hash table of bound ports**, holding the locally bound ports
     and the associated parameters, is used to determine if it is safe
-    to listen to a given port or to find a free port in the case of
+    to listen to a given port or to find a free port in the case of a
     dynamic bind. The size of this hash table is the same as the size
     of the hash table of connections:
     
@@ -336,7 +336,7 @@ outbound connections:
      44840  36556  81%    0.06K    760       59      3040K tcp_bind_bucket
 
 There is nothing to change here: the memory used by `TIME-WAIT`
-connections is **really small**. If your server need to handle
+connections is **really small**. If your server needs to handle
 thousands of new connections per second, you need far more memory to
 be able to efficiently push data to clients. The overhead of
 `TIME-WAIT` connections is negligible.
@@ -346,7 +346,7 @@ be able to efficiently push data to clients. The overhead of
 On the CPU side, searching for a free local port can be a bit
 expensive. The work is done by the
 [`inet_csk_get_port()` function][inet_csk_get_port] which uses a lock
-and iterate on locally bound ports until a free port is found. A large
+and iterates on locally bound ports until a free port is found. A large
 number of entries in this hash table is usually not a problem if you
 have a lot of outbound connections in the `TIME-WAIT` state (like
 ephemeral connections to a _memcached_ server): the connections
@@ -381,17 +381,16 @@ _socket lingering_. There are two flavors:
     will be immediately destroyed. No `TIME-WAIT` state in this
     case.
 
- 2. With the second flavor, if there is any data still remaining in
-    the socket send buffer, the process will sleep when calling
-    `close()` until either all the data is sent and acknowledged by
-    the peer or the configured linger timer expires. It is possible
-    for a process to not sleep by setting the socket as
-    non-blocking. In this case, the same process happens in the
-    background. It permits the remaining data to be sent during a
-    configured timeout but if the data is successfully sent, the normal
-    close sequence is run and you get a `TIME-WAIT` state. And on the
-    other case, you'll get the connection close with a _RST_ and the
-    remaining data is discarded.
+ 2. With the second flavor, any data is remaining in the socket send
+    buffer, the process will sleep when calling `close()` until either
+    all the data is sent and acknowledged by the peer or the
+    configured linger timer expires. It is possible for a process to
+    not sleep by setting the socket as non-blocking. In this case, the
+    same process happens in the background. It permits the remaining
+    data to be sent during a configured timeout but if the data is
+    successfully sent, the normal close sequence is run and you get a
+    `TIME-WAIT` state. And on the other case, you'll get the
+    connection close with a _RST_ and the remaining data is discarded.
 
 In both cases, **disabling socket lingering is not a one-size-fits-all
 solution**. It may be used by some applications like [HAProxy][] or
@@ -401,7 +400,7 @@ view. There are good reasons to not disable it unconditionally.
 ## `net.ipv4.tcp_tw_reuse`
 
 The `TIME-WAIT` state prevents delayed segments to be accepted in an
-unrelated connection. However, on certain conditions, it is possible
+unrelated connection. However, in certain conditions, it is possible
 to assume a new connection's segment cannot be misinterpreted with an
 old connection's segment.
 
@@ -420,20 +419,20 @@ recorded for the previous connection: an outgoing connection in the
 
 How is it safe? The first purpose of the `TIME-WAIT` state was to
 avoid duplicate segments to be accepted in an unrelated
-connection. Thanks to the use of timestamps, such a duplicate segments
+connection. Thanks to the use of timestamps, such duplicate segments
 will come with an outdated timestamp and therefore be discarded.
 
 The second purpose was to ensure the remote end is not in the
-`LAST-ACK` state because of the lost of the last _ACK_. The remote end
+`LAST-ACK` state because of the loss of the last _ACK_. The remote end
 will retransmit the _FIN_ segment until:
 
  1. it gives up (and tear down the connection), or
  2. it receives the _ACK_ it is waiting (and tear down the connection), or
  3. it receives a _RST_ (and tear down the connection).
 
-If the _FIN_ segments are received in a timely manner, the local end
-socket will still be in the `TIME-WAIT` state and the expected _ACK_
-segments will be sent.
+If the _FIN_ segments are received on time, the local end socket will
+still be in the `TIME-WAIT` state and the expected _ACK_ segments will
+be sent.
 
 Once a new connection replaces the `TIME-WAIT` entry, the _SYN_
 segment of the new connection is ignored (thanks to the timestamps)
@@ -454,7 +453,7 @@ counter is increased (despite its name).
 ## `net.ipv4.tcp_tw_recycle`
 
 This mechanism also relies on the timestamp option but affects **both
-incoming and outgoing connections** which is handy when the server
+incoming and outgoing connections**. This is handy when the server
 usually closes the connection first.[^serverfirst]
 
 [^serverfirst]: When the server closes the connection first, it gets
@@ -496,12 +495,11 @@ timestamp, unless the `TIME-WAIT` state would have expired:
             }
     }
 
-When the remote host is in fact a **NAT device**, the condition on
-timestamps will forbid all the hosts except one behind the NAT
-device to connect during one minute because they do not share the same
-timestamp clock. In doubt, this is far better to disable this option
-since it leads to **difficult to detect** and **difficult to
-diagnose** problems.
+When the remote host is a **NAT device**, the condition on timestamps
+will forbid all the hosts except one behind the NAT device to connect
+during one minute because they do not share the same timestamp clock.
+In doubt, this is far better to disable this option since it leads to
+**difficult to detect** and **difficult to diagnose** problems.
 
 !!! "Update (2017-09)" Starting from Linux 4.10 (commit
 [95a22caee396][]), Linux will randomize timestamp offsets for each
@@ -511,7 +509,7 @@ It has been completely [removed][] from Linux 4.12.
 [removed]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4396e46187ca5070219b81773c4e65088dac50cc "tcp: remove tcp_tw_recycle"
 
 
-The `LAST-ACK` state is handled in the exact same way as for
+The `LAST-ACK` state is handled in the same way as for
 `net.ipv4.tcp_tw_reuse`.
 
 # Summary
