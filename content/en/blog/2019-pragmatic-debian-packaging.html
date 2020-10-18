@@ -18,13 +18,13 @@ Bionic, have a look at the older version instead.
 While the creation of Debian packages is [abundantly][newmaint]
 [documented][newmaint], most [tutorials][tutorial] are targeted to
 packages implementing the [Debian policy][policy]. Moreover, Debian
-packaging has **a reputation of being unnecessarily
+packaging has **a reputation for being unnecessarily
 difficult**[^difficulty] and many people prefer to use less
 constrained tools[^fpm] like [fpm][] or [CheckInstall][].
 
 [^difficulty]: People may remember the time before *debhelper* 7.0.50
                (circa 2009) where `debian/rules` was a daunting
-               beast. However, nowaday, the boilerplate is quite
+               beast. However, nowadays, the boilerplate is quite
                reduced.
 
 [^fpm]: The complexity is not the only reason. These alternative tools
@@ -37,10 +37,10 @@ straightforward if you bend some rules:
  1. **No source package will be generated**.  Packages will be built
     directly from a checkout of a VCS repository.
 
- 2. **Additional dependencies can be downloaded during
-    build**. Packaging individually each dependency is a painstaking
+ 2. **Additional dependencies can be downloaded during the
+    build**. Packaging individually each dependency is painstaking
     work, notably when you have to deal with some fast-paced
-    ecosystems like Java, Javascript and Go.
+    ecosystems like Java, Javascript, and Go.
 
  3. The produced packages may **bundle dependencies**. This is likely
     to raise some concerns about security and long-term maintenance,
@@ -122,8 +122,8 @@ package.
 
 ## The build recipe
 
-The last mandatory file is `debian/rules`. It's the **recipe** of the
-package. We need to retrieve *memcached*, build it and install its
+The last mandatory file is `debian/rules`. It's the **recipe** for the
+package. We need to retrieve *memcached*, build it, and install its
 file tree in `debian/memcached/`. It looks like this:
 
     ::make
@@ -355,8 +355,8 @@ with `--no-act` to see what it would do. For example:
 
 Each of these helpers has a manual page. Helpers starting with
 `dh_auto_` are a bit "magic." For example, `dh_auto_configure` will
-try to automatically configure a package prior to building: it will
-detect the build system and invoke `./configure`, `cmake` or
+try to automatically configure a package before building: it will
+detect the build system and invoke `./configure`, `cmake`, or
 `Makefile.PL`.
 
 If one of the helpers do not do the "right" thing, you can replace it
@@ -378,7 +378,7 @@ with a lot of default flags like `--prefix=/usr` for better
 integration. A manual page is available for each tool.
 
 In the initial *memcached* example, we overrode all these "magic"
-targets. `dh_auto_clean`, `dh_auto_configure` and `dh_auto_build` are
+targets. `dh_auto_clean`, `dh_auto_configure`, and `dh_auto_build` are
 converted to no-ops to avoid any unexpected
 behavior. `dh_auto_install` is hijacked to do all the build
 process. Additionally, we modified the behavior of the `dh_gencontrol`
@@ -421,8 +421,8 @@ so `dh` will execute the `./configure` script with the appropriate
 options. We don't override the `dh_auto_build` step either: `dh` will
 execute `make`. `dh_auto_test` is invoked after the build and it will
 run the *memcached* test suite. We need to override it because one of
-the test is complaining about odd whitespaces in the `debian/`
-directory. We suppress this rogue test and let `dh_auto_test` executes
+the tests is complaining about odd whitespaces in the `debian/`
+directory. We suppress this rogue test and let `dh_auto_test` execute
 the test suite. `dh_auto_install` is not overridden either, so `dh`
 will execute some variant of `make install`.
 
@@ -482,8 +482,8 @@ copy. Here is an example:
 
     scripts/memcached-tool usr/bin
 
-Using these files make the build process **more declarative**. It is a
-matter of taste and you are free to use `cp` in `debian/rules`
+Using these files makes the build process **more declarative**. It is
+a matter of taste and you are free to use `cp` in `debian/rules`
 instead. You can review the whole package tree on
 [GitHub][memcached-gh].
 

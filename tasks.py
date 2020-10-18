@@ -336,7 +336,7 @@ def build(c):
     with c.cd("content/en"):
         c.run("! git grep -Pw '((?i:"
               "obviously|basically|simply|clearly|everyone knows|turns out"
-              "|explicitely|overriden|accross"
+              "|explicitely|overriden|accross|totally"
               ")|Thinkpad)' \\*.html")
         c.run("! git grep -E '\"[.](\s|$)' \\*.html")
     c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")

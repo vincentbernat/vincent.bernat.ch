@@ -68,8 +68,8 @@ join the other VTEPs:
     # ip link set up dev vxlan100
 
 The above commands create a new interface acting as a VXLAN tunnel
-endpoint, named `vxlan100` and put it in a bridge with some regular
-interfaces.[^bridges] Each VXLAN segment is associated to a 24-bit
+endpoint, named `vxlan100`, and put it in a bridge with some regular
+interfaces.[^bridges] Each VXLAN segment is associated with a 24-bit
 segment ID, the *VXLAN Network Identifier* (VNI). In our example, the
 default VNI is specified with `id 100`.
 
@@ -88,7 +88,7 @@ bit, like here with `ttl 5`.
 The `vxlan100` device acts as a bridge device with remote VTEPs as
 virtual ports:
 
- - it sends **broadcast, unknown unicast and multicast** (BUM) frames
+ - it sends **broadcast, unknown unicast, and multicast** (BUM) frames
    to all VTEPs using the multicast group, and
  - it discovers the association from Ethernet MAC addresses to VTEP IP
    addresses using **source-address learning**.
@@ -178,7 +178,7 @@ to duplicate each BUM frame (head-end replication) as many times as
 there are remote VTEPs. This is quite reasonable if you have a dozen
 of them. This may become out-of-hand if you have thousands of them.
 
-[Cumulus vxfld daemon][] is an example of use of this strategy (in the
+[Cumulus vxfld daemon][] is an example of this strategy (in the
 head-end replication mode).
 
 ## Unicast with static L2 entries
@@ -207,9 +207,9 @@ traffic (e.g. ARP and IPv6 neighbor discovery). This kind of setup
 works well to provide virtual L2 networks to virtual machines (no L3
 information available). You need some glue to update the FDB entries.
 
-[BGP EVPN][RFC 7432] with [Cumulus Quagga][] is an example of use of
-this strategy (see "[VXLAN: BGP EVPN with Cumulus Quagga][]" for
-additional information).
+[BGP EVPN][RFC 7432] with [Cumulus Quagga][] is an example of this
+strategy (see "[VXLAN: BGP EVPN with Cumulus Quagga][]" for additional
+information).
 
 ## Unicast with static L3 entries
 
@@ -238,13 +238,13 @@ not needed anymore (but you could keep them):
     you need an [additional patch][patch4] (to be included in 4.15,
     present in 4.14.2 and 4.13.16).
 
-This setup totally eliminates head-end replication. However, protocols
-relying on multicast won't work either. With some automation, this is
-a setup that should work well with containers: if there is a registry
-keeping a list of all IP and MAC addresses in use, a program could
-listen to it and adjust the FDB and the neighbor tables.
+This setup eliminates head-end replication. However, protocols relying
+on multicast won't work either. With some automation, this is a setup
+that should work well with containers: if there is a registry keeping
+a list of all IP and MAC addresses in use, a program could listen to
+it and adjust the FDB and the neighbor tables.
 
-The VXLAN backend of [Docker's libnetwork][] is an example of use of
+The VXLAN backend of [Docker's libnetwork][] is an example of
 this strategy (but it also uses the next method).
 
 ## Unicast with dynamic L3 entries
@@ -302,9 +302,10 @@ expires. If the address becomes stale, we will get another
 notification to refresh it.
 
 Once the host receives our proxy answer for the neighbor discovery
-request, it can send a frame with the MAC we gave as destination. The
-second notification is about the missing FDB entry for this MAC
-address. We add the appropriate entry with the following command:[^sooner]
+request, it can send a frame with the MAC we gave as a destination.
+The second notification is about the missing FDB entry for this MAC
+address. We add the appropriate entry with the following
+command:[^sooner]
 
     ::sh
     bridge fdb replace 50:54:33:00:00:0a \
@@ -319,7 +320,7 @@ migrate to the local VTEP (a dynamic entry cannot override a permanent
 entry).
 
 This setup works well with containers and a global registry. However,
-there is small latency penalty for the first connections. Moreover,
+there is a small latency penalty for the first connections. Moreover,
 multicast and broadcast won't be available in the underlay
 network. The VXLAN backend for [flannel][], a network fabric for
 *Kubernetes*, is an example of this strategy.
@@ -341,8 +342,8 @@ not putting all VXLAN interfaces into the same multicast group
 group).
 
 When multicast is not available, another generic solution is **BGP
-EVPN**: BGP is used as a controller to ensure distribution of the list
-of VTEPs and their respective FDBs. As mentioned earlier, an
+EVPN**: BGP is used as a controller to ensure the distribution of the
+list of VTEPs and their respective FDBs. As mentioned earlier, an
 implementation of this solution is [Cumulus Quagga][]. I explore this
 option in a separate post: [VXLAN: BGP EVPN with Cumulus Quagga][].
 
@@ -375,11 +376,11 @@ about the [proper isolation of a Linux bridge][].
 
 ## Encryption
 
-VXLAN enforces isolation between tenants, but the traffic is totally
+VXLAN enforces isolation between tenants, but the traffic is
 unencrypted. The most direct solution to provide encryption is to use
 *IPsec*. Some container-based solutions may come with IPsec support
-out-of-the box (notably [Docker's libnetwork][], but [flannel][] has
-plan for it too). This is quite important for a deployment over a
+out-of-the-box (notably [Docker's libnetwork][], but [flannel][] has
+a plan for it too). This is quite important for deployment over a
 public cloud.
 
 ## Overhead
