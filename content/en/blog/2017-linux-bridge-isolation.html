@@ -42,7 +42,7 @@ The main expectation of such a setup is that while the virtual hosts
 should be able to use resources from the public network, they should
 **not be able to access resources from the infrastructure network**
 (including resources hosted on the hypervisor itself, like a SSH
-server). In other words, we expect a total isolation between the green
+server). In other words, we expect total isolation between the green
 domain and the purple one.
 
 That's not the case. From any virtual host:
@@ -92,7 +92,7 @@ function. The following actions are executed:
 For a bridged interface, the kernel has configured a device-specific
 receive handler, `br_handle_frame()`. This function won't allow any
 additional processing in the context of the incoming interface, except
-for STP and LLDP frames or if "brouting" is
+for STP and LLDP frames, or if "brouting" is
 enabled.[^brouting] Therefore, the **protocol handlers are never
 executed** in this case.
 
@@ -109,9 +109,9 @@ be locally delivered:
 In this case, the frame is passed to the `br_pass_frame_up()`
 function. A VLAN-related check is optionally performed. The socket
 buffer is attached to the bridge interface (`br0`) instead of the
-physical interface (`eth0`), is evaluated by *Netfilter* and sent back
-to `netif_receive_skb()`. It will go through the four steps a second
-time.
+physical interface (`eth0`). It is evaluated by *Netfilter* and sent
+back to `netif_receive_skb()`. It will go through the four steps a
+second time.
 
 ## IPv4 processing
 
@@ -132,7 +132,7 @@ socket buffer is handled by `ip_rcv()`. Among other things, the three
 following steps will happen:
 
  - If the frame destination address is not the MAC address of the
-   incoming interface, not a multicast one and not a broadcast one, the
+   incoming interface, not a multicast one, and not a broadcast one, the
    frame is dropped ("not for us").
  - *Netfilter* gets a chance to evaluate the packet (in a `PREROUTING`
    chain).
@@ -153,7 +153,7 @@ different from the current incoming one, the packet is rejected.
 When the Ethernet type of the incoming frame is `0x806`, the socket
 buffer is handled by `arp_rcv()`.
 
- - Like for IPv4, if the frame is not for us, it is dropped.
+ - As with IPv4, if the frame is not for us, it is dropped.
  - If the incoming device has the `NOARP` flag, the frame is dropped.
  - *Netfilter* gets a chance to evaluate the packet (configuration is
    done with `arptables`).
@@ -165,7 +165,7 @@ buffer is handled by `arp_rcv()`.
 When the Ethernet type of the incoming frame is `0x86dd`, the socket
 buffer is handled by `ipv6_rcv()`.
 
- - Like for IPv4, if the frame is not for us, it is dropped.
+ - As with IPv4, if the frame is not for us, it is dropped.
  - If IPv6 is disabled on the interface, the packet is dropped.
  - *Netfilter* gets a chance to evaluate the packet (in a `PREROUTING`
    chain).
@@ -185,12 +185,12 @@ attached to the bridge, they cannot process any upper layer protocol
 (IPv4, IPv6, ARP). Therefore, we can focus on filtering incoming
 traffic from `br0`.
 
-It should be noted that for IPv4, IPv6 and ARP protocols, the MAC
+It should be noted that for IPv4, IPv6, and ARP protocols, the MAC
 address check can be circumvented by using the broadcast MAC address.
 
 ## Protocol-independent workarounds
 
-The four following fixes will indistinctly drop IPv4, ARP and IPv6
+The four following fixes will indistinctly drop IPv4, ARP, and IPv6
 packets.
 
 ### Using VLAN-aware bridge
@@ -217,7 +217,7 @@ in `br_pass_frame_up()`.
 It's also possible to drop the bridged frame early after it has been
 re-delivered to `netif_receive_skb()` by `br_pass_frame_up()`. The XDP
 hooks attached to an interface are evaluated before taps, ingress
-policy and handlers. A very simple `xdp_drop_all.c` program would
+policy, and handlers. A very simple `xdp_drop_all.c` program would
 look like this:
 
     ::c
@@ -262,7 +262,7 @@ interface) happens:
     # tc qdisc add dev br0 handle ffff: ingress
     # tc filter add dev br0 parent ffff: matchall action drop
 
-This is the third most efficient method, but is more convenient than
+This is the third most efficient method but is more convenient than
 the previous one for a very tiny additional overhead.
 
 !!! "Update (2020-01)" Since [Linux 4.2][], it is possible to use
@@ -342,7 +342,7 @@ first step of the ARP handler.
 Another way is to set `arp_ignore` to 2 for the given interface. The
 kernel will only answer to ARP requests whose target IP address is
 configured on the incoming interface. Since the bridge interface
-doesn't have any IP address, no ARP requests will be answered.
+doesn't have an IP address, no ARP requests will be answered.
 
     ::console
     # sysctl -qw net.ipv4.conf.br0.arp_ignore=2
@@ -360,8 +360,8 @@ user can still insert the appropriate entry in its neighbor cache:
     1 packets transmitted, 1 received, 0% packet loss, time 0ms
     rtt min/avg/max/mdev = 1.309/1.309/1.309/0.000 ms
 
-As the check on the target MAC address is quite loose, they don't even
-need to guess the MAC address:
+Because the check on the target MAC address is quite loose, they don't
+even need to guess the MAC address:
 
     ::console
     # ip neigh replace 192.168.14.3 lladdr ff:ff:ff:ff:ff:ff dev eth0
@@ -411,12 +411,12 @@ IPv6 handler:
     ::console
     # sysctl -qw net.ipv6.conf.br0.disable_ipv6=1
     
-Like for IPv4, it's possible to use *Netfilter* or a dedicated routing
+As with IPv4, it's possible to use *Netfilter* or a dedicated routing
 rule.
 
 # About the example
 
-In the above example, the virtual host get ICMP replies because they
+In the above example, the virtual host gets ICMP replies because they
 are routed through the infrastructure network to Internet (e.g. the
 hypervisor has a default gateway which also acts as a NAT router to
 Internet). This may not be the case.
