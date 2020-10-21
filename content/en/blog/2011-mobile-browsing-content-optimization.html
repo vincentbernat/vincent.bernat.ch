@@ -18,7 +18,7 @@ version of [Le Monde][lemonde], a French daily newspaper. I enabled
 Chromium *developer tools* and watched what happened in the "Network"
 tab. All images were served from IP like `10.141.0.4`. Looking at the
 HTML source code, I discovered that `<img>` tags were rewritten to
-point to these images. The smaller one were identical to the original
+point to these images. The smaller ones were identical to the original
 one but the larger ones (more than 50 KiB) were of reduced quality (and
 therefore reduced size).
 
@@ -46,7 +46,7 @@ After:
 This means that each page that includes [jQuery][jquery], a popular
 javascript library, as an external resource, will be turned into a page
 that includes the **whole** jQuery code which is about 85 KiB. Each page
-will weight more than 85 KiB instead of relying on an external and
+will weigh more than 85 KiB instead of relying on an external and
 cacheable resource.
 
 Nowadays, most browsers support [HTTP keep-alive][keepalive] which
@@ -54,20 +54,20 @@ allows one to serve multiple resources into a single request. There are
 two cases:
 
  1. If the resource is served from the same server as the HTML page,
- keep-alive would enable to get almost the same result without
+ keep-alive would enable us to get almost the same result without
  hindering the cache: the browser would first request the HTML page,
  then the javascript resource into the same TCP connection. There is a
  small penalty of about 100 ms to let the browser request the second
  resource. The browser may decide to open another connection because
  the initial document is not loaded yet. Some browsers may even
  negotiate this additional connection before needing it. In this case,
- it can use this idle connection at no cost. Otherwise, we may fall in
+ it can use this idle connection at no cost. Otherwise, we may fall into
  the second case.
  
  2. If the resource is served from another server (like in the example
  above) or if the browser does not have an idle connection ready for
  reuse, it would download the resource in parallel with the help of
- another connection. It will only costs about 300 ms of additional
+ another connection. It will only cost about 300 ms of additional
  time due to the establishment of a new TCP connection with the
  server. These 300 ms are a very small price to pay compared to the 2
  seconds needed to download 85 KiB for each page. Moreover, other
@@ -113,7 +113,7 @@ for example as a free option in your mobile plan.
 
 Google provides [`mod_pagespeed`][pagespeed] as a solution to optimize
 a website on the fly. This is an Apache module. It is targeted at
-optimizing your own website but since Apache can act as a regular
+optimizing your website but since Apache can act as a regular
 proxy, it seems possible to
 [enable `mod_pagespeed` for any website][pagespeedproxy].
 
@@ -149,7 +149,7 @@ downloaded the 64-bit version for Debian.
     Considering dependency proxy for proxy_http:
     Enabling module proxy.
     Enabling module proxy_http.
-    To to activate the new configuration, you need to run:
+    To activate the new configuration, you need to run:
       /etc/init.d/apache2 restart
 
 Then, we modify `/etc/apache2/mods-enabled/proxy.conf`:
@@ -192,8 +192,8 @@ proxy and try again:
 
 `mod_pagespeed` succeeds in reducing the size of the HTML file and
 combined the CSS files. Moreover, it minified the resulting CSS
-file. There seems to be a bug in Chromium that display incorrect
-transfert sizes (including in the timeline representation) when using
+file. There seems to be a bug in Chromium that displays incorrect
+transfer sizes (including in the timeline representation) when using
 a proxy. I have checked with Wireshark that the overall quantity
 transferred was about 8 KiB. The gain is very thin here but you can
 imagine that you will get better results on larger sites.
