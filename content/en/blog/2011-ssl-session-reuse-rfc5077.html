@@ -7,13 +7,12 @@ tags:
   - ssl
 ---
 
-Session reuse is one of the most important mechanism to
-[improve TLS performance][1]: by submitting an appropriate blob to the
-server, a client is able to trigger an abbreviated handshake,
-improving latency and computation time. There exists two distinct ways
-to achieve session reuse: **session identifiers** as described in
-[RFC 5246][rfc5246] and **session tickets** as depicted in
-[RFC 5077][rfc5077].
+Session reuse is one of the most important mechanisms to [improve TLS
+performance][1]: by submitting an appropriate blob to the server, a
+client can trigger an abbreviated handshake, improving latency and
+computation time. There exist two distinct ways to achieve session
+reuse: **session identifiers** as described in [RFC 5246][rfc5246] and
+**session tickets** as depicted in [RFC 5077][rfc5077].
 
 [1]: [[en/blog/2011-ssl-benchmark.html]]
 
@@ -32,17 +31,16 @@ mechanism](https://tools.ietf.org/html/rfc8446#section-2.2).
 To establish a TLS connection, four messages need to be exchanged
 between client and server. With a latency of 50 ms, we have a 200 ms
 overhead to establish the connection (plus TCP handshake). Moreover,
-to share a common secret, both the client and the server needs to
+to share a common secret, both the client and the server need to
 achieve some public-key cryptographic operations which are costly,
 computation-wise.
 
 ![TLS full handshake][s1]
 [s1]: [[!!images/benchs-ssl/ssl-handshake.svg]] "Full TLS handshake"
 
-To avoid a full TLS handshake each time a client request a resource,
-it is possible for the client to request an abbreviated handshake,
-saving a complete round-trip (100 ms) and avoiding the costliest part
-of the full TLS handshake.
+To avoid a full TLS handshake each time a client requests a resource,
+it can ask for an abbreviated handshake, saving a complete round-trip
+(100 ms) and avoiding the costliest part of the full TLS handshake.
 
 ![TLS abbreviated handshake][s2]
 [s2]: [[!!images/benchs-ssl/ssl-handshake-with-resume.svg]] "Abbreviated TLS handshake"
@@ -73,26 +71,25 @@ The ticket mechanism is a TLS extension. The client can advertise its
 support by sending an empty "Session Ticket" extension in the "Client
 Hello" message. The server will answer with an empty "Session Ticket"
 extension in its "Server Hello" message if it supports it. If one of
-them does not support this extension, they can fallback to the session
-identifier mechanism built into TLS.
+them does not support this extension, they can fall back to the
+session identifier mechanism built into TLS.
 
 [RFC 5077][rfc5077] identifies situations where tickets are desirable
 over session identifiers. The main improvement is to avoid to maintain
 a server-side session cache since the whole session state is
 remembered by the client, not the server. A session cache can be
-costly in term of memory and difficult to share between multiple hosts
+costly in terms of memory and difficult to share between multiple hosts
 when requests are load-balanced across servers.
 
 # Browser support
 
-Session identifiers are part of TLS and are therefore supported since
-a long time by clients and servers. <del>However, session tickets are
-an optional TLS extension and therefore, the support is not as
-widespread as for session identifiers.</del> Support for tickets was
-added in [OpenSSL][openssl] 0.9.8f (October
-2007). In [GnuTLS][gnutls], this is version 2.9.3 (August
-2009). For [NSS][nss], the set of libraries behind most browsers,
-support of RFC 5077 is in version 3.12 (June
+Session identifiers are part of TLS and are therefore supported for a
+long time by clients and servers. <del>However, session tickets are an
+optional TLS extension and therefore, the support is not as widespread
+as for session identifiers.</del> Support for tickets was added in
+[OpenSSL][openssl] 0.9.8f (October 2007). In [GnuTLS][gnutls], this is
+version 2.9.3 (August 2009). For [NSS][nss], the set of libraries
+behind most browsers, support of RFC 5077 is in version 3.12 (June
 2008). For [Schannel][schannel], Microsoft implementation of TLS,
 support was added in Windows 8.1 and Windows 2012 R2.
 
@@ -124,19 +121,19 @@ a customer care service of an important French telco:
 - 67.2% of requests exhibit support of [SNI][sni];
 - 86.7% of requests use TLS 1.0; the remaining uses SSL 3.0; almost no TLS
   1.1/1.2;
-- in average, a client execute 8 TLS handshakes;
-- ciphers supported by all clients are 3DES-SHA, RC4-MD5 and RC4-SHA.
+- on average, a client execute 8 TLS handshakes;
+- ciphers supported by all clients are 3DES-SHA, RC4-MD5, and RC4-SHA.
 
-With some log analysis to match each requests with the appropriate
-user agent, we can split the world in two parts: browsers supporting
-RFC 5077 (Chrome and Firefox) and browsers not supporting RFC 5077
+With some log analysis to match each request with the appropriate user
+agent, we can split the world into two parts: browsers supporting RFC
+5077 (Chrome and Firefox) and browsers not supporting RFC 5077
 (Internet Explorer, Opera 9.80, Safari for macOS and iOS and Android
 browser).
 
 # Web server support
 
 There is no unique recipe to configure a web server to handle
-appropriately and efficiently session resume. Here are some generic
+appropriately and efficiently session resume. Here are some general
 directions:
 
 - if the web server uses multiple processes, you need to configure a
@@ -171,21 +168,21 @@ resume. You need a session cache.
 ## Setting a session cache with Apache & nginx
 
 **Apache** features two different TLS engines. The first one is
-[mod_ssl][modssl] and uses OpenSSL as backend. It is possible to setup
-a shared session cache with `SSLSessionCache` but the
-memcached-enabled session cache is
-[available only in the development branch][modssl-memcached]. You can
-also get one by switching to [mod_gnutls][modgnutls] backend. The
-cache is enabled with `GnuTLSCache`. In this case, do not enable
-tickets because they cannot be shared.
+[mod_ssl][modssl] and uses OpenSSL as the backend. It is possible to
+setup a shared session cache with `SSLSessionCache` but the
+memcached-enabled session cache is [available only in the development
+branch][modssl-memcached]. You can also get one by switching to
+[mod_gnutls][modgnutls] backend. The cache is enabled with
+`GnuTLSCache`. In this case, do not enable tickets because they cannot
+be shared.
 
 With **nginx**, you need to enable the shared session cache with
 `ssl_session_cache`. Currently, it lacks a memcached-enabled session
 cache but [Matt Palmer has some patches to add it][nginxcaching] to
 the 0.8 branch. However, these patches can have a serious impact on
 nginx performance since retrieving a session from memcached is done
-synchronously (mostly because a limitation in OpenSSL design who does
-not allow us to register asynchronous callbacks with
+synchronously (mostly because of a limitation in OpenSSL design who
+does not allow us to register asynchronous callbacks with
 `SSL_CTX_sess_set_get_cb()`).
 
 As a proof of concept, I have also added a similar feature to
@@ -198,12 +195,12 @@ network proxy terminating TLS connections. The same limitation as for
 
 ## Sharing tickets
 
-[RFC 5077][rfc5077] tells tickets allow us to load-balance requests
-across servers. However, to the best of my knowledge, there is
-currently no web server able to share tickets across a pool. Actually,
-when a server initializes its TLS stack, it will randomly generate
-some keys that will be used to protect and encrypt tickets. In
-OpenSSL, from `ssl/ssl_lib.c`:
+[RFC 5077][rfc5077] explains that tickets allow us to load-balance
+requests across servers. However, to the best of my knowledge, there
+is currently no web server able to share tickets across a pool. When a
+server initializes its TLS stack, it will randomly generate some keys
+that will be used to protect and encrypt tickets. In OpenSSL, from
+`ssl/ssl_lib.c`:
 
     ::c
     /* Setup RFC4507 ticket keys */
@@ -249,7 +246,7 @@ Apache HTTPD][ticket-httpd].  This adds two new directives:
 
 !!! "Update (2011-11)" If you care about perfect forward secrecy like
 the one provided by cipher suites like `DHE-RSA-AES128-SHA`, using
-tickets this way will weaken it. Keys should be rotated in some
+tickets this way will weaken it. The keys should be rotated in some
 synchronized way.
 
 ## Testing
