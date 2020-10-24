@@ -7,21 +7,21 @@ tags:
 
 Distributing software efficiently across your platform can be
 difficult. Every distribution comes with a package manager which is
-usually suited for this task. APT can be relied upon on when using
+usually suited for this task. APT can be relied upon when using
 [Debian][] or a derivative.
 
 Unfortunately, the official repositories may not contain everything
 you need. When you require unpackaged software or more recent versions,
-it is possible to setup your own local repository.
+it is possible to set up your own local repository.
 
-Most of what is presented here was setup for [Dailymotion][] and was
+Most of what is presented here were set up for [Dailymotion][] and was
 greatly inspired by the work done by [Raphaël Pinson][] at Orange.
 
 [TOC]
 
 # Setting up your repositories
 
-There are three kinds of repositories you may want to setup:
+There are three kinds of repositories you may want to set up:
 
  1. A **distribution mirror**. Such a mirror will save bandwidth,
     provide faster downloads and permanent access, even when someone
@@ -44,14 +44,14 @@ repository is. Let's illustrate with the following line from my
 
 In this example, `http://ftp.debian.org/debian/` is the **repository**
 and `unstable` is the **distribution**. A distribution is subdivided
-into **components**. We have three components: `main`, `contrib` and
+into **components**. We have three components: `main`, `contrib`, and
 `non-free`.
 
-To setup repositories, we will use [reprepro][]. This is not the only
+To set up repositories, we will use [reprepro][]. This is not the only
 solution but it has a good balance between versatility and
 simplicity. _reprepro_ can only handle one repository. The first
-choice is about how you will split your packages in repositories,
-distributions and components.
+choice is about how you will split your packages into repositories,
+distributions, and components.
 
 !!! "Update (2019-06)" [aptly][] is an alternative to *reprepro*. It
 handles multiple repositories. It features an HTTP API. It can keep
@@ -62,7 +62,7 @@ use *aptly*.
 Here is what matters:
 
  - A **repository** cannot contain two identical packages (same name,
-   version and architecture).
+   version, and architecture).
  - Inside a **component**, you can only have one version of a package.
  - Usually, a **distribution is a subset of the versions** while a
    **component is a subset of the packages**. For example, in Debian,
@@ -94,7 +94,7 @@ First, create a system user to work with the repositories:
               --group reprepro
 
 All operations should be done with this user only. If you want to
-setup several repositories, create a directory for each of
+set up several repositories, create a directory for each of
 them. Each repository has these subdirectories:
 
  - `conf/` contains the configuration files,
@@ -171,7 +171,7 @@ Let's add this block to `conf/distributions`:
     SignWith: yes
 
 This defines the `precise` distribution in our repository. It contains
-four components: `main`, `restricted`, `universe` and `multiverse`
+four components: `main`, `restricted`, `universe`, and `multiverse`
 (like the regular distribution in official repositories).
 
 The `Update` line starts with a dash. This means _reprepro_ will
@@ -236,7 +236,7 @@ Next, you can run _reprepro_ and ask it to update your local mirror:
 
 This will take some time on the first run. You can execute this
 command every night. _reprepro_ is not the fastest mirror solution but
-it is easy to setup, flexible and reliable.
+it is easy to setup, flexible, and reliable.
 
 ## Repository for local packages
 
@@ -252,7 +252,7 @@ distributions:
 In our workflow, packages are introduced in `precise-staging` where
 they can be tested and will be copied to `precise-prod` when we want
 them to be available for production. You can adopt a more complex
-workflow if you need. The _reprepro_ part is quite easy. We add the
+workflow if you need it. The _reprepro_ part is quite easy. We add the
 following blocks into `conf/distributions`:
 
     ::ini
@@ -332,12 +332,12 @@ flag is one possible safe-guard. We also use a tailored
     Pin-Priority: -100
 
 By default, packages will have a priority of 500. By setting a
-priority of -100 to the staging distribution, we ensure the
-packages cannot be installed at all. This is stronger than
-`NotAutomatic` which sets the priority to 1. When a package exists in
-Ubuntu and in our local repository, we ensure that, if this is a
-production package, we will use ours by using a priority of 900 (or
-950 if we match a specific role component).
+priority of -100 to the staging distribution, we ensure the packages
+cannot be installed at all. This is stronger than `NotAutomatic` which
+sets the priority to 1. When a package exists in Ubuntu and our local
+repository, we ensure that, if this is a production package, we will
+use ours by using a priority of 900 (or 950 if we match a specific
+role component).
 
 Have a look at the "_How APT Interprets Priorities_" section of
 [`apt_preferences(5)`][apt_preferences] manual page for additional
@@ -371,10 +371,11 @@ distribution to the production distribution:
 
 ## Local mirror of third-party repositories
 
-Sometimes, you want a software published on some third-party repository
-without to repackage it yourself. A common example is the repositories
-edited by hardware vendors. Like for an Ubuntu mirror, there are two
-steps: defining the distribution and defining the source.
+Sometimes, you want a piece of software published on some third-party
+repository without repackaging it yourself. A common example is the
+repositories edited by hardware vendors. As for an Ubuntu mirror,
+there are two steps: defining the distribution and defining the
+source.
 
 We chose to put such mirrors into the same distributions as our local
 packages but with a dedicated component for each mirror. This way,
@@ -430,8 +431,8 @@ Our _reprepro_ setup seems complete, but how do we put packages into
 the staging distribution?
 
 You have several options to build Debian packages for your local
-repository. It really depends on how much time you want to invest in
-this activity:
+repository. It depends on how much time you want to invest in this
+activity:
 
  1. Build packages **from source** by adding a `debian/`
     directory. This is the classic way of building Debian
@@ -527,7 +528,7 @@ add the appropriate source:
 
 We ensure packages from our staging distribution are preferred
 over other packages by adding an `/etc/apt/preferences` file
-in a `E` hook:
+in an `E` hook:
 
     ::bash
     #!/bin/bash
@@ -556,7 +557,7 @@ A manual build can be run with:
 
 ## Version numbering
 
-To avoid to apply complex rules to chose a version number for a package,
+To avoid applying complex rules to chose a version number for a package,
 we chose to treat everything as a backport, even in-house software. We
 use the following scheme: `X-Y~preciseZ+dmW`.
 
@@ -569,13 +570,13 @@ use the following scheme: `X-Y~preciseZ+dmW`.
 
  * `W` is our version of the package. We increment it when we make a
    change to the packaging. This is the only number we are
-   allowed to control. All the others are set by an upstream entity,
-   unless it doesn't exist and in this case, you use 0.
+   allowed to control. All the others are set by an upstream entity
+   unless it doesn't exist and, in this case, you use 0.
 
 [^snapshot]: For a Git snapshot, we use something like `1.4-git20130905+1-ae42dc1` which is a snapshot made
              after version 1.4 (use 0.0 if no version has ever been
              released) at the given date. The following 1 is to be
-             able to package different snapshots at the same date
+             able to package different snapshots on the same date
              while the hash is here in case you need to retrieve
              the exact snapshot.
    
@@ -590,7 +591,7 @@ Ubuntu as `1.5-3ubuntu1`. You will rebase your changes on this version
 and get `1.5-3ubuntu1~precise0+dm1`.
 
 When using Debian instead of Ubuntu, a compatible convention could
-be : `X-Y~bpo70+Z~dm+W`.
+be: `X-Y~bpo70+Z~dm+W`.
 
 ## Uploading
 
@@ -598,13 +599,13 @@ To upload a package, a common setup is the following workflow:
 
  1. Upload the source package to an incoming directory.
  2. _reprepro_ will notice the _source_ package, check its
-    correctness (signature, distribution) and put it in the archive.
+    correctness (signature, distribution), and put it in the archive.
  3. The builder will notice a new package needs to be built and
     build it.
  4. Once the package is built, the builder will upload the result to
     the incoming directory.
  5. _reprepro_ will notice again the new _binary_ package and
-    integrate it in the archive.
+    integrate it into the archive.
 
 This workflow has the disadvantage to have many moving pieces and to
 leave the user in the dark while the compilation is in
