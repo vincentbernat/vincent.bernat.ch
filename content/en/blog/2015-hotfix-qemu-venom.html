@@ -34,7 +34,7 @@ test:[^exploit]
 
 [^exploit]: The complete code for this test is on [GitHub][exploit].
 
-Once the fix installed, all processes still have to be restarted for
+Once the fix is installed, all processes still have to be restarted for
 the upgrade to be effective. It is possible to minimize the downtime
 by [leveraging `virsh save`][virsh-save].
 
@@ -42,7 +42,7 @@ Another possibility would be to patch the running processes. The Linux
 kernel attracted a lot of interest in this area, with solutions like
 [Ksplice][] (mostly killed by Oracle), [kGraft][] (by SUSE) and
 [kpatch][] (by Red Hat) and the inclusion of a [common framework][] in
-the kernel. The userspace has far less out-of-the-box solutions.[^userspace]
+the kernel. The userspace has far fewer out-of-the-box solutions.[^userspace]
 
 [^userspace]: An interesting project seems to be [Katana][]. But there
               are also some insightful [hacking][1] [papers][2] on
@@ -177,7 +177,7 @@ query it, use `readelf -s`:
       8485: 00000000009f9d00   256 OBJECT  LOCAL  DEFAULT   26 command_to_handler
 
 This table is usually stripped out of the executable to save space,
-like shown below:
+as shown below:
 
     ::console
     $ file -b /usr/bin/qemu-system-x86_64 | tr , \\n
@@ -221,7 +221,7 @@ memory:[^more]
 [x86-layout-regular]: [[!!images/memory-layout-regular-v2.svg]] "Memory layout of a regular process on Linux x86 with ASLR."
 
 [^more]: [Anatomy of a program in memory][] is a great blog post
-         explaining in more details how a program lives in memory.
+         explaining in more detail how a program lives in memory.
 
 The random gaps (ASLR) are here to prevent an attacker from reliably
 jumping to a particular exploited function in memory. On x86-64, the
@@ -354,7 +354,7 @@ the target process:
         return 0;
     }
 
-Then, we retrieve the `command_to_handler[]` array, modify it and put it
+Then, we retrieve the `command_to_handler[]` array, modify it, and put it
 back in memory.[^write]
 
     ::c
@@ -454,7 +454,7 @@ The main steps are:
  2. **Get the executable name** from `/proc/PID/exe`.
  3. Parse `/proc/PID/maps` to **find the address of the text segment** (it's the first one).
  4. Do some **coherence checks**:
-      - check there is a ELF header at this location (4-byte magic number),
+      - check there is an ELF header at this location (4-byte magic number),
       - check the executable type (`ET_EXEC` for regular executables, `ET_DYN` for PIE), and
       - get the build ID and compare with the expected one.
  5. From the base address and the provided offset, **compute the location of the `command_to_handler[]` array**.
