@@ -301,7 +301,7 @@ Info:    {infostring}""".format(**row))
             elif ans == "r":
                 url = input("URL? ")
                 c.run("git grep -Fl '{}'"
-                      "| xargs -r sed -i 's, {}, {},g'".format(
+                      r"| xargs -r sed -i 's,\([( ]\){},\1{},g'".format(
                           row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
@@ -310,7 +310,7 @@ Info:    {infostring}""".format(**row))
                 c.run("xdg-open {}".format(row['parentname']))
             elif ans == "R":
                 c.run("git grep -Fl '{}'"
-                      "| xargs -r sed -i 's, {}, {},g'".format(
+                      r"| xargs -r sed -i 's,\([( ]\){},\1{},g'".format(
                           row['urlname'], row['urlname'], redirected))
                 break
             else:
