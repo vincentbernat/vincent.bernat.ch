@@ -612,7 +612,10 @@ define('app/i18n',["app/config", "app/i18n/en", "app/i18n/fr"],
     var plural = pluralforms(lang);
 
     var translate = function(msgid) {
-        return catalogue[lang][msgid] || en[msgid] || "???";
+        return config[msgid + '-text-' + lang] ||
+          catalogue[lang][msgid] ||
+          en[msgid] ||
+          "???";
     };
 
     var pluralize = function(msgid, n) {
