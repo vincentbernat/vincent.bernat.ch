@@ -15,7 +15,7 @@ On layer 2 networks, high availability can be achieved by:
 
  - antique protocols, like the [Spanning Tree Protocol][],
  - proprietary protocols, like [Juniper's virtual chassis][],
-   [Cisco's virtual port channel][] and [other][mclag1]
+   [Cisco's virtual port channel][], and [other][mclag1]
    [MC-LAG][mclag2] [implementations][mclag3],[^mclag]
  - standardized protocols, like [Shortest Path Bridging Protocol][IEEE 802.1Q-2014] or [TRILL][], or
  - the underlying network (in the case of an overlay network, like
@@ -30,7 +30,7 @@ Layer 2 networks need very little configuration but come with a major
 drawback in highly available scenarios: an incident is likely to bring
 the whole network down.[^incident] Therefore, it is safer to **limit
 the scope of a single layer 2 network** by, for example, using one
-distinct network in each rack and connecting them together with layer
+distinct network in each rack and connecting them with layer
 3 routing. Incidents are unlikely to impact a whole IP network.
 
 [^incident]: An incident can stem from an operator mistake, but also
@@ -62,7 +62,7 @@ To solve both these problems, it is possible to push L3 routing
 further to the south, turning each hypervisor into an L3
 router. However, we need to ensure customer virtual guests are blind
 to this change: they should keep getting their configuration from DHCP
-(IP, subnet and gateway).
+(IP, subnet, and gateway).
 
 [TOC]
 
@@ -84,7 +84,7 @@ The following illustration shows the configuration of a hypervisor
 with 5 guests. No bridge is needed.
 
 ![L3 routing inside a hypervisor][i2]
-[i2]: [[!!images/l3-routing-hypervisor.svg]] "Layer 3 routing setup for a hypervisor. Each hypervisor is connected to a “public” network and a “private” one. Guests are attached to either of these networks. Each routing table contains connected routes for local guests, host routes for remote guests and a default route for other destinations."
+[i2]: [[!!images/l3-routing-hypervisor.svg]] "Layer 3 routing setup for a hypervisor. Each hypervisor is connected to a “public” network and a “private” one. Guests are attached to either of these networks. Each routing table contains connected routes for local guests, host routes for remote guests, and a default route for other destinations."
 
 The complete configuration described below is also available on
 [GitHub][]. In real life, a piece of software is needed to update the
@@ -121,12 +121,12 @@ The two `iif lo` rules manage routing for packets originated from the
 hypervisor itself. The `local-out` table is a mix of the `private` and
 `public` tables. The hypervisor mostly needs the routes from the
 `private` table but also needs to contact local virtual guests (for
-example, to answer to a ping request) using the `public` table. Both
+example, to answer a ping request) using the `public` table. Both
 tables contain a default route (no chaining possible), so we build a
 third table, `local-out`, by [copying all routes][local-out] from the
 `private` table and directly connected routes from the `public` table.
 
-To avoid an accidental leak of traffic, `public`, `private` and
+To avoid an accidental leak of traffic, `public`, `private`, and
 `local-out` routing tables contain a default last-resort route with a
 large metric.[^nodistribute] On normal operations, these routes should
 be shadowed by a regular default route:
@@ -140,7 +140,7 @@ be shadowed by a regular default route:
     BGP. Hypervisors should receive a default route with a lower
     metric from edge routers.
 
-IPv6 is far simpler as we have only have one routing domain. While we
+IPv6 is far simpler as we have only one routing domain. While we
 keep a `public` table, there is no need for a `local-out` table:
 
     ::console
@@ -149,7 +149,7 @@ keep a `public` table, there is no need for a `local-out` table:
     20: from all lookup main
     40: from all lookup public
 
-As a last step, forwarding is enabled and the maximum size for IPv6
+As the last step, forwarding is enabled and the maximum size for IPv6
 route cache is increased (default is only 4096):[^ddos]
 
     ::sh
@@ -169,7 +169,7 @@ next to last value is the current cache size in hexadecimal.
 
 ## Guest routes
 
-The second step is to configure routes to each guest. For IPv6, we use
+The second step is to configure routes for each guest. For IPv6, we use
 the link-local address, derived from the remote MAC address, as
 next-hop:[^privacy]
 
@@ -219,7 +219,7 @@ address:[^onlink]
 
 The third step is to share routes between hypervisors, through
 BGP. This part is dependent on how hypervisors are connected to each
-others.
+other.
 
 ### Fabric design
 
@@ -229,15 +229,15 @@ one is to use a full L3 leaf-spine fabric:
 ![Full L3 fabric design][i3]
 [i3]: [[!!images/l3-routing-full-v2.svg]] "Full L3 leaf-spine fabric design. A BGP session is established over each link. Spine routers need to learn all routes."
 
-Each hypervisor establishes an eBGP session to each of the leaf
-top-of-the-rack routers. These routers establishes an eBGP session
+Each hypervisor establishes an eBGP session with each of the leaf
+top-of-the-rack routers. These routers establish an eBGP session
 with each spine router. This solution can be expensive because the
 spine routers need to handle all routes. With the current generation
 of switches/routers, this puts a limit around the maximum number of
-routes with respect to the expected density.[^current] IP and BGP
+routes for the expected density.[^current] IP and BGP
 configuration can also be tedious unless some uncommon
 autoconfiguration mechanisms are used. On the other hand, leaf routers
-(and hypervisors) may optionally learn less routes as they can push
+(and hypervisors) may optionally learn fewer routes as they can push
 non-local traffic north.
 
 [^current]: For example, a [Juniper QFX5100][] supports about 200k
@@ -249,7 +249,7 @@ non-local traffic north.
     engines, with Juniper Trio chipset) with a lower density.
 
 Another potential design is to use an L2 fabric. This may sound
-surprising after bad mouthing L2 networks for their unreliability but
+surprising after bad-mouthing L2 networks for their unreliability but
 we don't need them to be highly available. They can provide a very
 scalable and cost-efficient design:[^scale]
 
@@ -276,7 +276,7 @@ This is the solution described below. Public and private domains share
 the same infrastructure but use distinct VLANs.
 
 !!! "Update (2020.10)" While such a design made sense a few years
-back, recent hardware is able to scale better and I recommend you opt
+back, recent hardware can scale better and I recommend you opt
 for a full L3 design or even go a step further and uses only IPv6 for
 the fabric, minimizing configuration. In this case, you do not need
 the route reflectors.
@@ -326,7 +326,7 @@ Here is an example of configuration for *JunOS*:[^instances]
         autonomous-system 65000;
     }
 
-[^instances]: Use of routing instances would enable hosting several
+[^instances]: Using routing instances would enable hosting several
     route reflectors on the same box. This is not used in this example
     but should be considered to reduce costs.
 
@@ -343,7 +343,7 @@ receive—increasing resiliency.
 Instead of explicitly declaring all hypervisors allowed to connect to
 this route reflector, a whole subnet is authorized in ❸.[^security] We
 also declare the second route reflector for the same network as
-neighbor to ensure they connect to each other.
+a neighbor to ensure they connect to each other.
 
 [^security]: This prevents the use of any authentication mechanism:
     BGP usually relies on TCP MD5 signature ([RFC 2385][]) to
@@ -367,7 +367,7 @@ faults in path between two BGP peers ([RFC 5880][]).
     [officially][] one second. This is quite unfortunate as it makes
     BFD mostly useless.
 
-A last point to consider is whetever you want to **allow anycast** on
+The last point to consider is whether you want to **allow anycast** on
 your network: if an IP is advertised from more than one hypervisor,
 you may want to:
 
@@ -433,7 +433,7 @@ route reflectors on some of the top of the rack switches.
 
 Let's tackle the last step: the hypervisor configuration. We use
 [BIRD][] (1.6.x) as a BGP daemon. It maintains three internal routing
-tables (`public`, `private` and `local-out`). We use a template with
+tables (`public`, `private`, and `local-out`). We use a template with
 the common properties to connect to a route reflector:
 
     ::junos
@@ -496,7 +496,7 @@ We also need to enable BFD on all interfaces:
       };
     }
 
-To avoid loosing BFD packets when the conntrack table is full, it is
+To avoid losing BFD packets when the conntrack table is full, it is
 safer to disable connection tracking for these datagrams:
 
     ::sh
@@ -532,20 +532,20 @@ for the installed routes:
 
 ## Performance
 
-You may be worried on **how much memory** Linux may use when handling many
+You may be worried about **how much memory** Linux may use when handling many
 routes. Well, don't:
 
  - 128 MiB can fit 1 million IPv4 routes, and
  - 512 MiB can fit 1 million IPv6 routes.
 
 *BIRD* uses about the same amount of memory for its own usage. As for
-**lookup times**, performance are also excellent with IPv4 and still
+**lookup times**, performance is also excellent with IPv4 and still
 quite good with IPv6:
 
  - 30 ns per lookup with 1 million IPv4 routes, and
  - 1.25 µs per lookup with 1 million IPv6 routes.
 
-Therefore, the impact on letting Linux handle many routes is very
+Therefore, the impact of letting Linux handle many routes is very
 low. For more details, see “[IPv4 route lookup on Linux][]” and “[IPv6
 route lookup on Linux][].”
 
@@ -554,7 +554,7 @@ route lookup on Linux][].”
 To avoid spoofing, *reverse path filtering* is enabled on virtual
 guest interfaces: Linux will verify the source address is legit by
 checking the answer would use the incoming interface as an outgoing
-interface. This effectively prevent any possible spoofing from guests.
+interface. This effectively prevents any possible spoofing from guests.
 
 For IPv4, reverse path filtering can be enabled either through a
 per-interface *sysctl*[^sysctl] or through the `rpfilter` match of
@@ -595,7 +595,7 @@ directly to the guest interface:
     ::sh
     ip addr add 203.0.113.254/32 dev vnet5 scope link
 
-Our main goal is to ensure Linux will answer to ARP requests for the
+Our main goal is to ensure Linux will answer ARP requests for the
 gateway IP. Configuring a `/32` is enough for this and we do not want
 to configure a larger subnet as, by default, Linux would install a
 route for the subnet to this interface, which would be
@@ -633,7 +633,7 @@ following configuration snippet:
     }
 
 *ndppd* [does not spoof the source address][] and some systems are
-[more picky about it][]. Therefore, an appropriate address needs to be
+[pickier about it][]. Therefore, an appropriate address needs to be
 configured on each interface:
 
     ::sh
@@ -642,7 +642,7 @@ configured on each interface:
 For DHCP, some daemons may have difficulties to handle this odd
 configuration (with the `/32` IP address on the interface), but
 [Dnsmasq][] accepts such an oddity. For IPv6, assuming the assigned IP
-address is an [EUI-64][] one, [radvd][] works with the following
+address is a [EUI-64][] one, [radvd][] works with the following
 configuration on each interface:
 
     ::junos
@@ -660,16 +660,16 @@ configuration on each interface:
 This setup should work with *BIRD* 1.6.3 and a Linux 3.15+
 kernel. Compared to legacy L2 networks, it brings flexibility and
 resiliency while keeping guests unaware of the change. By handing over
-routing to Linux, this design is also cheap as existing equipments can
+routing to Linux, this design is also cheap as existing equipment can
 be reused. Still, exploitation of such solution is simple enough once
-the basic concepts are understood—IP rules, routing tables and BGP
+the basic concepts are understood—IP rules, routing tables, and BGP
 sessions.
 
 There are several potential improvements:
 
 using VRF
 : Starting from Linux 4.3, L3 VRF domains enable binding interfaces to
-  routing tables. We could have three VRFs: `public`, `private` and
+  routing tables. We could have three VRFs: `public`, `private`, and
   `local-out`. This would improve performance by removing most IP
   rules (but until Linux 4.8, performance is crippled due to
   offloading features not enabled, see [commit 7889681f4a6c][]). For
@@ -681,7 +681,7 @@ full L3 routing
   book, "[BGP in the datacenter][]," on this topic. However, this
   requires all BGP speakers to support these features. On the
   hypervisors, this would mean using *FRR* while the various network
-  equipments would need to run *Cumulus Linux*.
+  equipment would need to run *Cumulus Linux*.
 
 BGP resiliency with BGP LLGR
 : Using short BFD timers make our network react fast to any disruption
@@ -692,8 +692,8 @@ BGP resiliency with BGP LLGR
   Restart*, an extension allowing stale routes to be retained with a
   lower priority (see [draft-uttaro-idr-bgp-persistence-03][]). This
   is an ideal solution to our problem: these stale routes are used
-  only in last resort, after all links have failed. <del>Currently, no open
-  source implementation supports this draft.</del> See
+  only as last resort, after all links have failed. <del>Currently, no
+  open-source implementation supports this draft.</del> See
   "[BGP LLGR: robust and reactive BGP sessions][]" for more details.
 
 !!! "Update (2019-08)" For better security, it is possible to reuse
@@ -753,7 +753,7 @@ See "[Securing BGP on the host with origin validation][]."
 [EUI-64]: https://en.wikipedia.org/wiki/IPv6_address#Modified_EUI-64 "Modified IPv6 EUI-64 on Wikipedia"
 [l2-fabric]: https://docs.projectcalico.org/reference/architecture/design/l2-interconnect-fabric "Calico over an Ethernet interconnect fabric"
 [does not spoof the source address]: https://github.com/DanielAdolfsson/ndppd/issues/41 "Source address used by ndppd may not be a neighbor address #41"
-[more picky about it]: https://github.com/openbsd/src/blob/442f4bb483c9350a9d4c74fd7a2ae45f06c454dd/sys/netinet6/nd6_nbr.c#L155-L159 "nd6_ns_input() on OpenBSD"
+[pickier about it]: https://github.com/openbsd/src/blob/442f4bb483c9350a9d4c74fd7a2ae45f06c454dd/sys/netinet6/nd6_nbr.c#L155-L159 "nd6_ns_input() on OpenBSD"
 [Securing BGP on the host with origin validation]: [[en/blog/2019-bgp-host-rpki.html]] "Securing BGP on the host with origin validation"
 [GitHub]: https://github.com/vincentbernat/network-lab/tree/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv "Lab configuration files"
 [local-out]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/hypervisor.conf#L11-L40 "local-out table configuration"
