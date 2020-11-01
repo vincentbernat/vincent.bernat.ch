@@ -1,0 +1,239 @@
+---
+title: Déployer Isso sur NixOS dans un conteneur Docker
+description: |
+  Comment déclarativement définir, construire et déployer une image Docker
+  pour Isso avec NixOS.
+uuid: b0f081ff-00e7-4f57-8319-15cff39a89aa
+attachments:
+  "https://github.com/vincentbernat/nixops-take1/blob/master/isso.nix": Fichier Nix
+tags:
+  - distribution-nixos
+---
+
+Ce court article documente la façon dont je fais tourner [Isso][], le
+système de commentaires utilisé par ce blog, à l'intérieur d'un
+conteneur Docker sur [NixOS][], une distribution Linux construite sur
+Nix. Nix est un gestionnaire de paquets déclaratif pour Linux et
+d'autres systèmes Unix.
+
+---
+
+Bien que NixOS 20.09 intègre une [dérivation pour Isso][derivation for
+Isso], elle est malheureusement cassée et repose sur Python 2. Comme
+j'utilise également un fork d'Isso, j'ai construit ma propre
+dérivation, fortement inspirée de celle dans
+[master][][^alternative] :
+
+    ::nix
+    issoPackage = with pkgs.python3Packages; buildPythonPackage rec {
+      pname = "isso";
+      version = "custom";
+
+      src = pkgs.fetchFromGitHub {
+        # Use my fork
+        owner = "vincentbernat";
+        repo = pname;
+        rev = "vbe/master";
+        sha256 = "0vkkvjcvcjcdzdj73qig32hqgjly8n3ln2djzmhshc04i6g9z07j";
+      };
+
+      propagatedBuildInputs = [
+        itsdangerous
+        jinja2
+        misaka
+        html5lib
+        werkzeug
+        bleach
+        flask-caching
+      ];
+
+      buildInputs = [
+        cffi
+      ];
+
+      checkInputs = [ nose ];
+
+      checkPhase = ''
+        ${python.interpreter} setup.py nosetests
+      '';
+    };
+
+[^alternative]: Une autre alternative aurait été d'importer la
+    dérivation de *master* et de remplacer l'attribut `src`.
+
+Je veux faire tourner Isso via [Gunicorn][]. À cet effet, je construis
+un environnement combinant Isso et Gunicorn. Je peux alors invoquer ce
+dernier avec `"${issoEnv}/bin/gunicorn"`.
+
+    ::nix
+    issoEnv = pkgs.python3.buildEnv.override {
+        extraLibs = [
+          issoPackage
+          pkgs.python3Packages.gunicorn
+          pkgs.python3Packages.gevent
+        ];
+    };
+
+Avant de construire une image Docker, je aussi dois définir le fichier
+de configuration d'Isso :
+
+    ::nix
+    issoConfig = pkgs.writeText "isso.conf" ''
+      [general]
+      dbpath = /db/comments.db
+      host =
+        https://vincent.bernat.ch
+        http://localhost:8080
+      notify = smtp
+      […]
+    '';
+
+NixOS inclut un [outil pratique permettant de construire une image
+Docker][convenient tool to build a Docker image] sans utiliser de
+`Dockerfile` :
+
+    ::nix
+    issoDockerImage = pkgs.dockerTools.buildImage {
+      name = "isso";
+      tag = "latest";
+      runAsRoot = ''
+        mkdir -p /db
+      '';
+      config = {
+        Cmd = [ "${issoEnv}/bin/gunicorn"
+                "--name" "isso"
+                "--bind" "0.0.0.0:${port}"
+                "--worker-class" "gevent"
+                "--workers" "2"
+                "--worker-tmp-dir" "/dev/shm"
+                "--preload"
+                "isso.run"
+              ];
+        Env = [
+          "ISSO_SETTINGS=${issoConfig}"
+          "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+        ];
+      };
+    };
+
+Comme nous faisons référence à la dérivation `issoEnv` dans
+`config.Cmd`, toute la dérivation, y compris Isso et Gunicorn, est
+copiée à l'intérieur de l'image Docker. Il en va de même pour
+`issoConfig`, le fichier de configuration que nous avons créé
+précédemment, et `pkgs.cacert`, la dérivation contenant les
+certificats racines. L'image résultante pèse 171 Mo une fois
+installée, ce qui est comparable à l'image Debian Buster générée par
+le [`Dockerfile`][Dockerfile] officiel.
+
+NixOS dispose d'une abstraction pour faire déployer les conteneurs
+Docker. Elle n'est pas actuellement documentée dans le manuel de
+NixOS, mais vous pouvez consulter le [code source du module][source
+code of the module] pour connaître les options disponibles. J'ai
+choisi d'utiliser [Podman][] au lieu de Docker comme moteur car cela
+évite d'avoir à lancer un démon supplémentaire.
+
+    ::nix
+    virtualisation.oci-containers = {
+      backend = "podman";
+      containers = {
+        isso = {
+          image = "isso";
+          imageFile = issoDockerImage;
+          ports = ["127.0.0.1:${port}:${port}"];
+          volumes = [
+            "/var/db/isso:/db"
+          ];
+        };
+      };
+    };
+
+Un fichier de configuration pour *systemd* est automatiquement créé
+pour exécuter et superviser le conteneur :
+
+    ::console
+    $ systemctl status podman-isso.service
+    ● podman-isso.service
+         Loaded: loaded (/nix/store/a66gzqqwcdzbh99sz8zz5l5xl8r8ag7w-unit->
+         Active: active (running) since Sun 2020-11-01 16:04:16 UTC; 4min 44s ago
+        Process: 14564 ExecStartPre=/nix/store/95zfn4vg4867gzxz1gw7nxayqcl>
+       Main PID: 14697 (podman)
+             IP: 0B in, 0B out
+          Tasks: 10 (limit: 2313)
+         Memory: 221.3M
+            CPU: 10.058s
+         CGroup: /system.slice/podman-isso.service
+                 ├─14697 /nix/store/pn52xgn1wb2vr2kirq3xj8ij0rys35mf-podma>
+                 └─14802 /nix/store/7vsba54k6ag4cfsfp95rvjzqf6rab865-conmo>
+    
+    nov. 01 16:04:17 web03 podman[14697]: container init (image=localhost/isso:latest)
+    nov. 01 16:04:17 web03 podman[14697]: container start (image=localhost/isso:latest)
+    nov. 01 16:04:17 web03 podman[14697]: container attach (image=localhost/isso:latest)
+    nov. 01 16:04:19 web03 conmon[14802]: INFO: connected to SMTP server
+    nov. 01 16:04:19 web03 conmon[14802]: INFO: connected to https://vincent.bernat.ch
+    nov. 01 16:04:19 web03 conmon[14802]: [INFO] Starting gunicorn 20.0.4
+    nov. 01 16:04:19 web03 conmon[14802]: [INFO] Listening at: http://0.0.0.0:8080 (1)
+    nov. 01 16:04:19 web03 conmon[14802]: [INFO] Using worker: gevent
+    nov. 01 16:04:19 web03 conmon[14802]: [INFO] Booting worker with pid: 8
+    nov. 01 16:04:19 web03 conmon[14802]: [INFO] Booting worker with pid: 9
+
+Pour terminer, nous configurons Nginx pour qu'il transmette les
+requêtes à destination de `comments.luffy.cx` au conteneur. NixOS
+offre une intégration simple pour mettre en place un certificat géré
+par *Let's Encrypt*.
+
+    ::nix
+    services.nginx.virtualHosts."comments.luffy.cx" = {
+      root = "/data/webserver/comments.luffy.cx";
+      enableACME = true;
+      forceSSL = true;
+      extraConfig = ''
+        access_log /var/log/nginx/comments.luffy.cx.log anonymous;
+      '';
+      locations."/" = {
+        proxyPass = "http://127.0.0.1:${port}";
+        extraConfig = ''
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_hide_header Set-Cookie;
+          proxy_hide_header X-Set-Cookie;
+          proxy_ignore_headers Set-Cookie;
+        '';
+      };
+    };
+    security.acme.certs."comments.luffy.cx" = {
+      email = lib.concatStringsSep "@" [ "letsencrypt" "vincent.bernat.ch" ];
+    };
+
+---
+
+Bien que je rencontre encore des difficultés avec Nix et NixOS, je
+suis convaincu que c'est ainsi qu'une **infrastructure déclarative**
+doit être conçue. J'aime le fait d'avoir en [un seul fichier][one
+single file] contenant la dérivation pour construire Isso, la
+configuration, l'image Docker, la définition du conteneur et la
+configuration Nginx. Le langage Nix permet à la fois de **construire des
+paquets** et de **gérer des configurations**.
+
+De plus, l'image Docker est mise à jour automatiquement comme un hôte
+NixOS normal. Cela résout un problème qui affecte l'écosystème
+Docker : plus d'images périmées ! Ma prochaine étape est de combiner
+cette approche avec [Nomad][], un orchestrateur pour déployer et gérer
+les conteneurs.
+
+[derivation for Isso]: https://github.com/NixOS/nixpkgs/blob/release-20.09/pkgs/servers/isso/default.nix
+[master]: https://github.com/NixOS/nixpkgs/blob/master/pkgs/servers/isso/default.nix
+[Gunicorn]: https://gunicorn.org/ "Gunicorn 'Green Unicorn': a Python WSGI HTTP Server for UNIX"
+[convenient tool to build a Docker image]: https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-buildImage
+[source code of the module]: https://github.com/NixOS/nixpkgs/blob/release-20.09/nixos/modules/virtualisation/oci-containers.nix
+[Podman]: https://podman.io/
+[Dockerfile]: https://github.com/posativ/isso/blob/master/Dockerfile
+[Isso]: https://posativ.org/isso/ "Isso: a commenting server similar to Disqus"
+[NixOS]: https://nixos.org/manual/nixpkgs/stable/#ssec-pkgs-dockerTools-buildImage
+[one single file]: https://github.com/vincentbernat/nixops-take1/blob/master/isso.nix
+[Nomad]: https://www.nomadproject.io/ "Nomad: Workload Orchestration Made Easy"
+
+{# Local Variables:      #}
+{# mode: markdown        #}
+{# indent-tabs-mode: nil #}
+{# End:                  #}
