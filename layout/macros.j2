@@ -27,17 +27,24 @@
 </ul>
 {% endmacro %}
 
-{% macro sentence_case(text) %}
-    {{ text[0]|upper}}{{text[1:] }}
+{% macro tagfmt_plain(resource, tag, text) %}
+{{ text[0]|upper }}{{ text[1:] }}
+{% endmacro %}
+{% macro tagfmt_link(resource, tag, text) %}
+{%- if tag != "outdated" %}<a href="{{ content_url(resource.meta.language + '/blog') }}#tag-{{ tag }}">{% endif -%}
+{{- text -}}
+{%- if tag != "outdated" %}</a>{% endif %}
 {% endmacro %}
 
-{% macro format_tag(tag) %}
+{# fmt is a function taking the subtag name as first argument and description as second argument. #}
+{% macro format_tag(resource, tag, fmt) %}
 {%- set tag = tag|string %}
 {%- set subtags = tag.split("-") %}
 {%- for subtag in subtags -%}
     {%- set subtag = subtags[:loop.index]|join('-') -%}
-    {{- sentence_case(site.config.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e) }}
-    {{- sentence_case(site.config.tagger.tags[subtag].descr|e) -}}
+    {{- fmt(resource, subtag,
+            site.config.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e ~
+            site.config.tagger.tags[subtag].descr|e) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
 {% endmacro %}
@@ -51,7 +58,7 @@
 {% endfor %}
 <div class="toc"><ul>
 {% for tag in tags|sort if tag[1]|string != "outdated" %}
-  <li><a href="#tag-{{tag[1]}}">{{ format_tag(tag[1]|string) }}</a></li>
+  <li><a href="#tag-{{tag[1]}}">{{ format_tag(resource, tag[1]|string, tagfmt_plain) }}</a></li>
 {% endfor %}
 </ul></div>
 <div class="lf-list-tags">
@@ -71,7 +78,7 @@
 {% endfor %}
 {% if rr and tag|string != "outdated" %}
   <div class="lf-tag" id="tag-{{tag}}">
-    <h2>{{ format_tag(tag|string) }}</h2>
+    <h2>{{ format_tag(resource, tag|string, tagfmt_plain) }}</h2>
     <ul class="lf-list-titles">
 {% for resource in rr %}
       {{ format_resource(ctx, resource)|indent(6) }}
