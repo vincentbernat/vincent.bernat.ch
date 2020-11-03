@@ -21,7 +21,7 @@ d'autres systèmes Unix.
 Bien que NixOS 20.09 intègre une [dérivation pour Isso][derivation for
 Isso], elle est malheureusement cassée et repose sur Python 2. Comme
 j'utilise également un fork d'Isso, j'ai construit ma propre
-dérivation, fortement inspirée de celle dans [master][] :
+dérivation, fortement inspirée de celle dans [master][][^alternative] :
 
     ::nix
     issoPackage = with pkgs.python3Packages; buildPythonPackage rec {
@@ -56,6 +56,11 @@ dérivation, fortement inspirée de celle dans [master][] :
         ${python.interpreter} setup.py nosetests
       '';
     };
+
+[^alternative]: Il y a une différence subtile : j'utilise
+    `buildPythonPackage` au lieu de `buildPythonApplication`. C'est
+    important pour l'étape suivante. Je n'ai pas creusé pour savoir si
+    une application peut se convertir facilement en un paquet.
 
 Je veux faire tourner Isso via [Gunicorn][]. À cet effet, je construis
 un environnement Python combinant Isso et Gunicorn. Je peux alors
