@@ -132,8 +132,8 @@ class ImageFixerPlugin(Plugin):
             return int(size*4/3)
         raise ValueError("unknown unit {}".format(unit))
 
-    def __size(self, image):
-        """Get size for an image, and opacity."""
+    def _img_properties(self, image):
+        """Get size for an image, and opacity: (w, h), o?."""
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
             return img.size, "A" not in img.mode
@@ -186,7 +186,7 @@ class ImageFixerPlugin(Plugin):
                 self.logger.warn(
                     "[%s] has an unknown image %s" % (resource, src))
                 return None
-            self.cache[src] = self.__size(image)
+            self.cache[src] = self._img_properties(image)
             self.logger.debug("Image [%s] is %s" % (src,
                                                     self.cache[src]))
         dim, opacity = self.cache[src]
