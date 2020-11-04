@@ -133,27 +133,28 @@ class ImageFixerPlugin(Plugin):
         raise ValueError("unknown unit {}".format(unit))
 
     def __size(self, image):
-        """Get size for an image."""
+        """Get size for an image, and opacity."""
         if image.source_file.kind in {'png', 'jpg'}:
-            return Image.open(image.path).size
+            img = Image.open(image.path)
+            return img.size, "A" not in img.mode
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
             return tuple(x and self._topx(x) or None
                          for x in (svg.attrib.get('width', None),
-                                   svg.attrib.get('height', None)))
+                                   svg.attrib.get('height', None))), False
         if image.source_file.kind in {'m3u8'}:
             with open(image.path) as f:
                 w, h = max([(int(w), int(h))
                             for w, h in re.findall('RESOLUTION=(\d+)x(\d+)(?:$|,)',
                                                    f.read())])
-                return (w, h)
+                return (w, h), True
         if image.source_file.kind in {'mp4', 'ogv'}:
             mi = MediaInfo.parse(image.path)
             track = [t for t in mi.tracks if t.track_type == 'Video'][0]
-            return (track.width, track.height)
+            return (track.width, track.height), True
         self.logger.warn(
             "[%s] has an img tag not linking to an image" % resource)
-        return (None, None)
+        return (None, None), True
 
     def _size(self, resource, src, width, height):
         """Determine size of an image (with cache)."""
@@ -188,7 +189,8 @@ class ImageFixerPlugin(Plugin):
             self.cache[src] = self.__size(image)
             self.logger.debug("Image [%s] is %s" % (src,
                                                     self.cache[src]))
-        new_width, new_height = self.cache[src]
+        dim, opacity = self.cache[src]
+        new_width, new_height = dim
         if new_width is None or new_height is None:
             return None
         if width is not None:
@@ -374,6 +376,12 @@ class ImageFixerPlugin(Plugin):
                         float(height)*100./width)
                     outer.css.width = '{}px'.format(width)
                 outer.append(inner)
+
+                # Check opacity
+                if src in self.cache:
+                    _, opaque = self.cache[src]
+                    if opaque:
+                        img.addClass('lf-opaque')
 
                 # If we have a title, also enclose in a figure
                 figure = pq('<figure />')
