@@ -134,7 +134,7 @@ class ImageFixerPlugin(Plugin):
 
     def __size(self, image):
         """Get size for an image."""
-        if image.source_file.kind in {'png', 'jpg', 'jpeg', 'gif'}:
+        if image.source_file.kind in {'png', 'jpg'}:
             return Image.open(image.path).size
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
