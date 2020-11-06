@@ -439,6 +439,9 @@ def build(c):
         c.run(r"find * -type f -print0 | xargs -r0 chmod a+r")
         c.run(r"find * -type d -print0 | xargs -r0 chmod a+rx")
 
+        # Delete unwanted files
+        c.run("find . -type f -name '.*' -delete")
+
         c.run("git add *")
         c.run("git diff --stat HEAD || true", pty=True)
         if confirm("More diff?", default=True):
