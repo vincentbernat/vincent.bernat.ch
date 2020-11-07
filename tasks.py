@@ -364,6 +364,12 @@ def build(c):
         # Convert JPG to webp
         c.run("find media/images -type f -name '*.jpg' -print"
               " | xargs -n1 -P4 -i cwebp -quiet -q 84 -af '{}' -o '{}'.webp")
+        libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
+        # Convert JPG to avif
+        c.run("find media/images -type f -name '*.jpg' -print"
+              f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --yuv 420 "
+              "                                           --min 18 --max 22 '{}' '{}'.avif"
+              " > /dev/null")
         # Optimize JPG
         jpegoptim = c.run("nix-build --no-out-link "
                           "  -E 'with (import <nixpkgs>{}); "
@@ -380,11 +386,14 @@ def build(c):
         # Convert PNG to webp
         c.run("find media/images -type f -name '*.png' -print"
               " | xargs -n1 -P4 -i cwebp -quiet -z 6 '{}' -o '{}'.webp")
-        # Remove WebP if size is greater than original file
-        c.run("for f in media/images/**/*.webp; do"
-              "  orig=$(stat --format %s ${f%.webp});"
-              "  webp=$(stat --format %s $f);"
-              "  (( $orig*0.90 > $webp )) || rm $f;"
+        # Convert PNG to avif
+        c.run("find media/images -type f -name '*.png' -print"
+              f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --lossless '{{}}' '{{}}'.avif")
+        # Remove WebP/AVIF if size is greater than original file
+        c.run("for f in media/images/**/*.{webp,avif}; do"
+              "  orig=$(stat --format %s ${f%.*});"
+              "  new=$(stat --format %s $f);"
+              "  (( $orig*0.90 > $new )) || rm $f;"
               "done", shell="/bin/zsh")
 
         # Subset fonts. Nice tool to quickly look at the result:
