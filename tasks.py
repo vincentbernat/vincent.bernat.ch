@@ -363,7 +363,7 @@ def build(c):
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
         # Convert JPG to webp
         c.run("find media/images -type f -name '*.jpg' -print"
-              " | xargs -n1 -P4 -i cwebp -quiet -q 84 '{}' -o '{}'.webp")
+              " | xargs -n1 -P4 -i cwebp -quiet -q 84 -af '{}' -o '{}'.webp")
         # Optimize JPG
         jpegoptim = c.run("nix-build --no-out-link "
                           "  -E 'with (import <nixpkgs>{}); "
