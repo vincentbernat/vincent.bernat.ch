@@ -361,6 +361,9 @@ def build(c):
         c.run("find media/images -type f -name '*.svg'"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
+        # Convert JPG to webp
+        c.run("find media/images -type f -name '*.jpg' -print"
+              " | xargs -n1 -P4 -i cwebp -quiet -q 84 '{}' -o '{}'.webp")
         # Optimize JPG
         jpegoptim = c.run("nix-build --no-out-link "
                           "  -E 'with (import <nixpkgs>{}); "
@@ -374,6 +377,9 @@ def build(c):
               " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
               "                              --quiet --ext .png --force "
               "|| true")
+        # Convert PNG to webp
+        c.run("find media/images -type f -name '*.png' -print"
+              " | xargs -n1 -P4 -i cwebp -quiet -z 6 '{}' -o '{}'.webp")
 
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
