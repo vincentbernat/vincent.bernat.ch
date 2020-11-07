@@ -380,6 +380,12 @@ def build(c):
         # Convert PNG to webp
         c.run("find media/images -type f -name '*.png' -print"
               " | xargs -n1 -P4 -i cwebp -quiet -z 6 '{}' -o '{}'.webp")
+        # Remove WebP if size is greater than original file
+        c.run("for f in media/images/**/*.webp; do"
+              "  orig=$(stat --format %s ${f%.webp});"
+              "  webp=$(stat --format %s $f);"
+              "  (( $orig*0.90 > $webp )) || rm $f;"
+              "done", shell="/bin/zsh")
 
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
@@ -467,6 +473,7 @@ def image_quality(c, extension="jpg", target_extension=""):
 count=0
 total=0
 for f in $(cd content/media ; find images -name '*.{extension}'); do
+  [ -f .final/media/$f{target_extension} ] || continue
   ssim=$(magick compare -metric SSIM \
            content/media/$f \
            .final/media/$f{target_extension} \
