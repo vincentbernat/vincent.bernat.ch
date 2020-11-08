@@ -361,6 +361,7 @@ def build(c):
         c.run("find media/images -type f -name '*.svg'"
               "| grep -Ev '^media/images/(l|obj)(/|$)'"
               "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
+
         # Convert JPG to webp
         c.run("find media/images -type f -name '*.jpg' -print"
               " | xargs -n1 -P4 -i cwebp -quiet -q 84 -af '{}' -o '{}'.webp")
@@ -386,9 +387,6 @@ def build(c):
         # Convert PNG to webp
         c.run("find media/images -type f -name '*.png' -print"
               " | xargs -n1 -P4 -i cwebp -quiet -z 6 '{}' -o '{}'.webp")
-        # Convert PNG to avif
-        c.run("find media/images -type f -name '*.png' -print"
-              f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --lossless '{{}}' '{{}}'.avif")
         # Remove WebP/AVIF if size is greater than original file
         c.run("for f in media/images/**/*.{webp,avif}; do"
               "  orig=$(stat --format %s ${f%.*});"
