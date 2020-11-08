@@ -10,11 +10,7 @@ pre {
     white-space: pre-wrap;
     clear: left;
 }
-.codehilite {
-    margin-top: @line-height*1em;
-    padding: 0;
-}
-.codehilite {
+.codehilite when (@dark-mode = false) {
     /* High contrast "colorful" theme from pygments. See:
      * https://github.com/mpchadwick/pygments-high-contrast-stylesheets/blob/gh-pages/colorful.css
      */
@@ -84,7 +80,91 @@ pre {
     .vi { color: #3333BB } /* Name.Variable.Instance */
     .vm { color: #996633 } /* Name.Variable.Magic */
     .il { color: #0000DD } /* Literal.Number.Integer.Long */
-
+}
+.codehilite when (@dark-mode = true) {
+    /* High contrast "fruity" theme from pygments. See:
+     * https://github.com/mpchadwick/pygments-high-contrast-stylesheets/blob/gh-pages/fruity.css
+     */
+    .c { color: #009200; }
+    .err { color: #ffffff; }
+    .esc { color: #ffffff; }
+    .g { color: #ffffff; }
+    .k { color: #fb660a; }
+    .l { color: #ffffff; }
+    .n { color: #ffffff; }
+    .o { color: #ffffff; }
+    .x { color: #ffffff; }
+    .p { color: #ffffff; }
+    .ch { background-color: #0f140f; color: #009200; }
+    .cm { background-color: #0f140f; color: #009200; }
+    .cp { color: #ff0007; background-color: #0f140f; }
+    .cpf { background-color: #0f140f; color: #009200; }
+    .c1 { background-color: #0f140f; color: #009200; }
+    .cs { background-color: #0f140f; color: #009200; }
+    .gd { color: #ffffff; }
+    .ge { color: #ffffff; }
+    .gr { color: #ffffff; }
+    .gh { color: #ffffff; }
+    .gi { color: #ffffff; }
+    .go { color: #B9B9B9; }
+    .gp { color: #fb660a; }
+    .gs { color: #ffffff; }
+    .gu { color: #ffffff; }
+    .gt { color: #ffffff; }
+    .kc { color: #fb660a; }
+    .kd { color: #fb660a; }
+    .kn { color: #fb660a; }
+    .kp { color: #fb660a; }
+    .kr { color: #fb660a; }
+    .kt { color: #cdcaa9; }
+    .ld { color: #ffffff; }
+    .m { color: #0086f7; }
+    .s { color: #0086d2; }
+    .na { color: #ff0086; }
+    .nb { color: #ffffff; }
+    .nc { color: #ffffff; }
+    .no { color: #0086d2; }
+    .nd { color: #ffffff; }
+    .ni { color: #ffffff; }
+    .ne { color: #ffffff; }
+    .nf { color: #ff0086; }
+    .nl { color: #ffffff; }
+    .nn { color: #ffffff; }
+    .nx { color: #ffffff; }
+    .py { color: #ffffff; }
+    .nt { color: #fb660a; }
+    .nv { color: #fb660a; }
+    .ow { color: #ffffff; }
+    .w { color: #888888; }
+    .mb { color: #0086f7; }
+    .mf { color: #0086f7; }
+    .mh { color: #0086f7; }
+    .mi { color: #0086f7; }
+    .mo { color: #0086f7; }
+    .sa { color: #0086d2; }
+    .sb { color: #0086d2; }
+    .sc { color: #0086d2; }
+    .dl { color: #0086d2; }
+    .sd { color: #0086d2; }
+    .s2 { color: #0086d2; }
+    .se { color: #0086d2; }
+    .sh { color: #0086d2; }
+    .si { color: #0086d2; }
+    .sx { color: #0086d2; }
+    .sr { color: #0086d2; }
+    .s1 { color: #0086d2; }
+    .ss { color: #0086d2; }
+    .bp { color: #ffffff; }
+    .fm { color: #ff0086; }
+    .vc { color: #fb660a; }
+    .vg { color: #fb660a; }
+    .vi { color: #fb660a; }
+    .vm { color: #fb660a; }
+    .il { color: #0086f7; }
+}
+.codehilite {
+    margin-top: @line-height*1em;
+    padding: 0;
     .hll {
         position: relative;
         display: block;
@@ -100,17 +180,22 @@ pre {
             right: -@minimal-margin;
             top: 0;
             bottom: 0;
-            background: linear-gradient(135deg, #fdffb6 81%,#ffffe6 100%);
+            & when (@dark-mode = false) {
+              background: linear-gradient(135deg, #fdffb6 81%,#ffffe6 100%);
+            }
+            & when (@dark-mode = true) {
+              background: linear-gradient(135deg, #333333 81%,#222222 100%);
+            }
             z-index: -1;
         }
     }
 
     &.language-bash-session {
-        .nb, .m { color: black; }
+        .nb, .m { color: @color-foreground; }
         .gp { user-select: none; }
     }
     &.language-bash {
-        .nb, .m { color: black; }
+        .nb, .m { color: @color-foreground; }
     }
 
     @media not print {
@@ -129,6 +214,9 @@ pre {
             transition: opacity .4s;
             opacity: 0;
             cursor: pointer;
+            & when (@dark-mode = true) {
+                filter: invert(100%);
+            }
             &::after {
                 position: absolute;
                 top: 0;
@@ -142,8 +230,9 @@ pre {
                 white-space: nowrap;
                 vertical-align: middle;
                 font-family: @font-sansserif;
-                color: #fff;
-                background-color: #222;
+                /* Invert filter above also applies here */
+                color: if(@dark-mode = false, @color-foreground, #fff - @color-foreground);
+                background-color: if(@dark-mode = false, @color-background2, #fff - @color-background2);
                 transform: translateX(-30px);
             }
             &:hover::after {

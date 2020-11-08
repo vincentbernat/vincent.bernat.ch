@@ -3,9 +3,6 @@ html {
     @media @smaller {
         font-size: @font-size-small;
     }
-    @media (prefers-color-scheme: dark) {
-        filter: invert(100%) hue-rotate(180deg);
-    }
 }
 
 body {
@@ -15,15 +12,11 @@ body {
     overflow-wrap: break-word;
     overflow-x: hidden;
     max-width: 100%;        /* Needed because of "100vw" used below */
-    color: @foreground-color;
-    background-color: @background-color1;
+    color: @color-foreground;
+    background-color: @color-background1;
     background-image: url("data:image/svg+xml,@{background-svg}");
     background-attachment: fixed;
     background-size: cover;
-    @media (prefers-color-scheme: dark) {
-	background-color: (#fff - @background-color2);
-	background-image: none;
-    }
 }
 
 /* Horizontal alignment. */
@@ -85,12 +78,12 @@ main {
         margin-bottom: @line-height*2em;
         font-family: @font-sansserif;
         h1 {
-            color: @theme-color;
+            color: @color-theme;
             .font-size(2.625);
             margin: 0;
         }
         h2 {
-            color: #6F6F6F;
+            color: @color-low;
             font-size: 1em;
             line-height: @line-height;
             margin-top: 0;
@@ -116,14 +109,14 @@ main {
     b, strong {
         font-style: italic;
         font-weight: normal;
-        color: #B80F28;
+        color: @color-accent1;
         em {
             font-style: normal;
         }
     }
     del {
         text-decoration: line-through;
-        color: #666;
+        color: @color-low;
     }
     ins {
         font-style: italic;
@@ -131,7 +124,7 @@ main {
     }
     abbr[title] {
         cursor: help;
-        text-decoration: underline dashed lighten(@theme-color, 52%);
+        text-decoration: underline dashed lighten(@color-theme, 52%);
         @media (hover: none) {
             text-decoration: none;
         }
@@ -140,7 +133,7 @@ main {
         }
     }
     hr {
-        color: #222;
+        color: if(@dark-mode = false, #222, #ddd);
         text-align: center;
         display: block;
         border: none;
@@ -155,7 +148,7 @@ main {
         }
     }
     h1, h2, h3, h4 {
-        color: @theme-color;
+        color: @color-theme;
         font-family: PrettyAmpersand, @font-sansserif;
         code {
             font-family: inherit;
@@ -197,7 +190,7 @@ main {
                 bottom: 0;
                 left: (@admonition-margin - 0.6rem);
                 width: 1px;
-                background-color: #555;
+                background-color: @color-low;
             }
         }
         @media @medium {
@@ -219,7 +212,7 @@ main {
             margin-top: 0;
         }
         @media @medium {
-            color: #B80F28;
+            color: @color-accent1;
             padding-right: 0;
             text-align: left;
             &::before {
@@ -232,7 +225,7 @@ main {
 
     .headerlink {
         padding-left: .3em;
-        color: #aaa !important;
+        color: @color-low !important;
         visibility: hidden;
         opacity: .5;
     }
@@ -251,10 +244,9 @@ main {
             text-align: left;
             color: white;
             font-weight: normal;
-            background: linear-gradient(to bottom, @theme-color, lighten(@theme-color, 5%));
-            a {
-                color: lighten(@theme-color, 40%);
-            }
+            background: linear-gradient(to bottom,
+					if(@dark-mode = false, @color-theme, darken(@color-theme, 25%)),
+					if(@dark-mode = false, lighten(@color-theme, 5%), darken(@color-theme, 30%)));
             &:first-child {
                 border-radius: 4px 0 0 0;
             }
@@ -267,9 +259,9 @@ main {
                 padding: 0.2em 0.5em;
             }
             tr {
-                background-color: lighten(@theme-color, 78%);
+                background-color: if(@dark-mode = false, lighten(@color-theme, 78%), lighten(@color-background1, 10%));
                 &:nth-child(odd) {
-                    background-color: lighten(@theme-color, 58%);
+                    background-color: if(@dark-mode = false, lighten(@color-theme, 58%), lighten(@color-background1, 2%));
                 }
             }
         }
@@ -287,7 +279,7 @@ main {
             width: 1em;
             overflow: hidden;
             content: '«';
-            color: @theme-color;
+            color: @color-theme;
             font-family: Georgia,serif;
             position: absolute;
             left: -(1em/@line-height);
@@ -317,12 +309,12 @@ main {
     }
     dt {
         font-style: italic;
-        color: #B80F28;
+        color: @color-accent1;
     }
 
     .toc {
         margin: (@line-height*1em) 0 (@line-height*1em) -1em;
-        border-left: 1px solid lighten(@theme-color, 30%);
+        border-left: 1px solid lighten(@color-theme, 30%);
         font-family: @font-sansserif;
         li {
             list-style-type: none;
@@ -339,7 +331,7 @@ main {
             flex-direction: column;
             justify-content: center;
             text-align: center;
-            color: #555;
+            color: @color-low;
         }
         &[alt]::after {
             content: "🖼" " " attr(alt);
@@ -349,7 +341,7 @@ main {
             width: 100%;
             height: 100%;
             z-index: 2;
-            background-color: #DDD;
+            background-color: @color-background2;
         }
     }
     figure {
@@ -378,14 +370,18 @@ main {
             max-height: 100vh;
             object-fit: contain;
         }
+	& when (@dark-mode = true) {
+	    filter: invert(100%) hue-rotate(180deg);
+	}
     }
     .lf-media.lf-opaque {
-        filter: drop-shadow(0px 0px 1px rgba(0,0,0,.3))
-                drop-shadow(0px 0px 4px rgba(0,0,0,.3));
-        @media (prefers-color-scheme: dark) {
+	& when (@dark-mode = false) {
+            filter: drop-shadow(0px 0px 1px rgba(0,0,0,.3))
+                    drop-shadow(0px 0px 4px rgba(0,0,0,.3));
+	}
+	& when (@dark-mode = true) {
             filter: drop-shadow(0px 0px 1px rgba(255,255,255,.5))
-                    drop-shadow(0px 0px 4px rgba(255,255,255,.5))
-                    invert(100%) hue-rotate(180deg);
+                    drop-shadow(0px 0px 4px rgba(255,255,255,.5));
         }
     }
     .lf-media-outer {
