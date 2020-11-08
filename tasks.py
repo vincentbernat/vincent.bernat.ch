@@ -8,6 +8,7 @@ import yaml
 import csv
 import re
 import datetime
+import contextlib
 
 os.environ["PATH"] = os.path.expanduser('~/.virtualenvs/hyde/bin') \
     + os.pathsep + os.environ["PATH"]
@@ -36,6 +37,20 @@ def confirm(question, default=False):
         print(err, file=sys.stderr)
 
 
+@contextlib.contextmanager
+def step(what):
+    green = "\033[32;1m"
+    blue = "\033[34;1m"
+    yellow = "\033[33;1m"
+    reset = "\033[0m"
+    now = time.time()
+    print(f"{blue}▶ {yellow}{what}{reset}", file=sys.stderr)
+    yield
+    elapsed = int(time.time() - now)
+    print(f"{blue}▶ {green}{what}{reset} ({elapsed}s)",
+          file=sys.stderr)
+
+
 @task
 def gen(c):
     """Generate dev content"""
@@ -51,7 +66,7 @@ def regen(c):
 @task
 def serve(c):
     """Serve dev content"""
-    c.run('hyde -x serve -a 0.0.0.0', pty=True)
+    c.run('hyde -x serve -a 0.0.0.0', pty=True, hide=False)
 
 
 @task
@@ -337,62 +352,77 @@ def build(c):
         c.run("! git grep -Pw '((?i:"
               "obviously|basically|simply|clearly|everyone knows|turns out"
               "|explicitely|overriden|accross|totally"
-              ")|Thinkpad)' \\*.html")
-        c.run("! git grep -E '\"[.](\s|$)' \\*.html")
-    c.run("[ $(git rev-parse --abbrev-ref HEAD) = latest ]")
+              ")|Thinkpad)' \\*.html", hide='out')
+        c.run(r"! git grep -E '\"[.](\s|$)' \\*.html")
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
-    c.run("yarn install --frozen-lockfile")
-    c.run('hyde -x gen -c %s' % conf)
+    with step("update JS dependencies"):
+        c.run("yarn install --frozen-lockfile")
+    with step("run Hyde"):
+        c.run('hyde -x gen -c %s' % conf)
     with c.cd(".final"):
         # Fix HTML (<source> is an empty tag)
-        c.run(r"find . -name '*.html' -print0"
-              r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
-        c.run(r"find . -name '*.html' -print0"
-              r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'")
+        with step("fix HTML"):
+            c.run(r"find . -name '*.html' -print0"
+                  r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
+            c.run(r"find . -name '*.html' -print0"
+                  r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'")
         # Optimize SVG (consider using svgcleaner instead, svgo is a
         # bit fragile)
-        c.run("find media/images -type f -name '*.svg'"
-              "| sed 's+/[^/]*$++' | sort | uniq"
-              "| grep -Ev '^media/images/(l|obj)(/|$)'"
-              "| sort "
-              "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo "
-              "        --quiet --disable=mergePaths")
-        c.run("find media/images -type f -name '*.svg'"
-              "| grep -Ev '^media/images/(l|obj)(/|$)'"
-              "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
+        with step("optimize SVG"):
+            c.run("find media/images -type f -name '*.svg'"
+                  "| sed 's+/[^/]*$++' | sort | uniq"
+                  "| grep -Ev '^media/images/(l|obj)(/|$)'"
+                  "| sort "
+                  "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo "
+                  "        --quiet --disable=mergePaths")
+            c.run("find media/images -type f -name '*.svg'"
+                  "| grep -Ev '^media/images/(l|obj)(/|$)'"
+                  "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
 
-        # Convert JPG to webp
-        c.run("find media/images -type f -name '*.jpg' -print"
-              " | xargs -n1 -P4 -i cwebp -quiet -q 84 -af '{}' -o '{}'.webp")
-        libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
-        # Convert JPG to avif
-        c.run("find media/images -type f -name '*.jpg' -print"
-              f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --yuv 420 "
-              "                                           --min 18 --max 22 '{}' '{}'.avif"
-              " > /dev/null")
-        # Optimize JPG
-        jpegoptim = c.run("nix-build --no-out-link "
-                          "  -E 'with (import <nixpkgs>{}); "
-                          "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
-        c.run("find media/images -type f -name '*.jpg' -print0"
-              "  | sort -z "
-              f" | xargs -0 -n10 -P4 {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
-        # Optimize PNG
-        c.run("find media/images -type f -name '*.png' -print0"
-              " | sort -z "
-              " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
-              "                              --quiet --ext .png --force "
-              "|| true")
-        # Convert PNG to webp
-        c.run("find media/images -type f -name '*.png' -print"
-              " | xargs -n1 -P4 -i cwebp -quiet -z 6 '{}' -o '{}'.webp")
-        # Remove WebP/AVIF if size is greater than original file
-        c.run("for f in media/images/**/*.{webp,avif}; do"
-              "  orig=$(stat --format %s ${f%.*});"
-              "  new=$(stat --format %s $f);"
-              "  (( $orig*0.90 > $new )) || rm $f;"
-              "done", shell="/bin/zsh")
+        # Image optimization
+        with step("convert JPG to WebP"):
+            c.run("find media/images -type f -name '*.jpg' -print"
+                  " | xargs -n1 -P4 -i cwebp -q 84 -af '{}' -o '{}'.webp")
+        with step("convert JPG to AVIF"):
+            libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
+            c.run("find media/images -type f -name '*.jpg' -print"
+                  f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --yuv 420 "
+                  "                                           --min 18 --max 22 '{}' '{}'.avif"
+                  " > /dev/null")
+        with step("optimize JPG"):
+            jpegoptim = c.run("nix-build --no-out-link "
+                              "  -E 'with (import <nixpkgs>{}); "
+                              "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
+            c.run("find media/images -type f -name '*.jpg' -print0"
+                  "  | sort -z "
+                  f" | xargs -0 -n10 -P4 {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
+        with step("optimize PNG"):
+            c.run("find media/images -type f -name '*.png' -print0"
+                  " | sort -z "
+                  " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
+                  "                              --quiet --ext .png --force "
+                  "|| true")
+        with step("convert PNG to WebP"):
+            c.run("find media/images -type f -name '*.png' -print"
+                  " | xargs -n1 -P4 -i cwebp -z 8 '{}' -o '{}'.webp")
+        with step("remove WebP/AVIF files not small enough"):
+            c.run("for f in media/images/**/*.{webp,avif}; do"
+                  "  orig=$(stat --format %s ${f%.*});"
+                  "  new=$(stat --format %s $f);"
+                  "  (( $orig*0.90 > $new )) || rm $f;"
+                  "done", shell="/bin/zsh")
+            c.run(r"""
+printf "     %10s %10s %10s\n" Original WebP AVIF
+printf " PNG %10s %10s %10s\n" \
+   $(find media/images -name '*.png' | wc -l) \
+   $(find media/images -name '*.png.webp' | wc -l) \
+   $(find media/images -name '*.png.avif' | wc -l)
+printf " JPG %10s %10s %10s\n" \
+   $(find media/images -name '*.jpg' | wc -l) \
+   $(find media/images -name '*.jpg.webp' | wc -l) \
+   $(find media/images -name '*.jpg.avif' | wc -l)
+            """, hide='err')
 
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
@@ -409,50 +439,54 @@ def build(c):
                   "media/fonts/{}.woff".format(font, font))
             c.run("mv media/fonts/{}.subset.woff2 "
                   "media/fonts/{}.woff2".format(font, font))
-        subset('iosevka-custom-regular', 'monospace')
-        subset('merriweather', 'regular', ["--layout-features+=ss01"])
-        subset('merriweather-italic', 'regular', ["--layout-features+=ss01"])
+
+        with step("subset fonts"):
+            subset('iosevka-custom-regular', 'monospace')
+            subset('merriweather', 'regular', ["--layout-features+=ss01"])
+            subset('merriweather-italic', 'regular', ["--layout-features+=ss01"])
+
         # Compute hash on various files
-        for p in ['media/images/l/sprite*.svg',
-                  'media/fonts/*',
-                  'media/js/*.js',
-                  'media/css/*.css']:
-            sed_html = []
-            sed_css = []
-            files = c.run("echo %s" % p, hide=True).stdout.strip().split(" ")
-            for f in files:
-                # Compute hash
-                md5 = c.run("md5sum %s" % f,
-                            hide="out").stdout.split(" ")[0][:14]
-                sha = c.run("openssl dgst -sha256 -binary %s"
-                            "| openssl enc -base64 -A" % f,
-                            hide="out").stdout.strip()
-                # New name
-                root, ext = os.path.splitext(f)
-                newname = "%s.%s%s" % (root, md5, ext)
-                c.run("cp %s %s" % (f, newname))
-                # Remove deploy/media
-                f = f[len('media/'):]
-                newname = newname[len('media/'):]
-                if ext in [".png", ".svg", ".woff", ".woff2"]:
-                    # Fix CSS
-                    sed_css.append('s+{})+{})+g'.format(f, newname))
-                if ext not in [".png", ".svg"]:
-                    # Fix HTML
-                    sed_html.append(
-                        (r"s,"
-                         r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
-                         r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
-                         r"crossorigin=\3anonymous\3,"
-                         r"g").format(media, f, media, newname, sha))
-            if sed_css:
-                c.run("find . -name '*.css' -type f -print0 | "
-                      "xargs -r0 -n10 -P5 sed -i {}".format(
-                          " ".join(("-e '{}'".format(x) for x in sed_css))))
-            if sed_html:
-                c.run("find . -name '*.html' -type f -print0 | "
-                      "xargs -r0 -n10 -P5 sed -i {}".format(
-                          " ".join(('-e "{}"'.format(x) for x in sed_html))))
+        with step("compute hash for static files"):
+            for p in ['media/images/l/sprite*.svg',
+                      'media/fonts/*',
+                      'media/js/*.js',
+                      'media/css/*.css']:
+                sed_html = []
+                sed_css = []
+                files = c.run("echo %s" % p, hide=True).stdout.strip().split(" ")
+                for f in files:
+                    # Compute hash
+                    md5 = c.run("md5sum %s" % f,
+                                hide="out").stdout.split(" ")[0][:14]
+                    sha = c.run("openssl dgst -sha256 -binary %s"
+                                "| openssl enc -base64 -A" % f,
+                                hide="out").stdout.strip()
+                    # New name
+                    root, ext = os.path.splitext(f)
+                    newname = "%s.%s%s" % (root, md5, ext)
+                    c.run("cp %s %s" % (f, newname))
+                    # Remove deploy/media
+                    f = f[len('media/'):]
+                    newname = newname[len('media/'):]
+                    if ext in [".png", ".svg", ".woff", ".woff2"]:
+                        # Fix CSS
+                        sed_css.append('s+{})+{})+g'.format(f, newname))
+                    if ext not in [".png", ".svg"]:
+                        # Fix HTML
+                        sed_html.append(
+                            (r"s,"
+                             r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
+                             r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
+                             r"crossorigin=\3anonymous\3,"
+                             r"g").format(media, f, media, newname, sha))
+                if sed_css:
+                    c.run("find . -name '*.css' -type f -print0 | "
+                          "xargs -r0 -n10 -P5 sed -i {}".format(
+                              " ".join(("-e '{}'".format(x) for x in sed_css))))
+                if sed_html:
+                    c.run("find . -name '*.html' -type f -print0 | "
+                          "xargs -r0 -n10 -P5 sed -i {}".format(
+                              " ".join(('-e "{}"'.format(x) for x in sed_html))))
 
         # Fix permissions
         c.run(r"find * -type f -print0 | xargs -r0 chmod a+r")
@@ -462,11 +496,12 @@ def build(c):
         c.run("find . -type f -name '.*' -delete")
 
         c.run("git add *")
-        c.run("git diff --stat HEAD || true", pty=True)
+        c.run("git diff --stat HEAD || true", pty=True, hide=False)
         if confirm("More diff?", default=True):
-            c.run("env GIT_PAGER=less git diff --word-diff HEAD || true", pty=True)
+            c.run("env GIT_PAGER=less git diff --word-diff HEAD || true",
+                  pty=True, hide=False)
         if confirm("Keep?", default=True):
-            c.run('git commit -a -m "Autocommit"')
+            c.run('git commit -a -m "Autocommit"', hide=False)
         else:
             c.run("git reset --hard")
             c.run("git clean -d -f")
@@ -495,33 +530,38 @@ echo "SSIM {extension} to {extension}{target_extension}: $((total/count)) (out o
 @task
 def push(c, clean=False):
     """Push built site to production"""
-    c.run("git push github")
+    with step("push to GitHub"):
+        c.run("git push github")
 
     with c.cd(".final"):
         # Restore timestamps (this relies on us not truncating
         # history too often)
-        c.run('''
+        with step("restore timestamps"):
+            c.run('''
 for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
     touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") -h "$f";
 done''')
 
     # media
     for host in hosts:
-        c.run("rsync --exclude=.git --copy-unsafe-links -rt "
-              ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
+        with step(f"push media to {host}"):
+            c.run("rsync --exclude=.git --copy-unsafe-links -rt "
+                  ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
 
     # HTML
     for host in hosts:
-        c.run("rsync --exclude=.git --exclude=media "
-              "--delete-delay --copy-unsafe-links -rt "
-              ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
+        with step(f"push HTML to {host}"):
+            c.run("rsync --exclude=.git --exclude=media "
+                  "--delete-delay --copy-unsafe-links -rt "
+                  ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
 
     if clean:
         for host in hosts:
-            c.run("rsync --exclude=.git --copy-unsafe-links -rt "
-                  "--delete-delay --exclude=videos/\\*/ "
-                  ".final/media/ "
-                  "{}:/data/webserver/media.luffy.cx/".format(host))
+            with step(f"clean files on {host}"):
+                c.run("rsync --exclude=.git --copy-unsafe-links -rt "
+                      "--delete-delay --exclude=videos/\\*/ "
+                      ".final/media/ "
+                      "{}:/data/webserver/media.luffy.cx/".format(host))
 
 
 @task
