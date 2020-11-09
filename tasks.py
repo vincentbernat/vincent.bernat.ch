@@ -44,7 +44,7 @@ def step(what):
     yellow = "\033[33;1m"
     reset = "\033[0m"
     now = time.time()
-    print(f"{blue}▶ {yellow}{what}{reset}", file=sys.stderr)
+    print(f"{blue}▶ {yellow}{what}{reset}...", file=sys.stderr)
     yield
     elapsed = int(time.time() - now)
     print(f"{blue}▶ {green}{what}{reset} ({elapsed}s)",
