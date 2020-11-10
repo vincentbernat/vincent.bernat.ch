@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 CSS plugins
 """
@@ -11,17 +12,11 @@ class CSSPrefixerPlugin(Plugin):
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind not in ("less", "css"):
             return
-        mode = self.site.config.mode
-        if mode == "development":
-            print("HELLO")
-            cleancss_options = "{format: 'beautify', level: 2}"
-        else:
-            cleancss_options = "{level: 2}"
-        p = subprocess.Popen(
-            ['nodejs', '-e', """
+        p = subprocess.Popen(['nodejs', '-e', """
 var autoprefixer = require('autoprefixer');
+var mqpacker = require('css-mqpacker');
+var cssnano = require('cssnano');
 var postcss = require('postcss');
-var CleanCSS = require('clean-css');
 var input = '';
 
 process.stdin.setEncoding('utf8')
@@ -32,16 +27,13 @@ process.stdin.on('readable', function() {
   }
 });
 process.stdin.on('end', function() {
-  postcss([autoprefixer])
+  postcss([autoprefixer, mqpacker, cssnano({reduceIdents: false})])
         .process(input, { from: undefined })
         .then(function(result) {
-           process.stdout.write(
-             new CleanCSS(%s).minify(result.css.toString()).styles
-           );
+          process.stdout.write(result.css.toString());
         });
 });
-        """ % (cleancss_options,)],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        """], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         stdout, _ = p.communicate(text.encode('utf-8'))
         assert p.returncode == 0
         return stdout.decode('utf-8')
