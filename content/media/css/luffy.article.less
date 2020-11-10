@@ -180,26 +180,30 @@ main {
     .admonition {
         position: relative;
         margin-top: @line-height*1em;
-        @supports (display: flex) {
-            display: flex;
-            margin-left: -@admonition-margin;
-            &::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                left: (@admonition-margin - 0.6rem);
-                width: 1px;
-                background-color: @color-low;
-            }
+        display: flex;
+        margin-left: -@admonition-margin;
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: (@admonition-margin - 0.6rem);
+            width: 1px;
+            background-color: @color-low;
         }
-        @media @medium {
-            display: block;
+	.simple-admonition {
+	    display: block;
             margin-left: 0;
             &::before {
                 display: none;
             }
-        }
+	}
+	@supports not (display: flex) {
+	    .simple-admonition();
+	}
+        @media @medium {
+	    .simple-admonition();
+	}
     }
     .admonition-title {
         box-sizing: border-box;
@@ -211,16 +215,21 @@ main {
         &, & + p {
             margin-top: 0;
         }
-        @media @medium {
-            color: @color-accent1;
+	.simple-admonition-title {
             padding-right: 0;
             text-align: left;
             &::before {
-                content: '📌';
-                padding-right: .5rem;
+                content: '📌  ';
                 font-style: normal;
             }
         }
+	@supports not (display: flex) {
+	    .simple-admonition-title();
+	}
+        @media @medium {
+	    .simple-admonition-title();
+	}
+
     }
 
     .headerlink {
