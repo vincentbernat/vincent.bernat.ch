@@ -1,6 +1,6 @@
 /* Add a copy to clipboard button for code blocks */
 
-luffy.s.push(function() {
+luffy.do(function() {
   if (!window.getSelection) {
     return;
   }

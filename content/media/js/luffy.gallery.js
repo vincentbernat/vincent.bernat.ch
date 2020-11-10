@@ -1,6 +1,6 @@
 /* Handle image gallery */
 
-luffy.s.push(function() {
+luffy.do(function() {
     // Don't do anything if there is no gallery
     if (!document.querySelector(".lf-gallery")) return;
 

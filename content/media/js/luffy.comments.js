@@ -1,6 +1,6 @@
 /* Comment system (using Isso) */
 
-luffy.s.push(function() {
+luffy.do(function() {
     // Don't do anything if there is no comment
     var el = document.getElementById("isso-thread"),
         links = document.querySelectorAll('#lf-bottomlinks a[href="#isso-thread"]'),

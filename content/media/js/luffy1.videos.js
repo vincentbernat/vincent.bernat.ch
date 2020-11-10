@@ -1,5 +1,5 @@
 // Self-hosted videos
-(function() {
+luffy.do(function() {
     var videoSources = document.querySelectorAll("video.lf-media source[type='application/vnd.apple.mpegurl']");
     if (videoSources.length == 0) return;
 
@@ -40,10 +40,10 @@
         };
         newVideo.addEventListener('play', play, false);
     });
-})();
+});
 
 // Make seek-to links work
-(function() {
+luffy.do(function() {
     var seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
     [].forEach.call(seekLinks, function(seekLink) {
         seekLink.addEventListener('click', function(event) {
@@ -71,4 +71,4 @@
             }
         });
     });
-})();
+});
