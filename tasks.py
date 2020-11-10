@@ -387,6 +387,16 @@ def build(c):
                   r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
             c.run(r"find . -name '*.html' -print0"
                   r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'")
+
+        # Optimize luffy-dark.css
+        with step("optimize luffy-dark.css"):
+            with c.cd("media/css"):
+                c.run("../../../node_modules/cssnano-cli/cmd.js --no-reduceIdents "
+                      "  =(cat luffy-dark.css ; echo ; cat luffy-light.css ) "
+                      "> luffy-dark.concat.css", shell="/bin/zsh")
+                c.run("mv luffy-dark.concat.css luffy-dark.css")
+                c.run(r"sed -i '/\/\*! Light theme/,$d' luffy-dark.css")
+
         # Optimize SVG (consider using svgcleaner instead, svgo is a
         # bit fragile)
         with step("optimize SVG"):
