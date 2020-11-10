@@ -198,78 +198,76 @@ pre {
         .nb, .m { color: @color-foreground; }
     }
 
-    @media not print {
-        /* Clipboard handling */
-        position: relative;
-        &:hover > .lf-sprite-copy {
-            opacity: 0.4;
-            &:hover {
-                opacity: 1;
-            }
+    /* Clipboard handling */
+    position: relative;
+    &:hover > .lf-sprite-copy {
+        opacity: 0.4;
+        &:hover {
+            opacity: 1;
         }
-        & > .lf-sprite-copy {
+    }
+    & > .lf-sprite-copy {
+        position: absolute;
+        top: 0;
+        right: 0;
+        transition: opacity .4s;
+        opacity: 0;
+        cursor: pointer;
+        & when (@dark-mode = true) {
+            filter: invert(100%);
+        }
+        &::after {
             position: absolute;
             top: 0;
+            bottom: 0;
             right: 0;
-            transition: opacity .4s;
-            opacity: 0;
-            cursor: pointer;
-            & when (@dark-mode = true) {
-                filter: invert(100%);
-            }
+            height: 100%;
+            display: none;
+            font-size: 0.75em;
+            padding: 2px 5px;
+            border-radius: 2px;
+            white-space: nowrap;
+            vertical-align: middle;
+            font-family: @font-sansserif;
+            /* Invert filter above also applies here */
+            color: if(@dark-mode = false, @color-foreground, #fff - @color-foreground);
+            background-color: if(@dark-mode = false, @color-background2, #fff - @color-background2);
+            transform: translateX(-30px);
+        }
+        &:hover::after {
+            display: block;
+            content: "Copy to clipboard";
+        }
+        &:hover:lang(fr)::after {
+            content: "Copier vers le presse-papier";
+        }
+        &[class|='msg-copy'] {
+            opacity: 1;
             &::after {
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                right: 0;
-                height: 100%;
-                display: none;
-                font-size: 0.75em;
-                padding: 2px 5px;
-                border-radius: 2px;
-                white-space: nowrap;
-                vertical-align: middle;
-                font-family: @font-sansserif;
-                /* Invert filter above also applies here */
-                color: if(@dark-mode = false, @color-foreground, #fff - @color-foreground);
-                background-color: if(@dark-mode = false, @color-background2, #fff - @color-background2);
-                transform: translateX(-30px);
-            }
-            &:hover::after {
                 display: block;
-                content: "Copy to clipboard";
+                animation: showcopied 1.5s ease;
             }
-            &:hover:lang(fr)::after {
-                content: "Copier vers le presse-papier";
+        }
+        &.msg-copy-ok::after {
+            content: "Copied!";
+        }
+        &.msg-copy-ok:lang(fr)::after {
+            content: "Copié!";
+        }
+        &.msg-copy-failed::after {
+            content: "Ctrl/⌘+C to copy";
+        }
+        &.msg-copy-failed:lang(fr)::after {
+            content: "Ctrl/⌘+C pour copier";
+        }
+        @keyframes showcopied {
+            0% {
+                opacity: 0;
+                transform: translateX(0);
             }
-            &[class|='msg-copy'] {
+            50%,100% {
                 opacity: 1;
-                &::after {
-                    display: block;
-                    animation: showcopied 1.5s ease;
-                }
-            }
-            &.msg-copy-ok::after {
-                content: "Copied!";
-            }
-            &.msg-copy-ok:lang(fr)::after {
-                content: "Copié!";
-            }
-            &.msg-copy-failed::after {
-                content: "Ctrl/⌘+C to copy";
-            }
-            &.msg-copy-failed:lang(fr)::after {
-                content: "Ctrl/⌘+C pour copier";
-            }
-            @keyframes showcopied {
-                0% {
-                    opacity: 0;
-                    transform: translateX(0);
-                }
-                50%,100% {
-                    opacity: 1;
-                    transform: translateX(-30px);
-                }
+                transform: translateX(-30px);
             }
         }
     }
