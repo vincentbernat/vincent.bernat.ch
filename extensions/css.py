@@ -12,6 +12,10 @@ class CSSPrefixerPlugin(Plugin):
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind not in ("less", "css"):
             return
+        if self.site.config.mode == "development":
+            minify = "false"
+        else:
+            minify = "true"
         p = subprocess.Popen(['nodejs', '-e', """
 var autoprefixer = require('autoprefixer');
 var mqpacker = require('css-mqpacker');
@@ -27,13 +31,15 @@ process.stdin.on('readable', function() {
   }
 });
 process.stdin.on('end', function() {
-  postcss([autoprefixer, mqpacker, cssnano({reduceIdents: false})])
+  postcss([autoprefixer, mqpacker, cssnano({preset: ['default', {
+           reduceIdents: false, normalizeWhitespace: %s
+        }]})])
         .process(input, { from: undefined })
         .then(function(result) {
           process.stdout.write(result.css.toString());
         });
 });
-        """], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        """ % minify], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         stdout, _ = p.communicate(text.encode('utf-8'))
         assert p.returncode == 0
         return stdout.decode('utf-8')
