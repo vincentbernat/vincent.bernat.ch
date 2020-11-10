@@ -18,7 +18,6 @@ class CSSPrefixerPlugin(Plugin):
             minify = "true"
         p = subprocess.Popen(['nodejs', '-e', """
 var autoprefixer = require('autoprefixer');
-var mqpacker = require('css-mqpacker');
 var cssnano = require('cssnano');
 var postcss = require('postcss');
 var input = '';
@@ -31,7 +30,7 @@ process.stdin.on('readable', function() {
   }
 });
 process.stdin.on('end', function() {
-  postcss([autoprefixer, mqpacker, cssnano({preset: ['default', {
+  postcss([autoprefixer, cssnano({preset: ['default', {
            reduceIdents: false, normalizeWhitespace: %s
         }]})])
         .process(input, { from: undefined })
