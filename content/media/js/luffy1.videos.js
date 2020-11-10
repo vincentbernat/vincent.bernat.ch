@@ -4,41 +4,43 @@ luffy.do(function() {
     if (videoSources.length == 0) return;
 
     // Enable HLS for selected videos
-    if (!Hls.isSupported()) return;
+    luffy.load("hls.js", function() {
+        if (!Hls.isSupported()) return;
 
-    [].forEach.call(videoSources, function(videoSource) {
-        var m3u8 = videoSource.src,
-            once = false,
-            oldVideo = videoSource.parentNode,
-            newVideo = oldVideo.cloneNode(true),
-            allSources = newVideo.querySelectorAll('source'); // ":scope > source" is not well-supported
+        [].forEach.call(videoSources, function(videoSource) {
+            var m3u8 = videoSource.src,
+                once = false,
+                oldVideo = videoSource.parentNode,
+                newVideo = oldVideo.cloneNode(true),
+                allSources = newVideo.querySelectorAll('source'); // ":scope > source" is not well-supported
 
-        // Remove all sources from clone. Keep tracks.
-        [].forEach.call(allSources, function(source) {
-            source.remove();
+            // Remove all sources from clone. Keep tracks.
+            [].forEach.call(allSources, function(source) {
+                source.remove();
+            });
+
+            // Add an empty source (enable play event on Chromium 72+)
+            newVideo.src = "about:blank";
+
+            // Replace video tag with our clone.
+            oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+
+            // Pass control to hls.js
+            var play = function() {
+                if (once) return;
+                var hls = new Hls({
+                    capLevelToPlayerSize: true,
+                    maxMaxBufferLength: 90
+                });
+                hls.loadSource(m3u8);
+                hls.attachMedia(newVideo);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    newVideo.play();
+                });
+                once = true;
+            };
+            newVideo.addEventListener('play', play, false);
         });
-
-        // Add an empty source (enable play event on Chromium 72+)
-        newVideo.src = "about:blank";
-
-        // Replace video tag with our clone.
-        oldVideo.parentNode.replaceChild(newVideo, oldVideo);
-
-        // Pass control to hls.js
-        var play = function() {
-            if (once) return;
-            var hls = new Hls({
-                capLevelToPlayerSize: true,
-                maxMaxBufferLength: 90
-            });
-            hls.loadSource(m3u8);
-            hls.attachMedia(newVideo);
-            hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                newVideo.play();
-            });
-            once = true;
-        };
-        newVideo.addEventListener('play', play, false);
     });
 });
 
