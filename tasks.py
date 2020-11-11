@@ -295,7 +295,7 @@ def fixlinks(c):
             year = int(mo.group(1))
         archive = {'a': "https://archive.today/{}/{}".format(year,
                                                              row['urlname']),
-                   'w': "http{}://web.archive.org/web/{}/{}".format(
+                   'w': "http{}://web.archive.org/web/{}if_/{}".format(
                        not row['urlname'].startswith('http:') and "s" or "",
                        year, row['urlname'])}
         while True:
@@ -340,9 +340,9 @@ Info:    {infostring}""".format(**row))
                           row['urlname'], row['urlname'], url))
                 break
             elif ans == "b":
-                c.run("xdg-open {}".format(row['urlname']))
+                c.run("xdg-open '{}'".format(row['urlname']))
             elif ans == "p":
-                c.run("xdg-open {}".format(row['parentname']))
+                c.run("xdg-open '{}'".format(row['parentname']))
             elif ans == "R":
                 c.run("git grep -Fl '{}'"
                       r"| xargs -r sed -i 's,\([( ]\){},\1{},g'".format(
@@ -352,7 +352,7 @@ Info:    {infostring}""".format(**row))
                 found = False
                 for a in archive:
                     if ans == a:
-                        c.run("xdg-open {}".format(archive[a]))
+                        c.run("xdg-open '{}'".format(archive[a]))
                         break
                     elif ans == a.upper():
                         c.run("git grep -Fl '{}'"
