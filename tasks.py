@@ -118,7 +118,7 @@ def screenshots(c):
 """
 while read video arguments; do
   video2hls --hls-playlist-prefix https://media.luffy.cx/videos/${video%.*}/ \
-    --poster-grayscale --poster-quality 22 \
+    --poster-grayscale --poster-quality 30 \
     $=arguments $video
 done <<EOF
 2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
