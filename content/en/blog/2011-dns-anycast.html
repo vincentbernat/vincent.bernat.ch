@@ -142,6 +142,7 @@ kernel and to any BGP instance. Some directly connected routes will be
 imported (ones representing client networks) as well as all routes
 from BGP instances. Here is an excerpt of AS 64610's configuration:
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -172,7 +173,8 @@ small. This also means that these IP addresses are not routable in
 spite of the use of public IP addresses. Here is the routing table as
 seen by `64610` (use `birdc6` to connect to BIRD):
 
-    bird> show route
+    ::console
+    # birdc show route
     2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
                        via 2001:db8:ffff:4600:4610::1 on eth0 [bgp1 18:52] (100) [AS64622i]
     2001:db8:4621::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64621i]
@@ -184,7 +186,8 @@ As you can notice, it knows several paths to the same network,
 however, it only selects the best one (based on the length of the AS
 path):
 
-    bird> show route 2001:db8:4622::/48 all
+    ::console
+    # birdc show route 2001:db8:4622::/48 all
     2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
             Type: BGP unicast univ
             BGP.origin: IGP
@@ -238,6 +241,7 @@ AS 64620 only. The IP address of this anycast DNS server is
 `L1`. We also assign `2001:db8:aaaa::1/48` to `64651`, `64612` and
 `64621`. BIRD configuration is adapted to advertise this network:
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -274,6 +278,7 @@ customer of AS 64620. A common way to handle this is to let `64621`
 tag the route with a special community that will let know `64620` that
 the route should not be exported.
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -308,6 +313,7 @@ AS 64600, 64610 and 64630 on `64620`. We could use a special community
 to filter out the route but we keep it simple and just filter the
 route directly.
 
+    ::junos
     filter keep_local_dns {
        if net ~ [ 2001:db8:aaaa::/48 ] then reject;
        accept;

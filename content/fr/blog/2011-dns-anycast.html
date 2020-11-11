@@ -156,6 +156,7 @@ représentant les réseaux des clients) ainsi que toutes les routes en
 provenance des voisins BGP. Voici un extrait de la configuration de
 `64610` :
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -187,7 +188,8 @@ adresses de ces réseaux ne sont pas routables malgré l'utilisation
 d'IP publiques. Voici la table de routage telle que vue par `64610`
 (on utiliser `birdc6` pour se connecter à BIRD) :
 
-    bird> show route
+    ::console
+    # birdc show route
     2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
                        via 2001:db8:ffff:4600:4610::1 on eth0 [bgp1 18:52] (100) [AS64622i]
     2001:db8:4621::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64621i]
@@ -200,7 +202,8 @@ le même réseau mais il ne sélectionne que celui qu'il considère comme
 le meilleur (basé principalement sur la longueur du chemin en nombre
 d'AS traversés).
 
-    bird> show route 2001:db8:4622::/48 all
+    ::console
+    # birdc show route 2001:db8:4622::/48 all
     2001:db8:4622::/48 via 2001:db8:ffff:4610:4620::2 on eth3 [bgp4 18:52] * (100) [AS64622i]
             Type: BGP unicast univ
             BGP.origin: IGP
@@ -257,6 +260,7 @@ et `64621`. La configuration de BIRD est alors modifiée pour que ce
 réseau soit redistributée dans BGP au même titre que les réseaux
 classiques :
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -295,6 +299,7 @@ de configurer `64621` pour qu'il ajoute une communauté spéciale à la
 route en question qui indiquera à `64620` qu'il ne faut pas
 redistribuer cette route :
 
+    ::junos
     protocol direct {
        description "Client networks";
        import filter {
@@ -333,6 +338,7 @@ route et de baser le filtre sur cette communauté, mais pour des
 raisons de simplicité, nous construisons le filtre en testant
 directement la route.
 
+    ::junos
     filter keep_local_dns {
        if net ~ [ 2001:db8:aaaa::/48 ] then reject;
        accept;
