@@ -9,6 +9,8 @@ import csv
 import re
 import datetime
 import contextlib
+import urllib
+import xml.etree.ElementTree as ET
 
 os.environ["PATH"] = os.path.expanduser('~/.virtualenvs/hyde/bin') \
     + os.pathsep + os.environ["PATH"]
@@ -85,6 +87,24 @@ def sprite(c):
                     "--css-render-less-template=content/media/css/sprite.tmpl",
                     "--css-sprite=../images/l/sprite.svg",
                     "content/media/images/l/sprite/*.svg"]))
+
+
+@task
+def archive(lang="en", pause=2):
+    """Archive on the Wayback Machine."""
+    ns = {"urlset": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    sitemap = f".final/{lang}/sitemap.xml"
+    locs = ET.parse(sitemap).getroot().findall(".//urlset:loc", ns)
+    for loc in locs:
+        for url in loc.itertext():
+            request_url = f"https://web.archive.org/save/{url}"
+            try:
+                with urllib.request.urlopen(request_url):
+                    print(f"200 OK: {url}")
+            except urllib.error.HTTPError as err:
+                print(f"{err.code} {err.reason}: {url}")
+            finally:
+                time.sleep(pause)
 
 
 @task
