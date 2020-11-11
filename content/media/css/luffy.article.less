@@ -187,7 +187,7 @@ main {
             position: absolute;
             top: 0;
             bottom: 0;
-            left: (@admonition-margin - 0.6rem);
+            left: (@admonition-margin - @admonition-gap/2);
             width: 1px;
             background-color: @color-low;
         }
@@ -200,22 +200,26 @@ main {
 	}
     }
     .admonition-title {
-        box-sizing: border-box;
         font-style: italic;
-        flex: 0 0 @admonition-margin;
+        flex: 0 0 (@admonition-margin - @admonition-gap);
         align-self: center;
         text-align: right;
-        padding-right: 1.2rem;
         &, & + p {
             margin-top: 0;
         }
+	& + p {
+	    /* Instead of box-sizing: border-box, for compatibility with IE11 */
+	    padding-left: @admonition-gap;
+	}
         @media @medium {
-            padding-right: 0;
             text-align: left;
             &::before {
                 content: '📌  ';
                 font-style: normal;
             }
+	    & + p {
+		padding-left: 0;
+	    }
 	}
 
     }
