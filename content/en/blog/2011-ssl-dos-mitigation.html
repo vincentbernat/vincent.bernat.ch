@@ -53,18 +53,18 @@ disabled. Sending `R` on an empty line trigger renegotiation. Here is
 an example where renegotiation is disabled (despite being advertised
 as supported):
 
-	::console
-	$ openssl s_client -connect www.luffy.cx:443 -tls1
-	[...]
-	New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
-	Server public key is 2048 bit
-	Secure Renegotiation IS supported
-	Compression: zlib compression
-	Expansion: zlib compression
-	[...]
-	R
-	RENEGOTIATING
-	140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
+    ::console
+    $ openssl s_client -connect www.luffy.cx:443 -tls1
+    [...]
+    New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
+    Server public key is 2048 bit
+    Secure Renegotiation IS supported
+    Compression: zlib compression
+    Expansion: zlib compression
+    [...]
+    R
+    RENEGOTIATING
+    140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
 
 Disabling renegotiation is not trivial with OpenSSL. As an example, I
 have pushed a [patch to disable renegotiation in _stud_][studreneg],
@@ -89,18 +89,18 @@ If the handshake type is unknown, we assume that this is an encrypted
 record. Moreover, renegotiation requests are usually encapsulated in a
 TCP packet flagged with "push."
 
-	::sh
-	# Access to TCP payload (if not fragmented)
-	payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
-	iptables -A LIMIT_RENEGOTIATION \
-		-p tcp --dport 443 \
-		--tcp-flags SYN,FIN,RST,PSH PSH \
-		-m u32 \
-		--u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
-		-m hashlimit \
-		--hashlimit-above 5/minute --hashlimit-burst 3 \
-		--hashlimit-mode srcip --hashlimit-name ssl-reneg \
-		-j DROP
+    ::sh
+    # Access to TCP payload (if not fragmented)
+    payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
+    iptables -A LIMIT_RENEGOTIATION \
+        -p tcp --dport 443 \
+        --tcp-flags SYN,FIN,RST,PSH PSH \
+        -m u32 \
+        --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
+        -m hashlimit \
+        --hashlimit-above 5/minute --hashlimit-burst 3 \
+        --hashlimit-mode srcip --hashlimit-name ssl-reneg \
+        -j DROP
 
 The use of `u32` match is a bit difficult to read. The
 [manual page][iptables] gives some insightful examples. `$payload`
@@ -131,14 +131,14 @@ If you happen to disable TLS renegotiation, you can still use some
 Netfilter rule to limit the number of TLS handshakes by limiting the
 number of TCP connections from one IP:
 
-	::sh
-	iptables -A LIMIT_TLS \
-		-p tcp --dport 443 \
-		--syn -m state --state NEW \
-		-m hashlimit \
-		--hashlimit-above 120/minute --hashlimit-burst 20 \
-		--hashlimit-mode srcip --hashlimit-name ssl-conn \
-		-j DROP
+    ::sh
+    iptables -A LIMIT_TLS \
+        -p tcp --dport 443 \
+        --syn -m state --state NEW \
+        -m hashlimit \
+        --hashlimit-above 120/minute --hashlimit-burst 20 \
+        --hashlimit-mode srcip --hashlimit-name ssl-conn \
+        -j DROP
 
 Your servers will still be vulnerable to a large botnet but if there
 is only a handful of source IP, this rule will work just fine.[^a]

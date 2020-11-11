@@ -23,17 +23,17 @@ toutes les requêtes avec d'élégantes erreurs 404 :
     package main
     
     import (
-    	"log"
-    	"net"
-    	"net/http"
+        "log"
+        "net"
+        "net/http"
     )
     
     func main() {
-    	l, err := net.Listen("tcp", ":8081")
-    	if err != nil {
-    		log.Panicf("cannot listen: %s", err)
-    	}
-    	http.Serve(l, nil)
+        l, err := net.Listen("tcp", ":8081")
+        if err != nil {
+            log.Panicf("cannot listen: %s", err)
+        }
+        http.Serve(l, nil)
     }
 
 Il peut être construit avec `go build 404.go`.
@@ -103,20 +103,20 @@ paquet [go-systemd][] s'occupe des détails pour nous :
     package main
     
     import (
-    	"log"
-    	"net"
-    	"net/http"
+        "log"
+        "net"
+        "net/http"
     
-    	"github.com/coreos/go-systemd/daemon"
+        "github.com/coreos/go-systemd/daemon"
     )
     
     func main() {
-    	l, err := net.Listen("tcp", ":8081")
-    	if err != nil {
-    		log.Panicf("cannot listen: %s", err)
-    	}
-    	daemon.SdNotify(false, daemon.SdNotifyReady) // ❶
-    	http.Serve(l, nil)                           // ❷
+        l, err := net.Listen("tcp", ":8081")
+        if err != nil {
+            log.Panicf("cannot listen: %s", err)
+        }
+        daemon.SdNotify(false, daemon.SdNotifyReady) // ❶
+        http.Serve(l, nil)                           // ❷
     }
 
 Il est important de placer la notification après `net.Listen()` (en

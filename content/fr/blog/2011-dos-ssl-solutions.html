@@ -59,18 +59,18 @@ envoyant `R` sur une ligne vide. Voici un exemple où la renégociation
 est désactivée (malgré le fait qu'elle soit indiquée comme supportée
 lors de la poignée de mains initiale) :
 
-	::console
-	$ openssl s_client -connect www.luffy.cx:443 -tls1
-	[...]
-	New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
-	Server public key is 2048 bit
-	Secure Renegotiation IS supported
-	Compression: zlib compression
-	Expansion: zlib compression
-	[...]
-	R
-	RENEGOTIATING
-	140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
+    ::console
+    $ openssl s_client -connect www.luffy.cx:443 -tls1
+    [...]
+    New, TLSv1/SSLv3, Cipher is DHE-RSA-AES256-SHA
+    Server public key is 2048 bit
+    Secure Renegotiation IS supported
+    Compression: zlib compression
+    Expansion: zlib compression
+    [...]
+    R
+    RENEGOTIATING
+    140675659794088:error:1409E0E5:SSL routines:SSL3_WRITE_BYTES:ssl handshake failure:s3_pkt.c:591:
 
 Désactiver la renégociation dans un programme n'est pas quelque chose
 de trivial avec OpenSSL. À titre d'exemple, j'ai écrit un
@@ -100,18 +100,18 @@ correspond pas à un type connu et que le paquet TCP a le drapeau
 « _push_ », il est alors fortement probable qu'il s'agisse du paquet
 qui nous intéresse :
 
-	::sh
-	# Access to TCP payload (if not fragmented)
-	payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
-	iptables -A LIMIT_RENEGOCIATION \
-		-p tcp --dport 443 \
-		--tcp-flags SYN,FIN,RST,PSH PSH \
-		-m u32 \
-		--u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
-		-m hashlimit \
-		--hashlimit-above 5/minute --hashlimit-burst 3 \
-		--hashlimit-mode srcip --hashlimit-name ssl-reneg \
-		-j DROP
+    ::sh
+    # Access to TCP payload (if not fragmented)
+    payload="0 >> 22 & 0x3C @ 12 >> 26 & 0x3C @"
+    iptables -A LIMIT_RENEGOCIATION \
+        -p tcp --dport 443 \
+        --tcp-flags SYN,FIN,RST,PSH PSH \
+        -m u32 \
+        --u32 "$payload 0 >> 8 = 0x160300:0x160303 && $payload 2 & 0xFF = 3:10,17:19,21:255" \
+        -m hashlimit \
+        --hashlimit-above 5/minute --hashlimit-burst 3 \
+        --hashlimit-mode srcip --hashlimit-name ssl-reneg \
+        -j DROP
 
 L'utilisation de l'extension `u32` peut sembler particulièrement
 difficile à lire. Il est conseillé de lire attentivement la
@@ -147,14 +147,14 @@ Si les renégociations TLS sont désactivées, il est possible de
 simplement limiter le nombre de poignées de mains en limitant le
 nombre de connexions TCP en provenance d'une IP :
 
-	::sh
-	iptables -A LIMIT_TLS \
-		-p tcp --dport 443 \
-		--syn -m state --state NEW \
-		-m hashlimit \
-		--hashlimit-above 120/minute --hashlimit-burst 20 \
-		--hashlimit-mode srcip --hashlimit-name ssl-conn \
-		-j DROP
+    ::sh
+    iptables -A LIMIT_TLS \
+        -p tcp --dport 443 \
+        --syn -m state --state NEW \
+        -m hashlimit \
+        --hashlimit-above 120/minute --hashlimit-burst 20 \
+        --hashlimit-mode srcip --hashlimit-name ssl-conn \
+        -j DROP
 
 Les serveurs ainsi protégés sont toujours vulnérables à une attaque de
 plus grande envergure mais devraient pouvoir écarter tout attaquant

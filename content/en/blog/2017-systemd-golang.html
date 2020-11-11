@@ -22,17 +22,17 @@ requests with nifty 404 errors:
     package main
     
     import (
-    	"log"
-    	"net"
-    	"net/http"
+        "log"
+        "net"
+        "net/http"
     )
     
     func main() {
-    	l, err := net.Listen("tcp", ":8081")
-    	if err != nil {
-    		log.Panicf("cannot listen: %s", err)
-    	}
-    	http.Serve(l, nil)
+        l, err := net.Listen("tcp", ":8081")
+        if err != nil {
+            log.Panicf("cannot listen: %s", err)
+        }
+        http.Serve(l, nil)
     }
 
 You can build it with `go build 404.go`.
@@ -98,20 +98,20 @@ for us:
     package main
     
     import (
-    	"log"
-    	"net"
-    	"net/http"
+        "log"
+        "net"
+        "net/http"
     
-    	"github.com/coreos/go-systemd/daemon"
+        "github.com/coreos/go-systemd/daemon"
     )
     
     func main() {
-    	l, err := net.Listen("tcp", ":8081")
-    	if err != nil {
-    		log.Panicf("cannot listen: %s", err)
-    	}
-    	daemon.SdNotify(false, daemon.SdNotifyReady) // ❶
-    	http.Serve(l, nil)                           // ❷
+        l, err := net.Listen("tcp", ":8081")
+        if err != nil {
+            log.Panicf("cannot listen: %s", err)
+        }
+        daemon.SdNotify(false, daemon.SdNotifyReady) // ❶
+        http.Serve(l, nil)                           // ❷
     }
 
 It's important to place the notification after `net.Listen()` (in ❶):
