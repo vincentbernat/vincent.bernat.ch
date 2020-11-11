@@ -251,7 +251,7 @@ def linkcheck(c, remote=True, verbose=False):
         verbose and '--verbose' or '',
         remote and
         'https://vincent.bernat.ch/' or
-        'http://localhost:8080/'), warn=True)
+        'http://localhost:8080/'), warn=True, hide=False)
     if result.failed:
         fixlinks(c)
 
@@ -589,5 +589,5 @@ def analytics(c):
           "       --sort-panel=REFERRERS,BY_VISITORS,DESC "
           "       --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
           "       --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
-          "".format(" ".join(hosts)))
+          "".format(" ".join(hosts)), hide=False)
     c.run("xdg-open goaccess.html")
