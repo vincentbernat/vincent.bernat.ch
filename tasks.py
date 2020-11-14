@@ -90,7 +90,17 @@ def sprite(c):
 
 
 @task
-def archive(lang="en", pause=2):
+def prune(c, before='1 year ago'):
+    """Prune old commits."""
+    with c.cd(".final"):
+        out = c.run(f"git log --before='{before}' --pretty=format:%H | head -1").stdout.strip()
+        assert(out != "")
+        c.run(f"echo {out} > .git/shallow")
+        c.run("git gc --prune=now")
+
+
+@task
+def archive(c, lang="en", pause=2):
     """Archive on the Wayback Machine."""
     ns = {"urlset": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     sitemap = f".final/{lang}/sitemap.xml"
