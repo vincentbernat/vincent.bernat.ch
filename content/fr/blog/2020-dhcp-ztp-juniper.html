@@ -1,0 +1,188 @@
+---
+title: "Mise à jour et configuration automatique pour Juniper"
+description: |
+  Comment configurer le serveur ISC DHCP pour la mise à jour et la
+  configuration automatique des équipements Juniper.
+uuid: c082541a-7ba8-4709-b4c4-8d498e2e3fea
+tags:
+  - network-automation
+---
+
+La [documentation de Juniper sur ZTP][official documentation on ZTP]
+explique comment configurer le [serveur ISC DHCP][ISC DHCP Server]
+pour mettre à niveau et configurer automatiquement au premier
+démarrage un équipement Juniper. Toutefois, la configuration proposée
+pourrait être un brin plus élégante. Cette note explique comment.
+
+!!! "En bref" Ne redéfinissez pas l'option 43. Utilisez plutôt la
+directive `vendor-option-space`.
+
+---
+
+Lors du premier démarrage, un équipement Juniper demande son adresse
+IP via un message *DHCP discovery*, puis demande des paramètres
+supplémentaires pour l'autoconfiguration via un message *DHCP request*
+:
+
+    ::text hl_lines="30 31 37 38 39"
+    Dynamic Host Configuration Protocol (Request)
+        Message type: Boot Request (1)
+        Hardware type: Ethernet (0x01)
+        Hardware address length: 6
+        Hops: 0
+        Transaction ID: 0x44e3a7c9
+        Seconds elapsed: 0
+        Bootp flags: 0x8000, Broadcast flag (Broadcast)
+        Client IP address: 0.0.0.0
+        Your (client) IP address: 0.0.0.0
+        Next server IP address: 0.0.0.0
+        Relay agent IP address: 0.0.0.0
+        Client MAC address: 02:00:00:00:00:01 (02:00:00:00:00:01)
+        Client hardware address padding: 00000000000000000000
+        Server host name not given
+        Boot file name not given
+        Magic cookie: DHCP
+        Option: (54) DHCP Server Identifier (10.0.2.2)
+        Option: (55) Parameter Request List
+            Length: 14
+            Parameter Request List Item: (3) Router
+            Parameter Request List Item: (51) IP Address Lease Time
+            Parameter Request List Item: (1) Subnet Mask
+            Parameter Request List Item: (15) Domain Name
+            Parameter Request List Item: (6) Domain Name Server
+            Parameter Request List Item: (66) TFTP Server Name
+            Parameter Request List Item: (67) Bootfile name
+            Parameter Request List Item: (120) SIP Servers
+            Parameter Request List Item: (44) NetBIOS over TCP/IP Name Server
+            Parameter Request List Item: (43) Vendor-Specific Information
+            Parameter Request List Item: (150) TFTP Server Address
+            Parameter Request List Item: (12) Host Name
+            Parameter Request List Item: (7) Log Server
+            Parameter Request List Item: (42) Network Time Protocol Servers
+        Option: (50) Requested IP Address (10.0.2.15)
+        Option: (53) DHCP Message Type (Request)
+        Option: (60) Vendor class identifier
+            Length: 15
+            Vendor class identifier: Juniper-mx10003
+        Option: (51) IP Address Lease Time
+        Option: (12) Host Name
+        Option: (255) End
+        Padding: 00
+
+Il demande plusieurs options, notamment l'[option 150 pour l'adresse
+du serveur TFTP][TFTP server address option 150] et l'[option 43 «
+VSIO »][Vendor-Specific Information Option 43] pour les informations
+spécifiques au fournisseur. Le serveur DHCP peut s'aider de l'option
+60 pour déterminer les VSIO à envoyer. Pour les équipements Juniper,
+l'option 43 permet de coder le nom de l'image et le nom du fichier de
+configuration. Ils sont alors téléchargés à partir de l'adresse IP
+fournie dans l'option 150.
+
+La [documentation de Juniper sur ZTP][official documentation on ZTP]
+fournit une configuration valide pour répondre à une telle requête.
+Toutefois, elle ne tire pas parti de la capacité du serveur ISC DHCP à
+prendre en charge plusieurs fournisseurs et redéfinit l'option 43 pour
+qu'elle soit spécifique à Juniper :
+
+    ::junos
+    option NEW_OP-encapsulation code 43 = encapsulate NEW_OP;
+
+Au lieu de cela, il est possible de définir un espace d'options pour
+Juniper, en utilisant un nom moins alambiqué, sans surcharger l'option
+43 :
+
+    ::junos
+    # Juniper vendor option space
+    option space juniper;
+    option juniper.image-file-name     code 0 = text;
+    option juniper.config-file-name    code 1 = text;
+    option juniper.image-file-type     code 2 = text;
+    option juniper.transfer-mode       code 3 = text;
+    option juniper.alt-image-file-name code 4 = text;
+    option juniper.http-port           code 5 = text;
+
+Ensuite, lorsque vous devez définir ces sous-options, indiquez
+l'espace d'options à utiliser :
+
+    ::junos hl_lines="3"
+    class "juniper-mx10003" {
+      match if (option vendor-class-identifier = "Juniper-mx10003") {
+      vendor-option-space juniper;
+      option juniper.transfer-mode    "http";
+      option juniper.image-file-name  "/images/junos-vmhost-install-mx-x86-64-19.3R2-S4.5.tgz";
+      option juniper.config-file-name "/cfg/juniper-mx10003.txt";
+    }
+
+Cette configuration renvoie la réponse suivante[^wireshark] :
+
+    ::text hl_lines="24 25 26"
+    Dynamic Host Configuration Protocol (ACK)
+        Message type: Boot Reply (2)
+        Hardware type: Ethernet (0x01)
+        Hardware address length: 6
+        Hops: 0
+        Transaction ID: 0x44e3a7c9
+        Seconds elapsed: 0
+        Bootp flags: 0x8000, Broadcast flag (Broadcast)
+        Client IP address: 0.0.0.0
+        Your (client) IP address: 10.0.2.15
+        Next server IP address: 0.0.0.0
+        Relay agent IP address: 0.0.0.0
+        Client MAC address: 02:00:00:00:00:01 (02:00:00:00:00:01)
+        Client hardware address padding: 00000000000000000000
+        Server host name not given
+        Boot file name not given
+        Magic cookie: DHCP
+        Option: (53) DHCP Message Type (ACK)
+        Option: (54) DHCP Server Identifier (10.0.2.2)
+        Option: (51) IP Address Lease Time
+        Option: (1) Subnet Mask (255.255.255.0)
+        Option: (3) Router
+        Option: (6) Domain Name Server
+        Option: (43) Vendor-Specific Information
+            Length: 89
+            Value: 00362f696d616765732f6a756e6f732d766d686f73742d69…
+        Option: (150) TFTP Server Address
+        Option: (255) End
+
+[^wireshark]: *Wireshark* sait comment décoder l'option 43 pour certains
+    fournisseurs, grâce à l'option 60, mais pas pour Juniper.
+
+L'utilisation de la directive `vendor-option-space` permet de faire
+coexister différentes implémentations de ZTP. Par exemple, vous pouvez
+définir l'espace d'option pour PXE :
+
+    ::junos
+    option space PXE;
+    option PXE.mtftp-ip    code 1 = ip-address;
+    option PXE.mtftp-cport code 2 = unsigned integer 16;
+    option PXE.mtftp-sport code 3 = unsigned integer 16;
+    option PXE.mtftp-tmout code 4 = unsigned integer 8;
+    option PXE.mtftp-delay code 5 = unsigned integer 8;
+    option PXE.discovery-control    code 6  = unsigned integer 8;
+    option PXE.discovery-mcast-addr code 7  = ip-address;
+    option PXE.boot-server code 8  = { unsigned integer 16, unsigned integer 8, ip-address };
+    option PXE.boot-menu   code 9  = { unsigned integer 16, unsigned integer 8, text };
+    option PXE.menu-prompt code 10 = { unsigned integer 8, text };
+    option PXE.boot-item   code 71 = unsigned integer 32;
+
+    class "pxeclients" {
+      match if substring (option vendor-class-identifier, 0, 9) = "PXEClient";
+      vendor-option-space PXE;
+      option PXE.mtftp-ip 10.0.2.2;
+      # […]
+    }
+
+Sur le même thème, ne surchargez pas non plus l'option 125 « VIVSO ».
+Consultez la note « [Mise à jour et configuration automatique pour
+Cisco IOS][] » sur le sujet.
+
+*[VSIO]: Vendor-Specific Information Option
+*[VIVSO]: Vendor-Identifying Vendor-Specific Information Option
+
+[ISC DHCP Server]: https://www.isc.org/dhcp/ "ISC DHCP"
+[official documentation on ZTP]: https://www.juniper.net/documentation/en_US/junos/topics/topic-map/zero-touch-provision.html "Juniper: Zero Touch Provisioning"
+[TFTP server address option 150]: https://tools.ietf.org/html/rfc5859 "RFC 5859: TFTP Server Address Option for DHCPv4"
+[Bootfile name option 67]: https://tools.ietf.org/html/rfc2132#section-9.5 "RFC 2132: DHCP Options and BOOTP Vendor Extensions: Bootfile name"
+[Vendor-Specific Information Option 43]: https://tools.ietf.org/html/rfc2132#section-8.4 "RFC 2132: DHCP Options and BOOTP Vendor Extensions: Vendor Specific Information"
+[Mise à jour et configuration automatique pour Cisco IOS]: [[fr/blog/2020-dhcp-cisco-ios.html]]
