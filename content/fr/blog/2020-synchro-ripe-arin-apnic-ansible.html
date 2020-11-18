@@ -71,14 +71,16 @@ ces objets. Chaque IRR a différentes façons d'être mis à jour.
 Certains RIR proposent une API, mais d'autres non. Si l'on se limite
 au RIPE, à l'ARIN et à l'APNIC, la seule méthode commune de mise à
 jour des objets est la [mise à jour par courrier électronique][email
-updates], authentifié par un mot de passe ou une signature GPG[^arin].
+updates], authentifié par un mot de passe ou une signature PGP[^arin].
 Écrivons un module Ansible à cet effet !
 
 [^arin]: L'ARIN abandonne progressivement cette méthode au profit de
-    [IRR-online][]. RIPE dispose d'une [API][REST API], mais les mises
-    à jour par courrier électronique sont toujours prises en charge et
-    il n'est pas prévu de les faire disparaître. L'APNIC prévoit
-    d'exposer une [API][APNIC API].
+    [IRR-online][]. De plus, les signatures PGP n'ont jamais été
+    supportées en dehors de l'environnement de test. RIPE dispose
+    d'une [API][REST API], mais les mises à jour par courrier
+    électronique sont toujours prises en charge et il n'est pas prévu
+    de les faire disparaître. L'APNIC prévoit d'exposer une
+    [API][APNIC API].
 
 !!! "Note" Je vous recommande de lire « [Écrire un module Ansible sur
 mesure][] » en introduction, ainsi que « [Synchroniser des tables
@@ -106,7 +108,7 @@ contenu que celui que vous enverriez manuellement par courrier
 électronique. Tous les objets doivent être gérés par le même
 mainteneur, également fourni en paramètre.
 
-La signature et l'envoi du résultat ne relèvent pas de la
+La signature[^arin] et l'envoi du résultat ne relèvent pas de la
 responsabilité de ce module. Vous avez besoin de deux tâches
 supplémentaires à cette fin :
 
@@ -129,6 +131,10 @@ supplémentaires à cette fin :
         port: 25
         charset: us-ascii
         body: "{% raw %}{{ signed.stdout }}{% endraw %}"
+
+[^arin]: PGP n'est pas pris en charge par l'ARIN en dehors de
+    l'environnement de test. Seule l'authentification par mot de passe
+    est disponible... 😕
 
 Vous devez aussi autoriser la clef PGP utilisée pour signer les mises
 à jour en créant un objet `key-cert` et en l'ajoutant comme méthode

@@ -68,13 +68,14 @@ There is no module available on [Ansible Galaxy][] to manage these
 objects. Each IRR has different ways of being updated. Some RIRs
 propose an API but some don't. If we restrict ourselves to RIPE, ARIN,
 and APNIC, the only common method to update objects is [email
-updates][], authenticated with a password or a GPG signature.[^arin]
+updates][], authenticated with a password or a PGP signature.[^arin]
 Let's write a custom Ansible module for this purpose!
 
 [^arin]: ARIN is phasing out this method in favor of [IRR-online][].
-    RIPE has an [API][REST API] available, but email updates are still
-    supported and not planned to be deprecated. APNIC plans to expose
-    an [API][APNIC API].
+    Moreover, PGP signatures were never supported outside the test
+    environment. RIPE has an [API][REST API] available, but email
+    updates are still supported and not planned to be deprecated.
+    APNIC plans to expose an [API][APNIC API].
 
 !!! "Notice" I recommend that you read "[Writing a custom Ansible
 module][]" as an introduction, as well as "[Syncing MySQL tables][]"
@@ -100,8 +101,8 @@ language][]. This would be the same content you would send manually by
 email. All objects should be managed by the same maintainer, which is
 also provided as a parameter.
 
-Signing and sending the result is not the responsibility of this
-module. You need two additional tasks for this purpose:
+Signing[^arin] and sending the result is not the responsibility of
+this module. You need two additional tasks for this purpose:
 
     ::yaml hl_lines="4 5 18"
     - name: sign RIPE objects
@@ -122,6 +123,9 @@ module. You need two additional tasks for this purpose:
         port: 25
         charset: us-ascii
         body: "{% raw %}{{ signed.stdout }}{% endraw %}"
+
+[^arin]: PGP is not supported by ARIN outside the test environment.
+    You need to use the password method instead... 😕
 
 You also need to authorize the PGP keys used to sign the updates by
 creating a `key-cert` object and adding it as a valid authentication
