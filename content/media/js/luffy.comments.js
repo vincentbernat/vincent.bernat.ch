@@ -9,10 +9,10 @@ luffy.do(function() {
 
     // Function to load Isso
     var load = function() {
-	var done = false;
-	return function() {
-	    if (done) return;
-	    done = true;	// Don't want to load twice.
+        var done = false;
+        return function() {
+            if (done) return;
+            done = true;        // Don't want to load twice.
 
             luffy.load("isso.js", function() {
                 // Hide links
@@ -25,7 +25,7 @@ luffy.do(function() {
                     }
                 }
             });
-	}
+        }
     }();
 
     // Load if we have an anchor
