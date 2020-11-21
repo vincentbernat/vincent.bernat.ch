@@ -153,7 +153,7 @@ statically configured lists of remote VTEPs:[^patch1]
     # bridge fdb append 00:00:00:00:00:00 dev vxlan100 dst 2001:db8:3::1
 
 [^patch1]: For this example and the following ones,
-    a [patch is needed][patch1] for the `ip` command (to be included
+    a [patch is needed][patch1] for the `ip` command (included
     in 4.11) to use IPv6 for transport. In the meantime, here is a
     quick workaround:
 
@@ -235,9 +235,9 @@ not needed anymore (but you could keep them):
     # bridge fdb append 50:54:33:00:00:0b dev vxlan100 dst 2001:db8:3::1
 
 [^patch2]: You may have to [apply an IPv6-related patch][patch2] to
-    the kernel (to be included in 4.12). Also, to make ICMPv6 work,
-    you need an [additional patch][patch4] (to be included in 4.15,
-    present in 4.14.2 and 4.13.16).
+    the kernel (included in 4.12). Also, to make ICMPv6 work, you need
+    an [additional patch][patch4] (present in 4.15, 4.14.2, and
+    4.13.16).
 
 This setup eliminates head-end replication. However, protocols relying
 on multicast won't work either. With some automation, this is a setup
@@ -276,8 +276,8 @@ options:[^patch3]
        proxy
 
 [^patch3]: You have to [apply an IPv6-related patch][patch3] to the
-    kernel (to be included in 4.12) to get appropriate notifications
-    for missing IPv6 addresses.
+    kernel (included in 4.12) to get appropriate notifications for
+    missing IPv6 addresses.
 
 Notifications are sent to programs listening to an `AF_NETLINK` socket
 using the `NETLINK_ROUTE` protocol. This socket needs to be bound to
@@ -407,13 +407,17 @@ containers or the virtual machines) is correctly decreased.[^pmtu]
 
 While all the examples above are using IPv6, the ecosystem is not
 quite ready yet. The multicast L2-only strategy works fine with IPv6
-but every other scenario currently needs some patches
-([1][patch1], [2][patch2], [3][patch3]).
+but every other scenario currently needs some patches ([1][patch1],
+[2][patch2], [3][patch3], [4][patch4]).
+
+!!! "Update (2020.11)" From Linux 4.13, all the mentioned issues are
+solved. IPv6 is also more well-tested as Cumulus promotes IPv6 as the
+transport and signaling protocol for their own solutions.
 
 On top of that, IPv6 may not have been implemented in VXLAN-related
 tools:
 
- - [Cumulus Quagga][] and [Cumulus vxfld daemon][] do not support IPv6 as a transport layer,
+ - [Cumulus vxfld daemon][] does not support IPv6 as a transport layer,
  - [flannel][] has absolutely [no IPv6 support][flannel-ipv6],
  - [Docker's libnetwork][] has [no IPv6 support][libnetwork-ipv6] for the VXLAN backend.
 
