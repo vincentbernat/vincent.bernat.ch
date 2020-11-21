@@ -1,5 +1,5 @@
  ---
-title: "VXLAN: BGP EVPN with Cumulus Quagga (or FRR)"
+title: "VXLAN: BGP EVPN with FRR"
 description: |
   VXLAN is an overlay network for L2 traffic over an existing
   IP network. One deployment option is BGP EVPN.
@@ -43,13 +43,9 @@ second point, this is source-address learning.
 
 # Introduction to BGP EVPN
 
-BGP EVPN ([RFC 7432][] and [draft-ietf-bess-evpn-overlay][] for its
-application to VXLAN) is a standard control protocol to efficiently
-solves these two aspects without relying on multicast nor
-source-address learning.
-
-!!! "Update (2018-04)" [draft-ietf-bess-evpn-overlay][] has been
-promoted to [RFC 8365][].
+BGP EVPN ([RFC 7432][] and [RFC 8365][] for its application to VXLAN)
+is a standard control protocol to efficiently solves these two aspects
+without relying on multicast nor source-address learning.
 
 BGP EVPN relies on BGP ([RFC 4271][]) and its MP-BGP extensions
 ([RFC 4760][]). **BGP** is the routing protocol powering the
@@ -91,19 +87,20 @@ has three main advantages:
  - proven **scalability** (a typical BGP routers handle several millions of routes), and
  - possibility to enforce **fine-grained policies**.
 
-On Linux, [Cumulus Quagga][] is a fairly complete implementation of
+On Linux, [FRR][] is a fairly complete implementation of
 BGP EVPN (type 3 routes for VTEP discovery, type 2 routes with MAC or
 IP addresses, MAC mobility when a host changes from one VTEP to
 another one) which requires very little configuration.
 
-This is a fork of [Quagga][] and was used in [Cumulus Linux][],
-a network operating system based on Debian powering switches from
-various brands. At some point, BGP EVPN support will be [contributed
-back][pr-evpn] to [FRR][], a community-maintained fork of *Quagga*.[^fork]
+!!! "Update (2020-11)" Initially, this article was about *Cumulus
+Quagga*. EVPN support was added in FRR 4.0. On *Cumulus Linux*, *FRR*
+has replaced *Cumulus Quagga* since version 3.4.0. I have updated this
+article to replace mentions of *Cumulus Quagga* by *FRR* to avoid
+confusion.
 
-!!! "Update (2017-08)" Cumulus switched from Quagga to [FRR][] (since
-Cumulus Linux 3.4.0). The configuration presented here also works with
-FRR 4.0 when compiled with `--enable-cumulus` option.
+This is a fork of [Quagga][] and is used in [Cumulus Linux][], a
+network operating system based on Debian powering switches from
+various brands.[^fork]
 
 [^fork]: The development of *Quagga* is slow and "closed." New
     features are often stalled. *FRR* is placed under the umbrella of
@@ -112,15 +109,12 @@ FRR 4.0 when compiled with `--enable-cumulus` option.
     enhancements (notably, BGP add-path, BGP unnumbered, MPLS and
     LDP).
 
-It should be noted the BGP EVPN implementation of *Cumulus Quagga*
-currently only supports IPv4.
-
 # Route reflector setup
 
 Before configuring each VTEP, we need to configure two or more route
 reflectors. There are many solutions. I will present three of them:
 
- - using *Cumulus Quagga* or *FRR*,
+ - using *FRR*,
  - using *GoBGP*, an implementation of BGP in Go,
  - using *Juniper JunOS*.
 
@@ -132,7 +126,7 @@ The proposed configurations are quite minimal. However, it is possible
 to centralize policies on the route reflectors (e.g. routes tagged
 with some community can only be readvertised to some group of VTEPs).
 
-## Using Quagga (or FRR)
+## Using FRR
 
 The configuration is pretty simple. We suppose the configured route
 reflector has `203.0.113.254` configured as a loopback IP.
@@ -158,7 +152,7 @@ reflector has `203.0.113.254` configured as a loopback IP.
     !
 
 A peer group `fabric` is defined and we leverage the dynamic neighbor
-feature of *Cumulus Quagga*: we don't have to explicitily define each
+feature of *FRR*: we don't have to explicitily define each
 neighbor. Any client from `203.0.113.0/24` and presenting itself as
 part of AS 65000 can connect. All sent EVPN routes will be accepted
 and reflected to the other clients.
@@ -167,7 +161,7 @@ You don't need to run *Zebra*, the route engine talking with the
 kernel. Instead, start `bgpd` with the `--no_kernel` flag.
 
 !!! "Update (2018-04)" If you need to support several implementations
-of BGP EVPN, it is safer to **not** use *Quagga* as a route reflector:
+of BGP EVPN, it is safer to **not** use *FRR* as a route reflector:
 it may mangle the received routes.
 
 ## Using GoBGP
@@ -239,7 +233,7 @@ The main factor is the CPU and the memory. The *QFX5100* is low on
 memory and won't support large deployments without some additional
 policing.
 
-Here is a configuration similar to the *Quagga* one:
+Here is a configuration similar to the *FRR* one:
 
     ::junos
     interfaces {
@@ -310,9 +304,9 @@ FDBs between the hypervisors.
     brctl addif br100 vnet11
     brctl addif br200 vnet12
 
-The configuration of *Cumulus Quagga* (or *FRR*) is similar to the one
-used for a route reflector, except we use the `advertise-all-vni`
-directive to publish all local VNIs.
+The configuration of *FRR* is similar to the one used for a route
+reflector, except we use the `advertise-all-vni` directive to publish
+all local VNIs.
 
     ::quagga hl_lines="14"
     router bgp 65000
@@ -355,7 +349,7 @@ Step by step, let's check how everything comes together.
 
 ## Getting VXLAN information from the kernel
 
-On each VTEP, *Quagga* should be able to retrieve the information
+On each VTEP, *FRR* should be able to retrieve the information
 about configured VXLANs. This can be checked with `vtysh`:
 
     ::console hl_lines="12 13 15"
@@ -380,7 +374,7 @@ The important points are:
  - the VNI is 100, and
  - the bridge device was correctly detected.
 
-*Quagga* should also be able to retrieve information about the local
+*FRR* should also be able to retrieve information about the local
 MAC addresses :
 
     ::console
@@ -504,7 +498,7 @@ should mention the cause.
 
 ## Sent routes
 
-From each VTEP, *Quagga* needs to send:
+From each VTEP, *FRR* needs to send:
 
  - one type 3 route for each local VNI, and
  - one type 2 route for each local MAC address.
@@ -571,7 +565,7 @@ Here is a type 2 route announcing the location of the
          Communities: target:65000:268435556 encapsulation:vxlan(0x8)
     [...]
 
-With *Quagga*, you can get a similar output with `vtysh`:
+With *FRR*, you can get a similar output with `vtysh`:
 
     ::console
     # show bgp evpn route
@@ -611,7 +605,7 @@ Each VTEP should have received the type 2 and type 3 routes from its
 fellow VTEPs, through the route reflectors. You can check with the
 `show bgp evpn route` command of `vtysh`.
 
-Does *Quagga* correctly understand the received routes? The type 3
+Does *FRR* correctly understand the received routes? The type 3
 routes are translated to an association between the remote VTEPs and
 the VNIs:
 
@@ -638,7 +632,7 @@ MACs and the remote VTEPs:
 
 ## FDB configuration
 
-The last step is to ensure *Quagga* has correctly provided the
+The last step is to ensure *FRR* has correctly provided the
 received information to the kernel. This can be checked with the
 `bridge` command:
 
@@ -659,17 +653,11 @@ One of the strength of BGP EVPN is the interoperability with other
 network vendors. To demonstrate it works as expected, we will
 configure a [Juniper vMX][] 16.1R1.7 to act as a VTEP.
 
-!!! "Update (2018-04)" You need to add the following patches for
-*FRR*: [bgpd: add an option for RT auto-derivation to use RFC
-8635][#2034] and [bgpd: add basic support for ETI and ESI for BGP
-EVPN][#2035]. You also need to enable the `autort rfc8365-compatible`
-flag in *FRR*. The first patch may be removed if route targets are
-configured manually on the Juniper side. The second one can be avoided
-by configuring a separate Juniper virtual switch instance for each
-VNI—each with a dedicated route distinguisher. For *Cumulus Quagga*,
-you can apply a simplified version of these patches ([first
-patch][patch1], [second patch][patch2], [third patch][patch3], [fourth
-patch][patch4]).
+!!! "Update (2018-04)" You need to add the following patches for *FRR*
+unless you use version 6.0 or later: [bgpd: add an option for RT
+auto-derivation to use RFC 8635][#2034] and [bgpd: add basic support
+for ETI and ESI for BGP EVPN][#2035]. You also need to enable the
+`autort rfc8365-compatible` flag in *FRR*.
 
 [#2034]: https://github.com/FRRouting/frr/pull/2034 "bgpd: add an option for RT auto-derivation to use RFC 8635"
 [#2035]: https://github.com/FRRouting/frr/pull/2035 "bgpd: add basic support for ETI and ESI for BGP EVPN"
@@ -726,7 +714,7 @@ old-school VLANs paired with matching VNIs.
     doesn't support such a feature.
 
 Then, we configure BGP EVPN to advertise all known VNIs. The
-configuration is quite similar to the one we did with *Quagga*:
+configuration is quite similar to the one we did with *FRR*:
 
     ::junos
     protocols {
@@ -766,7 +754,7 @@ configuration is quite similar to the one we did with *Quagga*:
     }
 
 The routes sent by this configuration are very similar to the routes
-sent by Quagga. The main differences are:
+sent by *FRR*. The main differences are:
 
  - on *JunOS*, the route distinguisher is configured statically (in ❶), and
  - on *JunOS*, the VNI is also encoded as an Ethernet tag ID.
@@ -805,7 +793,7 @@ Here is a type 2 route:
     [...]
 
 We can check that the *vMX* is able to make sense of the routes it
-receives from its peers running *Quagga*:
+receives from its peers running *FRR*:
 
     ::console
     > show evpn database l2-domain-id 100
@@ -816,7 +804,7 @@ receives from its peers running *Quagga*:
          100        50:54:33:00:00:0e  203.0.113.2                    Apr 30 12:46:20
          100        50:54:33:00:00:0f  ge-0/0/1.0                     Apr 30 12:45:55
 
-On the other end, if we look at one of the *Quagga*-based VTEP, we can
+On the other end, if we look at one of the *FRR*-based VTEP, we can
 check the received routes are correctly understood:
 
     ::console hl_lines="5 15"
@@ -877,8 +865,6 @@ for the feature set to be complete.
 [RFC 8365]: https://tools.ietf.org/html/rfc8365 "A Network Virtualization Overlay Solution Using Ethernet VPN (EVPN)"
 [draft-ietf-bess-evpn-overlay]: https://tools.ietf.org/html/draft-ietf-bess-evpn-overlay-08 "A Network Virtualization Overlay Solution using EVPN"
 [VXLAN & Linux]: [[en/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
-[Cumulus Quagga]: https://github.com/CumulusNetworks/quagga "Cumulus Quagga routing suite"
-[cmaster branch]: https://github.com/cumulusnetworks/quagga/tree/cmaster "cmaster branch of Cumulus Quagga on GitHub"
 [Cumulus Linux]: https://cumulusnetworks.com/products/cumulus-linux/ "Cumulus Linux"
 [Quagga]: http://www.nongnu.org/quagga/ "Quagga Routing Suite"
 [FRR]: https://github.com/FRRouting/frr "The FRR Protocol Suite, forked from Quagga"
