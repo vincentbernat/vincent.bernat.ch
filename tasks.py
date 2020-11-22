@@ -585,6 +585,13 @@ done''')
                   "--delete-delay --copy-unsafe-links -rt "
                   ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host))
 
+    for host in hosts:
+        with step(f"clean images on {host}"):
+            c.run("rsync --exclude=.git --copy-unsafe-links -rt "
+                  "--delete-delay "
+                  "--exclude='*' --include='*.avif' --include='*.webp' "
+                  ".final/media/images "
+                  "{}:/data/webserver/media.luffy.cx/".format(host))
     if clean:
         for host in hosts:
             with step(f"clean files on {host}"):
