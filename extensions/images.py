@@ -137,10 +137,19 @@ class ImageFixerPlugin(Plugin):
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
             if "A" not in img.mode:
-                reduced = img.convert("RGB").resize((1, 1), resample=1)
+                reduced = img.copy()
+                reduced.thumbnail((150, 150))
+                paletted = reduced.convert('P',
+                                           palette=Image.ADAPTIVE,
+                                           colors=8)
+                palette = paletted.getpalette()
+                color_counts = sorted(paletted.getcolors(),
+                                      reverse=True)
+                palette_index = color_counts[0][1]
+                dominant = palette[palette_index*3:palette_index*3+3]
                 return dict(size=img.size,
                             opaque=True,
-                            dominant=reduced.getpixel((0, 0)))
+                            dominant=dominant)
             return dict(size=img.size, opaque=False)
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
