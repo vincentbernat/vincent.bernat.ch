@@ -357,8 +357,10 @@ class ImageFixerPlugin(Plugin):
             if img[0].tag == "img" and width:
                 lftext = img.parents('#lf-text')
                 if lftext:
-                    lftext = lftext[0]
-                    img.attr.loading = "lazy"
+                    parents = img.parents()
+                    rootEl = pq(parents[parents.index(lftext[0]) + 1])
+                    if len(rootEl.prev_all()) > 3:
+                        img.attr.loading = "lazy"
 
             # If image is contained in a paragraph, enclose into a
             # responsive structure.
