@@ -353,9 +353,12 @@ class ImageFixerPlugin(Plugin):
                     img[0].set(attr, None)
                 del img.attr.alt
 
-            # Lazy load if we have a large enough image
-            if img[0].tag == "img" and width and width*height > 20000:
-                img.attr.loading = "lazy"
+            # Lazy load
+            if img[0].tag == "img" and width:
+                lftext = img.parents('#lf-text')
+                if lftext:
+                    lftext = lftext[0]
+                    img.attr.loading = "lazy"
 
             # If image is contained in a paragraph, enclose into a
             # responsive structure.
