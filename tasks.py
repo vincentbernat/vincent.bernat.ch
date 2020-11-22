@@ -589,7 +589,9 @@ done''')
         with step(f"clean images on {host}"):
             c.run("rsync --exclude=.git --copy-unsafe-links -rt "
                   "--delete-delay "
-                  "--exclude='*' --include='*.avif' --include='*.webp' "
+                  "--include='**/' "
+                  "--include='*.avif' --include='*.webp' "
+                  "--exclude='*' "
                   ".final/media/images "
                   "{}:/data/webserver/media.luffy.cx/".format(host))
     if clean:
