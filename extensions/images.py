@@ -136,25 +136,31 @@ class ImageFixerPlugin(Plugin):
         """Get size for an image, and opacity: (w, h), o?."""
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
-            return img.size, "A" not in img.mode
+            if "A" not in img.mode:
+                reduced = img.convert("RGB").resize((1, 1), resample=1)
+                return dict(size=img.size,
+                            opaque=True,
+                            dominant=reduced.getpixel((0, 0)))
+            return dict(size=img.size, opaque=False)
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
-            return tuple(x and self._topx(x) or None
-                         for x in (svg.attrib.get('width', None),
-                                   svg.attrib.get('height', None))), False
+            return dict(size=tuple(x and self._topx(x) or None
+                                   for x in (svg.attrib.get('width', None),
+                                             svg.attrib.get('height', None))),
+                        opaque=False)
         if image.source_file.kind in {'m3u8'}:
             with open(image.path) as f:
                 w, h = max([(int(w), int(h))
                             for w, h in re.findall('RESOLUTION=(\d+)x(\d+)(?:$|,)',
                                                    f.read())])
-                return (w, h), True
+                return dict(size=(w, h), opaque=True)
         if image.source_file.kind in {'mp4', 'ogv'}:
             mi = MediaInfo.parse(image.path)
             track = [t for t in mi.tracks if t.track_type == 'Video'][0]
-            return (track.width, track.height), True
+            return dict(size=(track.width, track.height), opaque=True)
         self.logger.warn(
             "[%s] has an img tag not linking to an image" % resource)
-        return (None, None), True
+        return dict(size=(None, None), opaque=True)
 
     def _size(self, resource, src, width, height):
         """Determine size of an image (with cache)."""
@@ -189,7 +195,7 @@ class ImageFixerPlugin(Plugin):
             self.cache[src] = self._img_properties(image)
             self.logger.debug("Image [%s] is %s" % (src,
                                                     self.cache[src]))
-        dim, opacity = self.cache[src]
+        dim = self.cache[src]['size']
         new_width, new_height = dim
         if new_width is None or new_height is None:
             return None
@@ -384,9 +390,13 @@ class ImageFixerPlugin(Plugin):
 
                 # Check opacity
                 if src in self.cache:
-                    _, opaque = self.cache[src]
+                    opaque = self.cache[src]['opaque']
                     if opaque:
                         img.addClass('lf-opaque')
+                        if 'dominant' in self.cache[src]:
+                            print(src)
+                            color = "#{:02x}{:02x}{:02x}".format(*self.cache[src]['dominant'])
+                            img.css("background-color", color)
 
                 # If we have a title, also enclose in a figure
                 figure = pq('<figure />')
