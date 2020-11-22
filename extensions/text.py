@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import subprocess
-import html.parser
+import html
 
 from pyquery import PyQuery as pq
 from hyde.plugin import Plugin
@@ -59,7 +59,7 @@ process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(
     PR = None
 
     def katex_render(self, mo):
-        formula = html.parser.HTMLParser().unescape(mo.group(1))
+        formula = html.unescape(mo.group(1))
         if self.PR is None:
             self.PR = subprocess.Popen(['node', '-e', self.JS],
                                        stdin=subprocess.PIPE,
