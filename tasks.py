@@ -222,7 +222,8 @@ def upload_videos(c, video=None):
 @task
 def update_monospace_fonts(c):
     """Build latest Iosevka fonts with Nix"""
-    c.run("""
+    with step("building Iosevka"):
+        c.run("""
 nix-build -E '((import <nixpkgs>{}).iosevka.override {
   privateBuildPlan = {
     family = "Iosevka Custom";
@@ -247,12 +248,13 @@ xheight = 560                   # default: 530
 EOF";
 })'
 """)
-    c.run("cp result/share/fonts/iosevka-custom/*.ttf content/media/fonts/.")
-    c.run("rm result")
-    with c.cd("content/media/fonts"):
-        c.run("woff iosevka-custom*.ttf")
-        c.run("woff2_compress iosevka-custom*.ttf")
-        c.run("rm iosevka-custom*.ttf")
+        c.run("cp result/share/fonts/iosevka-custom/*.ttf content/media/fonts/.")
+        c.run("rm result")
+    with step("compressing fonts"):
+        with c.cd("content/media/fonts"):
+            c.run("woff iosevka-custom*.ttf")
+            c.run("woff2_compress iosevka-custom*.ttf")
+            c.run("rm iosevka-custom*.ttf")
 
 
 @task
