@@ -242,8 +242,8 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
 }).overrideAttrs(oldAttrs: {
   postConfigure = "cat <<EOF > private.toml
 [custom]
-xheight = 560
-cap = 775
+cap = 775                       # default: 735
+xheight = 560                   # default: 530
 EOF";
 })'
 """)
