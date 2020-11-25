@@ -221,15 +221,16 @@ def upload_videos(c, video=None):
 
 @task
 def update_monospace_fonts(c):
-    """Build latest Iosevka fonts with Nix"""
+    """Build Iosevka 3.7.1 fonts with Nix"""
     with step("building Iosevka"):
         c.run("""
 nix-build -E '((import <nixpkgs>{}).iosevka.override {
+  set = "custom";
   privateBuildPlan = {
     family = "Iosevka Custom";
-    design = ["custom" "term" "ss05" "v-asterisk-low"];
-    slants = {
-      upright = "upright";
+    design = ["ss05" "sp-term" "no-ligation" "v-asterisk-low"];
+    slopes = {
+      upright = "normal";
     };
     weights = {
       regular = {
@@ -238,14 +239,11 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
         css = 400;
       };
     };
+    metric-override = {
+      cap = 790;
+      xheight = 570;
+    };
   };
-  set = "custom";
-}).overrideAttrs(oldAttrs: {
-  postConfigure = "cat <<EOF > private.toml
-[custom]
-cap = 775                       # default: 735
-xheight = 560                   # default: 530
-EOF";
 })'
 """)
         c.run("cp result/share/fonts/truetype/iosevka-custom-regular.ttf content/media/fonts/.")
