@@ -29,9 +29,7 @@ var luffy = luffy || {
 };
 (function() {
   // Tell we can do JS
-  var cl = document.getElementsByTagName("html")[0].classList;
-  cl.remove('nojs');
-  cl.add('js');
+  document.getElementsByTagName("html")[0].classList.remove('nojs');
 
   // When prefers-color-scheme is unsupported, force the light stylesheet
   if (window.matchMedia("(prefers-color-scheme: light)").media === "not all") {
