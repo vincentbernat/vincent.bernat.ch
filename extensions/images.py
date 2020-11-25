@@ -403,7 +403,6 @@ class ImageFixerPlugin(Plugin):
                     if opaque:
                         img.addClass('lf-opaque')
                         if 'dominant' in self.cache[src]:
-                            print(src)
                             color = "#{:02x}{:02x}{:02x}".format(*self.cache[src]['dominant'])
                             img.css("background-color", color)
 
