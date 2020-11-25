@@ -33,6 +33,6 @@ var luffy = luffy || {
 
   // When prefers-color-scheme is unsupported, force the light stylesheet
   if (window.matchMedia("(prefers-color-scheme: light)").media === "not all") {
-    document.querySelector('link[rel="stylesheet"][data-name="light"]').removeAttribute("media");
+    document.querySelector('link[data-name="light"]').removeAttribute("media");
   }
 })();
