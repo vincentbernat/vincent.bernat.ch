@@ -404,20 +404,20 @@ def build(c):
                   "| sed 's+/[^/]*$++' | sort | uniq"
                   "| grep -Ev '^media/images/(l|obj)(/|$)'"
                   "| sort "
-                  "| xargs -n1 -P3 ../node_modules/svgo/bin/svgo "
+                  "| xargs -n1 -P$(nproc) ../node_modules/svgo/bin/svgo "
                   "        --quiet --disable=mergePaths")
             c.run("find media/images -type f -name '*.svg'"
                   "| grep -Ev '^media/images/(l|obj)(/|$)'"
-                  "| xargs -n1 -P3 sed -i 's/style=.marker:none. //g'")
+                  "| xargs -n1 -P$(nproc) sed -i 's/style=.marker:none. //g'")
 
         # Image optimization
         with step("convert JPG to WebP"):
             c.run("find media/images -type f -name '*.jpg' -print"
-                  " | xargs -n1 -P4 -i cwebp -q 84 -af '{}' -o '{}'.webp")
+                  " | xargs -n1 -P$(nproc) -i cwebp -q 84 -af '{}' -o '{}'.webp")
         with step("convert JPG to AVIF"):
             libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
             c.run("find media/images -type f -name '*.jpg' -print"
-                  f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --yuv 420 "
+                  f" | xargs -n1 -P$(nproc) -i {libavif}/bin/avifenc --codec aom --yuv 420 "
                   "                                           --min 18 --max 22 '{}' '{}'.avif"
                   " > /dev/null")
         with step("optimize JPG"):
@@ -426,16 +426,16 @@ def build(c):
                               "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
             c.run("find media/images -type f -name '*.jpg' -print0"
                   "  | sort -z "
-                  f" | xargs -0 -n10 -P4 {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
+                  f" | xargs -0 -n10 -P$(nproc) {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
         with step("optimize PNG"):
             c.run("find media/images -type f -name '*.png' -print0"
                   " | sort -z "
-                  " | xargs -0 -n10 -P4 pngquant --skip-if-larger --strip "
+                  " | xargs -0 -n10 -P$(nproc) pngquant --skip-if-larger --strip "
                   "                              --quiet --ext .png --force "
                   "|| true")
         with step("convert PNG to WebP"):
             c.run("find media/images -type f -name '*.png' -print"
-                  " | xargs -n1 -P4 -i cwebp -z 8 '{}' -o '{}'.webp")
+                  " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
         with step("remove WebP/AVIF files not small enough"):
             c.run("for f in media/images/**/*.{webp,avif}; do"
                   "  orig=$(stat --format %s ${f%.*});"
