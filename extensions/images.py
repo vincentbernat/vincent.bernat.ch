@@ -136,21 +136,7 @@ class ImageFixerPlugin(Plugin):
         """Get size for an image, and opacity: (w, h), o?."""
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
-            if "A" not in img.mode:
-                reduced = img.copy()
-                reduced.thumbnail((150, 150))
-                paletted = reduced.convert('P',
-                                           palette=Image.ADAPTIVE,
-                                           colors=8)
-                palette = paletted.getpalette()
-                color_counts = sorted(paletted.getcolors(),
-                                      reverse=True)
-                palette_index = color_counts[0][1]
-                dominant = palette[palette_index*3:palette_index*3+3]
-                return dict(size=img.size,
-                            opaque=True,
-                            dominant=dominant)
-            return dict(size=img.size, opaque=False)
+            return dict(size=img.size, opaque="A" not in img.mode)
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
             return dict(size=tuple(x and self._topx(x) or None
@@ -402,9 +388,6 @@ class ImageFixerPlugin(Plugin):
                     opaque = self.cache[src]['opaque']
                     if opaque:
                         img.addClass('lf-opaque')
-                        if 'dominant' in self.cache[src]:
-                            color = "#{:02x}{:02x}{:02x}".format(*self.cache[src]['dominant'])
-                            img.css("background-color", color)
 
                 # If we have a title, also enclose in a figure
                 figure = pq('<figure />')
