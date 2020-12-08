@@ -151,15 +151,16 @@ class ImageFixerPlugin(Plugin):
                 palette_index = color_counts[0][1]
                 dominant = palette[palette_index*3:palette_index*3+3]
                 gcd = math.gcd(*img.size)
-                reduced = Image.new("P",
-                                    (img.size[0]//gcd, img.size[1]//gcd),
-                                    tuple(dominant))
+                lqip = Image.new("P",
+                                 (img.size[0]//gcd, img.size[1]//gcd),
+                                 tuple(dominant))
                 output = io.BytesIO()
-                reduced.save(output, "PNG", optimize=True, bits=1)
-                dominant = base64.b64encode(output.getvalue())
+                lqip.save(output, "PNG", optimize=True, bits=1)
+                lqip = "data:image/png;base64,{}".format(
+                    base64.b64encode(output.getvalue()).decode('ascii'))
                 return dict(size=img.size,
                             opaque=True,
-                            dominant=dominant)
+                            lqip=lqip)
             return dict(size=img.size, opaque=False)
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
@@ -413,8 +414,8 @@ class ImageFixerPlugin(Plugin):
                     if opaque:
                         img.addClass('lf-opaque')
                         try:
-                            bg = "url(data:image/png;base64,{})".format(
-                                self.cache[src]["dominant"].decode('ascii'))
+                            bg = "url({})".format(
+                                self.cache[src]["lqip"])
                             img.css("background-image", bg)
                         except KeyError:
                             pass
