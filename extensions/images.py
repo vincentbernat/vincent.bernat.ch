@@ -8,6 +8,7 @@ Contains classes to handle images related things
 import os
 import io
 import base64
+import math
 import re
 import urllib
 import xml.etree.ElementTree as ET
@@ -149,9 +150,12 @@ class ImageFixerPlugin(Plugin):
                                       reverse=True)
                 palette_index = color_counts[0][1]
                 dominant = palette[palette_index*3:palette_index*3+3]
-                reduced = Image.new("RGB", (1, 1), tuple(dominant))
+                gcd = math.gcd(*img.size)
+                reduced = Image.new("P",
+                                    (img.size[0]//gcd, img.size[1]//gcd),
+                                    tuple(dominant))
                 output = io.BytesIO()
-                reduced.save(output, "PNG")
+                reduced.save(output, "PNG", optimize=True, bits=1)
                 dominant = base64.b64encode(output.getvalue())
                 return dict(size=img.size,
                             opaque=True,
