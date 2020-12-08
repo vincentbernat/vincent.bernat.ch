@@ -6,6 +6,8 @@ Contains classes to handle images related things
 """
 
 import os
+import io
+import base64
 import re
 import urllib
 import xml.etree.ElementTree as ET
@@ -136,7 +138,25 @@ class ImageFixerPlugin(Plugin):
         """Get size for an image, and opacity: (w, h), o?."""
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
-            return dict(size=img.size, opaque="A" not in img.mode)
+            if "A" not in img.mode:
+                reduced = img.copy()
+                reduced.thumbnail((150, 150))
+                paletted = reduced.convert('P',
+                                           palette=Image.ADAPTIVE,
+                                           colors=8)
+                palette = paletted.getpalette()
+                color_counts = sorted(paletted.getcolors(),
+                                      reverse=True)
+                palette_index = color_counts[0][1]
+                dominant = palette[palette_index*3:palette_index*3+3]
+                reduced = Image.new("RGB", (1, 1), tuple(dominant))
+                output = io.BytesIO()
+                reduced.save(output, "PNG")
+                dominant = base64.b64encode(output.getvalue())
+                return dict(size=img.size,
+                            opaque=True,
+                            dominant=dominant)
+            return dict(size=img.size, opaque=False)
         if image.source_file.kind in {'svg'}:
             svg = ET.parse(image.path).getroot()
             return dict(size=tuple(x and self._topx(x) or None
@@ -388,6 +408,12 @@ class ImageFixerPlugin(Plugin):
                     opaque = self.cache[src]['opaque']
                     if opaque:
                         img.addClass('lf-opaque')
+                        try:
+                            bg = "url(data:image/png;base64,{})".format(
+                                self.cache[src]["dominant"].decode('ascii'))
+                            img.css("background-image", bg)
+                        except KeyError:
+                            pass
 
                 # If we have a title, also enclose in a figure
                 figure = pq('<figure />')
