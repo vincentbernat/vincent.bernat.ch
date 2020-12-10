@@ -140,6 +140,7 @@ class ImageFixerPlugin(Plugin):
         if image.source_file.kind in {'png', 'jpg'}:
             img = Image.open(image.path)
             if "A" not in img.mode:
+                # Find a dominant color
                 reduced = img.copy()
                 reduced.thumbnail((150, 150))
                 paletted = reduced.convert('P',
@@ -150,6 +151,8 @@ class ImageFixerPlugin(Plugin):
                                       reverse=True)
                 palette_index = color_counts[0][1]
                 dominant = palette[palette_index*3:palette_index*3+3]
+                # Create an image with the exact same ratio using this
+                # color
                 gcd = math.gcd(*img.size)
                 lqip = Image.new("P",
                                  (img.size[0]//gcd, img.size[1]//gcd),
