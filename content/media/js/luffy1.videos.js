@@ -1,38 +1,35 @@
 // Self-hosted videos
-luffy.do(function() {
+luffy.do(() => {
     // Pause other videos when playing a new one
-    var allVideos = function(selector) {
+    const allVideos = (selector) => {
         selector = selector || "";
         return document.querySelectorAll("video.lf-media " + selector);
     }
-    var pauseOthers = function(event) {
-        var others = allVideos();
-        [].forEach.call(others, function(video) {
+    const pauseOthers = (event) => {
+        const others = allVideos();
+        others.forEach((video) => {
             if (event.target != video && !video.paused)
                 video.pause();
         });
     };
-    [].forEach.call(allVideos(), function(video) {
-        video.addEventListener('play', pauseOthers, false);
-    });
+    allVideos().forEach((video) => video.addEventListener('play', pauseOthers, false));
 
-    // Enable hls.js for HLS videos
-    var videoSources = allVideos("source[type='application/vnd.apple.mpegurl']");
-    if (videoSources.length == 0 || !window.Promise) return;
-    luffy.load("hls.js", function() {
+    const videoSources = document.querySelectorAll("video.lf-media source[type='application/vnd.apple.mpegurl']");
+    if (videoSources.length == 0) return;
+
+    // Enable HLS for selected videos
+    luffy.load("hls.js", () => {
         if (!Hls.isSupported()) return;
 
-        [].forEach.call(videoSources, function(videoSource) {
-            var m3u8 = videoSource.src,
-                once = false,
-                oldVideo = videoSource.parentNode,
-                newVideo = oldVideo.cloneNode(true),
-                allSources = newVideo.querySelectorAll('source'); // ":scope > source" is not well-supported
+        videoSources.forEach(({src, parentNode}) => {
+            let once = false;
+            const m3u8 = src; // ":scope > source" is not well-supported
+            const oldVideo = parentNode;
+            const newVideo = oldVideo.cloneNode(true);
+            const allSources = newVideo.querySelectorAll('source');
 
             // Remove all sources from clone. Keep tracks.
-            [].forEach.call(allSources, function(source) {
-                source.remove();
-            });
+            allSources.forEach(source => source.remove());
 
             // Add an empty source (enable play event on Chromium 72+)
             newVideo.src = "about:blank";
@@ -41,15 +38,15 @@ luffy.do(function() {
             oldVideo.parentNode.replaceChild(newVideo, oldVideo);
 
             // Pass control to hls.js
-            var play = function() {
+            const play = () => {
                 if (once) return;
-                var hls = new Hls({
+                const hls = new Hls({
                     capLevelToPlayerSize: true,
                     maxMaxBufferLength: 90
                 });
                 hls.loadSource(m3u8);
                 hls.attachMedia(newVideo);
-                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     newVideo.play();
                 });
                 once = true;
@@ -61,24 +58,24 @@ luffy.do(function() {
 });
 
 // Make seek-to links work
-luffy.do(function() {
-    var seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
-    [].forEach.call(seekLinks, function(seekLink) {
-        seekLink.addEventListener('click', function(event) {
+luffy.do(() => {
+    const seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
+    seekLinks.forEach(seekLink => {
+        seekLink.addEventListener('click', event => {
             event.preventDefault();
 
-            var seekTo = parseInt(seekLink.hash.substr(12), 10),
-                videos = document.querySelectorAll("video");
+            const seekTo = parseInt(seekLink.hash.substr(12), 10);
+            const videos = document.querySelectorAll("video");
 
             // Look for the nearest video before that
-            for (var i = videos.length - 1; i >= 0; i--) {
+            for (let i = videos.length - 1; i >= 0; i--) {
                 if (seekLink.compareDocumentPosition(videos[i]) &
                     Node.DOCUMENT_POSITION_PRECEDING) {
                     videos[i].currentTime = seekTo;
                     if (videos[i].paused) videos[i].play();
 
                     // Scroll element into view if needed
-                    var rect = videos[i].getBoundingClientRect();
+                    const rect = videos[i].getBoundingClientRect();
                     if (rect.top >= 0 &&
                         rect.bottom <= (window.innerHeight ||
                                        document.documentElement.clientHeight))
