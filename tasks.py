@@ -127,7 +127,9 @@ def screenshots(c):
                 "en/projects.html",
                 "en/blog/2011-ssl-perfect-forward-secrecy.html",
                 "en/blog/2011-thinkpad-edge-11.html",
-                "en/blog/2017-ipv6-route-lookup-linux.html"]:
+                "en/blog/2017-ipv6-route-lookup-linux.html",
+                "en/blog/2020-old-pc-cards.html",
+                "en/blog/2019-self-hosted-videos-subtitles.html"]:
         for width in [320, 600, 1024, 1280, 1900]:
             c.run("chromium "
                   "--headless "
