@@ -16,7 +16,7 @@ block-all-mixed-content;
 {% endmacro %}
 
 index         index.html;
-error_page    404 {{content_url('/en/404.html')}};
+error_page    404 {{ content_url('/en/404.html') }};
 expires       6h;
 add_header    "Cache-Control" "max-age=21600";
 add_header    "X-Content-Type-Options" "nosniff";
@@ -32,11 +32,11 @@ location = /nginx.conf {
 {# language selection, a more correct alternative would be:
    https://www.nginx.com/resources/wiki/modules/accept_language/ #}
 {% for code, lang in languages %}
-location /{{code}} {
-  error_page 404 {{content_url('/' + code + '/404.html')}};
+location /{{ code }} {
+  error_page 404 {{ content_url('/' + code + '/404.html') }};
   try_files $uri.html $uri $uri/index.html =404;
 }
-location {{content_url('/' + code + '/404.html')}} {
+location {{ content_url('/' + code + '/404.html') }} {
   internal;
   try_files $uri.html $uri;
 }
@@ -46,9 +46,9 @@ location = / {
   log_not_found off;
   set $lang en;
 {% for code, lang in languages %}
-  if ($http_accept_language ~* ^{{code}}) {
+  if ($http_accept_language ~* ^{{ code }}) {
     # Not safe, but it seems to work. May change depending on the outer directives.
-    set $lang {{code}};
+    set $lang {{ code }};
   }
 {% endfor %}
   add_header  Vary Accept-Language;
