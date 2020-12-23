@@ -1,17 +1,20 @@
 {# nginx configuration to be included at the "server" level #}
+{% macro domain(url) -%}
+  {{ url.split("://")[- 1].split("/")[0] }}
+{%- endmacro %}
 {% macro csp() %}
 default-src     'self' blob:;
-script-src      'self' blob: {{ media_url('js/') }};
-object-src      'self' {{ media_url('images/') }};
-img-src         'self' data: {{ media_url('images/') }}; frame-src {{ media_url('images/') }};
-style-src       'self' 'unsafe-inline' {{ media_url('css/') }};
-font-src        'self' data: {{ media_url('fonts/') }};
+script-src      'self' blob: {{ domain(media_url('js/')) }};
+object-src      'self' {{ domain(media_url('images/')) }};
+img-src         'self' data: {{ domain(media_url('images/')) }}; frame-src {{ domain(media_url('images/')) }};
+style-src       'self' 'unsafe-inline' {{ domain(media_url('css/')) }};
+font-src        'self' data: {{ domain(media_url('fonts/')) }};
 worker-src      blob:;
-media-src       'self' blob: about: {{ media_url('videos/') }} {{ media_url('images/') }};
-connect-src     'self' {{ media_url('videos/') }} https://comments.luffy.cx;
+media-src       'self' blob: about: {{ domain(media_url('videos/')) }} {{ domain(media_url('images/')) }};
+connect-src     'self' {{ domain(media_url('videos/')) }} comments.luffy.cx;
 base-uri        'none';
 frame-ancestors 'none';
-form-action     https://duckduckgo.com;
+form-action     duckduckgo.com;
 block-all-mixed-content;
 {% endmacro %}
 
