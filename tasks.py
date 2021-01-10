@@ -420,7 +420,7 @@ def build(c):
             libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
             c.run("find media/images -type f -name '*.jpg' -print"
                   f" | xargs -n1 -P$(nproc) -i {libavif}/bin/avifenc --codec aom --yuv 420 "
-                  "                                           --min 18 --max 22 '{}' '{}'.avif"
+                  "                                           --min 20 --max 25 '{}' '{}'.avif"
                   " > /dev/null")
         with step("optimize JPG"):
             jpegoptim = c.run("nix-build --no-out-link "
