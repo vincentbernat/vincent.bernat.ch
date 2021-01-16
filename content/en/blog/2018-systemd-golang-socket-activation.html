@@ -210,6 +210,14 @@ socket. On the other hand, we loose the ability to wait for the
 service to come to a full stop—either by itself or forcefully after a
 timeout with `SIGKILL`.
 
+!!! "Update (2021-01)" `KillMode=none` is now [deprecated][]. In
+addition to the below alternative, it is possible to pass the
+currently active connections to *systemd* with the
+[`sd_pid_notify_with_fds()`][passfd] function. Then, the new process
+needs some logic to handle them. Unfortunately, this is not an easy
+task as you also need to serialize the associated state. Moreover, the
+function is [not implemented][] in *go-systemd*.
+
 ## Waiting longer for existing connections (alternative)
 
 An alternative to the previous solution is to **make *systemd* believe
@@ -555,3 +563,6 @@ In another console, we can make a request for each endpoint:
 [cannot easily detach]: https://github.com/golang/go/issues/227 "runtime: support for daemonize"
 [recently]: https://golang.org/doc/go1.10#runtime "Go 1.10 Release Notes: Runtime"
 [/r/golang]: https://www.reddit.com/r/golang/comments/85sm59/integration_of_a_go_service_with_systemd_socket/ "/r/golang: Integration of a Go service with systemd: socket activation"
+[deprecated]: https://github.com/systemd/systemd/pull/15928 "PR #15928: warn on KillMode=none, inform about left-over processes on stop"
+[passfd]: https://manpages.debian.org/buster/libelogind-dev-doc/sd_pid_notify_with_fds.3.en.html "Manual page sd_notify(3)"
+[not implemented]: https://github.com/coreos/go-systemd/issues/199 "Issue #199: Missing interfaces for sd_pid_notify_with_fds and sd_listen_fds_with_names"
