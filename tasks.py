@@ -406,7 +406,7 @@ def build(c):
                   "| sed 's+/[^/]*$++' | sort | uniq"
                   "| grep -Ev '^media/images/(l|obj)(/|$)'"
                   "| sort "
-                  "| xargs -n1 -P$(nproc) ../node_modules/svgo/bin/svgo --quiet")
+                  "| xargs -n1 -P$(nproc) ../node_modules/svgo/bin/svgo --quiet --multipass")
 
         # Image optimization
         with step("convert JPG to WebP"):
