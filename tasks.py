@@ -407,7 +407,10 @@ def build(c):
                   "| grep -Ev '^media/images/(l|obj)(/|$)'"
                   "| sort "
                   "| xargs -n1 -P$(nproc) ../node_modules/svgo/bin/svgo "
-                  "    --quiet --config ../svgo.config.js")
+                  "        --quiet --disable=mergePaths")
+            c.run("find media/images -type f -name '*.svg'"
+                  "| grep -Ev '^media/images/(l|obj)(/|$)'"
+                  "| xargs -n1 -P$(nproc) sed -i 's/style=.marker:none. //g'")
 
         # Image optimization
         with step("convert JPG to WebP"):
