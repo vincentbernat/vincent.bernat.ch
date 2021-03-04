@@ -14,7 +14,7 @@ les commandes suivantes :
 
     ::console
     # bridge vlan del dev br0 vid 1 self
-    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    # ip link set dev br0 type bridge vlan_filtering 1
 
 Un pont réseau (aussi appelé « commutateur » ou « *switch* ») permet
 d'interconnecter plusieurs segments Ethernet ensemble. C'est un
@@ -193,10 +193,10 @@ tous les protocoles simultanément (IPv4, ARP et IPv6).
 ### Utilisation du filtrage des VLAN
 
 Linux 3.9 a introduit la possibilité d'effectuer un filtrage des VLAN
-sur les ports du pont. Cela permet d'éviter tout trafic local :
+sur les ports du pont. Cela permet d'éviter tout trafic local[^older] :
 
     ::console
-    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    # ip link set dev br0 type bridge vlan_filtering 1
     # bridge vlan del dev br0 vid 1 self
     # bridge vlan show
     port    vlan ids
@@ -205,6 +205,12 @@ sur les ports du pont. Cela permet d'éviter tout trafic local :
     eth3     1 PVID Egress Untagged
     eth4     1 PVID Egress Untagged
     br0     None
+
+[^older]: Avec un noyau plus ancien que Linux 4.3, vous devrez
+    utiliser la commande suivante au lieu de `ip link` :
+
+        ::console
+        # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
 
 C'est la méthode la plus efficace car la trame est rejetée directement
 dans la fonction `br_pass_frame_up()`.

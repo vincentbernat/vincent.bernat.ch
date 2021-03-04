@@ -14,8 +14,8 @@ commands to enforce isolation:
 
     ::console
     # bridge vlan del dev br0 vid 1 self
-    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
-    
+    # ip link set dev br0 type bridge vlan_filtering 1
+
 ---
 
 A network bridge (also commonly called a "switch") brings several
@@ -196,10 +196,10 @@ packets.
 ### Using VLAN-aware bridge
 
 Linux 3.9 introduced the ability to use VLAN filtering on bridge
-ports. This can be used to prevent any local traffic:
+ports. This can be used to prevent any local traffic:[^older]
 
     ::console
-    # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
+    # ip link set dev br0 type bridge vlan_filtering 1
     # bridge vlan del dev br0 vid 1 self
     # bridge vlan show
     port    vlan ids
@@ -208,6 +208,12 @@ ports. This can be used to prevent any local traffic:
     eth3     1 PVID Egress Untagged
     eth4     1 PVID Egress Untagged
     br0     None
+
+[^older]: With a kernel older than Linux 4.3, you'll have to use the
+    following command instead of `ip link`:
+
+        ::console
+        # echo 1 > /sys/class/net/br0/bridge/vlan_filtering
 
 This is the most efficient method since the frame is dropped directly
 in `br_pass_frame_up()`.
