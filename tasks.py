@@ -474,8 +474,8 @@ printf " JPG %10s %10s %10s\n" \
 
         with step("subset fonts"):
             subset('iosevka-custom-regular', 'monospace')
-            subset('merriweather', 'regular', ["--layout-features+=ss01"])
-            subset('merriweather-italic', 'regular', ["--layout-features+=ss01"])
+            subset('merriweather', 'regular', ["--layout-features+=ss01,onum"])
+            subset('merriweather-italic', 'regular', ["--layout-features+=ss01,onum"])
 
         # Compute hash on various files
         with step("compute hash for static files"):
