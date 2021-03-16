@@ -29,7 +29,7 @@ Il existe deux outils courants pour interroger cette base de données :
 avec le [protocole WHOIS][WHOIS protocol] :
 
     ::console
-    $ whois -BrG 2a0a:e805:400::/40
+    $ whois -h whois.ripe.net -- '-BrG 2a0a:e805:400::/40'
     […]
     inet6num:       2a0a:e805:400::/40
     netname:        FR-BLADE-CUSTOMERS-DE
@@ -212,7 +212,7 @@ tous les objets attachés au mainteneur fourni en paramètre du module.
             *options[irr],
             "-i", "mnt-by",
             module.params['mntner']]
-    proc = subprocess.run("whois", *args, capture_output=True)
+    proc = subprocess.run(["whois", *args], capture_output=True)
     if proc.returncode != 0:
         raise AnsibleError(
             f"unable to query whois: {args}")
@@ -227,7 +227,7 @@ objets dont le champ `mnt-by` correspond au mainteneur fourni. Voici
 un exemple de sortie :
 
     ::console
-    $ whois -h whois.ripe.net -s RIPE -BrG -i mnt-by fr-blade-1-mnt
+    $ whois -h whois.ripe.net -- '-s RIPE -BrG -i mnt-by fr-blade-1-mnt'
     […]
     
     inet6num:       2a0a:e805:300::/40

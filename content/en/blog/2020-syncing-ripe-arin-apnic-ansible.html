@@ -27,7 +27,7 @@ There are two common tools to query this database: `whois` and
 protocol][]:
 
     ::console
-    $ whois -BrG 2a0a:e805:400::/40
+    $ whois -h whois.ripe.net -- '-BrG 2a0a:e805:400::/40'
     […]
     inet6num:       2a0a:e805:400::/40
     netname:        FR-BLADE-CUSTOMERS-DE
@@ -202,7 +202,7 @@ the objects from the provided maintainer.
             *options[irr],
             "-i", "mnt-by",
             module.params['mntner']]
-    proc = subprocess.run("whois", *args, capture_output=True)
+    proc = subprocess.run(["whois", *args], capture_output=True)
     if proc.returncode != 0:
         raise AnsibleError(
             f"unable to query whois: {args}")
@@ -216,7 +216,7 @@ objects to exclude from synchronization. The second part invokes the
 provided maintainer. Here is an example of output:
 
     ::console
-    $ whois -h whois.ripe.net -s RIPE -BrG -i mnt-by fr-blade-1-mnt
+    $ whois -h whois.ripe.net -- '-s RIPE -BrG -i mnt-by fr-blade-1-mnt'
     […]
     
     inet6num:       2a0a:e805:300::/40
