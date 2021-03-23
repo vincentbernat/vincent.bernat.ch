@@ -97,10 +97,10 @@ composant avec `pkgbuild` :
     ::console
     $ mkdir pkg1
     $ pkgbuild --root osx-pkg \
-         --identifier org.someid.daemon \
-         --version 0.47 \
-         --ownership recommended \
-         pkg1/output.pkg
+    >    --identifier org.someid.daemon \
+    >    --version 0.47 \
+    >    --ownership recommended \
+    >    pkg1/output.pkg
     pkgbuild: Inferring bundle components from contents of osx-pkg
     pkgbuild: Wrote package to output.pkg
 
@@ -162,10 +162,10 @@ La commande suivante se charge de construire le produit :
 
     ::console
     $ productbuild --distribution distribution.xml \
-                   --resources resources \
-                   --package-path pkg1 \
-                   --version 0.47 \
-                   ../final.pkg
+    >              --resources resources \
+    >              --package-path pkg1 \
+    >              --version 0.47 \
+    >              ../final.pkg
     productbuild: Wrote product to ../final.pkg
 
 ## Scripts
@@ -261,8 +261,8 @@ ainsi que l'emplacement du SDK. Cela peut se faire via les variables
     ::console
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
     $ ./configure --prefix=/usr --sysconfdir=/private/etc \
-              CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
-              LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+    >         CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+    >         LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
 
 Le drapeau `-mmacosx-version-min` est utilisé par diverses macros dans
 les fichiers d'entête pour indiquer que telle ou telle fonction est
@@ -287,8 +287,8 @@ Une façon simple de générer de tels fichiers est de passer les options
 
     ::console
     $ ./configure --prefix=/usr --sysconfdir=/private/etc \
-          CC="gcc -arch i386 -arch x86_64" \
-          CPP="gcc -E"
+    >     CC="gcc -arch i386 -arch x86_64" \
+    >     CPP="gcc -E"
 
 Toutefois, c'est une approche plutôt déconseillée. Supposons que
 `./configure` détermine lors de son exécution la valeur de certains
@@ -305,8 +305,8 @@ avec [lipo][] :
     $ for arch in i386 x86_64; do
     >   mkdir $arch ; cd $arch
     >   ../configure --prefix=/usr --sysconfdir=/private/etc \
-            CC="gcc -arch $ARCH" \
-            CPP="gcc -E"
+    >       CC="gcc -arch $ARCH" \
+    >       CPP="gcc -E"
     >   make
     >   make install DESTDIR=$PWD/../target-$ARCH
     >   cd ..
@@ -425,8 +425,8 @@ macOS avec ce système de construction :
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
     $ mkdir build && cd build
     $ ../configure --prefix=/usr --sysconfdir=/private/etc --with-embedded-libevent \
-        CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
-        LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+    >   CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+    >   LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
     […]
     $ make -C osx pkg ARCHS="i386 x86_64"
     […]

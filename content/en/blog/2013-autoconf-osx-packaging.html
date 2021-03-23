@@ -96,10 +96,10 @@ We will now put the content of `osx-pkg` into a component package with
     ::console
     $ mkdir pkg1
     $ pkgbuild --root osx-pkg \
-         --identifier org.someid.daemon \
-         --version 0.47 \
-         --ownership recommended \
-         pkg1/output.pkg
+    >    --identifier org.someid.daemon \
+    >    --version 0.47 \
+    >    --ownership recommended \
+    >    pkg1/output.pkg
     pkgbuild: Inferring bundle components from contents of osx-pkg
     pkgbuild: Wrote package to output.pkg
 
@@ -161,10 +161,10 @@ The following command will generate the product archive:
 
     ::console
     $ productbuild --distribution distribution.xml \
-                   --resources resources \
-                   --package-path pkg1 \
-                   --version 0.47 \
-                   ../final.pkg
+    >              --resources resources \
+    >              --package-path pkg1 \
+    >              --version 0.47 \
+    >              ../final.pkg
     productbuild: Wrote product to ../final.pkg
 
 ## Scripts
@@ -256,8 +256,8 @@ SDK location. You can do this by setting `CFLAGS` and `LDFLAGS` (and
     ::console
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
     $ ./configure --prefix=/usr --sysconfdir=/private/etc \
-              CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
-              LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+    >         CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+    >         LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
 
 The `-mmacosx-version-min` flag will be used by various macros in the
 headers to mark some functions as available or not, depending on the
@@ -280,8 +280,8 @@ x86_64` to the compiler:
 
     ::console
     $ ./configure --prefix=/usr --sysconfdir=/private/etc \
-          CC="gcc -arch i386 -arch x86_64" \
-          CPP="gcc -E"
+    >     CC="gcc -arch i386 -arch x86_64" \
+    >     CPP="gcc -E"
 
 However, this is a dangerous option. Suppose that your `./configure`
 script tries to determine some architecture-dependent parameter, like
@@ -297,8 +297,8 @@ compilations and to build the universal binary with [lipo][]:
     $ for arch in i386 x86_64; do
     >   mkdir $arch ; cd $arch
     >   ../configure --prefix=/usr --sysconfdir=/private/etc \
-            CC="gcc -arch $ARCH" \
-            CPP="gcc -E"
+    >       CC="gcc -arch $ARCH" \
+    >       CPP="gcc -E"
     >   make
     >   make install DESTDIR=$PWD/../target-$ARCH
     >   cd ..
@@ -412,8 +412,8 @@ Here is how a user would create its own macOS package:
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
     $ mkdir build && cd build
     $ ../configure --prefix=/usr --sysconfdir=/private/etc --with-embedded-libevent \
-        CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
-        LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
+    >   CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
+    >   LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
     […]
     $ make -C osx pkg ARCHS="i386 x86_64"
     […]
