@@ -399,8 +399,7 @@ def build(c):
                   r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'")
             c.run(r"find . -name '*.html' -print0"
                   r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'")
-        # Optimize SVG (consider using svgcleaner instead, svgo is a
-        # bit fragile)
+        # Optimize SVG
         with step("optimize SVG"):
             c.run("find media/images -type f -name '*.svg'"
                   "| sed 's+/[^/]*$++' | sort | uniq"
