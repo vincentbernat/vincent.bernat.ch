@@ -164,43 +164,11 @@ MTU inférieur à 1500 :
 
 # QoS
 
-!!! "Mise à jour (11.2014)" Cette section est malheureusement
-incorrecte, y compris la promesse qu'elle véhicule. Lisez le
+!!! "Mise à jour (11.2014)" Cette section était malheureusement
+incorrecte, y compris la promesse qu'elle véhiculait. Lisez le
 [commentaire de Dave Taht][Dave Taht comment] pour en savoir plus. Le
 [wiki de Gentoo][] contient des instructions simples pour mettre en
 plus une QoS efficace.
-
- <del>Il y a très très longtemps, la mise en place d'une QoS efficace était
-plutôt compliquée. Le script [Wonder Shaper][] était souvent utilisé
-pour obtenir une configuration honnête. Aujourd'hui, grâce au travail
-du [projet Bufferbloat][Bufferbloat project], il y a deux étapes très
-simples pour obtenir quelque chose de raisonnable :</del>
-
- 1. <del>**Réduire la taille de la queue de transmission** des
-    périphériques réseau. Une valeur de 32 paquets aide TCP à détecter
-    rapidement les problèmes de congestion sans brider un lien
-    gigabit.</del>
-
-        ip link set txqueuelen 32 dev lan
-        ip link set txqueuelen 32 dev internet
-        ip link set txqueuelen 32 dev wlan
-
- 2. <del>**Utiliser `fq_codel` comme *qdisc* par défaut**. Un *qdisc*
-    reçoit les paquets qui sont envoyés par le noyau et décide comment
-    les transmettre à la carte réseau. Ceux-ci peuvent être supprimés,
-    réordonnés ou retardés. [`fq_codel`][fq_codel] est un algorithme
-    combinant une gestion équitable des flux et la minimisation des
-    latences. Une **gestion équitable des flux** signifie que tous les
-    flux sont égaux quant à leur possibilité d'émettre des
-    paquets. Autrement dit, un flux au débit très élevé ne
-    monopolisera pas la carte réseau. **Minimiser les latences**
-    s'obtient en s'assurant que la taille de la queue de transmission
-    est limitée en supprimant des paquets d'autant plus agressivement
-    que la latence augmente.</del>
-
-        tc qdisc replace dev lan root fq_codel
-        tc qdisc replace dev internet root fq_codel
-        tc qdisc replace dev wlan root fq_codel
 
 *[FTTH]: Fiber to the Home
 *[FAI]: Fournisseur d'accès à Internet

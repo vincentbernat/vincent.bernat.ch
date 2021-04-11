@@ -158,38 +158,10 @@ problem you may run into with a MTU less than 1500:
 
 # QoS
 
-!!! "Update (2014-11)" Unfortunately, this section is incorrect,
+!!! "Update (2014-11)" Unfortunately, this section was incorrect,
 including its premise. Have a look at [Dave Taht comment][] for more
 details. As an alternative, [Gentoo's wiki][] contains simple
 instructions to setup an effective traffic shaping.
-
- <del>Once upon a time, QoS was a tacky subject. The [Wonder Shaper][] was a
-common way to get a somewhat working setup. Nowadays, thanks to the
-work of the [Bufferbloat project][], there are two simple steps to get
-something quite good:</del>
-
- 1. <del>**Reduce the queue** of your devices to something like 32
-    packets. This helps TCP to detect congestion and act accordingly
-    while still being able to saturate a gigabit link.</del>
-
-        ip link set txqueuelen 32 dev lan
-        ip link set txqueuelen 32 dev internet
-        ip link set txqueuelen 32 dev wlan
-
- 2. <del>**Change the root *qdisc* to `fq_codel`**. A *qdisc* receives packets
-    to be sent from the kernel and decide how packets are handled to
-    the network card. Packets can be dropped, reordered or
-    rate-limited. [`fq_codel`][fq_codel] is a queuing discipline
-    combining fair queuing and controlled delay. **Fair queuing**
-    means that all flows get an equal chance to be served. Another way
-    to tell it is that a high-bandwidth flow won't starve the
-    queue. **Controlled delay** means that the queue size will be
-    limited to ensure the latency stays low. This is achieved by
-    dropping packets more aggressively when the queue grows.</del>
-
-        tc qdisc replace dev lan root fq_codel
-        tc qdisc replace dev internet root fq_codel
-        tc qdisc replace dev wlan root fq_codel
 
 *[FTTH]: Fiber to the Home
 *[ISP]: Internet Service Provider
