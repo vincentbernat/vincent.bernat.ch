@@ -437,6 +437,11 @@ def build(c):
         with step("convert PNG to WebP"):
             c.run("find media/images -type f -name '*.png' -print"
                   " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
+
+        # We want to prefer JPGs if their sizes are not too large.
+        # The idea is that:
+        #  - JPG decoding is fast
+        #  - JPG has progressive decoding
         with step("remove WebP/AVIF files not small enough"):
             c.run("for f in media/images/**/*.{webp,avif}; do"
                   "  orig=$(stat --format %s ${f%.*});"
