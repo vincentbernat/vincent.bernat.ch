@@ -1,9 +1,24 @@
 // Self-hosted videos
 luffy.do(function() {
-    var videoSources = document.querySelectorAll("video.lf-media source[type='application/vnd.apple.mpegurl']");
-    if (videoSources.length == 0 || !window.Promise) return;
+    // Pause other videos when playing a new one
+    var allVideos = function(selector) {
+        selector = selector || "";
+        return document.querySelectorAll("video.lf-media " + selector);
+    }
+    var pauseOthers = function(event) {
+        var others = allVideos();
+        [].forEach.call(others, function(video) {
+            if (event.target != video && !video.paused)
+                video.pause();
+        });
+    };
+    [].forEach.call(allVideos(), function(video) {
+        video.addEventListener('play', pauseOthers, false);
+    });
 
-    // Enable HLS for selected videos
+    // Enable hls.js for HLS videos
+    var videoSources = allVideos("source[type='application/vnd.apple.mpegurl']");
+    if (videoSources.length == 0 || !window.Promise) return;
     luffy.load("hls.js", function() {
         if (!Hls.isSupported()) return;
 
@@ -40,6 +55,7 @@ luffy.do(function() {
                 once = true;
             };
             newVideo.addEventListener('play', play, false);
+            newVideo.addEventListener('play', pauseOthers, false);
         });
     });
 });
