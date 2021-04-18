@@ -1,7 +1,7 @@
 // Self-hosted videos
 luffy.do(function() {
     var videoSources = document.querySelectorAll("video.lf-media source[type='application/vnd.apple.mpegurl']");
-    if (videoSources.length == 0) return;
+    if (videoSources.length == 0 || !window.Promise) return;
 
     // Enable HLS for selected videos
     luffy.load("hls.js", function() {
