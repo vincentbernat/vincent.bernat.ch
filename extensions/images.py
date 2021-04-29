@@ -390,6 +390,7 @@ class ImageFixerPlugin(Plugin):
                     rootEl = pq(parents[parents.index(lftext[0]) + 1])
                     if len(rootEl.prev_all()) > 3:
                         img.attr.loading = "lazy"
+                    img.attr.decoding = "async"
 
             # If image is contained in a paragraph, enclose into a
             # responsive structure.
