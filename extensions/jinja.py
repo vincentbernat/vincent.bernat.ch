@@ -2,6 +2,7 @@
 import os
 import jinja2
 from babel.dates import format_date
+from distutils.version import LooseVersion
 
 
 def human_date(dt, locale='en', format=None):
@@ -31,6 +32,18 @@ def same_tag(resource, attribute, skip=0):
         if len(tags & ctags) > 0:
             break
     return candidate
+
+
+def media_listing(resources, directory):
+    """Version-sort media resources contained in directory."""
+    resources = [r
+                 for r in resources
+                 if r.source_file.parent.path.endswith("/media/" + directory)]
+    to_sort = [{"resource": r,
+                "version": LooseVersion(r.relative_path)}
+               for r in resources]
+    to_sort.sort(key=lambda x: x["version"])
+    return [r["resource"] for r in to_sort]
 
 
 @jinja2.contextfunction
