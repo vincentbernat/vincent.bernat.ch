@@ -47,7 +47,7 @@ def thumb(self, defaults={}, width=None, height=None):
     elif height is None:
         # width is not None
         height = im.size[1]*width//im.size[0] + 1
-    im.thumbnail((width, height), Image.ANTIALIAS)
+    im.thumbnail((width, height), Image.LANCZOS)
     # Prepare path
     path = os.path.join(os.path.dirname(self.get_relative_deploy_path()),
                         "%s%s" % (defaults['prefix'],
@@ -250,7 +250,7 @@ class ImageFixerPlugin(Plugin):
             return
         im = Image.open(source)
         im = im.resize((int(im.width*factor), int(im.height*factor)),
-                       Image.ANTIALIAS)
+                       Image.LANCZOS)
         File(destination).parent.make()
         if source.endswith(".jpg"):
             im.save(destination, "JPEG", optimize=True, quality=95)
