@@ -124,7 +124,7 @@ interface. This brings two features:
 # Route-based VPN on Juniper
 
 Before looking at how to achieve that on Linux, let's have a look at the way it
-works with a *JunOS*-based platform (like a *Juniper vSRX*). This platform as
+works with a *Junos*-based platform (like a *Juniper vSRX*). This platform as
 long-standing history of supporting route-based VPNs (a feature already present
 in the *Netscreen ISG* platform).
 
@@ -267,7 +267,7 @@ It was learnt both from `V1-1` (through `st0.1`) and `V1-2` (through
 packets are sent/received in the `public` routing instance. No route-leaking is
 needed for this configuration. The VPN cannot be used as a gateway from internal
 hosts to external hosts (or vice-versa). This could also have been done with
-JunOS' security policies (stateful firewall rules) but doing the separation with
+Junos' security policies (stateful firewall rules) but doing the separation with
 routing instances also ensure routes from different domains are not mixed and a
 simple policy misconfiguration won't lead to a disaster.
 
@@ -294,7 +294,7 @@ as we can use IPv6 link-local addresses):
     # ip netns exec private ip link set up dev eth1
     # ip netns exec private ip link set up dev eth2
 
-Then, we create `vti6`, a tunnel interface (similar to `st0.1` in the *JunOS*
+Then, we create `vti6`, a tunnel interface (similar to `st0.1` in the *Junos*
 example):
 
     ::console hl_lines="5 6"
@@ -343,7 +343,7 @@ We can then configure *strongSwan*:[^ciphers]
       mobike      = no
 
 [^ciphers]: The ciphers used here are the strongest ones currently possible
-    while keeping compatibility with *JunOS*. The documentation for *strongSwan*
+    while keeping compatibility with *Junos*. The documentation for *strongSwan*
     contains a [complete list of supported algorithms][] as well
     as [security recommendations][] to choose them.
 
@@ -404,7 +404,7 @@ correctly:
             nexthop via 2001:db8:ff::7  dev vti6 weight 1
 
 The above route was learnt from both `V3-1` (through `vti5`) and `V3-2` (through
-`vti6`). Like for the *JunOS* version, there is no route-leaking between the
+`vti6`). Like for the *Junos* version, there is no route-leaking between the
 "private" namespace and the initial one. The VPN cannot be used as a gateway
 between the two namespaces, only for encapsulation. This also prevent a
 misconfiguration (for example, IKE daemon not running) from allowing packets to
@@ -446,7 +446,7 @@ and [0152eee6fc3b][]—both applied to stable trees.
 
 [strongSwan]: https://strongswan.org/ "strongSwan: the OpenSource IPsec-based VPN Solution"
 [Libreswan]: https://libreswan.org/ "Libreswan VPN software"
-[junos-conf]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn/junos-V3-2.conf "JunOS configuration for a route-based VPN"
+[junos-conf]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn/junos-V3-2.conf "Junos configuration for a route-based VPN"
 [GitHub]: https://github.com/vincentbernat/network-lab/blob/master/lab-routed-vpn "Configuration files for route-based VPNs"
 [complete list of supported algorithms]: https://wiki.strongswan.org/projects/strongswan/wiki/IKEv2CipherSuites "strongSwan: IKEv2 Cipher Suites"
 [security recommendations]: https://wiki.strongswan.org/projects/strongswan/wiki/SecurityRecommendations "strongSwan: Security Recommendations"

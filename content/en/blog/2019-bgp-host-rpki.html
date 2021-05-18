@@ -172,7 +172,7 @@ RTR:
 
 | Platform          | Over TCP? | Over SSH? |
 |-------------------|-----------|-----------|
-| [Juniper JunOS][] | ✔️         | ❌        |
+| [Juniper Junos][] | ✔️         | ❌        |
 | [Cisco IOS XR][]  | ✔️         | ✔️         |
 | [Cisco IOS XE][]  | ✔️         | ❌        |
 | [Cisco IOS][]     | ✔️         | ❌        |
@@ -181,9 +181,9 @@ RTR:
 | [FRR][]           | ✔️         | ✔️         |
 | [GoBGP][]         | ✔️         | ❌        |
 
-## Configuring JunOS
+## Configuring Junos
 
-*JunOS* only supports plain-text TCP. First, let's configure the
+*Junos* only supports plain-text TCP. First, let's configure the
 connections to the validation servers:
 
     ::junos
@@ -418,7 +418,7 @@ Then, we can configure *BIRD* to use these RTR servers:
        remote validator2 port 8283;
     }
 
-Unlike *JunOS*, *BIRD* doesn't have a feature to only use a subset of
+Unlike *Junos*, *BIRD* doesn't have a feature to only use a subset of
 validators. Therefore, we only configure two of them. As a safety
 measure, if both connections become unavailable, *BIRD* will keep the
 ROAs for one hour.
@@ -472,7 +472,7 @@ We can query the state of the RTR sessions and the database:
         2001:db8:ff::/64-128 AS65010  [VALIDATOR1 17:28:56.333] * (100)
                                       [VALIDATOR2 17:28:56.414] (100)
 
-Like for the *JunOS* case, a malicious actor could try to workaround
+Like for the *Junos* case, a malicious actor could try to workaround
 the validation by building an AS path where the last AS number is the
 legitimate one. *BIRD* is flexible enough to allow us to use any AS to
 check the IP prefix. Instead of checking the origin AS, we ask it to
@@ -540,7 +540,7 @@ the BGP connection is established.
 [RPKI and BGP: our path to securing Internet Routing]: https://blog.cloudflare.com/rpki-details/ "RPKI and BGP: our path to securing Internet Routing"
 [RIPE's RPKI Validator instance]: https://rpki-validator.ripe.net/ "RPKI Validator"
 [GoRTR]: https://github.com/cloudflare/gortr "The RPKI-to-Router server used at Cloudflare"
-[Juniper JunOS]: https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html "Configuring Origin Validation for BGP on Juniper JunOS"
+[Juniper Junos]: https://www.juniper.net/documentation/en_US/junos/topics/topic-map/bgp-origin-as-validation.html "Configuring Origin Validation for BGP on Juniper Junos"
 [Cisco IOS XR]: https://www.cisco.com/c/en/us/td/docs/routers/asr9000/software/asr9k-r6-2/routing/configuration/guide/b-routing-cg-asr9000-62x/b-routing-cg-asr9000-62x_chapter_010.html#concept_A84818AD41744DFFBD094DA7FCD7FE8B "BGP Prefix Origin Validation Based on RPKI on Cisco IOS XR"
 [Cisco IOS XE]: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/xe-3s/irg-xe-3s-book/bgp-origin-as-validation.html "BGP—Origin AS Validation on Cisco IOS XE"
 [Cisco IOS]: https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/iproute_bgp/configuration/15-s/irg-15-s-book/irg-origin-as.html "BGP—Origin AS Validation on Cisco IOS"
