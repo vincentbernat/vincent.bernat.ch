@@ -187,11 +187,10 @@ EOF
 
 # When possible, normalize videos to -2.0dB for peaks. Use the
 # following command to get the peak volume:
-#  ffmpeg -loglevel info -i indy3-dosbox-opl2lpt.mkv -af "volumedetect" \
-#         -vn -sn -dn -f null /dev/null
+#  ffmpeg -loglevel info -i 2021-network-cmdb.mkv -af "volumedetect" -vn -sn -dn -f null /dev/null
 #
-# Then, in Blender, you can increase the volume (use
-# http://www.redwirez.com/pcalc.jsp to convert dB to percents).
+# Then, in Blender, use adjust the volume:
+#  ffmpeg -i 2021-network-cmdb.mkv -filter:a "volume=6.4dB" -c:v copy normalized.mkv
 
 
 @task
