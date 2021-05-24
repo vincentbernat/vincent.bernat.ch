@@ -11,20 +11,17 @@ luffy.do(function() {
     var load = function() {
         var done = false;
         return function() {
-            if (done) return;
+            if (done || !links) return;
             done = true;        // Don't want to load twice.
 
-            luffy.load("isso.js", function() {
-                // Hide links
-                for (i = 0; i < links.length; i++) {
-                    var parent = links[i].parentNode;
-                    while (parent && parent.tagName !== "LI")
-                        parent = parent.parentNode;
-                    if (parent) {
-                        parent.style.visibility = 'hidden';
-                    }
-                }
-            });
+            var parent = links[0].parentNode;
+            while (parent && parent.tagName !== "LI")
+                parent = parent.parentNode;
+            if (parent) {
+                parent.style.visibility = 'hidden';
+            }
+
+            luffy.load("isso.js");
         }
     }();
 
