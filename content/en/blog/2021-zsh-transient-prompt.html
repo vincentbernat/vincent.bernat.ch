@@ -68,7 +68,7 @@ following function to define the prompt appearance:
 {% endraw %}
 
 Our next step is to redraw the prompt when accepting a command. This
-is done by invoking the `reset-prompt` ZLE widget. We have three cases
+is done by invoking the `reset-prompt` ZLE widget. We have four cases
 to consider:
 
     ::zsh
@@ -97,6 +97,8 @@ to consider:
     setopt ignoreeof
     zle -N _vbe_reset-prompt-and-exit
     bindkey '^D' _vbe_reset-prompt-and-exit
+
+    # 4. hitting Ctrl-C
     TRAPINT() {
         zle && [[ $#zsh_eval_context == 1 ]] && {
             _vbe_prompt_compact=1
@@ -118,6 +120,12 @@ using the regular form:
     add-zsh-hook precmd _vbe_prompt_precmd
 
 That's all!
+
+!!! "Update (2021.05)" My way of handling <kbd>Ctrl-C</kbd> shortens
+the prompt on some unwanted cases, notably when using
+<kbd>Ctrl-R</kbd> then <kbd>Ctrl-C</kbd> or <kbd>Meta-X</kbd> then
+<kbd>Ctrl-C</kbd>. If you are hit by this, you may want to skip the
+definition of the `TRAPINT` function. See the comments for more details.
 
 ---
 
