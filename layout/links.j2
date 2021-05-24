@@ -1,14 +1,8 @@
 {# -*- web -*- #}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
+{% if resource.meta.comments or next or previous %}
 <ul id="lf-bottomlinks" data-nosnippet>
-{% if resource.meta.comments %}
-    <li>
-        <span class="lf-sym">💬</span>
-        <span class="when-nojs">{{ resource.meta.l10n.comments_nojs }}</span>
-        <span class="when-js">{{ resource.meta.l10n.comments }}</span>
-    </li>
-{% endif %}
 {% if next %}
     <li><span class="lf-sym">→</span>
         <a rel="next" href="{{ content_url(next.url) }}">{{ next.meta.title|e }}</a></li>
@@ -31,9 +25,12 @@
     <li><span class="lf-sym">📨</span>
         <a href="{{ content_url( resource.meta.language + '/blog/subscribe.html') }}">{{ resource.meta.l10n.subscribe }}</a></li>
 {% endif %}
-</ul>
 {% if resource.meta.comments %}
-<div id="isso-thread" class="when-js" aria-live="polite"
-     data-title="{{ resource.meta.title|e }}"
-     data-isso-id="/{{ resource.relative_path[:-5] }}"></div>
+    <li>
+        <span class="lf-sym">💬</span>
+        <span class="when-nojs">{{ resource.meta.l10n.comments_nojs }}</span>
+        <span class="when-js">{{ resource.meta.l10n.comments }}</span>
+    </li>
+{% endif %}
+</ul>
 {% endif %}

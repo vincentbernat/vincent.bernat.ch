@@ -5,7 +5,7 @@ luffy.do(function() {
     return;
   }
 
-  var codeBlocks = document.querySelectorAll('main .codehilite');
+  var codeBlocks = document.querySelectorAll('.lf-main .codehilite');
   for (var i = 0; i < codeBlocks.length; i++) {
     var copyIcon = document.createElement('span');
     copyIcon.className = 'lf-sprite-copy';

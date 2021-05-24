@@ -47,6 +47,6 @@ luffy.do(function() {
                 load();
             }
         });
-        observer.observe(links[0]);
+        observer.observe(document.querySelectorAll('footer')[0]);
     }
 });
