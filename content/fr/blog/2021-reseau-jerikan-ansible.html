@@ -1,0 +1,920 @@
+---
+title: "Jerikan : un système de gestion de configuration pour les équipes réseau"
+description: |
+  Jerikan est un outil destiné aux équipes réseau. Il génère des fichiers de configuration
+  à partir d'une source de vérité et de modèles. Le déploiement est ensuite confié à Ansible.
+uuid: c6fb13a5-2787-4525-83d5-6f99b5083e6c
+attachments:
+  "https://github.com/jerikan-network/cmdb": Dépôt GitHub
+cover: jerikan/templates@2x.jpg
+tags:
+  - network-automation
+---
+
+Il existe de nombreuses ressources pour l'automatisation du réseau
+avec [Ansible][]. La plupart d'entre elles n'exposent que les
+[premières étapes][first steps] ou se limitent à un [champ
+d'application réduit][narrow scope]. Elles donnent peu d'indications
+sur la manière d'aller plus loin. Les environnements réseau
+réels peuvent être vastes, polyvalents, hétérogènes et remplis
+d'exceptions. L'absence d'exemples concrets de déploiements Ansible,
+contrairement à [Puppet][] et [SaltStack][], conduit de nombreuses
+équipes à élaborer des solutions fragiles et incomplètes.
+
+Nous avons [publié][Jerikan] sous une licence libre notre tentative
+pour pallier à ce manque :
+
+ - **Jerikan**, un outil pour construire des fichiers de configuration
+   à partir d'une *source de vérité unique* et de *modèles
+   [Jinja2][]*, ainsi que son intégration dans *GitLab*,
+ - un **playbook Ansible** pour déployer ces fichiers de configuration
+   sur les équipements réseau,
+ - une version édulcorée des **données de configuration et des
+   modèles** pour nos centres de données, aujourd'hui fermés, à San
+   Francisco et en Corée du Sud, couvrant de nombreux fournisseurs
+   (Facebook Wedge 100, Dell S4048 et S6010, Juniper QFX 5110, Juniper
+   QFX 10002, Cisco ASR 9001, Cisco Catalyst 2960, serveurs de console
+   Opengear et serveurs Linux) et de nombreuses fonctionnalités
+   (approvisionnement, routage BGP vers l'hôte, routage Internet,
+   réseau d'administration séparé, configuration DNS, intégration avec
+   NetBox et les IRR).
+
+Voici une démo pour l'ajout d'un nouveau peering:
+
+![]([[!!videos/2021-network-cmdb.m3u8]])
+
+Ce travail est l'œuvre collective de [Cédric Hascoët][],
+[Jean-Christophe Legatte][], [Loïc Pailhas][], [Sébastien Hurtel][],
+[Tchadel Icard][] et [Vincent Bernat][]. Nous sommes l'équipe réseau
+de Blade, une société française exploitant [Shadow][], un produit de
+PC dans les nuages. En mai 2021, notre société a été [rachetée par
+Octave Klaba][was bought by Octave Klaba] et l'infrastructure est en
+cours de transfert vers [OVHcloud][], sauvant ainsi *Shadow* en tant
+que produit, mais rendant notre équipe superflue.
+
+Notre réseau comptait environ 800 équipements, répartis sur 10 centres
+de données avec plus de 300 Gbps de bande passante en sortie. Le
+matériel publié est donc un exemple substantiel de gestion d'un réseau
+de taille moyenne à l'aide d'*Ansible*. Nous avons laissé de côté la
+configuration de nos centres de données plus anciens pour rendre le
+résultat final plus lisible, tout en conservant suffisamment de
+substance pour ne pas en faire un exemple trivial.
+
+[TOC]
+
+# Jerikan
+
+Le premier composant est *Jerikan*. En entrée, il prend une liste
+d'équipements, des données de configuration, des modèles et des
+scripts de validation. Il génère un ensemble de fichiers de
+configuration pour chaque appareil. *Ansible* pourrait effectuer cette
+tâche, mais il présente les limitations suivantes concernant la
+compilation des modèles :
+
+ - il est lent,
+ - les erreurs sont difficiles à corriger[^debug],
+ - la hiérarchie de recherche d'une variable est [rigide][rigid].
+
+[^debug]: *Ansible* ne fournit même pas un numéro de ligne lorsqu'il y
+    a une erreur dans un modèle. Il faut parfois trouver le problème
+    par bissection.
+
+        ::console
+        {% raw %}
+        $ ansible --version
+        ansible 2.10.8
+        […]
+        $ cat test.j2
+        Hello {{ name }}!
+        $ ansible all -i localhost, \
+        >  --connection=local \
+        >  -m template \
+        >  -a "src=test.j2 dest=test.txt"
+        localhost | FAILED! => {
+            "changed": false,
+            "msg": "AnsibleUndefinedVariable: 'name' is undefined"
+        }
+        {% endraw %}
+
+![Entrées et sorties de Jerikan]([[!!images/jerikan/jerikan.svg]]
+"Entrées et sorties de Jerikan")
+
+Si vous voulez suivre les exemples, il vous suffit d'avoir installé
+[Docker][] et [Docker Compose][]. Clonez le [dépôt][Jerikan] et vous
+êtes prêt !
+
+## Source de vérité
+
+Nous utilisons des fichiers YAML, versionnés avec *Git*, comme source
+de vérité unique au lieu d'utiliser une base de données, comme NetBox,
+ou un mélange de base de données et de fichiers texte. Cela offre de
+nombreux avantages :
+
+ - chacun peut utiliser son éditeur de texte préféré,
+ - l'équipe prépare les changements dans des branches,
+ - l'équipe évalue les changements en utilisant des *demandes de fusion*,
+ - les demandes de fusion présentent l'impact sur les fichiers de configuration générés,
+ - le retour à un état antérieur est facile,
+ - c'est rapide.
+
+Le premier fichier est [`devices.yaml`][devices.yaml]. Il contient la
+liste des équipements. Le deuxième fichier est
+[`classifier.yaml`][classifier.yaml]. Il définit un ensemble de
+clés-valeurs pour chaque équipement. Il est utilisé dans les modèles
+et pour rechercher les données associées à un appareil.
+
+    ::console
+    $ ./run-jerikan scope to1-p1.sk1.blade-group.net
+    continent: apac
+    environment: prod
+    groups:
+    - tor
+    - tor-bgp
+    - tor-bgp-compute
+    host: to1-p1.sk1
+    location: sk1
+    member: '1'
+    model: dell-s4048
+    os: cumulus
+    pod: '1'
+    shorthost: to1-p1
+
+Le nom de l'équipement est comparé à une liste d'expressions
+régulières et chaque correspondance contribue au résultat. Pour
+`to1-p1.sk1.blade-group.net`, le sous-ensemble suivant de
+`classifier.yaml` définit ses variables :
+
+    ::yaml
+    matchers:
+      - "^(([^.]*)\\..*)\\.blade-group\\.net":
+          environment: prod
+          host: "\\1"
+          shorthost: "\\2"
+      - "\\.(sk1)\\.":
+          location: "\\1"
+          continent: apac
+      - "^to([12])-[as]?p(\\d+)\\.":
+          member: "\\1"
+          pod: "\\2"
+      - "^to([12])-p(\\d+)\\.":
+          groups:
+            - tor
+            - tor-bgp
+            - tor-bgp-compute
+      - "^to([12])-(p|ap)(\\d+)\\.(sk1)\\.":
+          os: cumulus
+          model: dell-s4048
+
+Le troisième fichier est [`searchpaths.py`][searchpaths.py]. Il décrit
+les répertoires à examiner pour trouver une variable. Une fonction
+Python fournit une liste de chemins dans [`data/`][data] selon les
+variables associées à l'équipement. Voici une version
+simplifiée[^jerakia] :
+
+    ::python
+    def searchpaths(scope):
+        paths = [
+            "host/{scope[location]}/{scope[shorthost]}",
+            "location/{scope[location]}",
+            "os/{scope[os]}-{scope[model]}",
+            "os/{scope[os]}",
+            'common'
+        ]
+        for idx in range(len(paths)):
+            try:
+                paths[idx] = paths[idx].format(scope=scope)
+            except KeyError:
+                paths[idx] = None
+        return [path for path in paths if path]
+
+[^jerakia]: Ce sont les mêmes concepts que dans [Hiera][],
+    le système clés-valeurs hiérarchique de *Puppet*. Au départ, nous
+    utilisions [Jerakia][], un système similaire indépendant qui
+    expose une interface HTTP REST. Cependant, le surcoût en temps
+    d'une recherche est trop important pour notre utilisation.
+    *Jerikan* implémente la même fonctionnalité dans une [fonction
+    Python][Python function].
+
+Avec cette définition, les données pour `to1-p1.sk1.blade-group.net`
+sont recherchées dans les chemins suivants :
+
+    ::console
+    $ ./run-jerikan scope to1-p1.sk1.blade-group.net
+    […]
+    Search paths:
+      host/sk1/to1-p1
+      location/sk1
+      os/cumulus-dell-s4048
+      os/cumulus
+      common
+
+Les variables sont limitées à un espace de noms à spécifier lors d'une
+recherche. Nous utilisons les suivants :
+
+ - `system` pour les comptes, DNS, serveurs syslog, ...
+ - `topology` pour les ports, interfaces, adresses IP, sous-réseaux, ...
+ - `bgp` pour la configuration de BGP
+ - `build` pour les modèles et les scripts de validation
+ - `apps` pour les variables d'application
+
+Lors de la recherche d'une variable dans un espace de noms donné,
+*Jerikan* recherche un fichier YAML nommé d'après l'espace de noms
+dans chaque répertoire retournés par la fonction de recherche. Par
+exemple, si nous recherchons une variable pour
+`to1-p1.sk1.blade-group.net` dans l'espace de noms `bgp`, les fichiers
+YAML suivants sont traités : `host/sk1/to1-p1/bgp.yaml`,
+`location/sk1/bgp.yaml`, `os/cumulus-dell-s4048/bgp.yaml`,
+`os/cumulus/bgp.yaml` et `common/bgp.yaml`. La recherche s'arrête à
+la première correspondance.
+
+Le fichier [`schema.yaml`][schema.yaml] nous permet d'outrepasser ce
+dernier comportement en fusionnant dans certains cas les dictionnaires
+et les tableaux correspondants. Voici un extrait de ce fichier pour
+l'espace de noms `topology` :
+
+    ::yaml
+    system:
+      users:
+        merge: hash
+      sampling:
+        merge: hash
+      ansible-vars:
+        merge: hash
+      netbox:
+        merge: hash
+
+La dernière fonctionnalité de la source de vérité est la possibilité
+d'utiliser des modèles [Jinja2][] pour les clefs et les valeurs en les
+préfixant par « `~` » :
+
+    ::yaml
+    {% raw %}
+    # Dans data/os/junos/system.yaml
+    netbox:
+      manufacturer: Juniper
+      model: "~{{ model|upper }}"
+
+    # Dans data/groups/tor-bgp-compute/system.yaml
+    netbox:
+      role: net_tor_gpu_switch
+    {% endraw %}
+
+Chercher `netbox` dans l'espace de noms `system` pour
+`to1-p2.ussfo03.blade-group.net` produit le résultat suivant :
+
+    ::console
+    $ ./run-jerikan scope to1-p2.ussfo03.blade-group.net
+    continent: us
+    environment: prod
+    groups:
+    - tor
+    - tor-bgp
+    - tor-bgp-compute
+    host: to1-p2.ussfo03
+    location: ussfo03
+    member: '1'
+    model: qfx5110-48s
+    os: junos
+    pod: '2'
+    shorthost: to1-p2
+    […]
+    Search paths:
+    […]
+      groups/tor-bgp-compute
+    […]
+      os/junos
+      common
+    $ ./run-jerikan lookup to1-p2.ussfo03.blade-group.net system netbox
+    manufacturer: Juniper
+    model: QFX5110-48S
+    role: net_tor_gpu_switch
+
+Cela fonctionne aussi pour des données structurées :
+
+    ::yaml
+    {% raw %}
+    # Dans groups/adm-gateway/topology.yaml
+    interface-rescue:
+      address: "~{{ lookup('topology', 'addresses').rescue }}"
+      up:
+        - "~ip route add default via {{ lookup('topology', 'addresses').rescue|ipaddr('first_usable') }} table rescue"
+        - "~ip rule add from {{ lookup('topology', 'addresses').rescue|ipaddr('address') }} table rescue priority 10"
+
+    # Dans groups/adm-gateway-sk1/topology.yaml
+    interfaces:
+      ens1f0: "~{{ lookup('topology', 'interface-rescue') }}"
+    {% endraw %}
+
+Cela retourne le résultat suivant :
+
+    ::console
+    $ ./run-jerikan lookup gateway1.sk1.blade-group.net topology interfaces
+    […]
+    ens1f0:
+      address: 121.78.242.10/29
+      up:
+      - ip route add default via 121.78.242.9 table rescue
+      - ip rule add from 121.78.242.10 table rescue priority 10
+
+Pour placer des données dans la source de vérité, nous utilisons les
+règles suivantes :
+
+ 1. Ne pas se répéter.
+ 2. Préférer l'emplacement le plus spécifique sans enfreindre la première règle.
+ 3. Utiliser avec parcimonie les modèles, principalement pour respecter les règles précédentes.
+ 4. Limiter le modèle de données à ce qui est nécessaire pour votre cas d'utilisation.
+
+La première règle est assez importante. Par exemple, lorsque vous
+spécifiez des adresses IP pour une liaison point à point, ne spécifiez
+qu'un côté et déduisez l'autre valeur via les modèles. La dernière
+règle signifie qu'il est inutile de reproduire un [modèle BGP
+YANG][BGP YANG model] pour spécifier les pairs et les politiques BGP :
+
+    ::yaml
+    peers:
+      transit:
+        cogent:
+          asn: 174
+          remote:
+            - 38.140.30.233
+            - 2001:550:2:B::1F9:1
+          specific-import:
+            - name: ATT-US
+              as-path: ".*7018$"
+              lp-delta: 50
+      ix-sfmix:
+        rs-sfmix:
+          monitored: true
+          asn: 63055
+          remote:
+            - 206.197.187.253
+            - 206.197.187.254
+            - 2001:504:30::ba06:3055:1
+            - 2001:504:30::ba06:3055:2
+        blizzard:
+          asn: 57976
+          remote:
+            - 206.197.187.42
+            - 2001:504:30::ba05:7976:1
+          irr: AS-BLIZZARD
+
+## Modèles
+
+La liste des modèles à compiler pour chaque équipement est stockée
+dans la source de vérité, sous l'espace de noms `build` :
+
+    ::console
+    $ ./run-jerikan lookup edge1.ussfo03.blade-group.net build templates
+    data.yaml: data.j2
+    config.txt: junos/main.j2
+    config-base.txt: junos/base.j2
+    config-irr.txt: junos/irr.j2
+    $ ./run-jerikan lookup to1-p1.ussfo03.blade-group.net build templates
+    data.yaml: data.j2
+    config.txt: cumulus/main.j2
+    frr.conf: cumulus/frr.j2
+    interfaces.conf: cumulus/interfaces.j2
+    ports.conf: cumulus/ports.j2
+    dhcpd.conf: cumulus/dhcp.j2
+    default-isc-dhcp: cumulus/default-isc-dhcp.j2
+    authorized_keys: cumulus/authorized-keys.j2
+    motd: linux/motd.j2
+    acl.rules: cumulus/acl.j2
+    rsyslog.conf: cumulus/rsyslog.conf.j2
+
+Les modèles utilisent [Jinja2][]. C'est le même moteur que pour
+*Ansible*. *Jerikan* fournit quelques filtres personnalisés mais
+réutilise également certains des filtres d'*Ansible*[^extend],
+notamment [`ipaddr`][ipaddr]. Voici un extrait de
+[`templates/junos/base.j2`][templates/junos/base.j2] pour configurer
+les serveurs DNS et NTP sur les équipements Juniper :
+
+    ::jinja
+    {% raw %}
+    system {
+      ntp {
+    {% for ntp in lookup("system", "ntp") %}
+        server {{ ntp }};
+    {% endfor %}
+      }
+      name-server {
+    {% for dns in lookup("system", "dns") %}
+        {{ dns }};
+    {% endfor %}
+      }
+    }
+    {% endraw %}
+
+Voici le modèle équivalent pour Cisco IOS-XR :
+
+    ::jinja
+    {% raw %}
+    {% for dns in lookup('system', 'dns') %}
+    domain vrf VRF-MANAGEMENT name-server {{ dns }}
+    {% endfor %}
+    !
+    {% for syslog in lookup('system', 'syslog') %}
+    logging {{ syslog }} vrf VRF-MANAGEMENT
+    {% endfor %}
+    !
+    {% endraw %}
+
+
+[^extend]: La liste des filtres est placée en dur dans
+    [`jerikan/jinja.py`][jerikan/jinja.py]. C'est une conséquence du
+    fait que nous ne maintenons pas *Jerikan* comme un logiciel
+    indépendant.
+
+Trois fonctions utiles sont fournies :
+
+ - `devices()` renvoie la liste des équipements correspondant à un
+   ensemble de conditions. Par exemple, `devices("location==ussfo03",
+   "groups==tor-bgp")` renvoie la liste des routeurs de San Francisco
+   appartenant au groupe `tor-bgp`. Vous pouvez également omettre
+   l'opérateur si vous souhaitez que la valeur spécifiée soit égale à
+   celle de l'équipement en cours. Par exemple, `devices("location")`
+   renvoie les équipements situés dans le lieu actuel.
+ - `lookup()` effectue une recherche par clé. Elle prend l'espace de
+   noms, la clé, et optionellement, un nom d'équipement. S'il n'est
+   pas fourni, la recherche s'effectue sur l'équipement actuel.
+ - `scope()` renvoie les variables associées à l'équipement indiqué.
+
+Voici comment définir des sessions iBGP entre des routeurs situés dans
+le même centre de données :
+
+    ::jinja
+    {% raw %}
+    {% for neighbor in devices("location", "groups==edge") if neighbor != device %}
+      {% for address in lookup("topology", "addresses", neighbor).loopback|tolist %}
+    protocols bgp group IPV{{ address|ipv }}-EDGES-IBGP {
+      neighbor {{ address }} {
+        description "IPv{{ address|ipv }}: iBGP to {{ neighbor }}";
+      }
+    }
+      {% endfor %}
+    {% endfor %}
+    {% endraw %}
+
+Nous disposons également d'une base de données clé-valeur pour
+enregistrer les informations à réutiliser dans un autre modèle ou
+équipement. Ceci est très utile pour construire automatiquement des
+enregistrement DNS. Tout d'abord, on « capture » l'adresse IP insérée
+dans un modèle avec le filtre `store()` :
+
+    ::jinja
+    {% raw %}
+    interface Loopback0
+     description 'Loopback:'
+     {% for address in lookup('topology', 'addresses').loopback|tolist %}
+     ipv{{ address|ipv }} address {{ address|store('addresses', 'Loopback0')|ipaddr('cidr') }}
+     {% endfor %}
+    !
+    {% endraw %}
+
+Puis, nous réutilisons les valeurs stockées pour construire les
+enregistrements DNS en itérant sur les résultats de la fonction
+`store()`[^function] :
+
+    ::jinja
+    {% raw %}
+    {% for device, ip, interface in store('addresses') %}
+      {% set interface = interface|replace('/', '-')|replace('.', '-')|replace(':', '-') %}
+      {% set name = '{}.{}'.format(interface|lower, device) %}
+    {{ name }}. IN {{ 'A' if ip|ipv4 else 'AAAA' }} {{ ip|ipaddr('address') }}
+    {% endfor %}
+    {% endraw %}
+
+[^function]: C'est un peu confus. Nous avons un filtre `store()` et
+    une fonction `store()`. Dans *Jinja2*, les filtres et les
+    fonctions vivent dans deux espaces de noms distincts.
+
+Les modèles sont compilés localement avec `./run-jerikan build`.
+L'argument `--limit` restreint les équipements pour lesquels générer
+des configurations. La construction ne se fait pas en parallèle car un
+modèle peut dépendre des données collectées par un autre modèle.
+Actuellement, il faut 1 minute pour construire environ 3000 fichiers
+couvrant plus de 800 appareils.
+
+![Sortie de Jerikan lors de la compilation des
+modèles]([[!!images/jerikan/templates@2x.jpg]] "Sortie de Jerikan
+après la génération des fichiers de configuration pour six
+équipements")
+
+Lorsqu'une erreur se produit, une trace détaillée est affichée. Elle
+inclut le nom du modèle, le numéro de ligne et la valeur de toutes les
+variables visibles. C'est un gain de temps considérable par rapport à
+*Ansible* !
+
+    ::text hl_lines="1 7 26"
+    {% raw %}
+    templates/opengear/config.j2:15: in top-level template code
+        config.interfaces.{{ interface }}.netmask {{ adddress | ipaddr("netmask") }}
+            continent  = 'us'
+            device     = 'con1-ag2.ussfo03.blade-group.net'
+            environment = 'prod'
+            host       = 'con1-ag2.ussfo03'
+            infos      = {'address': '172.30.24.19/21'}
+            interface  = 'wan'
+            location   = 'ussfo03'
+            loop       = <LoopContext 1/2>
+            member     = '2'
+            model      = 'cm7132-2-dac'
+            os         = 'opengear'
+            shorthost  = 'con1-ag2'
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    
+    value = JerkianUndefined, query = 'netmask', version = False, alias = 'ipaddr'
+    
+    […]
+            # Check if value is a list and parse each element
+            if isinstance(value, (list, tuple, types.GeneratorType)):
+                _ret = [ipaddr(element, str(query), version) for element in value]
+                return [item for item in _ret if item]
+    
+    >       elif not value or value is True:
+    E       jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'adddress'
+    {% endraw %}
+
+Nous ne disposons pas de règles générales pour l'écriture des modèles.
+Comme pour la source de vérité, il n'est pas nécessaire de créer des
+modèles génériques capables de produire n'importe quelle configuration
+BGP. Il y a un équilibre à trouver entre la lisibilité et le fait
+d'éviter la duplication. Les modèles peuvent devenir effrayants et
+complexes : parfois, il est préférable d'écrire un filtre ou une
+fonction dans [`jerikan/jinja.py`][jerikan/jinja.py]. Maîtriser
+[Jinja2][] est un très bon investissement. Prenez le temps de
+parcourir [nos modèles][our templates], car certains d'entre eux
+présentent des fonctionnalités intéressantes.
+
+## Validation
+
+Optionellement, chaque fichier de configuration peut être validé par
+un script dans le répertoire [`checks/`][checks]. *Jerikan* utilise la
+variable `checks` dans l'espace de noms `build` pour connaître les
+tests à appliquer :
+
+    ::console
+    $ ./run-jerikan lookup edge1.ussfo03.blade-group.net build checks
+    - description: Juniper configuration file syntax check
+      script: checks/junoser
+      cache:
+        input: config.txt
+        output: config-set.txt
+    - description: check YAML data
+      script: checks/data.yaml
+      cache: data.yaml
+
+Dans l'exemple ci-dessus, `checks/junoser` est exécuté s'il y a une
+modification du fichier généré `config.txt`. Il produit également une
+version transformée du fichier de configuration qui est plus facile à
+interfacer avec l'utilitaire `diff`. [Junoser][] vérifie un fichier de
+configuration Junos en utilisant la définition du schéma XML pour
+Netconf[^fork]. En cas d'erreur, *Jerikan* affiche :
+
+    jerikan/build.py:127: RuntimeError
+    -------------- Captured syntax check with Junoser call --------------
+    P: checks/junoser edge2.ussfo03.blade-group.net
+    C: /app/jerikan
+    O:
+    E: Invalid syntax:  set system syslog archive size 10m files 10 word-readable
+    S: 1
+
+[^fork]: Nous utilisons une [version modifiée][fork] pour pouvoir
+    valider nos configurations et exposer un service HTTP pour réduire
+    le temps de validation.
+
+## Intégration continue avec GitLab
+
+L'étape suivante consiste à compiler les modèles en utilisant un
+système d'intégration continue. Comme nous utilisons GitLab, *Jerikan*
+contient avec un fichier [`.gitlab-ci.yaml`][gitlab-ci.yaml]. Lorsque
+nous devons effectuer un changement, nous créons une branche dédiée et
+une demande de fusion. GitLab compile les modèles en utilisant le même
+environnement que celui que nous utilisons sur nos ordinateurs
+portables et les stocke dans un artefact.
+
+![Demande de fusion dans
+GitLab]([[!!images/jerikan/merge-request@2x.png]] "Demande de fusion
+pour ajouter un nouveau port sur USSFO03. Les modèles sont compilés
+avec succès mais un autre membre de l'équipe doit approuver le
+changement avant de pouvoir l'intégrer.")
+
+Avant d'approuver une fusion, un autre membre de l'équipe étudie les
+changements au niveau du code mais aussi les différences au niveau des
+fichiers générés :
+
+![Différences sur les fichiers
+générés]([[!!images/jerikan/diff@2x.png]] "Le changement inclut la
+configuration d'un port sur un équipement Juniper, l'ajout des
+enregistrements DNS et les mises à jour de NetBox pour les nouvelles
+adresses IP.")
+
+# Ansible
+
+Une fois que *Jerikan* a construit les fichiers de configuration,
+*Ansible* prend le relais. Il est également livré sous la forme d'une
+image Docker pour éviter la maintenance d'un environnement virtuel
+Python et s'assurer que nous utilisons tous les mêmes versions.
+
+## Inventaire
+
+*Jerikan* a généré un fichier d'inventaire. Il contient tous les
+équipements gérés, des variables définies pour chacun d'eux et les
+groupes convertis en groupes *Ansible* :
+
+    ::toml
+    ob1-n1.sk1.blade-group.net ansible_host=172.29.15.12 ansible_user=blade ansible_connection=network_cli ansible_network_os=ios
+    ob2-n1.sk1.blade-group.net ansible_host=172.29.15.13 ansible_user=blade ansible_connection=network_cli ansible_network_os=ios
+    ob1-n1.ussfo03.blade-group.net ansible_host=172.29.15.12 ansible_user=blade ansible_connection=network_cli ansible_network_os=ios
+    none ansible_connection=local
+    
+    [oob]
+    ob1-n1.sk1.blade-group.net
+    ob2-n1.sk1.blade-group.net
+    ob1-n1.ussfo03.blade-group.net
+    
+    [os-ios]
+    ob1-n1.sk1.blade-group.net
+    ob2-n1.sk1.blade-group.net
+    ob1-n1.ussfo03.blade-group.net
+    
+    [model-c2960s]
+    ob1-n1.sk1.blade-group.net
+    ob2-n1.sk1.blade-group.net
+    ob1-n1.ussfo03.blade-group.net
+    
+    [location-sk1]
+    ob1-n1.sk1.blade-group.net
+    ob2-n1.sk1.blade-group.net
+    
+    [location-ussfo03]
+    ob1-n1.ussfo03.blade-group.net
+
+    [in-sync]
+    ob1-n1.sk1.blade-group.net
+    ob2-n1.sk1.blade-group.net
+    ob1-n1.ussfo03.blade-group.net
+    none
+
+`in-sync` est un groupe spécial pour les équipements dont la
+configuration doit correspondre à la configuration générée.
+Quotidiennement et sans surveillance, *Ansible* devrait être capable
+de pousser les configurations vers ce groupe. L'objectif à moyen terme
+est de couvrir tous les équipements.
+
+`none` est un équipement spécial pour les tâches non liées à un hôte
+spécifique. Cela inclut la [synchronisation de NetBox][synchronizing
+NetBox], des [objets IRR][IRR objects] et du DNS, la mise à jour de la
+RPKI et la construction des fichiers de géolocalisation.
+
+## Playbook
+
+Nous utilisons un unique *playbook* pour tous les équipements. Il est
+décrit dans le fichier
+[`ansible/playbooks/site.yaml`][ansible/playbooks/site.yaml]. En voici
+une version raccourcie :
+
+    ::yaml
+    - hosts: adm-gateway:!done
+      strategy: mitogen_linear
+      roles:
+        - blade.linux
+        - blade.adm-gateway
+        - done
+    
+    - hosts: os-linux:!done
+      strategy: mitogen_linear
+      roles:
+        - blade.linux
+        - done
+    
+    - hosts: os-junos:!done
+      gather_facts: false
+      roles:
+        - blade.junos
+        - done
+    
+    - hosts: os-opengear:!done
+      gather_facts: false
+      roles:
+        - blade.opengear
+        - done
+    
+    - hosts: none:!done
+      gather_facts: false
+      roles:
+        - blade.none
+        - done
+
+Un hôte n'exécute qu'un seul des rôles. Par exemple, un équipement
+Junos exécute le rôle `blade.junos`. Une fois qu'un rôle a été
+exécuté, l'équipement est ajouté au groupe `done` et les autres rôles
+sont ignorés.
+
+Le playbook peut être exécuté avec les fichiers de configuration
+générés par GitLab en utilisant la commande `./run-ansible-gitlab`.
+Elle utilise Docker pour exposer la commande `ansible-playbook` et
+elle accepte les mêmes arguments. Pour simuler un déploiement de la
+configuration sur les équipements du centre de données SK1, nous
+utilisons :
+
+    ::console
+    $ ./run-ansible-gitlab playbooks/site.yaml --limit='edge:&location-sk1' --diff --check
+    […]
+    PLAY RECAP *************************************************************
+    edge1.sk1.blade-group.net  : ok=6    changed=0    unreachable=0    failed=0    skipped=3    rescued=0    ignored=0
+    edge2.sk1.blade-group.net  : ok=5    changed=0    unreachable=0    failed=0    skipped=1    rescued=0    ignored=0
+
+Nous avons quelques règles pour écrire les rôles :
+
+ - `--check` doit détecter si un changement est nécessaire,
+ - `--diff` doit fournir une visualisation des changements prévus,
+ - `--check` et `--diff` ne doivent rien afficher s'il n'y a rien à changer,
+ - [écrire un module sur mesure][writing a custom module] pour nos besoins est une solution valable,
+ - toute la configuration de l'équipement est gérée[^derivation],
+ - les secrets doivent être stockés dans *Vault*,
+ - les modèles doivent être évités car nous avons *Jerikan* pour cela,
+ - les tâches doivent être réutilisées et non dupliquées[^duplication].
+
+[^derivation]: Il y a une tendance dans l'automatisation des réseaux à
+    se limiter à un sous-ensemble de configuration, par exemple en
+    ayant un playbook pour créer une nouvelle session BGP. Nous
+    pensons que c'est une mauvaise approche : avec le temps, votre
+    configuration ne correspondra pas à l'état attendu, notamment les
+    changements faits à la main ne seront pas détectés.
+
+[^duplication]: Voir
+    [`ansible/roles/blade.linux/tasks/firewall.yaml`][firewall.yaml]
+    et
+    [`ansible/roles/blade.linux/tasks/interfaces.yaml`][interfaces.yaml].
+    Ils sont destinés à être appelés lorsque cela est nécessaire, en
+    utilisant `import_role`.
+
+Nous évitons d'utiliser des collections d'[Ansible Galaxy][], à
+l'exception de celles permettant de se connecter et d'interagir avec
+les équipements constructeur, comme la [collection
+`cisco.iosxr`][cisco.iosxr]. La qualité des collections d'*Ansible
+Galaxy* est assez aléatoire et cela représente un effort de
+maintenance supplémentaire. Nous préférons écrire des rôles adaptés à
+nos besoins. Les collections que nous utilisons sont dans
+[`ci/ansible/ansible-galaxy.yaml`][ansible-galaxy.yaml]. Nous
+utilisons [Mitogen][] pour accélérer considérablement les exécutions
+d'*Ansible* sur les hôtes Linux.
+
+Nous disposons également de quelques playbooks à des fins
+opérationnelles : mise à niveau d'une version, isolation d'un routeur
+Internet, etc. Nous avions également en tête d'ajouter une étape de
+validation dans les rôles : est-ce que toutes les sessions BGP sont
+opérationnelles ? Cela aurait permis de valider un déploiement et de
+revenir rapidement en arrière en cas de problèmes.
+
+Actuellement, nos playbooks sont exécutés à partir de nos ordinateurs
+portables. Pour assurer le suivi des exécutions, nous utilisons
+[ARA][]. Un essai hebdomadaire sur les équipements du groupe `in-sync`
+fournit également un tableau de bord sur les hôtes sur lesquels nous
+devons faire converger la configuration.
+
+# Données de configuration et modèles
+
+Nous livrons *Jerikan* avec des données et des modèles correspondant à
+la configuration de nos centres de données USSFO03 et SK1. Ils
+n'existent plus mais, nous vous le promettons, tout ceci était utilisé
+en production à une époque ! 😢
+
+![Architecture réseau pour les centres de données
+Blade]([[!!images/jerikan/network@2x.png]] "La dernière itération de
+notre infrastructure réseau pour SK1, USSFO03 et les futurs centres de
+données. Le réseau de production utilise BGPttH en utilisant une
+topologie Clos. Le réseau hors bande utilise une conception L2 simple,
+avec le protocole STP, ainsi qu'un ensemble de serveurs de console.")
+
+Vous trouverez la configuration pour :
+
+nos routeurs Internet
+: Certains fonctionnent sur *Junos*, comme [edge2.ussfo03][], les
+  autres sur IOS-XR, comme [edge1.sk1][]. Les fonctionnalités
+  implémentées sont similaires dans les deux cas et nous pouvons
+  échanger l'un contre l'autre. Il y a la configuration BGP pour les
+  transits, les peerings et les IX ainsi que les politiques BGP
+  associées. [PeeringDB][] est interrogé pour obtenir le nombre
+  maximum de préfixes à accepter. [bgpq3 et un IRRd
+  conteneurisé][bgpq3 and a containerized IRRd] aident à filtrer les
+  routes reçues. Un pare-feu est également présent. IPv4 et IPv6 sont
+  tous deux configurés.
+
+notre fabrique BGP
+: BGP est utilisé à l'intérieur du centre de données[^evpn] et s'étend
+  jusqu'aux les hôtes physiques. La configuration est automatiquement
+  dérivée de l'emplacement du dispositif et du numéro de
+  port[^bgptth]. Les switchs en haut de chaque rack utilisent des
+  sessions BGP passives pour les ports vers les serveurs. Ils exposent
+  également un réseau spécifique pour permettre de démarrer en
+  utilisant DHCP et PXE. Ils font également office de serveur DHCP. La
+  conception est multivendeur : certains équipements fonctionnent sous
+  *Cumulus Linux*, comme [to1-p1.ussfo03][], tandis que d'autres
+  fonctionnent sous *Junos*, comme [to1-p2.ussfo03][].
+
+notre réseau hors bande
+: Nous utilisons des commutateurs Cisco Catalyst 2960 pour construire
+  un réseau hors bande L2. Pour assurer la redondance et économiser
+  quelques sous sur le câblage, nous construisons des petites boucles
+  et exploitons le protocole STP. Regardez [ob1-p1.ussfo03][]. Le
+  réseau est connecté de manière redondante à des serveurs d'accès.
+  Nous utilisons également des équipements OpenGear pour les accès
+  console. Regardez [con1-n1.ussfo03][].
+
+nos passerelles d'accès
+: Ces serveurs Linux ont plusieurs objectifs : passerelles SSH,
+  connexion de secours, accès direct au réseau hors bande,
+  installation automatisée des équipements réseau[^ztp], accès
+  Internet pour les flux administratifs, centralisation des serveurs
+  de console à l'aide de [Conserver][] et mise à disposition d'une API
+  pour l'autoconfiguration des sessions BGP pour les serveurs
+  physiques. Ce sont les premiers serveurs installés dans un nouveau
+  centre de données et ils sont utilisés pour mettre en place tout le
+  reste. Regardez à la fois les [fichiers générés][generated files] et
+  les [tâches Ansible][Ansible tasks] associées.
+
+[^evpn]: Nous avons également quelques centres de données qui
+    utilisent BGP EVPN VXLAN avec des équipements *Juniper*. Comme ils
+    sont encore en production aujourd'hui, nous n'avons pas inclus
+    cette fonctionnalité mais nous pourrions la publier à l'avenir.
+
+[^bgptth]: Rétrospectivement, ce n'est peut-être pas une bonne idée,
+    sauf si vous êtes à peu près sûr que tout est immuable. Ce n'était
+    pas notre cas. Nous pensons maintenant qu'il aurait été plus
+    judicieux d'attribuer un préfixe à chaque appareil et de le
+    consigner dans la source de vérité.
+
+[^ztp]: Les équipements n'utilisant pas Linux sont mis à jour et
+    configurés sans interaction de notre part. Les périphériques
+    *Cumulus Linux* sont automatiquement mis à jour lors de leur
+    première installation mais la configuration finale doit être
+    poussée en utilisant *Ansible* : nous ne voulions pas dupliquer le
+    processus de configuration en utilisant un autre outil.
+
+*[IRRs]: Internet Routing Registries
+*[IRR]: Internet Routing Registry
+*[STP]: Spanning Tree Protocol
+*[RPKI]: Resource Public Key Infrastructure
+*[IX]: Internet Exchange
+
+[Cédric Hascoët]: https://www.linkedin.com/in/c%C3%A9dric-hasco%C3%ABt-5069087b/
+[Jean-Christophe Legatte]: https://www.linkedin.com/in/jean-christophe-legatte-b9b86298/
+[Loïc Pailhas]: https://www.linkedin.com/in/lo%C3%AFc-pailhas-b40893136/
+[Sébastien Hurtel]: https://www.linkedin.com/in/s%C3%A9bastien-hurtel-14a501140/
+[Tchadel Icard]: https://twitter.com/tchadelicard/
+[Vincent Bernat]: [[fr]]
+[Shadow]: https://shadow.tech
+[OVHcloud]: https://www.ovh.com
+[was bought by Octave Klaba]: https://www.nextinpact.com/article/43500/reprise-blade-octave-klaba-emporte "Reprise de Blade (Shadow) : Octave Klaba l'emporte"
+[Ansible]: https://www.ansible.com "https://www.ansible.com"
+[first steps]: https://docs.ansible.com/ansible/latest/network/index.html "Ansible for Network Automation"
+[narrow scope]: https://gitlab.com/cumulus-consulting/goldenturtle/cumulus_ansible_modules "NVIDIA Cumulus Linux Roles"
+[Puppet]: https://github.com/wikimedia/puppet "Puppet repository for the Wikimedia Foundation"
+[Jerikan]: https://github.com/jerikan-network/cmdb
+[SaltStack]: https://github.com/creativecommons/sre-salt-prime "Creative Commons SaltStack configuration files"
+[rigid]: https://docs.ansible.com/ansible/latest/user_guide/playbooks_variables.html#understanding-variable-precedence "Using Variables: Understanding variable precedence"
+[BGP YANG model]: https://github.com/openconfig/public/tree/master/release/models/bgp "OpenConfig's YANG model for BGP"
+[devices.yaml]: https://github.com/jerikan-network/cmdb/blob/main/devices.yaml
+[classifier.yaml]: https://github.com/jerikan-network/cmdb/blob/main/classifier.yaml
+[docker-compose.yaml]: https://github.com/jerikan-network/cmdb/blob/main/docker-compose.yaml
+[gitlab-ci.yaml]: https://github.com/jerikan-network/cmdb/blob/main/.gitlab-ci.yaml
+[schema.yaml]: https://github.com/jerikan-network/cmdb/blob/main/schema.yaml
+[searchpaths.py]: https://github.com/jerikan-network/cmdb/blob/main/searchpaths.py
+[data]: https://github.com/jerikan-network/cmdb/blob/main/data
+[Jinja2]: https://jinja.palletsprojects.com/en/2.11.x/templates/ "Jinja2: moteur de modèles pour Python"
+[ipaddr]: https://docs.ansible.com/ansible/latest/user_guide/playbooks_filters_ipaddr.html "Ansible: ipaddr filter"
+[templates/junos/base.j2]: https://github.com/jerikan-network/cmdb/blob/main/templates/junos/base.j2
+[our templates]: https://github.com/jerikan-network/cmdb/blob/main/templates
+[jerikan/jinja.py]: https://github.com/jerikan-network/cmdb/blob/main/jerikan/jinja.py
+[checks]: https://github.com/jerikan-network/cmdb/blob/main/checks
+[Junoser]: https://github.com/codeout/junoser/ "PEG parser for Junos configuration"
+[fork]: https://github.com/jerikan-network/junoser "Junoser fork"
+[Docker Compose]: https://docs.docker.com/compose/ "Overview of Docker Compose"
+[Docker]: https://docs.docker.com/ "Docker documentation"
+[Hiera]: https://puppet.com/docs/puppet/latest/hiera_intro.html
+[Jerakia]: http://jerakia.io/ "Jerakia: a versatile data lookup system"
+[Python function]: https://github.com/jerikan-network/cmdb/blob/main/jerikan/jerakia.py
+[synchronizing NetBox]: [[fr/blog/2020-synchro-netbox-ansible.html]] "Synchroniser NetBox avec un module Ansible sur mesure"
+[IRR objects]: [[fr/blog/2020-synchro-ripe-arin-apnic-ansible.html]] "Synchroniser des objets RIPE, ARIN et APNIC avec un module Ansible sur mesure"
+[ansible/playbooks/site.yaml]: https://github.com/jerikan-network/cmdb/blob/main/ansible/playbooks/site.yaml
+[cisco.iosxr]: https://galaxy.ansible.com/cisco/iosxr "Ansible Galaxy: cisco.iosxr collection"
+[Ansible Galaxy]: https://galaxy.ansible.com "Ansible Galaxy"
+[ansible-galaxy.yaml]: https://github.com/jerikan-network/cmdb/blob/main/ci/ansible/ansible-galaxy.yaml
+[Mitogen]: https://mitogen.networkgenomics.com/ansible_detailed.html "Mitogen for Ansible"
+[writing a custom module]: [[fr/blog/2020-ecrire-module-ansible.html]] "Écrire un module Ansible sur mesure"
+[firewall.yaml]: https://github.com/jerikan-network/cmdb/blob/main/ansible/roles/blade.linux/tasks/firewall.yaml
+[interfaces.yaml]: https://github.com/jerikan-network/cmdb/blob/main/ansible/roles/blade.linux/tasks/interfaces.yaml
+[edge1.sk1]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/edge1.sk1.blade-group.net/config.txt
+[edge2.ussfo03]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/edge2.ussfo03.blade-group.net/config.txt
+[to1-p1.ussfo03]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/to1-p1.ussfo03.blade-group.net
+[to1-p2.ussfo03]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/to1-p2.ussfo03.blade-group.net/config.txt
+[ob1-p1.ussfo03]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/ob1-p1.ussfo03.blade-group.net/config.txt
+[con1-n1.ussfo03]: https://github.com/jerikan-network/cmdb/blob/generated-public/output/con1-n1.ussfo03.blade-group.net/config.txt
+[PeeringDB]: https://www.peeringdb.com/ "The Interconnection Database"
+[bgpq3 and a containerized IRRd]: [[fr/blog/2020-bgpq4-irrd-docker.html]] "Accélérer bgpq4 avec IRRd dans un containeur"
+[Conserver]: https://www.conserver.com/
+[generated files]: https://github.com/jerikan-network/cmdb/tree/generated-public/output/gateway1.ussfo03.blade-group.net
+[Ansible tasks]: https://github.com/jerikan-network/cmdb/tree/main/ansible/roles/blade.adm-gateway/tasks
+[ARA]: https://ara.recordsansible.org "ARA Records Ansible"

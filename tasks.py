@@ -178,6 +178,8 @@ done <<EOF
                                  --audio-bitrate 128 --audio-only
 2019-self-hosted-videos-subtitles.webm \
                                  --poster-seek 15s
+2021-network-cmdb.mkv            --video-bitrate-factor 0.5 \
+                                 --poster-seek 20%
 EOF
 """
 

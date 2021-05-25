@@ -1,0 +1,120 @@
+WEBVTT
+Kind: captions
+Language: fr
+
+00:00:00.000 --> 00:00:04.433
+Nous voulons mettre en place un peering avec Twitch dans notre data centre de SK1.
+
+00:00:05.100 --> 00:00:07.400
+Nous sommes tous les deux présents sur le KINX IX.
+
+00:00:08.100 --> 00:00:10.400
+En regardant leur page PeeringDB,
+
+00:00:10.401 --> 00:00:13.867
+nous récupérons les informations nécessaires pour configurer les sessions BGP :
+
+00:00:15.000 --> 00:00:17.033
+le numéro d'AS et le nom de l'AS set
+
+00:00:18.000 --> 00:00:20.000
+les adresses IP.
+
+00:00:20.001 --> 00:00:25.000
+Twitch a deux routeurs connectés sur le KINX et ils sont accessibles en IPv4 et IPv6.
+
+00:00:26.000 --> 00:00:28.400
+D'abord, nous créons une branche pour y placer les modifications.
+
+00:00:32.000 --> 00:00:37.600
+Ensuite, nous trouvons le fichier contenant la configuration BGP de edge1.sk1.
+
+00:00:38.000 --> 00:00:41.467
+Comme ce type de configuration est spécifique au routeur,
+
+00:00:41.500 --> 00:00:45.533
+nous devons aller dans data/host/sk1/edge1
+
+00:00:45.600 --> 00:00:48.000
+et ouvrir le fichier bgp.yaml.
+
+00:00:49.000 --> 00:00:52.500
+Comme vous pouvez voir, il y a déjà une session configurée avec Google.
+
+00:00:53.000 --> 00:00:54.433
+Configurons celle pour Twitch.
+
+00:00:55.000 --> 00:00:59.333
+Nous spécifions le numéro d'AS, les adresses IP et le nom de l'AS set.
+
+00:01:04.000 --> 00:01:07.800
+L'AS set sera utilisé pour filtrer les préfixes reçus.
+
+00:01:10.000 --> 00:01:13.800
+Faisons tourner Jerikan pour construire le fichier de configuration du routeur.
+
+00:01:18.500 --> 00:01:20.500
+Nous plaçons les changements dans Git.
+
+00:01:34.000 --> 00:01:36.000
+Nous poussons la branche sur GitLab.
+
+00:01:39.800 --> 00:01:44.300
+Ensuite, nous ouvrons l'URL fournie dans le navigateur pour créer la merge request.
+
+00:01:45.500 --> 00:01:47.367
+Nous pouvons vérifier les modifications.
+
+00:01:49.000 --> 00:01:51.000
+Nous validons la merge request.
+
+00:01:52.500 --> 00:01:57.000
+La CI de GitLab commence la construction de la configuration et nous demandons une relecture à Loïc.
+
+00:01:59.000 --> 00:02:03.000
+Pour la revue, nous vérifions d'abord les modifications des données.
+
+00:02:05.000 --> 00:02:11.700
+Une fois la compilation finie, GitLab fournit un artifact avec les différences avec la configuration actuelle.
+
+00:02:13.000 --> 00:02:16.100
+Nous pouvons voir la politique de routage pour ces nouveaux peerings...
+
+00:02:20.500 --> 00:02:27.000
+...ainsi que la liste des préfixes extraites des bases de données IRR pour filtrer les routes reçues.
+
+00:02:27.500 --> 00:02:31.000
+Ensuite, nous avons la configuration des sessions BGP.
+
+00:02:31.600 --> 00:02:36.833
+Les valeurs pour le nombre maximum de préfixes ont été automatiquement récupérées sur PeeringDB.
+
+00:02:37.000 --> 00:02:41.267
+En utilisant GitLab, nous pouvons ajouter des commentaires ou demander des modifications.
+
+00:02:42.000 --> 00:02:45.600
+Une fois que tout est OK, nous approuvons le changement et l'intégrons.
+
+00:02:53.000 --> 00:02:58.367
+GitLab reconstruit tous les fichiers et de configuration et nous pouvons demander à Vincent de finir le déploiement.
+
+00:03:01.500 --> 00:03:06.367
+La commande ./run-ansible-gitlab récupère les fichiers de configuration générés depuis GitLab.
+
+00:03:14.500 --> 00:03:17.733
+Nous faisons une première exécution avec --diff --check pour voir les changements.
+
+00:03:58.500 --> 00:04:00.333
+Tout est OK.
+
+00:04:01.500 --> 00:04:03.767
+Nous retirons --check pour appliquer les changements.
+
+00:04:26.000 --> 00:04:30.700
+Ensuite, nous nous connectons sur l'équipement et nous voyons que les sessions BGP sont bien présentes.
+
+00:04:47.500 --> 00:04:50.100
+Nous pouvons informer Twitch qu'ils peuvent désormais configurer leur côté.
+
+00:04:51.500 --> 00:04:53.000
+Merci d'avoir regardé !
