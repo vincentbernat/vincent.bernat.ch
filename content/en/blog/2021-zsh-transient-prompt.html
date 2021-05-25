@@ -9,7 +9,7 @@ tags:
   - programming-shell
 ---
 
-[Powerlevel10k][] is a prompt for *Zsh*. It contains some powerful
+[Powerlevel10k][] is a theme for *Zsh*. It contains some powerful
 features, is astoundingly fast, and easy to customize. I am quite
 amazed at the skills of its [main author][]. Be sure to also have a
 look at [Zsh for Humans][], a complete *Zsh* configuration including
@@ -67,65 +67,45 @@ following function to define the prompt appearance:
     PS1='$(_vbe_prompt) '
 {% endraw %}
 
-Our next step is to redraw the prompt when accepting a command. This
-is done by invoking the `reset-prompt` ZLE widget. We have four cases
-to consider:
+!!! "Update (2021.05)" The following part has been rewritten to be
+more robust. The code is stolen from [Powerlevel10k's issue #888][].
+See the comments for more details.
+
+Our next step is to redraw the prompt after accepting a command. We
+wrap Zsh line editor into a function:
 
     ::zsh
-    # 1. accepting a new command line
-    _vbe_reset-prompt-and-accept-line () {
-        _vbe_prompt_compact=1
-        zle reset-prompt
-        zle .accept-line
-    }
-    zle -N accept-line _vbe_reset-prompt-and-accept-line
+    _vbe-zle-line-init() {
+        [[ $CONTEXT == start ]] || return 0
 
-    # 2. executing a command from the history
-    _vbe_zle-isearch-exit () {
-        [[ $KEYS != $'\r' ]] && return
-        _vbe_prompt_compact=1
-        zle reset-prompt
-    }
-    zle -N zle-isearch-exit _vbe_zle-isearch-exit
+        # Start regular line editor
+        zle .recursive-edit
+        local -i ret=$?
 
-    # 3. exiting the current shell
-    _vbe_reset-prompt-and-exit () {
-        _vbe_prompt_compact=1
-        zle reset-prompt
-        exit
-    }
-    setopt ignoreeof
-    zle -N _vbe_reset-prompt-and-exit
-    bindkey '^D' _vbe_reset-prompt-and-exit
-
-    # 4. hitting Ctrl-C
-    TRAPINT() {
-        zle && [[ $#zsh_eval_context == 1 ]] && {
+        # If we received EOT, we exit the shell
+        if [[ $ret == 0 && $KEYS == $'\4' ]]; then
             _vbe_prompt_compact=1
-            zle reset-prompt
-        }
-        return $((128+$1))
-    }
+            zle .reset-prompt
+            exit
+        fi
 
-And before executing the command line, we need to unset the
-`$_vbe_prompt_compact` variable to ensure the next prompt is drawn
-using the regular form:
-
-    ::zsh
-    # Just before executing the command for real,
-    # signal the next prompt should be a regular one.
-    _vbe_prompt_precmd () {
+        # Line edition is over. Shorten the current prompt.
+        _vbe_prompt_compact=1
+        zle .reset-prompt
         unset _vbe_prompt_compact
+
+        if (( ret )); then
+            # Ctrl-C
+            zle .send-break
+        else
+            # Enter
+            zle .accept-line
+        fi
+        return ret
     }
-    add-zsh-hook precmd _vbe_prompt_precmd
+    zle -N zle-line-init _vbe-zle-line-init
 
 That's all!
-
-!!! "Update (2021.05)" My way of handling <kbd>Ctrl-C</kbd> shortens
-the prompt on some unwanted cases, notably when using
-<kbd>Ctrl-R</kbd> then <kbd>Ctrl-C</kbd> or <kbd>Meta-X</kbd> then
-<kbd>Ctrl-C</kbd>. If you are hit by this, you may want to skip the
-definition of the `TRAPINT` function. See the comments for more details.
 
 ---
 
@@ -161,3 +141,4 @@ following text:
 [Zsh for Humans]: https://github.com/romkatv/zsh4humans
 [main author]: https://github.com/romkatv "Roman Perepelitsa"
 [from scratch]: [[en/blog/2011-zsh-zshrc.html]] "Rewriting my .zshrc"
+[Powerlevel10k's issue #888]: https://github.com/romkatv/powerlevel10k/issues/888 "Help understanding the implementation of transient prompt #888"
