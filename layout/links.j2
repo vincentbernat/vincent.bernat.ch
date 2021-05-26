@@ -1,8 +1,25 @@
 {# -*- web -*- #}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
-{% if resource.meta.comments or next or previous %}
+{% if resource.meta.comments or resource.meta.share or next or previous %}
 <ul id="lf-bottomlinks" data-nosnippet>
+{% if resource.meta.share %}
+{% set url = base|urlencode + content_url(resource.url)|urlencode %}
+{% set title = resource.meta.title|urlencode %}
+    <li><span class="lf-sym">📢</span>
+        <span>
+            {{ resource.meta.l10n.share }}
+            <a href="https://twitter.com/intent/tweet?url={{url}}&text={{title}}">Twitter</a>,
+            <a href="https://www.facebook.com/sharer.php?u={{url}}&t={{title}}">Facebook</a>,
+            <a href="https://www.reddit.com/submit?url={{url}}&title={{title}}">Reddit</a>,
+            <a href="https://www.linkedin.com/shareArticle?url={{url}}&mini=true&title={{title}}">LinkedIn</a>,
+{% if resource.meta.language == "en" %}
+            <a href="https://news.ycombinator.com/submitlink?u={{url}}&t={{title}}">Hacker News</a>,
+{% endif %}
+            {{ resource.meta.l10n.share_email[0] }} <a href="mailto:?subject={{title}}&body={{url}}">{{ resource.meta.l10n.share_email[1] }}</a>.
+        </span>
+    </li>
+{% endif %}
 {% if next %}
     <li><span class="lf-sym">→</span>
         <a rel="next" href="{{ content_url(next.url) }}">{{ next.meta.title|e }}</a></li>
