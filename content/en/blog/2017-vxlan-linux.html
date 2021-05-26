@@ -23,8 +23,8 @@ and IPv4. Let's explore the various methods to configure it.
 
 To illustrate our examples, we use the following setup:
 
- - an **underlay IP network** (highly available and scalable, possibly the Internet),
- - three Linux bridges acting as **VXLAN tunnel endpoints** (VTEP),
+ - an **underlay IP network** (highly available and scalable, possibly the Internet);
+ - three Linux bridges acting as **VXLAN tunnel endpoints** (VTEP); and
  - four **servers** believing they share a common Ethernet segment.
 
 A VXLAN tunnel extends the individual Ethernet segments across the
@@ -89,7 +89,7 @@ The `vxlan100` device acts as a bridge device with remote VTEPs as
 virtual ports:
 
  - it sends **broadcast, unknown unicast, and multicast** (BUM) frames
-   to all VTEPs using the multicast group, and
+   to all VTEPs using the multicast group; and
  - it discovers the association from Ethernet MAC addresses to VTEP IP
    addresses using **source-address learning**.
 
@@ -124,10 +124,10 @@ network and build VXLAN segments on top of it, see my
 Using VXLAN over a multicast IP network has several benefits:
 
  - automatic discovery of other VTEPs sharing the same multicast
-   group,
+   group
  - good bandwidth usage (packets are replicated as late as
-   possible),
- - decentralized and controller-less design.[^decentralized]
+   possible)
+ - decentralized and controller-less design[^decentralized]
 
 [^decentralized]: The underlay multicast network may still need some
     central components, like rendez-vous points for PIM-SM
@@ -254,8 +254,8 @@ program queries some central registry and dynamically adds the
 requested entry. However, for L2 entries, notifications are issued
 only if:
 
- - the destination MAC address is not known,
- - there is no all-zero entry in the FDB, and
+ - the destination MAC address is not known;
+ - there is no all-zero entry in the FDB; and
  - the destination MAC address is not a multicast or broadcast one.
 
 These limitations prevent us to do a "unicast with dynamic L2 entries"
@@ -331,9 +331,9 @@ There is no one-size-fits-all solution.
 
 You should consider the **multicast** solution if:
 
- - you are in an environment where multicast is available,
- - you are ready to operate (and scale) a multicast network,
- - you need multicast and broadcast inside the virtual segments,
+ - you are in an environment where multicast is available;
+ - you are ready to operate (and scale) a multicast network;
+ - you need multicast and broadcast inside the virtual segments; and
  - you don't have L2/L3 addresses available beforehand.
 
 The scalability of such a solution is pretty good if you take care of
@@ -416,9 +416,9 @@ transport and signaling protocol for their own solutions.
 On top of that, IPv6 may not have been implemented in VXLAN-related
 tools:
 
- - [Cumulus vxfld daemon][] does not support IPv6 as a transport layer,
- - [flannel][] has absolutely [no IPv6 support][flannel-ipv6],
- - [Docker's libnetwork][] has [no IPv6 support][libnetwork-ipv6] for the VXLAN backend.
+ - [Cumulus vxfld daemon][] does not support IPv6 as a transport layer
+ - [flannel][] has absolutely [no IPv6 support][flannel-ipv6]
+ - [Docker's libnetwork][] has [no IPv6 support][libnetwork-ipv6] for the VXLAN backend
 
 ## Multicast
 

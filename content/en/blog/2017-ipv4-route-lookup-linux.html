@@ -22,8 +22,8 @@ information about the datagram (source and destination IP addresses,
 interfaces, firewall mark, ...), this function should quickly provide
 a decision. Some possible options are:
 
- - local delivery (`RTN_LOCAL`),
- - forwarding to a supplied next hop (`RTN_UNICAST`),
+ - local delivery (`RTN_LOCAL`);
+ - forwarding to a supplied next hop (`RTN_UNICAST`); and
  - silent discard (`RTN_BLACKHOLE`).
 
 Since 2.6.39, Linux stores routes in a **compressed prefix tree**
@@ -176,13 +176,13 @@ Here is the representation of our example routing table in memory:[^tnode]
 
 There are several structures involved:
 
- - [`struct fib_table`][struct fib_table] represents a routing table,
- - [`struct trie`][struct trie] represents a complete trie,
+ - [`struct fib_table`][struct fib_table] represents a routing table;
+ - [`struct trie`][struct trie] represents a complete trie;
  - [`struct key_vector`][struct key_vector] represents either
-   an internal node (when `bits` is not zero) or a leaf,
+   an internal node (when `bits` is not zero) or a leaf;
  - [`struct fib_info`][struct fib_info] contains the characteristics
    shared by several routes (like a next-hop gateway and an output
-   interface),
+   interface); and
  - [`struct fib_alias`][struct fib_alias] is the glue between the
    leaves and the `fib_info` structures.
 
@@ -342,8 +342,8 @@ configured. Let's look at the three last lines. When the IP address
 `192.168.117.55` was configured on the `eno1` interface, the kernel
 automatically added the appropriate routes:
 
- - a route for `192.168.117.55` for local unicast delivery to the IP address,
- - a route for `192.168.117.63` for broadcast delivery to the broadcast address,
+ - a route for `192.168.117.55` for local unicast delivery to the IP address;
+ - a route for `192.168.117.63` for broadcast delivery to the broadcast address; and
  - a route for `192.168.117.0` for broadcast delivery to the network address.
 
 When `127.0.0.1` was configured on the loopback interface, the same
@@ -455,9 +455,9 @@ details about it in the [kernel documentation][vrf.txt].
 
 The takeaways from this article are:
 
- - route lookup times hardly increase with the number of routes,
- - densily packed /32 routes lead to amazingly fast route lookups,
- - memory use is low (128 MiB per million routes),
+ - route lookup times hardly increase with the number of routes;
+ - densily packed /32 routes lead to amazingly fast route lookups;
+ - memory use is low (128 MiB per million routes); and
  - no optimization is done on routing rules.
 
 For IPv6, have a look at “[IPv6 route lookup on Linux][].”
