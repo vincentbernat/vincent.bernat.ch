@@ -3,7 +3,7 @@ luffy.do(() => {
     // Pause other videos when playing a new one
     const allVideos = (selector) => {
         selector = selector || "";
-        return document.querySelectorAll("video.lf-media " + selector);
+        return document.querySelectorAll(`video.lf-media ${selector}`);
     }
     const pauseOthers = (event) => {
         const others = allVideos();
