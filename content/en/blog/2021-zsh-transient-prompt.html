@@ -72,15 +72,17 @@ more robust. The code is stolen from [Powerlevel10k's issue #888][].
 See the comments for more details.
 
 Our next step is to redraw the prompt after accepting a command. We
-wrap Zsh line editor into a function:
+wrap Zsh line editor into a function:[^bracketedpaste]
 
     ::zsh
     _vbe-zle-line-init() {
         [[ $CONTEXT == start ]] || return 0
 
         # Start regular line editor
+        (( $+zle_bracketed_paste )) && print -r -n - $zle_bracketed_paste[1]
         zle .recursive-edit
         local -i ret=$?
+        (( $+zle_bracketed_paste )) && print -r -n - $zle_bracketed_paste[2]
 
         # If we received EOT, we exit the shell
         if [[ $ret == 0 && $KEYS == $'\4' ]]; then
@@ -104,6 +106,9 @@ wrap Zsh line editor into a function:
         return ret
     }
     zle -N zle-line-init _vbe-zle-line-init
+
+[^bracketedpaste]: We have to manually enable bracketed paste because
+    Zsh does it after `zle-line-init`.
 
 That's all!
 
