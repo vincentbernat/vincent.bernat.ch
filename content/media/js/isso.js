@@ -510,17 +510,17 @@ define('app/config',[],function() {
 });
 
 define('app/i18n/en',{
-    "postbox-text": "Type Comment Here (at least 3 chars)",
+    "postbox-text": "Type comment here (at least 3 chars)",
     "postbox-author": "Name (optional)",
-    "postbox-email": "E-mail (optional)",
+    "postbox-email": "Email (optional)",
     "postbox-website": "Website (optional)",
     "postbox-preview": "Preview",
     "postbox-edit": "Edit",
     "postbox-submit": "Submit",
     "postbox-notification": "Subscribe to email notification of replies",
 
-    "num-comments": "One Comment\n{{ n }} Comments",
-    "no-comments": "No Comments Yet",
+    "num-comments": "One comment\n{{ n }} comments",
+    "no-comments": "No comments yet",
     "atom-feed": "Atom feed",
 
     "comment-reply": "Reply",
