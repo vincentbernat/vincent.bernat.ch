@@ -3,61 +3,62 @@
 {% if resource.meta.share %}
 {% set url = base|urlencode + content_url(resource.url)|urlencode %}
 {% set title = resource.meta.title|urlencode %}
-    <li><span class="lf-sym">📢</span>
-        <span>
-            {{ resource.meta.l10n.share }}
-            <a href="https://twitter.com/intent/tweet?url={{url}}&text={{title}}">Twitter</a>,
-            <a href="https://www.facebook.com/sharer.php?u={{url}}">Facebook</a>,
-            <a href="https://www.reddit.com/submit?url={{url}}&title={{title}}">Reddit</a>,
-            <a href="https://www.linkedin.com/sharing/share-offsite/?url={{url}}">LinkedIn</a>,
+<li>
+  <span class="lf-sym">📢</span>
+  <span>
+    {{ resource.meta.l10n.share }}
+    <a href="https://twitter.com/intent/tweet?url={{url}}&text={{title}}">Twitter</a>,
+    <a href="https://www.facebook.com/sharer.php?u={{url}}">Facebook</a>,
+    <a href="https://www.reddit.com/submit?url={{url}}&title={{title}}">Reddit</a>,
+    <a href="https://www.linkedin.com/sharing/share-offsite/?url={{url}}">LinkedIn</a>,
 {% if resource.meta.language == "en" %}
-            <a href="https://news.ycombinator.com/submitlink?u={{url}}&t={{title}}">Hacker News</a>,
+    <a href="https://news.ycombinator.com/submitlink?u={{url}}&t={{title}}">Hacker News</a>,
 {% endif %}
-            <span class="lf-webshare">{{ resource.meta.l10n.share_app[0] }} <a href="#">{{ resource.meta.l10n.share_app[1] }}</a>,</span>
-            {{ resource.meta.l10n.share_email[0] }} <a href="mailto:?subject={{title}}&body={{url}}">{{ resource.meta.l10n.share_email[1] }}</a>.
-        </span>
-    </li>
+    <span class="lf-webshare">{{ resource.meta.l10n.share_app[0] }} <a href="#">{{ resource.meta.l10n.share_app[1] }}</a>,</span>
+    {{ resource.meta.l10n.share_email[0] }} <a href="mailto:?subject={{title}}&body={{url}}">{{ resource.meta.l10n.share_email[1] }}</a>.
+  </span>
+</li>
 {% endif %}
 {% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
 {% if next %}
-    <li><span class="lf-sym">→</span>
-        <a rel="next" href="{{ content_url(next.url) }}">{{ next.meta.title|e }}</a></li>
+<li><span class="lf-sym">→</span>
+    <a rel="next" href="{{ content_url(next.url) }}">{{ next.meta.title|e }}</a></li>
 {% endif %}
 {% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
 {% if previous %}
-    <li><span class="lf-sym">←</span>
-        <a rel="prev" href="{{ content_url(previous.url) }}">{{ previous.meta.title|e }}</a></li>
+<li><span class="lf-sym">←</span>
+    <a rel="prev" href="{{ content_url(previous.url) }}">{{ previous.meta.title|e }}</a></li>
 {% endif %}
 {% set related = resource|same_tag("prev_by_time_" + resource.meta.language, 1) %}
 {% if related %}
-    <li><span class="lf-sym">💡</span>
-        <a href="{{ content_url(related.url) }}">{{ related.meta.title|e }}</a></li>
+<li><span class="lf-sym">💡</span>
+    <a href="{{ content_url(related.url) }}">{{ related.meta.title|e }}</a></li>
 {% endif %}
 {% set related = resource|same_tag("next_by_time_" + resource.meta.language, 1) %}
 {% if related %}
-    <li><span class="lf-sym">💡</span>
-        <a href="{{ content_url(related.url) }}">{{ related.meta.title|e }}</a></li>
+<li><span class="lf-sym">💡</span>
+    <a href="{{ content_url(related.url) }}">{{ related.meta.title|e }}</a></li>
 {% endif %}
 {% if '/blog/' in resource.url and not resource.url.endswith("/subscribe.html") %}
-    <li><span class="lf-sym">📨</span>
-        <a href="{{ content_url( resource.meta.language + '/blog/subscribe.html') }}">{{ resource.meta.l10n.subscribe }}</a></li>
+<li><span class="lf-sym">📨</span>
+    <a href="{{ content_url( resource.meta.language + '/blog/subscribe.html') }}">{{ resource.meta.l10n.subscribe }}</a></li>
 {% endif %}
 {% if resource.meta.comments %}
-    <li>
-        <span class="lf-sym">💬</span>
-        <span class="when-nojs">{{ resource.meta.l10n.comments_nojs }}</span>
-        <span class="when-js">{{ resource.meta.l10n.comments }}</span>
-    </li>
+<li>
+  <span class="lf-sym">💬</span>
+  <span class="when-nojs">{{ resource.meta.l10n.comments_nojs }}</span>
+  <span class="when-js">{{ resource.meta.l10n.comments }}</span>
+</li>
 {% endif %}
 {% endset %}
 {% if links %}
 <ul id="lf-bottomlinks" data-nosnippet>
 {{ links }}
 {%- if not resource.meta.comments %}
-    <li style="visibility: hidden">
-        <span class="lf-sym">💬</span>
-        <span>{{ resource.meta.l10n.no_comments }}</span>
-    </li>
+  <li style="visibility: hidden">
+    <span class="lf-sym">💬</span>
+    <span>{{ resource.meta.l10n.no_comments }}</span>
+  </li>
 {% endif %}
 </ul>
 {% endif %}

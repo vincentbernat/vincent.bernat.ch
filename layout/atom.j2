@@ -1,34 +1,31 @@
 {# -*- web -*- #}
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="{{ resource.meta.language }}" xml:base="{{base}}">
-    <title>
-        {{ resource.meta.author|e }}
-    </title>
-    <link href="{{base}}{{ content_url(resource.url) }}" rel="self" />
-    <link href="{{base}}{{ content_url(resource.meta.language) }}" rel="alternate" />
-    <id>http://www.luffy.cx{{ content_url(resource.url) }}/</id>
+  <title>{{ resource.meta.author|e }}</title>
+  <link href="{{base}}{{ content_url(resource.url) }}" rel="self" />
+  <link href="{{base}}{{ content_url(resource.meta.language) }}" rel="alternate" />
+  <id>http://www.luffy.cx{{ content_url(resource.url) }}/</id>
+{% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)()|top(6) %}
+{% if loop.first %}
+  <updated>{{ res.meta.modified|xmldatetime }}</updated>
 
-    {% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)()|top(6) %}
-    {% if loop.first %}
-    <updated>{{ res.meta.modified|xmldatetime }}</updated>
+{% endif %}
+  <entry>
+    <title type="html">{{ res.meta.title|e }}</title>
+    <author><name>{{ res.meta.author|e }}</name></author>
+    <link href="{{base}}{{ content_url(res.url) }}" rel="alternate" />
+{% if res.meta.comments %}
+    <link href="{{base}}{{ content_url(res.url) }}#isso-thread" rel="replies" type="text/html" />
+{% endif %}
+    <updated>{{ res.meta.created|xmldatetime }}</updated>
+    <id>http://www.luffy.cx{{ content_url(res.url) }}.html</id>
 
-    {% endif %}
-        <entry>
-            <title type="html">{{ res.meta.title|e }}</title>
-            <author><name>{{ res.meta.author|e }}</name></author>
-            <link href="{{base}}{{ content_url(res.url) }}" rel="alternate" />
-            {% if res.meta.comments %}
-            <link href="{{base}}{{ content_url(res.url) }}#isso-thread" rel="replies" type="text/html" />
-            {% endif %}
-            <updated>{{ res.meta.created|xmldatetime }}</updated>
-            <id>http://www.luffy.cx{{ content_url(res.url) }}.html</id>
-
-            <content type="html">
+    <content type="html">
 <![CDATA[
 {% refer to res.relative_path as file -%}
 {{ file.article | replace('>#</a>', '>​</a>') }}
 ]]>
-            </content>
-        </entry>
-    {% endfor %}
+    </content>
+  </entry>
+{% endfor %}
 </feed>
