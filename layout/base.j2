@@ -24,23 +24,20 @@
 {% if resource.meta.noindex %}
   <meta name="robots" content="noindex,follow">
 {% endif %}
-{% if resource.meta.description %}
-  <meta name="description" content="{{ resource.meta.description|replace('\n', ' ')|trim()|e }}">
-{% endif %}
-  <meta name="og:type" content="article">
-  <meta name="og:locale" content="{{ resource.meta.locale }}">
-  <meta name="og:title" content="{{ resource.meta.title|e }}">
-  <meta name="og:description" content="
+  <meta property="og:type" content="article">
+  <meta property="og:locale" content="{{ resource.meta.locale }}">
+  <meta property="og:title" content="{{ resource.meta.title|e }}">
+  <meta property="og:description" name="description" content="
 {%- filter replace('\n', ' ')|truncate(150)|trim()|e %}
 {%- if resource.meta.description %}{{ resource.meta.description }}
 {%- else %}{{ formatted_article|truncate(1000)|striptags }}
 {%- endif %}
 {%- endfilter %}">
 {% if resource.meta.cover %}
-  <meta name="og:image" content="{{ media_url('images/' + resource.meta.cover) }}">
+  <meta property="og:image" content="{{ media_url('images/' + resource.meta.cover) }}">
 {% endif %}
 {% if resource.meta.created != None %}
-  <meta name="article:published_time" content="{{ resource.meta.created|xmldatetime }}">
+  <meta property="article:published_time" content="{{ resource.meta.created|xmldatetime }}">
 {% endif %}
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="{{ media_url('images/favicon.png') }}">
