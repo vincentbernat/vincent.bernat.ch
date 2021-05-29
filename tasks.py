@@ -619,6 +619,7 @@ def analytics(c):
           "done"
           " | LANG=en_US.utf8 goaccess "
           "       --ignore-crawlers "
+          "       --unknowns-as-crawlers "
           "       --http-protocol=no "
           "       --no-term-resolver "
           "       --no-ip-validation "
