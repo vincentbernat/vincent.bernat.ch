@@ -187,50 +187,36 @@ substantiellement les routes qu'il reçoit.
 [GoBGP][] est une implémentation de BGP en Go[^go]. Il fournit une API
 de type RPC pour la configuration mais accepte également des fichiers
 de configuration classiques et est livré avec un client en ligne de
-commande.
+commande. Voici une configuration similaire à celle de *FRR* :
+
+     ::yaml
+     global:
+       config:
+         as: 65000
+         router-id: 203.0.113.254
+         local-address-list:
+           - 203.0.113.254
+     peer-groups:
+       - config:
+           peer-group-name: rr-client
+           peer-as: 65000
+         afi-safis:
+           - config:
+               afi-safi-name: l2vpn-evpn
+         route-reflector:
+           config:
+             route-reflector-client: true
+             route-reflector-cluster-id: 203.0.113.254
+     dynamic-neighbors:
+       - config:
+           peer-group: rr-client
+           prefix: 203.0.113.0/24
+
 
 [^go]: Je suis souvent circonspect envers les projets se contentant de
     réécrire un service existant en Go. Toutefois, bien que plutôt
     jeune, *GoBGP* a des mérites propres (bonne architecture, bonnes
     performances).
-
-Il est nécessaire de définir tous les voisins via l'API, le client en
-ligne de commande ou fichier de configuration construit à partir d'un
-gabarit <del>(l'implémentation des voisins dynamiques
-est [en cours][gobgp-dynamic-neighbors])</del>[^dynamic]. Voici une
-configuration pour un seul voisin :
-
-    ::yaml
-    global:
-      config:
-        as: 65000
-        router-id: 203.0.113.254
-        local-address-list:
-          - 203.0.113.254
-    neighbors:
-      - config:
-          neighbor-address: 203.0.113.1
-          peer-as: 65000
-        afi-safis:
-          - config:
-              afi-safi-name: l2vpn-evpn
-        route-reflector:
-          config:
-            route-reflector-client: true
-            route-reflector-cluster-id: 203.0.113.254
-
-[^dynamic]: Le support des voisins dynamiques a été intégré dans GoBGP
-    1.21. Jetez un œil sur cet [exemple de
-    configuration][gobgp-dynamic-neighbors-conf].
-
-[gobgp-dynamic-neighbors-conf]: https://github.com/vincentbernat/network-lab/blob/853ad29b1c5233e028e0d015eeac62b15d6ab16c/lab-vxlan/gobgpd.yaml "Example de configuration de GoBGP comme réflecteurs avec des voisins dynamiques"
-
-Il est possible d'ajouter des voisins depuis la ligne de commande :
-
-    ::console
-    $ gobgp neighbor add 203.0.113.2 as 65000 \
-    >         route-reflector-client 203.0.113.254 \
-    >         --address-family evpn
 
 Par défaut, *GoBGP* ne tente aucune interaction avec le noyau, ce qui
 nous convient parfaitement dans ce rôle.
