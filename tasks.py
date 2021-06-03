@@ -225,6 +225,7 @@ def upload_videos(c, video=None):
 @task
 def update_monospace_fonts(c):
     """Build Iosevka 3.7.1 fonts with Nix"""
+    # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
         c.run("""
 nix-build -E '((import <nixpkgs>{}).iosevka.override {
