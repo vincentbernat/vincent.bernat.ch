@@ -262,10 +262,10 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
 @task
 def update_text_fonts(c):
     """Download latest Merriweather fonts"""
-    url = "https://github.com/SorkinType/Merriweather/raw/master/fonts/woff2"
+    url = "https://github.com/SorkinType/Merriweather/raw/master/fonts/woffs"
     with c.cd('content/media/fonts'):
-        for source, target in [("Merriweather-Light", "merriweather"),
-                               ("Merriweather-LightItalic", "merriweather-italic")]:
+        for source, target in [("Merriweather-6ptLight", "merriweather"),
+                               ("Merriweather-6ptLightItalic", "merriweather-italic")]:
             c.run("wget -O {}.woff2 "
                   "{}/{}.woff2".format(target, url, source))
             # Patch
