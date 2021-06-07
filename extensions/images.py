@@ -400,7 +400,7 @@ class ImageFixerPlugin(Plugin):
                 parent = img.parent()
             elif parents[-2:] == ['p', 'a']:
                 parent = img.parent().parent()
-            if parent:
+            if parent and parent.contents().length == 1:
                 img.addClass('lf-media')
                 inner = pq('<span />')
                 outer = pq('<div />')
