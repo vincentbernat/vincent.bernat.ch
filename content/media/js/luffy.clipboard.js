@@ -8,7 +8,7 @@ luffy.do(() => {
   const codeBlocks = document.querySelectorAll('.lf-main .codehilite');
   for (let i = 0; i < codeBlocks.length; i++) {
     const copyIcon = document.createElement('span');
-    copyIcon.className = 'lf-sprite-copy';
+    copyIcon.className = 'lf-copy';
     codeBlocks[i].appendChild(copyIcon);
   }
 
@@ -16,7 +16,7 @@ luffy.do(() => {
 
   function copy({target}) {
     const t = target;
-    if (t.className === 'lf-sprite-copy') {
+    if (t.className === 'lf-copy') {
       // Find the sibling pre element
       const el = t.parentNode.childNodes[0];
       if (el.tagName === 'PRE') {
@@ -45,14 +45,14 @@ luffy.do(() => {
           el.blur();
 
           // Inform user
-          t.className = 'msg-copy-ok lf-sprite-copy';
+          t.className = 'msg-copy-ok lf-copy';
         } catch (err) {
           // Hint to use OS to copy
-          t.className = 'msg-copy-failed lf-sprite-copy';
+          t.className = 'msg-copy-failed lf-copy';
         }
 
         // Remove the message after a timeout
-        setTimeout(() => { t.className = 'lf-sprite-copy'; }, 3000);
+        setTimeout(() => { t.className = 'lf-copy'; }, 3000);
       }
     }
   }

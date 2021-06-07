@@ -72,24 +72,6 @@ def serve(c):
 
 
 @task
-def sprite(c):
-    """Regenerate sprites"""
-    c.run(" ".join(["./node_modules/svg-sprite/bin/svg-sprite.js",
-                    "--shape-spacing-padding=2px",
-                    "--css",                         # CSS mode
-                    "--css-bust=false",              # No cache busting
-                    "--css-dest=content/media/css",  # Destination
-                    "--css-prefix=.lf-sprite-",
-                    "--css-dimensions=",             # Inline dimensions
-                    "--css-mixin=sprite",
-                    "--css-render-less",             # LESS mode
-                    "--css-render-less-dest=luffy.sprite.less",
-                    "--css-render-less-template=content/media/css/sprite.tmpl",
-                    "--css-sprite=../images/l/sprite.svg",
-                    "content/media/images/l/sprite/*.svg"]))
-
-
-@task
 def prune(c, before='1 year ago'):
     """Prune old commits."""
     with c.cd(".final"):
@@ -485,8 +467,7 @@ printf " JPG %10s %10s %10s\n" \
 
         # Compute hash on various files
         with step("compute hash for static files"):
-            for p in ['media/images/l/sprite*.svg',
-                      'media/fonts/*',
+            for p in ['media/fonts/*',
                       'media/js/*.js',
                       'media/css/*.css']:
                 sed_html = []
