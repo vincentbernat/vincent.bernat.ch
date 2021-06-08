@@ -447,7 +447,7 @@ printf " JPG %10s %10s %10s\n" \
         # Subset fonts. Nice tool to quickly look at the result:
         #  http://torinak.com/font/lsfont.html
         def subset(font, glyphs, options=[]):
-            options = " ".join(["--layout-features=liga,kern",
+            options = " ".join(["--layout-features=",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
                                 "--no-hinting --desubroutinize",
                                 *options])
