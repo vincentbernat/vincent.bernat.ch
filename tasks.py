@@ -449,6 +449,7 @@ printf " JPG %10s %10s %10s\n" \
         def subset(font, glyphs, options=[]):
             options = " ".join(["--layout-features=",
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
+                                "--no-hinting --desubroutinize",
                                 *options])
             c.run("pyftsubset media/fonts/{}.woff "
                   "--flavor=woff --with-zopfli {}".format(font, options))
