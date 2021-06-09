@@ -40,6 +40,7 @@
 {% macro format_tag(resource, tag, fmt) %}
 {%- set tag = tag|string %}
 {%- set subtags = tag.split("-") %}
+{%- filter replace("\n", "") %}
 {%- for subtag in subtags -%}
     {%- set subtag = subtags[:loop.index]|join('-') -%}
     {{- fmt(resource, subtag,
@@ -47,6 +48,7 @@
             site.config.tagger.tags[subtag].descr|e) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
+{%- endfilter -%}
 {% endmacro %}
 
 {# Display all the categories #}
