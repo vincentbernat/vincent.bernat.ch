@@ -412,11 +412,6 @@ def build(c):
             c.run("find media/images -type f -name '*.jpg' -print0"
                   "  | sort -z "
                   f" | xargs -0 -n10 -P$(nproc) {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
-        with step("convert PNG to AVIF"):
-            c.run("find media/images -type f -name '*.png' -print"
-                  f" | xargs -n1 -P4 -i {libavif}/bin/avifenc --codec aom --yuv 444 "
-                  "                                    --min 10 --max 15 '{}' '{}'.avif"
-                  " > /dev/null")
         with step("optimize PNG"):
             c.run("find media/images -type f -name '*.png' -print0"
                   " | sort -z "
