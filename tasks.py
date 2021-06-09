@@ -426,11 +426,20 @@ def build(c):
         # The idea is that:
         #  - JPG decoding is fast
         #  - JPG has progressive decoding
+        #
+        # We prefer smaller WebPs over AVIFs as all browsers
+        # supporting AVIF also support WebP.
         with step("remove WebP/AVIF files not small enough"):
             c.run("for f in media/images/**/*.{webp,avif}; do"
                   "  orig=$(stat --format %s ${f%.*});"
                   "  new=$(stat --format %s $f);"
                   "  (( $orig*0.90 > $new )) || rm $f;"
+                  "done", shell="/bin/zsh")
+            c.run("for f in media/images/**/*.avif; do"
+                  "  [[ -f ${f%.*}.webp ]] || continue;"
+                  "  orig=$(stat --format %s ${f%.*}.webp);"
+                  "  new=$(stat --format %s $f);"
+                  "  (( $orig > $new )) || rm $f;"
                   "done", shell="/bin/zsh")
             c.run(r"""
 printf "     %10s %10s %10s\n" Original WebP AVIF
