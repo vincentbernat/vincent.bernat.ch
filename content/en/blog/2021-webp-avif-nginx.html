@@ -1,0 +1,236 @@
+---
+title: "Serving WebP & AVIF images with Nginx"
+description: |
+  WebP and AVIF are new image formats for the web. How to configure
+  Nginx to serve them when the browser supports them?
+uuid: 3d5059d6-f929-4ef3-bd30-bab47e44df97
+js:
+  - 2021-webp-avif-nginx.js
+tags:
+  - web
+---
+
+WebP and AVIF are two image formats for the web. They aim to produce
+smaller files than JPEG and PNG. They both support lossy and lossless
+compression, as well as alpha transparency. [WebP][] was developed by
+Google and is a derivative of the [VP8][] video format.[^lossless] It
+is [supported on most browsers][]. [AVIF][] is using the newer [AV1][]
+video format to achieve better results. It is [supported by
+Chromium-based browsers][] and has experimental support for
+Firefox.[^firefox]
+
+[^lossless]: VP8 is only used for lossy compression. Lossless
+    compression is using an [unrelated format][].
+
+[^firefox]: Firefox support was scheduled for Firefox 86 but because
+    of the [lack of proper color space support][], it is still not
+    enabled by default.
+
+<span id="lf1-support-both">Your browser supports WebP and AVIF image formats.</span>
+<span id="lf1-support-none">Your browser supports none of these image formats.</span>
+<span id="lf1-support-webp">Your browser only supports the WebP image format.</span>
+<span id="lf1-support-avif">Your browser only supports the AVIF image format.</span>
+{.when-js}
+
+Without JavaScript, I can't tell what your browser supports.
+{.when-nojs}
+
+# Converting and optimizing images
+
+For this blog, I am using the following shell snippets to convert and
+optimize JPEG and PNG images. Skip to the [next
+section](#serving-webp-avif-with-nginx) if you are only interested in
+the *Nginx* setup.
+
+## JPEG images
+
+JPEG images are converted to **WebP** using [cwebp][].
+
+    ::sh
+    find media/images -type f -name '*.jpg' -print0 \
+      | xargs -0n1 -P$(nproc) -i \
+          cwebp -q 84 -af '{}' -o '{}'.webp
+
+They are converted to **AVIF** using `avifenc` from [libavif][]:
+
+    ::sh
+    find media/images -type f -name '*.jpg' -print0 \
+      | xargs -0n1 -P$(nproc) -i \
+          avifenc --codec aom --yuv 420 --min 20 --max 25 '{}' '{}'.avif
+
+Then, they are **optimized** using [jpegoptim][] built with [Mozilla's
+improved JPEG encoder][], via [Nix][]. This is one reason I love
+*Nix*.
+
+    ::sh
+    jpegoptim=$(nix-build --no-out-link \
+          -E 'with (import <nixpkgs>{}); jpegoptim.override { libjpeg = mozjpeg; }')
+    find media/images -type f -name '*.jpg' -print0 \
+      | sort -z
+      | xargs -0n10 -P$(nproc) \
+          ${jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all
+
+## PNG images
+
+PNG images are **down-sampled to 8-bit RGBA-palette** using
+[pngquant][]. The conversion reduces file sizes significantly while
+being mostly invisible.
+
+    ::sh
+    find media/images -type f -name '*.png' -print0 \
+      | sort -z
+      | xargs -0n10 -P$(nproc) \
+          pngquant --skip-if-larger --strip \
+                   --quiet --ext .png --force
+
+Then, they are converted to **WebP** with `cwebp` in lossless mode:
+
+    ::sh
+    find media/images -type f -name '*.png' -print0 \
+      | xargs -0n1 -P$(nproc) -i \
+          cwebp -z 8 '{}' -o '{}'.webp
+
+No conversion is done to AVIF: lossless compression is not as
+efficient as `pngquant` and lossy compression is only marginally
+better than what I get with WebP.
+
+## Keeping only the smallest files
+
+I am only keeping WebP and AVIF images if they are at least 10%
+smaller than the original format: decoding is usually faster for JPEG
+and PNG; and JPEG images can be decoded progressively.[^progressive]
+
+    ::zsh
+    for f in media/images/**/*.{webp,avif}; do
+      orig=$(stat --format %s ${f%.*})
+      new=$(stat --format %s $f)
+      (( orig*0.90 > new )) || rm $f
+    done
+
+[^progressive]: Progressive decoding is not planned for WebP but could
+    be implemented using low-quality thumbnail images for AVIF. See
+    [this issue][] for a discussion.
+
+I only keep AVIF images if they are smaller than WebP.
+
+    ::zsh
+    for f in media/images/**/*.avif; do
+      [[ -f ${f%.*}.webp ]] || continue
+      orig=$(stat --format %s ${f%.*}.webp)
+      new=$(stat --format %s $f)
+      (( $orig > $new )) || rm $f
+    done
+
+We can compare how many images are kept when converted to WebP or AVIF:
+
+    ::zsh
+    printf "     %10s %10s %10s\n" Original WebP AVIF
+    for format in png jpg; do
+      printf " ${format:u} %10s %10s %10s\n" \
+        $(find media/images -name "*.$format" | wc -l) \
+        $(find media/images -name "*.$format.webp" | wc -l) \
+        $(find media/images -name "*.$format.avif" | wc -l)
+    done
+
+AVIF is better than *MozJPEG* for most JPEG files while WebP beats
+*MozJPEG* only for one file out of two:
+
+           Original       WebP       AVIF
+     PNG         64         47          0
+     JPG         83         40         74
+
+## Further reading
+
+I didn't detail my choices for quality parameters and there is not
+much science in it. Here are two resources providing more insight on
+AVIF:
+
+ - Jake Archibald [compares WebP and AVIF with examples][]; and
+ - Daniel Aleksandersen [compares WebP and AVIF at the same visual quality][] using DDSIM.
+
+# Serving WebP & AVIF with Nginx
+
+To serve WebP and AVIF images, there are two possibilities:
+
+1. use `<picture>` to let the browser pick the format it supports, or
+2. use [content negotiation][] to let the server send the
+   best-supported format.
+
+I use the second approach. It relies on inspecting the `Accept` HTTP
+header in the request. For Chrome, it looks like this:
+
+    Accept: image/avif,image/webp,image/apng,image/*,*/*;q=0.8
+
+I configure Nginx to serve AVIF image, then the WebP image, and
+fallback to the original JPEG/PNG image depending on what the browser
+advertises:[^vary]
+
+    ::nginx
+    http {
+      map $http_accept $webp_suffix {
+        default        "";
+        "~image/webp"  ".webp";
+      }
+      map $http_accept $avif_suffix {
+        default        "";
+        "~image/avif"  ".avif";
+      }
+    }
+    server {
+      # […]
+      location ~ ^/images/.*\.(png|jpe?g)$ {
+        add_header Vary Accept;
+        try_files $uri$avif_suffix$webp_suffix $uri$avif_suffix $uri$webp_suffix $uri =404;
+      }
+    }
+
+[^vary]: The `Vary` header ensures an intermediary cache (a proxy
+    or a CDN) checks the `Accept` header before using a cached
+    response. Internet Explorer has trouble with this header and may
+    not be able to cache the resource properly. There is a
+    [workaround][] but Internet Explorer's market share is now so
+    small that it is pointless to implement it.
+
+For example, let's suppose the browser requests
+`/images/ont-box-orange@2x.jpg`. If it supports WebP but not AVIF,
+`$webp_suffix` is set to `.webp` while `$avif_suffix` is set to the
+empty string. The server tries to serve the first existing file in
+this list:
+
+ - `/images/ont-box-orange@2x.jpg.webp`
+ - `/images/ont-box-orange@2x.jpg`
+ - `/images/ont-box-orange@2x.jpg.webp`
+ - `/images/ont-box-orange@2x.jpg`
+
+If the browser supports both AVIF and WebP, Nginx walks the following
+list:
+
+ - `/images/ont-box-orange@2x.jpg.webp.avif` (it never exists)
+ - `/images/ont-box-orange@2x.jpg.avif`
+ - `/images/ont-box-orange@2x.jpg.webp`
+ - `/images/ont-box-orange@2x.jpg`
+
+Eugene Lazutkin [explains in more detail how this works][]. I have
+only presented a variation of his setup supporting both WebP and
+AVIF.
+
+[supported on most browsers]: https://caniuse.com/webp "Can I use WebP image format"
+[WebP]: https://en.wikipedia.org/wiki/WebP "WebP on Wikipedia"
+[VP8]: https://en.wikipedia.org/wiki/VP8 "VP8 on Wikipedia"
+[unrelated format]: https://developers.googleblog.com/2012/08/lossless-and-transparency-modes-in-webp.html "Lossless and Transparency Modes in WebP"
+[AVIF]: https://en.wikipedia.org/wiki/AV1#AV1_Image_File_Format_(AVIF) "AV1 Image File Format (AVIF) on Wikipedia"
+[AV1]: https://en.wikipedia.org/wiki/AV1 "AV1 on Wikipedia"
+[supported by Chromium-based browsers]: https://caniuse.com/avif "Can I use AVIF image format"
+[lack of proper color space support]: https://bugzilla.mozilla.org/show_bug.cgi?id=1634741 "AVIF (AV1 Image File Format): proper color space support"
+[Mozilla's improved JPEG encoder]: https://github.com/mozilla/mozjpeg
+[Nix]: https://nixos.org/
+[jpegoptim]: https://github.com/tjko/jpegoptim "utility to optimize/compress JPEG files"
+[cwebp]: https://developers.google.com/speed/webp/docs/cwebp "cwebp encoder"
+[libavif]: https://github.com/AOMediaCodec/libavif "Library for encoding and decoding .avif files"
+[pngquant]: https://pngquant.org/ "pngquant: lossy PNG compressor"
+[this issue]: https://github.com/AOMediaCodec/av1-avif/issues/102 "AVIF: Optional progressive download frame"
+[compares WebP and AVIF at the same visual quality]: https://www.ctrl.blog/entry/webp-avif-comparison.html "Comparing AVIF vs WebP file sizes at the same DSSIM"
+[compares WebP and AVIF with examples]: https://jakearchibald.com/2020/avif-has-landed/ "AVIF has landed"
+[content negotiation]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation/List_of_default_Accept_values#values_for_an_image "MDN: List of default Accept values for images"
+[workaround]: https://github.com/igrigorik/webp-detect/blob/master/nginx.conf "WebP detection using Nginx"
+[explains in more detail how this works]: https://www.lazutkin.com/blog/2014/02/23/serve-files-with-nginx-conditionally/ "Serve files with nginx conditionally"
