@@ -142,6 +142,8 @@ done <<EOF
 2014-eudyptula-boot-1.mp4        --video-bitrate-factor 0.5
 2014-eudyptula-boot-2.mp4        --video-bitrate-factor 0.5
 2015-hotfix-qemu-venom.mp4       --video-bitrate-factor 0.5
+2015-dotscale-docker-machine-swarm.mkv \
+                                 --video-bitrate-factor 0.3
 2017-netops-org-mode-1.mp4       --video-bitrate-factor 0.5
 2017-netops-org-mode-2.mp4       --video-bitrate-factor 0.5
 2017-netops-org-mode-3.mp4       --video-bitrate-factor 0.5
