@@ -338,7 +338,9 @@ class ImageFixerPlugin(Plugin):
             elif src.endswith('.pdf'):
                 img[0].tag = 'object'
                 img.attr("type", "application/pdf")
-                img.attr("data", src)
+                # Most browsers: toolbar, navpanes, scrollbar
+                # Firefox: view, pagemode, zoom
+                img.attr("data", f"{src}#toolbar=0&navpanes=0&scrollbar=0&view=Fit&pagemode=none&zoom=page-fit")
                 fallback = pq('<a />')
                 fallback.attr("href", src)
                 fallback.text(img.attr.alt or "PDF")
