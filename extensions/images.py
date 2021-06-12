@@ -23,6 +23,7 @@ from pyquery import PyQuery as pq
 from PIL import Image
 from pymediainfo import MediaInfo
 import langcodes
+from PyPDF2 import PdfFileReader
 
 
 class Thumb(object):
@@ -181,6 +182,11 @@ class ImageFixerPlugin(Plugin):
             mi = MediaInfo.parse(image.path)
             track = [t for t in mi.tracks if t.track_type == 'Video'][0]
             return dict(size=(track.width, track.height), opaque=True)
+        if image.source_file.kind in {'pdf'}:
+            with open(image.path, 'rb') as f:
+                pdf = PdfFileReader(f)
+                box = pdf.getPage(0).mediaBox
+                return dict(size=(box.getWidth(), box.getHeight()), opaque=True)
         self.logger.warn(
             "[%s] has an img tag not linking to an image" % resource)
         return dict(size=(None, None), opaque=True)
@@ -325,8 +331,21 @@ class ImageFixerPlugin(Plugin):
                 img[0].tag = 'object'
                 img.attr("type", "image/svg+xml")
                 img.attr("data", src)
-                del img.attr.src
                 img.text('&#128444; {}'.format(img.attr.alt or ""))
+                del img.attr.src
+                del img.attr.alt
+
+            # PDF files
+            elif src.endswith('.pdf'):
+                img[0].tag = 'object'
+                img.attr("type", "application/pdf")
+                img.attr("data", src)
+                fallback = pq('<a />')
+                fallback.attr("href", src)
+                fallback.text(img.attr.alt or "PDF")
+                img.append(fallback)
+                del img.attr.src
+                del img.attr.alt
 
             # On-demand videos (should be in /videos)
             elif src.endswith('.m3u8'):
