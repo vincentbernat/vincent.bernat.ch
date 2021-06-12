@@ -199,9 +199,8 @@ class ImageFixerPlugin(Plugin):
                 path = self.site.config.media_root_path.child(path)
                 image = self.site.content.resource_from_relative_deploy_path(
                     path)
-            elif src.startswith(self.site.media_url('videos/')):
-                path = src[len(self.site.media_url('videos/')) -
-                           len('videos/'):]
+            elif src.startswith(self.site.media_url('videos/')[:-7]):
+                path = src[len(self.site.media_url('videos/')) - 7:]
                 path = self.site.config.media_root_path.child(path)
                 image = self.site.content.resource_from_relative_deploy_path(
                     path)
