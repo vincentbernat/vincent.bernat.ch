@@ -12,12 +12,18 @@ class FootnotesPlugin(Plugin):
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind != 'html':
             return
-
         d = pq(text, parser='html')
-        footnotes = d('.footnote ol')
+
+        # Rename footnote to endnote
+        for cls in ['footnote', 'footnote-ref', 'footnote-backref']:
+            els = d(f".{cls}")
+            els.removeClass(cls)
+            els.addClass(cls.replace('foot', 'end'))
+
+        endnotes = d('.endnote ol')
 
         # Pop out orphaned backlinks
-        backrefs = footnotes('.footnote-backref')
+        backrefs = endnotes('.endnote-backref')
         for backref in backrefs.items():
             parent = backref.parent()
             if len(parent.contents()) == 1:
@@ -27,7 +33,7 @@ class FootnotesPlugin(Plugin):
         # Create sidenotes
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]
-            fn = footnotes('li[id=fn-{}]'.format(name))
+            fn = endnotes('li[id=fn-{}]'.format(name))
             assert(fn)
             parents = ref.parents()
             for i in range(len(parents)-1):
@@ -39,7 +45,7 @@ class FootnotesPlugin(Plugin):
             sidenote[0].set('hidden', None)
             sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
                 ref.text(), fn.html()))
-            sidenote("a.footnote-backref").remove()
+            sidenote("a.endnote-backref").remove()
             sidenote.insert_before(parent)
         return u'<!DOCTYPE html>\n' + d.outer_html()
 
