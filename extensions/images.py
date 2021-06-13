@@ -336,16 +336,14 @@ class ImageFixerPlugin(Plugin):
 
             # PDF files
             elif src.endswith('.pdf'):
-                img[0].tag = 'object'
-                img.attr("type", "application/pdf")
+                img[0].tag = 'iframe'
                 # Most browsers: toolbar, navpanes, scrollbar
                 # Firefox: view, pagemode, zoom
-                img.attr("data", f"{src}#toolbar=0&navpanes=0&scrollbar=0&view=Fit&pagemode=none&zoom=page-fit")
-                fallback = pq('<a />')
-                fallback.attr("href", src)
-                fallback.text(img.attr.alt or "PDF")
-                img.append(fallback)
-                del img.attr.src
+                img.attr("src", f"{src}#toolbar=0&navpanes=0&scrollbar=0&view=Fit&pagemode=none&zoom=page-fit")
+                img.attr("allowfullscreen", "true")
+                img.attr("loading", "lazy")
+                if img.attr.alt:
+                    img.attr("title", img.attr.alt)
                 del img.attr.alt
 
             # On-demand videos (should be in /videos)
