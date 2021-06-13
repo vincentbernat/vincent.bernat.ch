@@ -15,6 +15,7 @@ import xml.etree.ElementTree as ET
 import lxml.html
 import types
 from functools import partial
+from fractions import Fraction
 
 from hyde.plugin import Plugin
 from fswrap import File, Folder
@@ -186,7 +187,15 @@ class ImageFixerPlugin(Plugin):
             with open(image.path, 'rb') as f:
                 pdf = PdfFileReader(f)
                 box = pdf.getPage(0).mediaBox
-                return dict(size=(box.getWidth(), box.getHeight()), opaque=True)
+                # PDF physical sizes may be skewed, notably for
+                # slides. Assume width will be around 1000.
+                ratio = Fraction(Fraction(box.getWidth()),
+                                 Fraction(box.getHeight()))
+                ratio = ratio.limit_denominator(100)
+                width = 1000//ratio.numerator*ratio.numerator
+                height = 1000//ratio.numerator*ratio.denominator
+                return dict(size=(width, height),
+                            opaque=True)
         self.logger.warn(
             "[%s] has an img tag not linking to an image" % resource)
         return dict(size=(None, None), opaque=True)
