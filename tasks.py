@@ -616,6 +616,7 @@ def analytics(c):
           "       --http-protocol=no "
           "       --no-term-resolver "
           "       --no-ip-validation "
+          "       --no-query-string "
           "       --output=goaccess.html "
           "       --log-format=COMBINED "
           "       --ignore-panel=KEYPHRASES "
