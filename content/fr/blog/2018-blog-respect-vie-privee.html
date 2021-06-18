@@ -34,7 +34,12 @@ milliers de visiteurs par jour.
 !!! "Mise à jour (02.2019)" Concernant les traces côté serveur, les
 adresses IP sont anonymisées à l'aide de [ipscrub][], un module pour
 *nginx*. Toutefois, les ressources autres que HTML sont services par
-[CloudFront][].
+*Amazon CloudFront*[^cdn].
+
+[^cdn]: Je n'ai pas de problème avec l'utilisation d'un CDN comme
+    [CloudFront][] : c'est un service payant et Amazon n'est pas
+    une entreprise qui se spécialise dans l'espionnage des
+    utilisateurs.
 
 # Polices de caractères
 
@@ -231,15 +236,10 @@ L'en-tête HTTP `Content-Security-Policy` contrôle les resources qu'un
 navigateur est autorisé à charger pour le rendu d'une page. Il s'agit
 d'un garde-fou et d'une documentation pour les ressources externes
 utilisées. Le mien est modérément complexe et montre à quoi s'attendre
-du point de vue de la protection de la vie privée[^cdn] :
+du point de vue de la protection de la vie privée :
 
     Content-Security-Policy:
       {% from "nginx.j2" import csp with context %}{{ csp()|indent(6) }}
-
-[^cdn]: Je n'ai pas de problème avec l'utilisation d'un CDN comme
-    [CloudFront][] : c'est un service payant et Amazon n'est pas
-    une entreprise qui se spécialise dans l'espionnage des
-    utilisateurs.
 
 Je suis plutôt satisfait d'avoir pu atteindre ce résultat ! 😊
 
