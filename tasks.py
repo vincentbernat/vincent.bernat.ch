@@ -371,7 +371,7 @@ def build(c):
               "obviously|basically|simply|clearly|everyone knows|turns out"
               "|explicitely|overriden|accross|totally"
               ")|Thinkpad)' \\*.html", hide='out')
-        c.run(r"! git grep -E '\"[.](\s|$)' \\*.html")
+        c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     with step("update JS dependencies"):
