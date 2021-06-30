@@ -608,7 +608,7 @@ def analytics(c):
     """Get some stats"""
     c.run("for h in {};"
           "do ssh $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
-          "   | grep -v atom.xml;"
+          "   | grep -Fv atom.xml;"
           "done"
           " | LANG=en_US.utf8 goaccess "
           "       --ignore-crawlers "
