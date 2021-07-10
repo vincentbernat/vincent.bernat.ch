@@ -207,7 +207,7 @@ Le corps de notre script devient ceci :
         sys.exit(0)
 
 Si le script peut être exécuté non interactivement, par exemple depuis
-une *crontab*, il est possible d'envoyer les traces vers *syslog* :
+une *crontab*, il est possible d'envoyer les traces vers *syslog*[^systemd] :
 
     ::python
     def setup_logging(options):
@@ -222,14 +222,22 @@ une *crontab*, il est possible d'envoyer les traces vers *syslog* :
                                                     facility=facility)
                 sh.setFormatter(logging.Formatter(
                     "{0}[{1}]: %(message)s".format(
-                        logger.name,
-                        os.getpid())))
+                        logger.name, os.getpid())))
                 root.addHandler(sh)
             else:
                 ch = logging.StreamHandler()
                 ch.setFormatter(logging.Formatter(
                     "%(levelname)s[%(name)s] %(message)s"))
                 root.addHandler(ch)
+
+[^systemd]: Alternativement, envoyer les traces vers `journald` est plus simple :
+
+        ::python
+        from systemd import journal
+        # […]
+        if not sys.stderr.isatty():
+            sh = journal.JournalHandler(SYSLOG_IDENTIFIER=logger.name)
+            root.addHandler(sh)
 
 Pour cet exemple, cela représente beaucoup de code pour un seul appel
 à `logger.debug()`, mais en situation réelle, cela est très utile pour

@@ -200,7 +200,7 @@ The main body of our script becomes this:
         sys.exit(0)
 
 If the script may run unattended—e.g. from a crontab, we can make it
-log to syslog:
+log to syslog:[^systemd]
 
     ::python
     def setup_logging(options):
@@ -215,14 +215,22 @@ log to syslog:
                                                     facility=facility)
                 sh.setFormatter(logging.Formatter(
                     "{0}[{1}]: %(message)s".format(
-                        logger.name,
-                        os.getpid())))
+                        logger.name, os.getpid())))
                 root.addHandler(sh)
             else:
                 ch = logging.StreamHandler()
                 ch.setFormatter(logging.Formatter(
                     "%(levelname)s[%(name)s] %(message)s"))
                 root.addHandler(ch)
+
+[^systemd]: Alternatively, logging to `journald` is simpler:
+
+        ::python
+        from systemd import journal
+        # […]
+        if not sys.stderr.isatty():
+            sh = journal.JournalHandler(SYSLOG_IDENTIFIER=logger.name)
+            root.addHandler(sh)
 
 For this example, this is a lot of code just to use `logger.debug()`
 once, but in a real script, this will come handy to help users
