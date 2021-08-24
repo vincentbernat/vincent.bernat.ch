@@ -419,7 +419,7 @@ def build(c):
                   " | sort -z "
                   " | xargs -0 -n10 -P$(nproc) pngquant --skip-if-larger --strip "
                   "                              --quiet --ext .png --force "
-                  "|| true")
+                  "|| [ $? -eq 123 ]")
         with step("convert PNG to WebP"):
             c.run("find media/images -type f -name '*.png' -print"
                   " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
