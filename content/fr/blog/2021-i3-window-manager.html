@@ -1,0 +1,520 @@
+---
+title: "Passage au gestionnaire de fenêtres i3"
+description: |
+  Après avoir utilisé awesome pendant 10 ans, je suis passé à i3, un autre
+  gestionnaire de fenêtres à tuiles avec une philosophie différente.
+uuid: 03f95792-9f0b-455a-a6cc-e925c225835b
+cover: i3/layouts@2x.jpg
+attachments:
+  "https://github.com/vincentbernat/i3wm-configuration": "configuration complète"
+tags:
+  - desktop
+---
+
+J'utilise [awesome][awesome window manager] depuis 10 ans. Il s'agit
+d'un [gestionnaire de fenêtres à tuiles][tiling window manager],
+configurable et extensible avec le langage [Lua][]. L'utilisation d'un
+langage de programmation polyvalent pour configurer chaque aspect est
+une arme à double tranchant. Par paresse et à cause de la difficulté
+apparente d'adapter [ma configuration][awesome config] d'environ
+3000 lignes aux nouvelles versions, je suis resté coincé avec la
+version 3.4, dont la dernière version date de 2013.
+
+[![i3 sur deux écrans]([[!!images/i3/desktop@2x.jpg]] "Configuration
+en double écran faisant tourner i3, Emacs, quelques terminaux, dont
+une console à la Quake, Firefox, Polybar comme barre de statut et
+Dunst pour afficher les
+notifications.")]([[!!images/i3/desktop@2x.jpg]])
+
+Le gestionnaire de fenêtres n'est qu'une partie d'un environnement de
+bureau. Il existe plusieurs options pour les autres composants. Je les
+présente également dans ce billet.
+
+[TOC]
+
+# i3 : le gestionnaire de fenêtres
+
+*i3* est un gestionnaire de fenêtres à tuiles (« *tiling window
+manager* ») minimaliste. Sa [documentation][] peut être lue du début à
+la fin en moins d'une heure. *i3* organise les fenêtres dans un
+[arbre][tree]. Chaque nœud intermédiaire contient une ou plusieurs
+fenêtres et possède une orientation et une disposition. Ces
+informations permettent d'arbitrer la position des fenêtres. *i3*
+propose trois dispositions : fractionnée (*split*), empilée
+(*stacking*) et à onglets (*tabbed*). Elles sont présentées dans la
+capture d'écran ci-dessous :
+
+![Exemple de dispositions]([[!!images/i3/layouts@2x.jpg]]
+"Démonstration des dispositions dans i3. Le conteneur principal est
+divisé horizontalement. Le premier enfant est divisé verticalement. Le
+deuxième utilise des onglets. Le dernier est empilé.")
+
+![Représentation en arbre de la capture d'écran
+précédente]([[!!images/i3/layouts.svg]] "Représentation en arbre de la
+capture d'écran précédente.")
+
+La plupart des autres gestionnaires de fenêtres à tuiles, y compris
+*awesome*, utilisent des dispositions prédéfinies. Ils présentent
+généralement une zone importante pour la fenêtre principale et une
+seconde zone découpée entre les autres fenêtres. Ces dispositions
+peuvent être légèrement modifiées, mais vous vous en tenez
+généralement à une ou deux d'entre elles. Lorsqu'une nouvelle fenêtre
+est ajoutée, le comportement est assez prévisible. De plus, vous
+pouvez parcourir les différentes fenêtres sans trop réfléchir car
+elles sont ordonnées.
+
+*i3* est plus flexible grâce à sa capacité à construire n'importe
+quelle disposition à la volée, mais cela peut déconcerter car vous
+devez visualiser l'arbre dans votre tête. Au début, il n'est pas rare
+de se retrouver avec une arborescence complexe comportant de nombreux
+conteneurs imbriqués superflus. De plus, vous devez naviguer dans les
+fenêtres à l'aide de directions. Il faut un certain temps pour s'y
+habituer.
+
+J'ai configuré une disposition en deux parties pour Emacs et quelques
+terminaux, mais la plupart des autres espaces de travail utilisent des
+onglets. Je n'utilise pas la disposition par empilement. Vous pouvez
+trouver de nombreux scripts essayant d'émuler d'autres gestionnaires
+de fenêtres à tuiles, mais j'ai essayé de ne pas me laisser tenter dès
+le début et de prendre le temps de m'habituer. i3 peut également
+[sauvegarder et restaurer les dispositions][save and restore layouts],
+ce qui est une fonctionnalité assez puissante.
+
+[Ma configuration][i3cfg] est proche de la configuration par défaut
+avec moins de 200 lignes.
+
+# le compagnon i3 : le chaînon manquant
+
+La philosophie de *i3* est de rester minimaliste et de laisser
+l'utilisateur implémenter les fonctionnalités manquantes en utilisant
+un protocole de communication (« *IPC* ») :
+
+> Ne pas ajouter de complexité supplémentaire lorsque cela peut être
+> évité. Nous sommes généralement satisfaits de l'ensemble des
+> fonctionnalités de i3 et nous nous concentrons plutôt sur la
+> correction des bogues et la maintenance de la stabilité. De
+> nouvelles fonctionnalités ne seront donc envisagées que si les
+> avantages l'emportent sur la complexité supplémentaire, et nous
+> encourageons les utilisateurs à mettre en œuvre des fonctionnalités
+> en utilisant le protocole IPC chaque fois que cela est possible.
+>
+> — [Introduction au gestionnaire de fenêtres i3][i3 window manager]
+
+Bien que cela ne soit pas aussi versatile qu'un langage intégré, c'est
+suffisant pour de nombreux cas. De plus, comme les fonctionnalités de
+haut niveau sont souvent subjectives, les déléguer à de petits
+morceaux de code faiblement couplés les rend plus faciles à maintenir.
+Des bibliothèques existent à cet effet dans [plusieurs
+langages][several languages]. Les utilisateurs ont publié de nombreux
+scripts pour étendre *i3* : [mise en page automatique][automatic
+layout] et [promotion de fenêtres][window promotion] pour imiter le
+comportement d'autres gestionnaires de fenêtres, [remplacement de
+fenêtres][window swallowing] pour placer une nouvelle application
+au-dessus du terminal qui la lance et [passage d'une fenêtre à
+l'autre][cycling between windows] avec <kbd>Alt</kbd>+<kbd>Tab</kbd>.
+
+Au lieu de maintenir un script pour chaque fonctionnalité, j'ai tout
+centralisé dans un seul processus Python,
+[`i3-companion`][i3-companion], utilisant [asyncio][] et la
+bibliothèque [i3ipc-python][]. Chaque fonctionnalité est confinée dans
+une fonction. Il implémente les composants suivants :
+
+
+rendre un espace de travail exclusif à une application
+: Lorsqu'un espace de travail contient Emacs ou Firefox, j'aimerais
+  que les autres applications se placent dans un autre espace de
+  travail, à l'exception du terminal qui est autorisé à « envahir »
+  n'importe quel espace de travail. La fonction
+  `workspace_exclusive()` surveille les nouvelles fenêtres et les
+  déplace si nécessaire vers un espace de travail vide ou contenant la
+  même application déjà en cours d'exécution.
+
+implémenter une console Quake
+: La fonction `quake_console()` implémente une console déroulante
+  disponible depuis n'importe quel espace de travail. Elle peut être
+  activée avec <kbd>Mod</kbd>+<kbd>`</kbd>. Elle utilise le mécanisme
+  de [scratchpad][scratchpad window].
+
+alterner entre les deux derniers espaces de travail sur un écran
+: Avec la commande `workspace back_and_forth`, on peut demander à *i3*
+  de passer à l'espace de travail précédent. Cependant, cette
+  fonctionnalité n'est pas limitée à l'écran actuel. Je préfère avoir
+  un raccourci clavier pour passer à l'espace de travail sur l'écran
+  d'à côté et un autre pour passer à l'espace de travail précédent sur
+  le même écran. Ce comportement est mis en place dans la fonction
+  `previous_workspace()` en conservant un historique par écran.
+
+créer un nouvel espace de travail vide ou déplacer une fenêtre vers un espace de travail vide
+: Pour créer un nouvel espace de travail vide ou y déplacer une
+  fenêtre, vous devez trouver un emplacement non utilisé et invoquer
+  le raccourci pour `workspace number 4` ou `move container to
+  workspace number 4`. La fonction `new_workspace()` trouve un
+  emplacement libre et l'utilise comme espace de travail cible.
+
+redémarrer certains services lors d'un changement de configuration des écrans
+: Lors de l'ajout ou de la suppression d'un écran, certaines actions
+  doivent être exécutées : rafraîchir le fond d'écran, redémarrer
+  certains composants incapables d'adapter leur configuration par
+  eux-mêmes, etc. *i3* déclenche un événement à cet effet. La fonction
+  `output_update()` fusionne plusieurs événements consécutifs et
+  vérifie s'il y a un réel changement avec la bibliothèque de bas
+  niveau [xcffib][].
+
+Je détaillerai les autres fonctionnalités au fur et à mesure de ce
+billet. Concernant la partie technique, chaque fonction est décorée
+avec les événements auxquels elle doit réagir :
+
+    ::python
+    @on(CommandEvent("previous-workspace"), I3Event.WORKSPACE_FOCUS)
+    async def previous_workspace(i3, event):
+        """Go to previous workspace on the same output."""
+
+La classe d'évènements `CommandEvent()` correspond à ma façon
+d'envoyer une commande au compagnon, en utilisant soit `i3-msg -t
+send_tick` ou en liant un raccourci à une commande `nop`. Cette
+dernière est utilisée pour éviter d'invoquer un shell et un processus
+`i3-msg` juste pour envoyer un message. Le compagnon écoute les
+événements liés aux raccourcis clavier et vérifie si c'est une
+commande `nop`.
+
+    bindsym $mod+Tab nop "previous-workspace"
+
+Il existe d'autres décorateurs pour éviter la duplication du code :
+`@debounce()` pour fusionner plusieurs appels consécutifs, `@static()`
+pour définir une variable statique, et `@retry()` pour relancer une
+fonction en cas d'échec. Le [script entier][i3-companion] fait un peu
+plus de 1000 lignes. Je pense que cela vaut la peine de le lire car je
+suis assez satisfait du résultat. 🦚
+
+# dunst : le démon de notification
+
+Contrairement à *awesome*, *i3* ne dispose pas d'un système de
+notification intégré. [Dunst][] est un démon de notification léger.
+J'utilise une version modifiée avec le [support HiDPI pour X11][HiDPI
+support for X11] et la [recherche récursive des icônes][recursive icon
+lookup]. Le *compagnon i3* a une fonction auxiliaire, `notify()`, pour
+envoyer des notifications en utilisant DBus. `container_info()` et
+`workspace_info()` l'utilisent pour afficher des informations sur le
+conteneur ou l'arbre d'un espace de travail.
+
+![Notification montrant l'arbre i3 d'un espace de
+travail]([[!!images/i3/workspace-info@2x.jpg]] "Notification montrant
+l'arbre i3 d'un espace de travail")
+
+# polybar : la barre de statut
+
+*i3* inclut [i3bar], une barre de statut polyvalente, mais j'ai opté
+pour [Polybar][]. Un [script][polybar script] exécute une instance
+pour chaque écran.
+
+Le premier module est le support intégré pour les espaces de travail
+*i3*. Pour ne pas avoir à se rappeler quelle application est en cours
+d'exécution dans un espace de travail, le *compagnon i3* renomme les
+espaces de travail pour inclure une icône pour chaque application.
+Cette opération est effectuée par la fonction `workspace_rename()`.
+Les icônes proviennent du projet [Font Awesome][]. Je maintiens
+manuellement la correspondance entre les applications et les icônes.
+C'est un peu lourd, mais c'est très joli.
+
+![Espaces de travail dans Polybar]([[!!images/i3/workspaces@2x.png]]
+"Les espaces de travail d'i3 dans Polybar")
+
+Pour le CPU, la mémoire, la luminosité, la batterie, le disque et le
+volume sonore, je m'appuie sur les modules intégrés. Le
+[script][polybar script] lançant *Polybar* génère la liste des
+systèmes de fichiers à surveiller et ils ne sont affichés que lorsque
+l'espace disponible est faible. L'icône de la batterie devient rouge
+et clignote lentement lorsqu'elle est à court d'énergie. Consultez ma
+[configuration de Polybar][Polybar configuration] pour plus de
+détails.
+
+![Divers modules pour Polybar]([[!!images/i3/polybar@2x.png]] "Polybar
+affiche diverses informations : utilisation du CPU, utilisation de la
+mémoire, luminosité de l'écran, état de la batterie, état du bluetooth
+(avec un casque connecté), état du réseau (connecté à un réseau sans
+fil et à un VPN), état des notifications et volume sonore.")
+
+Pour les statuts du Bluetooh, du réseau et des notifications,
+j'utilise le [module `ipc`][ipc module] de *Polybar* : la prochaine
+version permet de [recevoir un texte arbitraire via le canal
+IPC][receive arbitrary text on an IPC]. Le module est défini avec une
+seule commande à exécuter au démarrage pour restaurer le dernier
+statut.
+
+    ::ini
+    [module/network]
+    type = custom/ipc
+    hook-0 = cat $XDG_RUNTIME_DIR/i3/network.txt 2> /dev/null
+    initial = 1
+
+Il peut être mis à jour avec la commande `polybar-msg action
+"#network.send.XXXX"`. Dans le *compagnon i3*, le décorateur
+`@polybar()` prend la chaîne retournée par une fonction et pousse la
+mise à jour à travers la chaussette IPC.
+
+Le *compagnon i3* réagit aux signaux DBus pour mettre à jour les
+icônes Bluetooth et réseau. Le décorateur `@on()` accepte un objet
+`DBusSignal()`:
+
+    ::python
+    @on(
+        StartEvent,
+        DBusSignal(
+            path="/org/bluez",
+            interface="org.freedesktop.DBus.Properties",
+            member="PropertiesChanged",
+            signature="sa{sv}as",
+            onlyif=lambda args: (
+                args[0] == "org.bluez.Device1"
+                and "Connected" in args[1]
+                or args[0] == "org.bluez.Adapter1"
+                and "Powered" in args[1]
+            ),
+        ),
+    )
+    @retry(2)
+    @debounce(0.2)
+    @polybar("bluetooth")
+    async def bluetooth_status(i3, event, *args):
+        """Update bluetooth status for Polybar."""
+
+Le milieu de la barre est occupé par la date et la météo. Cette
+dernière utilise également le mécanisme IPC, mais la source est un
+[script Python][polybar-weather] déclenché régulièrement.
+
+![Date et météo dans Polybar]([[!!images/i3/weather@2x.png]] "Date
+actuelle et prévisions météorologiques pour la journée dans Polybar.
+Les données sont récupérées avec l'API OpenWeather.")
+
+Je n'utilise pas la *zone de notification* intégrée à *Polybar*. Les
+icônes sont généralement hideuses et se comportent toutes
+différemment. Il y a quelques années, [Gnome a supprimé la zone de
+notification][Gnome has removed the system tray]. La plupart des
+problèmes sont résolus par le protocole [Status Notifier Item][Status
+Notifier Item protocol] basé sur DBus. Toutefois, [*Polybar* ne prend
+pas en charge celui-ci][*Polybar* does not support this protocol].
+L'implémentation des icônes Bluetooth et réseau, y compris l'affichage
+des notifications en cas de changement, prend environ 200 lignes dans
+le *compagnon i3*. J'ai pu apprendre un peu comment fonctionne DBus et
+j'obtiens exactement les informations que je veux.
+
+# picom : le compositeur
+
+J'aime avoir des terminaux légèrement transparents et réduire
+l'opacité des fenêtres inactives. Ces tâches nécessitent un
+compositeur[^tearfree]. [picom][] est un compositeur léger. Il
+fonctionne bien dans mon cas, mais il peut nécessiter quelques
+ajustements en fonction de votre carte graphique[^intel].
+Contrairement à *awesome*, *i3* ne gère pas la transparence, donc le
+compositeur doit décider l'opacité de chaque fenêtre. Consultez [ma
+configuration][picom config] pour plus de détails.
+
+[^tearfree]: Outre le côté esthétique, un compositeur permet également
+    également de fluidifier le rendu vidéo.
+
+[^intel]: Ma configuration fonctionne pour les cartes graphiques Intel
+    des générations Haswell (2014) et Whiskey Lake (2018). Elle
+    fonctionne aussi pour les cartes AMD de la génération Polaris
+    (2017)
+
+# systemd : le gestionnaire de services
+
+J'utilise [systemd][] pour démarrer *i3* et les différents services
+qui l'entourent. Mon [script `xsession`][xsession script] ne définit
+que quelques variables d'environnement et laisse *systemd* s'occuper
+de tout le reste. Jetez un coup d'œil à [cet article de Michał
+Góral][this article from Michał Góral] pour en connaître les raisons.
+Notamment, chaque composant peut être facilement redémarré et leurs
+sorties ne sont pas mélangées dans le fichier
+`~/.xsession-errors`[^limitation].
+
+[^limitation]: Il n'est pas possible de gérer plusieurs serveurs X de
+    cette façon, par exemple `:0` et `:1`. Dans une première
+    implémentation, j'ai essayé de paramétrer chaque service avec le
+    serveur associé, mais c'est inutile : il n'y a qu'une seule
+    session utilisateur DBus et de nombreux services en dépendent. Par
+    exemple, il n'est pas possible d'exécuter deux démons de
+    notification.
+
+J'utilise un démarrage en deux étapes : [`i3.service`][i3.service]
+dépend de [`xsession.target`][xsession.target] pour démarrer les
+services avant *i3* :
+
+    ::ini
+    [Unit]
+    Description=X session
+    BindsTo=graphical-session.target
+    Wants=autorandr.service
+    Wants=dunst.socket
+    Wants=inputplug.service
+    Wants=picom.service
+    Wants=pulseaudio.socket
+    Wants=policykit-agent.service
+    Wants=redshift.service
+    Wants=spotify-clean.timer
+    Wants=ssh-agent.service
+    Wants=xiccd.service
+    Wants=xsettingsd.service
+    Wants=xss-lock.service
+
+Ensuite, *i3* active la seconde étape via
+[`i3-session.target`][i3-session.target]:
+
+    ::ini
+    [Unit]
+    Description=i3 session
+    BindsTo=graphical-session.target
+    Wants=wallpaper.service
+    Wants=wallpaper.timer
+    Wants=polybar-weather.service
+    Wants=polybar-weather.timer
+    Wants=polybar.service
+    Wants=i3-companion.service
+    Wants=misc-x.service
+
+Jetez un œil à [mes fichiers de configuration][systemd config] pour plus de détails.
+
+# rofi : le lanceur d'applications
+
+[Rofi][] est un lanceur d'applications. Son apparence peut être
+modifiée en utilisant un langage semblable à CSS et il est livré avec
+plusieurs thèmes. Regardez ma [configuration][rofi config] pour le
+mien.
+
+![Rofi en lanceur d'applications]([[!!images/i3/rofi-drun@2x.jpg]]
+"Rofi en lanceur d'applications")
+
+Il peut également faire office de menu. J'ai écrit un script pour
+[contrôler un lecteur multimédia][rofi-mediaplayer] et un autre pour
+[sélectionner le réseau sans fil][rofi-wifi]. C'est une application
+plutôt flexible.
+
+![Rofi pour sélectionner le réseau sans
+fil]([[!!images/i3/rofi-wifi@2x.jpg]] "Rofi pour sélectionner le
+réseau sans fil")
+
+# xss-lock et i3lock : le verrouillage de la session
+
+[i3lock][] permet de verrouiller la session. [xss-lock][] l'invoque de
+manière fiable en cas d'inactivité ou avant une mise en veille. Pour
+l'inactivité, il utilise les [événements XScreenSaver][XScreenSaver
+events]. Les délai est configuré via la commande `xset s`. Le
+verrouillage peut être instantané avec `xset s activate`. Les
+applications X11 savent comment le désactiver. J'ai également
+développé une petite [application de fondu au noir][dimmer
+application] qui est exécutée 20 secondes avant le verrouillage pour
+me donner une chance de bouger la souris si je ne suis pas
+absent[^dimmer]. Jetez un coup d'oeil à mon [script de
+configuration][xss-lock config].
+
+![xss-lock, xss-dimmer et i3lock en action]([[!!images/i3/locker.mp4]]
+"Démonstration accélérée de xss-lock, xss-dimmer et i3lock.")
+
+[^dimmer]: Je n'ai découvert que plus tard que [XSecureLock][] livre
+    une telle application avec une implémentation similaire. Mais le
+    mien a un compte à rebours !
+
+# Les autres composants
+
+- [autorandr][] est un outil qui détecte les écrans connectés, les
+  compare à un ensemble de profils et les configure avec `xrandr`.
+
+- [inputplug][] exécute un script pour chaque nouvelle souris et
+  clavier branchés. Regardez [ma configuration][inputplug config]
+  pour avoir une idée des possibilités.
+
+- [xsettingsd][] fournit des paramètres aux applications X11, un peu
+  comme [xrdb][] mais il notifie les applications des changements.
+  L'utilisation principale est de configurer les paramètres Gtk et
+  DPI. Lisez mon article sur le [support HiDPI sur Linux avec
+  X11][HiDPI support for X11] pour les détails.
+
+- [Redshift][] ajuste la température des couleurs de l'écran en
+  fonction de l'heure de la journée.
+
+- [maim][] est un utilitaire pour faire des captures d'écran.
+  J'utilise <kbd>Prt Scn</kbd> pour déclencher une capture d'écran
+  d'une fenêtre ou d'une zone spécifique et <kbd>Mod</kbd>+<kbd>Prt
+  Scn</kbd> pour capturer le bureau entier dans un fichier. Consultez
+  le [script associé][maim script] pour plus de détails.
+
+- J'ai une collection de fonds d'écran que je fais tourner toutes les
+  heures. Un [script][wallpaper] les sélectionne avec un algorithme
+  neuronal particulièrement élaboré et les assemble sur les
+  configurations multi-écrans. Le fond d'écran sélectionné est
+  réutilisé par *i3lock*.
+
+*[IPC]: Inter-process communication
+*[CSS]: Cascading Style Sheets
+[awesome window manager]: https://awesomewm.org/
+[Lua]: https://www.lua.org/
+[Wayland]: https://wayland.freedesktop.org/
+[Sway]: https://swaywm.org/
+[i3 window manager]: https://i3wm.org/
+[tiling window manager]: https://fr.wikipedia.org/wiki/Gestionnaire_de_fen%C3%AAtres_par_pavage
+[documentation]: https://i3wm.org/docs/userguide.html "i3 User's Guide"
+[tree]: https://i3wm.org/docs/userguide.html#_tree "i3 User's Guide: Tree"
+[i3cfg]: https://github.com/vincentbernat/i3wm-configuration/blob/master/config "i3 configuration file"
+[save and restore layouts]: https://i3wm.org/docs/layout-saving.html "Layout saving in i3"
+[picom]: https://github.com/yshui/picom
+[Dunst]: https://dunst-project.org/
+[i3ipc-python]: https://i3ipc-python.readthedocs.io/en/latest/ "i3ipc-python Documentation"
+[several languages]: https://i3wm.org/docs/ipc.html#_see_also_existing_libraries "IPC interface (interprocess communication): existing libraries"
+[asyncio]: https://docs.python.org/3/library/asyncio.html
+[automatic layout]: https://aduros.com/blog/hacking-i3-automatic-layout/ "Hacking i3: Automatic Layout"
+[window promotion]: https://aduros.com/blog/hacking-i3-window-promoting/ "Hacking i3: Window Promoting"
+[window swallowing]: https://aduros.com/blog/hacking-i3-window-swallowing/ "Hacking i3: Window Swallowing"
+[cycling between windows]: https://github.com/altdesktop/i3ipc-python/blob/master/examples/i3-cycle-focus.py
+[i3-companion]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/i3-companion
+[scratchpad window]: https://i3wm.org/docs/userguide.html#_scratchpad "i3's User Guide: Scratchpad"
+[xcffib]: https://github.com/tych0/xcffib "drop-in replacement for xpyb based on cffi"
+[i3bar]: https://i3wm.org/i3bar/
+[Polybar]: https://github.com/polybar/polybar "Fast and easy-to-use bar"
+[polybar script]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/polybar
+[Font Awesome]: https://fontawesome.com/
+[ipc module]: https://github.com/polybar/polybar/wiki/Module:-ipc
+[receive arbitrary text on an IPC]: https://github.com/polybar/polybar/pull/2463 "PR #2463: feat(ipc): allow receiving arbitrary text on IPC socket"
+[Polybar configuration]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/polybar.conf
+[Gnome has removed the system tray]: https://blogs.gnome.org/aday/2017/08/31/status-icons-and-gnome/ "Status Icons and GNOME"
+[Status Notifier Item protocol]: https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/StatusNotifierItem/
+[Application Indicators]: https://wiki.ubuntu.com/DesktopExperienceTeam/ApplicationIndicators "Application Panel Indicators"
+[*Polybar* does not support this protocol]: https://github.com/polybar/polybar/issues/2010 "No support for SystemNotifier tray icons (electron apps)"
+[HiDPI support for X11]: https://github.com/dunst-project/dunst/pull/890 "PR #890: X11: enable dpi scaling"
+[i3lock]: https://i3wm.org/i3lock/
+[xss-lock]: https://bitbucket.org/raymonad/xss-lock/src/master/
+[XScreenSaver events]: https://manpages.debian.org/buster/libxss-dev/Xss.3.en.html "Manpage for XScreenSaver(3)"
+[dimmer application]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xss-dimmer
+[autorandr]: https://github.com/phillipberndt/autorandr/ "Auto-detect the connected display hardware and load the appropriate X11 setup using xrandr"
+[inputplug]: https://github.com/andrewshadura/inputplug "XInput event monitor daemon"
+[xss-lock config]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xss-lock
+[keyboard map]: [[en/extending-xkb.html]] "Extending the X keyboard map with xkb"
+[inputplug config]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/input-event
+[xsettingsd]: https://github.com/derat/xsettingsd "Provides settings to X11 applications via the XSETTINGS specification"
+[xrdb]: https://manpages.debian.org/buster/x11-xserver-utils/xrdb.1.en.html "Manpage for xrdb(1)"
+[HiDPI support on Linux with X11]: [[en/blog/2018-4k-hidpi-dual-screen-linux.html]]#hidpi-support-on-linux-with-x11
+[Redshift]: http://jonls.dk/redshift/
+[PipeWire]: https://pipewire.org/ "audio and video processing engine multimedia server"
+[EasyEffects]: https://github.com/wwmm/easyeffects "Limiter, compressor, convolver, equalizer and auto volume and many other plugins for PipeWire applications"
+[RNNoise]: https://github.com/xiph/rnnoise "Recurrent neural network for audio noise reduction"
+[wallpaper]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/wallpaper
+[systemd]: https://systemd.io
+[xsession script]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/xsession
+[this article from Michał Góral]: https://goral.net.pl/post/systemd-x-sessions/ "Using systemd for X sessions"
+[systemd config]: https://github.com/vincentbernat/i3wm-configuration/tree/master/dotfiles/systemd
+[i3.service]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/systemd/i3.service
+[xsession.target]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/systemd/xsession.target
+[i3-session.target]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/systemd/i3-session.target
+[Rofi]: https://github.com/davatorium/rofi/ "Rofi: A window switcher, application launcher and dmenu replacement"
+[rofi config]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/rofi.conf
+[rofi-mediaplayer]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/rofi-mediaplayer
+[rofi-wifi]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/rofi-wifi
+[recursive icon lookup]: https://github.com/dunst-project/dunst/pull/864 "PR #864: Recursive icon lookup"
+[maim]: https://github.com/naelstrof/maim
+[maim script]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/screenshot
+[awesome config]: https://github.com/vincentbernat/awesome-configuration/
+[i3-resurrect]: https://github.com/JonnyHaystack/i3-resurrect "Simple solution to saving and restoring i3 workspaces"
+[picom config]: https://github.com/vincentbernat/i3wm-configuration/blob/master/dotfiles/picom.conf
+[bug #980839]: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=980839 "RFP: rnnoise -- noise suppression library based on a recurrent neural network"
+[XSecureLock]: https://github.com/google/xsecurelock "X11 screen lock utility with security in mind"
+[polybar-weather]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/polybar-weather
+[Ayatana Indicators]: https://ayatanaindicators.github.io/
