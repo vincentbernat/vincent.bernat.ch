@@ -414,7 +414,7 @@ class ImageFixerPlugin(Plugin):
             # video tag like an animated GIF.
             elif src.endswith(".mp4") or src.endswith(".ogv"):
                 img[0].tag = 'video'
-                for attr in {'muted', 'loop', 'autoplay', 'playsinline', 'controls'}:
+                for attr in 'muted loop autoplay playsinline controls'.split():
                     img[0].set(attr, None)
                 del img.attr.alt
 
