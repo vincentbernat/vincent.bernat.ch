@@ -1,0 +1,137 @@
+---
+title: "Short feedback on Cisco pyATS and Genie Parser"
+description: |
+  Genie Parser allows one to parse the output of many commands
+  into structured data. Here is my short feedback about it.
+uuid: aa720308-acf3-4d88-b942-7e1b336bf41c
+tags:
+  - network-automation
+---
+
+[Cisco pyATS][] is a framework for network automation and testing. It
+includes, among other things, an open-source multi-vendor set of
+parsers and models, [Genie Parser][]. It features 2700 parsers for
+various commands over many network OS. On the paper, this seems a
+great tool!
+
+    ::pycon
+    >>> from genie.conf.base import Device
+    >>> device = Device("router", os="iosxr")
+    >>> # Hack to parse outputs without connecting to a device
+    >>> device.custom.setdefault("abstraction", {})["order"] = ["os", "platform"]
+    >>> cmd = "show route ipv4 unicast"
+    >>> output = """
+    ... Tue Oct 29 21:29:10.924 UTC
+    ...
+    ... O    10.13.110.0/24 [110/2] via 10.12.110.1, 5d23h, GigabitEthernet0/0/0/0.110
+    ... """
+    >>> device.parse(cmd, output=output)
+    {'vrf': {'default': {'address_family': {'ipv4': {'routes': {'10.13.110.0/24': {'route': '10.13.110.0/24',
+           'active': True,
+           'route_preference': 110,
+           'metric': 2,
+           'source_protocol': 'ospf',
+           'source_protocol_codes': 'O',
+           'next_hop': {'next_hop_list': {1: {'index': 1,
+              'next_hop': '10.12.110.1',
+              'outgoing_interface': 'GigabitEthernet0/0/0/0.110',
+              'updated': '5d23h'}}}}}}}}}}
+
+First deception: *pyATS* is closed-source with some exceptions. This
+is quite annoying if you run into some issues outside *Genie Parser*.
+For example, although *pyATS* is using the `ssh` command, it cannot
+leverage my `ssh_config` file: *pyATS* [resolves hostnames before
+providing them to `ssh`][#125]. There is [no plan to open source
+*pyATS*][pyats opensource]. 🤨
+
+Then, *Genie Parser* has two problems:
+
+1. The data models used are dependent on the vendor and OS, despite
+   the documentation saying otherwise. For example, the data model
+   used for IPv4 interfaces is different between [NX-OS][] and
+   [IOS-XR][].
+2. The parsers rely on line-by-line regular expressions to extract
+   data and some Python code as glue. This is fragile and may break
+   silently.
+
+To illustrate the second point, let's assume the output of `show ipv4
+vrf all interface` is:
+
+      Loopback10 is Up, ipv4 protocol is Up
+        Vrf is default (vrfid 0x60000000)
+        Internet protocol processing disabled
+      Loopback30 is Up, ipv4 protocol is Down [VRF in FWD reference]
+        Vrf is ran (vrfid 0x0)
+        Internet address is 203.0.113.17/32
+        MTU is 1500 (1500 is available to IP)
+        Helper address is not set
+        Directed broadcast forwarding is disabled
+        Outgoing access list is not set
+        Inbound  common access list is not set, access list is not set
+        Proxy ARP is disabled
+        ICMP redirects are never sent
+        ICMP unreachables are always sent
+        ICMP mask replies are never sent
+        Table Id is 0x0
+
+Because the [regular expression to parse an interface name][] does not
+expect the extra data after the interface state, *Genie Parser*
+ignores the line starting the definition of `Loopback30` and parses
+the output to this structure:[^model]
+
+    ::json
+    {
+      "Loopback10": {
+        "int_status": "up",
+        "oper_status": "up",
+        "vrf": "ran",
+        "vrf_id": "0x0",
+        "ipv4": {
+          "203.0.113.17/32": {
+            "ip": "203.0.113.17",
+            "prefix_length": "32"
+          },
+          "mtu": 1500,
+          "mtu_available": 1500,
+          "broadcast_forwarding": "disabled",
+          "proxy_arp": "disabled",
+          "icmp_redirects": "never sent",
+          "icmp_unreachables": "always sent",
+          "icmp_replies": "never sent",
+          "table_id": "0x0"
+        }
+      }
+    }
+
+[^model]: As an exercise, the astute reader is asked to write the code
+    to extract the IPv4 from this structure.
+
+While this bug is simple to fix, this is an uphill battle. Any
+existing or future slight variation in the output of a command could
+trigger another similar undetected bug, despite the extended test
+coverage. I have reported and fixed several other silent parsing
+errors: [#516][], [#529][], and [#530][]. A more robust alternative
+would have been to use [TextFSM][] and to trigger a warning when some
+output is not recognized, like [Batfish][], a configuration analysis
+tool, does.
+
+In the future, we should rely on [YANG][] for data extraction, but it
+is currently not widely supported. SNMP is still a valid possibility
+but much information is not accessible through this protocol. In the
+meantime, I would advise you to only use *Genie Parser* with caution.
+
+*[SNMP]: Simple Network Management Protocol
+[Cisco pyATS]: https://developer.cisco.com/docs/pyats/
+[Genie]: https://developer.cisco.com/docs/genie-docs/
+[#125]: https://github.com/CiscoTestAutomation/pyats/issues/125 "CiscoTestAutomation/pyats #125: Let ssh resolve hostname to leverage user's configuration"
+[#516]: https://github.com/CiscoTestAutomation/genieparser/pull/516 "CiscoTestAutomation/genieparser #516: IOSXR/NXOS: fix show static routing parsers to correctly handle IPv6"
+[#529]: https://github.com/CiscoTestAutomation/genieparser/pull/529 "CiscoTestAutomation/genieparser #529: IOSXR: fix show route ipv4 parser for hops without interface"
+[#530]: https://github.com/CiscoTestAutomation/genieparser/pull/530 "CiscoTestAutomation/genieparser #530: IOSXR: fix AS parsing for dynamic neighbors"
+[pyats opensource]: https://github.com/CiscoTestAutomation/pyats#is-pyats-open-source
+[Genie Parser]: https://github.com/CiscoTestAutomation/genieparser
+[regular expression to parse an interface name]: https://github.com/CiscoTestAutomation/genieparser/blob/88cb6ee4ad540a45c9c0b03c8cd75271f39da424/src/genie/libs/parser/iosxr/show_interface.py#L1246-L1248
+[YANG]: https://datatracker.ietf.org/doc/html/rfc6020 "RFC 6020: YANG: A Data Modeling Language for the Network Configuration Protocol"
+[TextFSM]: https://github.com/google/textfsm "Python module for parsing semi-structured text into python tables"
+[IOS-XR]: https://github.com/CiscoTestAutomation/genieparser/blob/88cb6ee4ad540a45c9c0b03c8cd75271f39da424/src/genie/libs/parser/iosxr/show_interface.py#L1184-L1219
+[NX-OS]: https://github.com/CiscoTestAutomation/genieparser/blob/88cb6ee4ad540a45c9c0b03c8cd75271f39da424/src/genie/libs/parser/nxos/show_interface.py#L1144-L1226
+[Batfish]: https://www.batfish.org/ "An open source network configuration analysis tool"
