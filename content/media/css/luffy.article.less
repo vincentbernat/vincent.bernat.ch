@@ -179,49 +179,48 @@ body {
     }
     .admonition {
         position: relative;
+	display: block;
+        margin-left: 0;
         margin-top: @line-height*1em;
-        display: flex;
-        margin-left: -@admonition-margin;
-        &::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: (@admonition-margin - @admonition-gap/2);
-            width: 1px;
-            background-color: @color-low;
-        }
-        @media @medium {
-	    display: block;
-            margin-left: 0;
-            &::before {
-                display: none;
+        @supports (display: flex) {
+            @media @mediumer {
+                display: flex;
+                margin-left: -@admonition-margin;
+                &::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    bottom: 0;
+                    left: (@admonition-margin - 0.6rem);
+                    width: 1px;
+                    background-color: @color-low;
+                }
             }
-	}
+        }
     }
     .admonition-title {
+        box-sizing: border-box;
         font-style: italic;
-        flex: 0 0 (@admonition-margin - @admonition-gap);
-        align-self: center;
-        text-align: right;
+        padding-right: 0;
+        text-align: left;
+        &::before {
+            content: '📌  ';
+            font-style: normal;
+        }
         &, & + p {
             margin-top: 0;
         }
-	& + p {
-	    /* Instead of box-sizing: border-box, for compatibility with IE11 */
-	    padding-left: @admonition-gap;
-	}
-        @media @medium {
-            text-align: left;
-            &::before {
-                content: '📌  ';
-                font-style: normal;
+        @supports (display: flex) {
+            @media @mediumer {
+                padding-right: 1.2rem;
+                flex: 0 0 @admonition-margin;
+                align-self: center;
+                text-align: right;
+                &::before {
+                    display: none;
+                }
             }
-	    & + p {
-		padding-left: 0;
-	    }
-	}
-
+        }
     }
 
     .headerlink {
