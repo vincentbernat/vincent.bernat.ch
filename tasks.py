@@ -420,7 +420,7 @@ def build(c):
                   "|| [ $? -eq 123 ]")
         with step("convert PNG to WebP"):
             c.run("find media/images -type f -name '*.png' -print"
-                  " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
+                  " | xargs -n1 -P$(nproc) -i cwebp -near_lossless 60 '{}' -o '{}'.webp")
 
         # We want to prefer JPGs if their sizes are not too large.
         # The idea is that:
