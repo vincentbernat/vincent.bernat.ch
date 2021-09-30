@@ -412,15 +412,15 @@ def build(c):
             c.run("find media/images -type f -name '*.jpg' -print0"
                   "  | sort -z "
                   f" | xargs -0 -n10 -P$(nproc) {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
+        with step("convert PNG to WebP"):
+            c.run("find media/images -type f -name '*.png' -print"
+                  " | xargs -n1 -P$(nproc) -i cwebp -near_lossless 60 '{}' -o '{}'.webp")
         with step("optimize PNG"):
             c.run("find media/images -type f -name '*.png' -print0"
                   " | sort -z "
                   " | xargs -0 -n10 -P$(nproc) pngquant --skip-if-larger --strip "
                   "                              --quiet --ext .png --force "
                   "|| [ $? -eq 123 ]")
-        with step("convert PNG to WebP"):
-            c.run("find media/images -type f -name '*.png' -print"
-                  " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
 
         # We want to prefer JPGs if their sizes are not too large.
         # The idea is that:
