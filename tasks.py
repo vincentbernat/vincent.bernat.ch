@@ -238,7 +238,6 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
         c.run("rm result")
     with step("compressing fonts"):
         with c.cd("content/media/fonts"):
-            c.run("woff iosevka-custom-regular.ttf")
             c.run("woff2_compress iosevka-custom-regular.ttf")
             c.run("rm iosevka-custom*.ttf")
 
@@ -257,7 +256,6 @@ def update_text_fonts(c):
                   '| xmlstarlet ed '
                   '     -u /ttFont/post/underlineThickness/@value -v 150 '
                   '> {}.ttx'.format(target, target))
-            c.run('ttx -o {}.woff --flavor=woff {}.ttx'.format(target, target))
             c.run('ttx -o {}.woff2 --flavor=woff2 {}.ttx'.format(target, target))
             c.run('rm {}.ttx'.format(target))
 
@@ -460,12 +458,8 @@ printf " JPG %10s %10s %10s\n" \
                                 "--text-file=../glyphs-{}.txt".format(glyphs),
                                 "--no-hinting --desubroutinize",
                                 *options])
-            c.run("pyftsubset media/fonts/{}.woff "
-                  "--flavor=woff --with-zopfli {}".format(font, options))
             c.run("pyftsubset media/fonts/{}.woff2 "
                   "--flavor=woff2 {}".format(font, options))
-            c.run("mv media/fonts/{}.subset.woff "
-                  "media/fonts/{}.woff".format(font, font))
             c.run("mv media/fonts/{}.subset.woff2 "
                   "media/fonts/{}.woff2".format(font, font))
 
