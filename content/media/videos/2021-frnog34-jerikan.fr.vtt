@@ -1,0 +1,424 @@
+WEBVTT
+
+00:00.309 --> 00:00.979
+Bonjour!
+
+00:02.877 --> 00:09.066
+Je vais vous expliquer comment, chez Blade, on a déployé des datacenters en un « clic ».
+
+00:09.927 --> 00:12.927
+Le titre est un petit peu mensonger car on a cliqué nulle part.
+
+00:13.840 --> 00:20.322
+C'est le travail commun de l'ex-équipe réseau de Blade avec mes collègues qui sont dans la salle.
+
+00:23.171 --> 00:27.933
+Le périmètre, c'est uniquement la partie réseau du datacenter.
+
+00:28.075 --> 00:34.447
+Des routeurs de bordure, des switchs OOB, des spines, des leafs...
+
+00:34.773 --> 00:36.556
+...des serveurs de console...
+
+00:37.641 --> 00:42.396
+...deux serveurs Linux qui sont centraux dans toute la gestion du réseau...
+
+00:43.396 --> 00:45.356
+...et un serveur LibreNMS pour la supervision.
+
+00:47.879 --> 00:53.252
+À la fin du déploiement, tout ce qui est configuré, c'est l'intégralité des routeurs de bordure...
+
+00:53.509 --> 00:59.093
+...y compris les sessions BGP, les policies avec les transitaires et les peerings...
+
+01:01.227 --> 01:02.597
+...une fabrique basée sur BGP...
+
+01:03.514 --> 01:06.630
+...la fabrique de management out-of-band...
+
+01:07.514 --> 01:13.693
+...le serveur de management qui est aussi la gateway pour le réseau de management...
+
+01:14.693 --> 01:17.380
+...avec le ZTP, firewall, NAT, l'accès aux serveurs de console...
+
+01:18.380 --> 01:19.550
+...le VPN vers les autres sites...
+
+01:20.498 --> 01:29.475
+...ainsi que tous les systèmes externes: DNS, IRR, RPKI, NetBox.
+
+01:30.475 --> 01:34.475
+Tout ça est configuré de manière automatique à la fin du déploiement.
+
+01:36.001 --> 01:41.268
+Il y a une première étape où vous devez acheter de l'espace, du power, de quoi refroidir,
+
+01:41.268 --> 01:46.535
+...des racks, des équipements et brancher tout ça.
+
+01:47.522 --> 01:50.522
+Ensuite, sur les serveurs de gateway Linux, vous installez une Debian 10.
+
+01:51.522 --> 01:54.522
+Depuis votre laptop, vous lancez une petite commande...
+
+01:55.522 --> 01:57.332
+...qui va faire la première étape du provisionning.
+
+01:58.332 --> 02:03.331
+Ensuite, il faut attendre un petit peu parce que tous les équipements réseau vont se provisionner en ZTP.
+
+02:02.848 --> 02:04.996
+Et on relance une deuxième fois la commande...
+
+02:05.900 --> 02:13.048
+...pour certains équipements comme les Cumulus que l'on considère plus comme des équipements Linux que comme des équipements constructeur.
+
+02:13.900 --> 02:17.048
+Une fois qu'ils ont eu le provisioning de base, Ansible va finaliser leur configuration.
+
+02:20.000 --> 02:26.637
+Une fois que c'est fait, on dit à notre équipe système que tout fonctionne.
+
+02:31.028 --> 02:34.028
+On a une base de vérité.
+
+02:35.028 --> 02:38.292
+Nous on a choisi que NetBox n'était pas notre base de vérité.
+
+02:39.028 --> 02:40.349
+On utilise NetBox, mais il est accessoire.
+
+02:41.357 --> 02:45.357
+Notre base de vérité, c'est des fichiers plats en YAML, versionnés dans Git.
+
+02:45.357 --> 02:48.357
+Ils comprennent la liste des équipements,
+
+02:49.357 --> 02:54.322
+un classifieur qui, à partir d'un nom d'équipement, donne les propriétés intrinsèques de celui-ci,
+
+02:55.322 --> 02:58.322
+une définition d'une hiérarchie pour chercher toutes les autres données,
+
+03:00.188 --> 03:03.949
+et tous les fichiers de données qui sont des YAML inclus dans cette hiérarchie.
+
+03:06.338 --> 03:12.000
+La liste des équipements est juste une liste qui contient le nom de tous les équipements.
+
+03:13.522 --> 03:24.750
+Le nom de l'équipement implique sa fonction. Ce n'est pas strictement nécessaire, mais c'est plus simple.
+
+03:25.900 --> 03:31.445
+Par exemple, ici, c'est un équipement à San Francisco et « ob » signifie que c'est un équipement d'OOB.
+
+03:34.087 --> 03:38.050
+Le classifieur prend le nom de l'équipement et y attache des propriétés.
+
+03:38.600 --> 03:41.209
+Ce ne sont que des propriétés que l'on peut déduire du nom.
+
+03:45.161 --> 03:50.265
+Il y a plusieurs type d'information : la localisation physique, la fonction de l'équipement...
+
+03:51.265 --> 03:54.389
+Les « to », ce sont les top-of-the-rack.
+
+03:55.676 --> 03:58.676
+Quand ils sont à San Francisco, c'est une technologie basée sur BGP.
+
+03:59.000 --> 04:02.130
+Et quand ils s'appellent « -p », c'est un pod compute.
+
+04:02.423 --> 04:05.423
+Ils se retrouvent dans deux groupes qui donnent ces informations.
+
+04:07.069 --> 04:12.840
+Il déduit aussi l'OS qui tourne dessus. Ce sont des Facebook Wedge 100 qui font tourner Cumulus.
+
+04:15.230 --> 04:18.761
+Le classifieur utilise des regex pour déduire ces informations du nom.
+
+04:19.784 --> 04:25.142
+On a une définition de la hiérarchie qui, à partir des informations déduites par le classifieur
+
+04:25.142 --> 04:30.499
+va indiquer dans quels répertoires chercher les fichiers de données.
+
+04:32.980 --> 04:35.866
+Enfin, on a tous les fichiers de données.
+
+04:37.034 --> 04:48.210
+Le modèle est libre. Une règle importante est de ne pas avoir de répétition.
+
+04:48.782 --> 04:51.782
+Si on met la même IP dans deux fichiers différents, c'est qu'il y a un problème.
+
+04:52.782 --> 04:55.782
+Quelqu'un risque de modifier une IP d'un côté et oublier de l'autre.
+
+05:01.238 --> 05:05.875
+On limite les modèles à nos besoins. On essaie pas d'inventer des besoins que l'on a pas encore.
+
+05:06.613 --> 05:11.953
+Sur cet exemple, on définit un peering sur un IX.
+
+05:12.262 --> 05:15.262
+On donne le nom du peering, l'AS, les IP.
+
+05:20.532 --> 05:28.324
+Dans ce cas avec Blizzard, on donne leur macro pour générer les filtres pour n'accepter que leurs préfixes.
+
+05:32.422 --> 05:38.372
+C'est un peu difficile à voir mais pour le datacenter de San Francisco, sa mise en place s'est fait en un seul commit.
+
+05:43.381 --> 05:45.955
+Ça a été préparé sur plusieurs semaines.
+
+05:49.838 --> 05:52.838
+Les données nécessaires pour déployer le datacenter sont réparties dans tous ces fichiers.
+
+05:53.838 --> 05:59.434
+Certains sont spécifiques à chaque équipement, souvent pour donner leurs adresses IP et adresses MAC.
+
+06:00.434 --> 06:05.418
+Certains sont spécifiques au datacenter ou au rack.
+
+06:07.330 --> 06:14.697
+Une fois que ce commit a été accepté, il ne reste plus qu'à deployer avec les commandes que j'ai indiquées au début.
+
+06:17.703 --> 06:21.244
+Derrière, on a développé un soft qui s'appelle Jerikan.
+
+06:21.732 --> 06:27.970
+Sa fonction est de compiler les fichiers de configuration à partir de la source de vérité et des templates.
+
+06:28.922 --> 06:34.014
+On n'a pas utilisé Ansible pour ça parce qu'Ansible est assez lent quand il faut générer des templates.
+
+06:35.278 --> 06:36.910
+Il est assez casse-pied quand il faut les débugguer.
+
+06:40.027 --> 06:43.284
+Jerikan répond à ces problématiques. Il est extrêmement rapide.
+
+06:44.284 --> 06:50.692
+On a environ 600 équipements.
+
+06:50.692 --> 06:57.100
+Il génère l'intégralité de la configuration, y compris les routeurs de bordure avec les policies BGP de plusieurs méga, en moins d'une minute.
+
+07:02.894 --> 07:07.916
+Au niveau des templates, on utilise Jinja2 car c'est ce qu'utilise Ansible et c'est ce qui est le plus courant.
+
+07:09.468 --> 07:17.891
+On a complété avec quelques fonctions à nous comme la fonction lookup qui permet de chercher une donnée dans la source de vérité.
+
+07:20.154 --> 07:25.708
+C'est un petit exemple quand il y a une erreur dans une template pour montrer la différence avec Ansible.
+
+07:27.796 --> 07:32.806
+Il y a une erreur. On obtient la ligne sur laquelle se situe l'erreur : la ligne 15.
+
+07:34.983 --> 07:40.292
+On a aussi toutes les variables qui sont actuellement instanciées à ce niveau.
+
+07:43.250 --> 07:51.484
+Le dictionnaire info contient address avec deux d et non trois d.
+
+07:52.088 --> 07:58.146
+Cela permet de voir où est l'erreur sans enlever la moitié du template.
+
+08:01.421 --> 08:09.227
+On a une intégration dans GitLab grâce à l'utilisation de Git.
+
+08:10.700 --> 08:19.252
+Quand Loic voulait préparer le déploiement de San Francisco, on n'a pas arrêté les autres projets.
+
+08:19.732 --> 08:23.090
+Il fait une branche Git. Il travaille dessus autant de temps qu'il faut.
+
+08:23.391 --> 08:28.134
+Quand il est prêt à déployer, il soumet une merge request dans GitLab.
+
+08:28.555 --> 08:37.184
+Avec l'équipe on la revoie. Les gens donnent des commentaires. Il faut au moins qu'une autre personne approuve avant de pouvoir merger.
+
+08:39.165 --> 08:49.914
+Aussi, GitLab va construire toutes les configurations et va montrer la différence par rapport à la configuration qui tourne sur les équipements.
+
+08:50.216 --> 09:02.587
+Quand on fait des petites modifications, on ne sait pas trop ce que ça va impacter. Ici, on peut dire que cette modification va faire ça.
+
+09:03.900 --> 09:06.433
+C'est assez pratique pour voir le résultat.
+
+09:08.852 --> 09:12.412
+C'est un exemple de diff que l'on obtient sur un autre genre de commit.
+
+09:17.760 --> 09:23.978
+On voit qu'il y a des équipements ajoutés. Il y a un port qui s'est activé et la deuxième partie concerne le DNS.
+
+09:26.802 --> 09:31.864
+Ensuite, on garde Ansible pour toute la partie déploiement.
+
+09:32.760 --> 09:41.309
+On a des équipements très hétérogènes comme du Dell OS 9 et du HP Comware.
+
+09:41.541 --> 09:46.892
+Vous ne voudriez pas les avoir sur votre réseau mais il faut quand même les gérer.
+
+09:49.305 --> 09:51.946
+On utilise un seul playbook Ansible.
+
+09:52.658 --> 10:01.842
+On évite de le laisser tourner sur l'intégralité des datacenters.
+
+10:03.106 --> 10:10.001
+On fait attention que les actions sont idempotentes : si on fait tourner trois fois le playbook, il nous indique qu'il n'y a plus de modifications.
+
+10:10.855 --> 10:19.345
+On fait que le --diff --check fonctionne, notamment que --check ne fasse pas de modification et --diff affiche les modifications prévues.
+
+10:21.105 --> 10:27.243
+Ainsi, on peut le faire toutes les semaines et voir si quelque chose a été modifié sans qu'on le sache et remettre en compliance l'équipement en question.
+
+10:28.437 --> 10:34.947
+Et sur les équipements réseau, on déploie des configurations complètes pour s'assurer que l'on fait tourner exactement ce à quoi on s'attend.
+
+10:37.917 --> 10:50.553
+Si vous voulez plus de renseignements, il y un blog post avec une démo vidéo qui rentre plus dans le détail.
+
+10:50.953 --> 10:56.868
+On a tout mis dans dépôt GitHub qui contient Jerikan, nos playbooks Ansible
+
+10:57.889 --> 11:02.744
+et toutes les données pour les datacenters de San Francisco et de Corée du Sud qui n'existent plus actuellement.
+
+11:06.426 --> 11:12.295
+C'est les données complètes. On a pas changé les IP. On a pas enlevé la moitié.
+
+11:12.970 --> 11:20.561
+Si vous avez de quoi acheter une quarantaine de racks, vous devriez pouvoir redéployer la même chose en tapant les commandes.
+
+11:24.579 --> 11:33.514
+Il y a aussi les configurations générées. Si la partie automatisation ne vous intéresse pas parce que vous avez déjà quelque chose,
+
+11:34.699 --> 11:43.680
+jetez un coup d'œil aux configurations générées, notamment la configuration des routeurs de bordure, les filtres BGP.
+
+11:44.741 --> 11:45.895
+Cela permet de voir un peu à quoi cela ressemble.
+
+11:47.774 --> 11:59.312
+C'est assez intéressant car dans notre industrie, on a beaucoup d'exemples très simples et jamais un exemple complet.
+
+11:59.577 --> 12:06.063
+Là, si vous voulez une fabrique BGP, deux routeurs de bordure, vous avez la configuration de A-Z.
+
+12:17.775 --> 12:19.091
+Est-ce qu'il y a des questions ?
+
+12:34.013 --> 12:39.358
+Ma question portait sur le fait que vous dites que vous déployiez tout par Ansible.
+
+12:40.204 --> 12:50.445
+Est-ce que vous avez rencontré des soucis ? Est-ce que vous utilisez des modules spécifiques ?
+
+12:52.373 --> 12:57.346
+Je n'ai quasiment pas entendu la question, le volume est un peu faible.
+
+13:02.375 --> 13:13.316
+Par rapport à certains constructeurs, il n'y a pas forcément des modules Ansible disponibles. Dans ce cas, comment vous procédez ?
+
+13:17.313 --> 13:26.463
+L'intérêt d'utiliser Ansible est qu'il sait vraiment tout faire.
+
+13:27.905 --> 13:37.878
+Ma question portait sur le fait que vous utilisez le module command ou si vous avez tout le temps le module adéquat disponible.
+
+13:38.939 --> 13:47.054
+Cela dépend du constructeur. On n'utilisait pas Ansible Galaxy à l'exception des modules constructeurs.
+
+13:48.671 --> 13:56.285
+En ce qui concerne Juniper et Cisco, on utilisait soit les modules communautaires, soit les modules du constructeur.
+
+14:00.362 --> 14:07.912
+Avec Juniper, on utilisait NAPALM. Pour Cisco, on utilisait le module communautaire.
+
+14:13.320 --> 14:17.411
+Pour Cumulus, on le considérait comme un Linux et on utilisait pas de module spécifique.
+
+14:40.959 --> 14:46.785
+Pour vos données sensibles, vous les chiffrez dans le git par quel moyen ?
+
+14:52.947 --> 14:56.552
+Toute la partie Jerikan ne manipule aucun secret.
+
+14:58.600 --> 15:06.938
+On utilisait des clefs SSH pour les utilisateurs. Pour les mots de passe root, ils sont hashés et on considère ça assez robuste.
+
+15:07.667 --> 15:15.560
+Pour tous les secrets qui doivent être en clair, c'est Ansible qui les manipule et ils sont stockés dans un Vault.
+
+15:15.884 --> 15:23.755
+Le déploiement se fait depuis nos laptops. On fournit à Ansible le token Vault.
+
+15:25.015 --> 15:28.356
+Dans la partie GitLab et templates, il n'y a pas de secrets.
+
+15:33.327 --> 15:40.022
+Dans Jerikan, pour les données qui sont sous forme de dictionnaires imbriqués,
+
+15:40.022 --> 15:46.716
+est-ce que tu as choisi un merge récursif ou est-ce que tu fais comme Ansible avec un seul niveau.
+
+15:48.109 --> 15:50.949
+Le merge ne se fait qu'au premier niveau.
+
+15:53.755 --> 16:01.066
+On a un schéma qui indique pour certaines structures de données comment on peut les merger.
+
+16:01.066 --> 16:08.377
+Mais quand on les merge, on ne le fait que sur un seul niveau.
+
+16:34.536 --> 16:40.172
+Pourquoi ne pas avoir utilisé NetBox ou une base de données et utiliser des fichiers plats YAML.
+
+16:41.848 --> 16:50.473
+On n'utilise pas de base de données. On aurait pu mixer un bout dans NetBox et un bout dans les fichiers plats.
+
+16:51.037 --> 16:56.647
+L'intérêt de tout faire dans des fichiers plats, c'est une unique source de vérité.
+
+16:57.913 --> 16:59.775
+Une base de données, c'est difficile à forker.
+
+16:59.987 --> 17:06.182
+Si vous avez un NetBox et que vous devez modifier quelque chose, puis dans des fichiers plats, il y a une désynchro.
+
+17:08.228 --> 17:16.550
+Déployer un datacenter, cela peut être un mois de travail. Le changement de schéma peut impacter le travail des autres.
+
+17:17.413 --> 17:24.280
+L'intérêt d'utiliser Git est de pouvoir tout faire dans une branche sans impacter les autres.
+
+17:24.280 --> 17:29.894
+C'est facile à rollback. Si on se trompe dans NetBox, c'est plus compliqué à rollback.
+
+17:30.581 --> 17:33.434
+On peut utiliser une base pour des tests et une base pour la prod,
+
+17:33.434 --> 17:36.286
+mais on peut avoir deux personnes travaillant sur deux projets différents.
+
+17:36.745 --> 17:38.477
+Ici, on peut faire autant de branches qu'on veut.
+
+17:38.901 --> 17:46.820
+On a choisi de tout mettre dans des fichiers plats pour permettre d'utiliser Git jusqu'au bout.

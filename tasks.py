@@ -164,6 +164,7 @@ done <<EOF
                                  --poster-seek 15s
 2021-network-cmdb.mkv            --video-bitrate-factor 0.5 \
                                  --poster-seek 20%
+2021-frnog34-jerikan.mp4         --video-bitrate-factor 0.5
 EOF
 """
 
@@ -175,7 +176,7 @@ EOF
 # following command to get the peak volume:
 #  ffmpeg -loglevel info -i 2021-network-cmdb.mkv -af "volumedetect" -vn -sn -dn -f null /dev/null
 #
-# Then, in Blender, use adjust the volume:
+# Then, to normalize (where 6.4dB is the desired offset compared to max)
 #  ffmpeg -i 2021-network-cmdb.mkv -filter:a "volume=6.4dB" -c:v copy normalized.mkv
 
 
@@ -190,7 +191,7 @@ def upload_videos(c, video=None):
             continue
         # Upload
         for host in hosts:
-            c.run("rsync -a {directory}/ {host}:"
+            c.run("rsync --delete -a {directory}/ {host}:"
                   "/data/webserver/media.luffy.cx/videos/{short}/".format(
                       host=host,
                       short=directory,

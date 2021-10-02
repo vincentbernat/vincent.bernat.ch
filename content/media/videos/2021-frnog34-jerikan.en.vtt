@@ -1,0 +1,424 @@
+WEBVTT
+
+00:00.309 --> 00:00.979
+Hello!
+
+00:02.877 --> 00:09.066
+I'll tell you how we at Blade deployed a datacenter in one "click".
+
+00:09.927 --> 00:12.927
+The title is a little bit clickbaity because we didn't click anywhere.
+
+00:13.840 --> 00:20.322
+This is the joint work of the former Blade network team. My colleagues are in the room.
+
+00:23.171 --> 00:27.933
+The scope is just the network part of the datacenter.
+
+00:28.075 --> 00:34.447
+Edge routers, OOB switches, spines, leafs...
+
+00:34.773 --> 00:36.556
+...console servers...
+
+00:37.641 --> 00:42.396
+...two Linux servers that are central to the whole network management...
+
+00:43.396 --> 00:45.356
+...and a LibreNMS server for the supervision.
+
+00:47.879 --> 00:53.252
+At the end of the deployment, all that is configured: the edge routers...
+
+00:53.509 --> 00:59.093
+...including BGP sessions, policies with forwarders and peerings...
+
+01:01.227 --> 01:02.597
+...a BGP-based factory...
+
+01:03.514 --> 01:06.630
+...the out-of-band management factory...
+
+01:07.514 --> 01:13.693
+...the management servers which are also the gateway to the management network...
+
+01:14.693 --> 01:17.380
+...with ZTP, firewall, NAT, access to console servers...
+
+01:18.380 --> 01:19.550
+...the VPN to other sites...
+
+01:20.498 --> 01:29.475
+...and all external systems: DNS, IRR, RPKI, NetBox.
+
+01:30.475 --> 01:34.475
+All this is configured automatically at the end of the deployment.
+
+01:36.001 --> 01:41.268
+There is a first step where you have to buy space, power, cooling,
+
+01:41.268 --> 01:46.535
+...racks, equipment, and plug it all in.
+
+01:47.522 --> 01:50.522
+Then, on the gateway servers, you install a Debian 10.
+
+01:51.522 --> 01:54.522
+From your laptop, you run a short command...
+
+01:55.522 --> 01:57.332
+...which will do the first step of the provisioning.
+
+01:58.332 --> 02:03.331
+Then you have to wait a little bit because all the network devices are going to provision themselves in ZTP.
+
+02:02.848 --> 02:04.996
+And we run the command a second time...
+
+02:05.900 --> 02:13.048
+...for some devices like Cumulus that we consider more as Linux devices than as vendor devices.
+
+02:13.900 --> 02:17.048
+Once they have the basic provisioning, Ansible will finalize their configuration.
+
+02:20.000 --> 02:26.637
+Once that's done, we tell our system team that everything is functional.
+
+02:31.028 --> 02:34.028
+We have a source of truth.
+
+02:35.028 --> 02:38.292
+We chose that NetBox was not our source of truth.
+
+02:39.028 --> 02:40.349
+We use NetBox, but it is secondary.
+
+02:41.357 --> 02:45.357
+Our source of truth is flat files in YAML, versioned in Git.
+
+02:45.357 --> 02:48.357
+They include the equipment list,
+
+02:49.357 --> 02:54.322
+a classifier which, from a device name, gives the intrinsic properties of the device,
+
+02:55.322 --> 02:58.322
+a definition of a hierarchy to search for all other data,
+
+03:00.188 --> 03:03.949
+and all data files written in YAML and included in this hierarchy.
+
+03:06.338 --> 03:12.000
+The equipment list is just a list containing the names of all the equipment.
+
+03:13.522 --> 03:24.750
+The name of the equipment implies its function. This is not strictly necessary, but it is simpler.
+
+03:25.900 --> 03:31.445
+For example, here it's an equipment in San Francisco and "ob" means it's an OOB equipment.
+
+03:34.087 --> 03:38.050
+The classifier takes the name of the equipment and attaches properties to it.
+
+03:38.600 --> 03:41.209
+These are only properties that can be inferred from the name.
+
+03:45.161 --> 03:50.265
+There are several types of information: the physical location, the function of the equipment...
+
+03:51.265 --> 03:54.389
+The "to" are the top-of-the-rack.
+
+03:55.676 --> 03:58.676
+When they're in San Francisco, it's a BGP-based technology.
+
+03:59.000 --> 04:02.130
+And when they're called "-p", it's a compute pod.
+
+04:02.423 --> 04:05.423
+They end up in two groups that give this information.
+
+04:07.069 --> 04:12.840
+It also deduces the OS. These are Facebook Wedge 100s running Cumulus.
+
+04:15.230 --> 04:18.761
+The classifier uses regexes to infer this information from the name.
+
+04:19.784 --> 04:25.142
+We have a definition of the hierarchy which, from the information deduced by the classifier
+
+04:25.142 --> 04:30.499
+will indicate in which directories to look for the data files.
+
+04:32.980 --> 04:35.866
+Finally, we have all the data files.
+
+04:37.034 --> 04:48.210
+The model is freeform. An important rule is not to have any repetition.
+
+04:48.782 --> 04:51.782
+If you put the same IP in two different files, there is a problem.
+
+04:52.782 --> 04:55.782
+Someone might change the IP at one locati0on and forget at the other.
+
+05:01.238 --> 05:05.875
+We limit the models to our needs. We don't try to invent needs that we don't have yet.
+
+05:06.613 --> 05:11.953
+On this example, we define a peering on an IX.
+
+05:12.262 --> 05:15.262
+We give the name of the peering, the AS, the IPs.
+
+05:20.532 --> 05:28.324
+In this case with Blizzard, we give their macro to generate the filters to accept only their prefixes.
+
+05:32.422 --> 05:38.372
+It's a little hard to see but for the San Francisco datacenter, it was implemented in one commit.
+
+05:43.381 --> 05:45.955
+It was prepared over several weeks.
+
+05:49.838 --> 05:52.838
+The data needed to deploy the datacenter is spread across all these files.
+
+05:53.838 --> 05:59.434
+Some are specific to each equipment, often to give their IP and MAC addresses.
+
+06:00.434 --> 06:05.418
+Some are datacenter or rack specific.
+
+06:07.330 --> 06:14.697
+Once this commit has been accepted, the next step is to deploy with the commands I indicated at the beginning.
+
+06:17.703 --> 06:21.244
+We have developed a software called Jerikan.
+
+06:21.732 --> 06:27.970
+Its function is to compile configuration files from the source of truth and templates.
+
+06:28.922 --> 06:34.014
+We didn't use Ansible for this because Ansible is quite slow when it compiles templates.
+
+06:35.278 --> 06:36.910
+It's a pain in the ass when you have to debug them.
+
+06:40.027 --> 06:43.284
+Jerikan answers these problems. It is extremely fast.
+
+06:44.284 --> 06:50.692
+We have about 600 equipments.
+
+06:50.692 --> 06:57.100
+It generates the entire configuration, including edge routers with multi-megabyte BGP policies, in less than a minute.
+
+07:02.894 --> 07:07.916
+At the template level, we use Jinja2 because that's what Ansible uses and that's what's most common.
+
+07:09.468 --> 07:17.891
+We completed with some functions to us as the lookup function which allows to look for a data in the source of truth.
+
+07:20.154 --> 07:25.708
+This is a small example when there is an error in a template to show the difference with Ansible.
+
+07:27.796 --> 07:32.806
+There is an error. We get the line on which the error is located: line 15.
+
+07:34.983 --> 07:40.292
+We also have all the variables that are currently in the scope.
+
+07:43.250 --> 07:51.484
+The info dictionary contains address with two d and not three d.
+
+07:52.088 --> 07:58.146
+This allows you to see where the error is without removing half the template.
+
+08:01.421 --> 08:09.227
+We have an integration in GitLab thanks to the use of Git.
+
+08:10.700 --> 08:19.252
+When Loic wanted to prepare the deployment of San Francisco, we didn't stop working.
+
+08:19.732 --> 08:23.090
+He's doing a Git branch. He works on it as long as it takes.
+
+08:23.391 --> 08:28.134
+When he's ready to deploy, he submits a merge request to GitLab.
+
+08:28.555 --> 08:37.184
+With the team we review it. People give feedback. We need at least one other person to approve before we can merge.
+
+08:39.165 --> 08:49.914
+Also, GitLab will build all the configurations and show the difference from the configuration that is running on the hardware.
+
+08:50.216 --> 09:02.587
+When you make small changes, you don't really know what the impact will be. Here, we can say that this change will do that.
+
+09:03.900 --> 09:06.433
+It's pretty convenient to see the result.
+
+09:08.852 --> 09:12.412
+This is an example of a diff you get on a different kind of commit.
+
+09:17.760 --> 09:23.978
+We can see that there are added devices. There is a port that has been activated and the second part is about DNS.
+
+09:26.802 --> 09:31.864
+Then, we keep Ansible for the whole deployment part.
+
+09:32.760 --> 09:41.309
+We have very heterogeneous equipment like Dell OS 9 and HP Comware.
+
+09:41.541 --> 09:46.892
+You wouldn't want to have them on your network but you still have to manage them.
+
+09:49.305 --> 09:51.946
+We use a single Ansible playbook.
+
+09:52.658 --> 10:01.842
+We avoid to let it run unattended on all the datacenters.
+
+10:03.106 --> 10:10.001
+We make sure that the actions are idempotent: if we run the playbook three times, it tells us that there are no more modifications.
+
+10:10.855 --> 10:19.345
+We make the --diff --check work, namely that --check does not make any changes and --diff shows the expected changes.
+
+10:21.105 --> 10:27.243
+So we can do it every week and see if something has been changed without us knowing it and put the equipment in question back into compliance.
+
+10:28.437 --> 10:34.947
+And on the network devices, we deploy full configurations to make sure we're running exactly what we expect.
+
+10:37.917 --> 10:50.553
+If you want more information, there is a blog post with a video demo that goes into more detail.
+
+10:50.953 --> 10:56.868
+We put everything in a GitHub repository, which contains Jerikan, our Ansible playbooks
+
+10:57.889 --> 11:02.744
+and all the data for the San Francisco and South Korea datacenters (they don't exist anymore).
+
+11:06.426 --> 11:12.295
+This is the complete data. We didn't change the IPs. We didn't remove half of them.
+
+11:12.970 --> 11:20.561
+If you have enough money to buy 40 racks, you should be able to redeploy the same thing by typing the commands.
+
+11:24.579 --> 11:33.514
+There are also the generated configurations. If you're not interested in the automation part because you already have something,
+
+11:34.699 --> 11:43.680
+take a look at the generated configurations, including edge router configuration, BGP filters.
+
+11:44.741 --> 11:45.895
+This will show you what it looks like.
+
+11:47.774 --> 11:59.312
+This is quite interesting because in our industry, we have a lot of very simple examples and never a complete example.
+
+11:59.577 --> 12:06.063
+There, if you want a BGP factory, two edge routers, you have the complete configuration.
+
+12:17.775 --> 12:19.091
+Are there any questions?
+
+12:34.013 --> 12:39.358
+My question was about the fact that you say you deploy everything through Ansible.
+
+12:40.204 --> 12:50.445
+Did you encounter any problems? Are you using any specific modules?
+
+12:52.373 --> 12:57.346
+I didn't hear the question, the volume is a bit low.
+
+13:02.375 --> 13:13.316
+Compared to some vendors, there are not necessarily Ansible modules available. In that case, how do you proceed?
+
+13:17.313 --> 13:26.463
+The advantage of using Ansible is that it can really do everything.
+
+13:27.905 --> 13:37.878
+My question was about whether you use the command module or whether you have the right module available all the time.
+
+13:38.939 --> 13:47.054
+It depends on the vendor. We weren't using Ansible Galaxy except for the vendor modules.
+
+13:48.671 --> 13:56.285
+For Juniper and Cisco, we used either the community modules or the vendor modules.
+
+14:00.362 --> 14:07.912
+With Juniper, we used NAPALM. For Cisco, we used the community module.
+
+14:13.320 --> 14:17.411
+For Cumulus, we considered it as a Linux and we didn't use a specific module.
+
+14:40.959 --> 14:46.785
+For your sensitive data, you encrypt it in Git by what means?
+
+14:52.947 --> 14:56.552
+The whole Jerikan part doesn't handle any secret.
+
+14:58.600 --> 15:06.938
+We use SSH keys for the users. For root passwords, they are hashed and we consider that robust enough.
+
+15:07.667 --> 15:15.560
+For all the secrets that must be in clear text, it is Ansible that handles them and they are stored in a Vault.
+
+15:15.884 --> 15:23.755
+The deployment is done from our laptops. We provide Ansible with a Vault token.
+
+15:25.015 --> 15:28.356
+In the GitLab and templates part, there are no secrets.
+
+15:33.327 --> 15:40.022
+In Jerikan, for data that is in the form of nested dictionaries,
+
+15:40.022 --> 15:46.716
+did you choose a recursive merge or are you doing like Ansible with a single level.
+
+15:48.109 --> 15:50.949
+The merge is only done at the first level.
+
+15:53.755 --> 16:01.066
+We have a schema which indicates for some data structures how they can be merged.
+
+16:01.066 --> 16:08.377
+But when we merge them, we only do it at the first level.
+
+16:34.536 --> 16:40.172
+Why didn't you use NetBox or a database and use YAML flat files.
+
+16:41.848 --> 16:50.473
+We don't use a database. We could have mixed a bit in NetBox and a bit in flat files.
+
+16:51.037 --> 16:56.647
+The point of doing everything in flat files is a single source of truth.
+
+16:57.913 --> 16:59.775
+A database is hard to fork.
+
+16:59.987 --> 17:06.182
+If you have a NetBox and you have to change something, then in the flat files, there is a desynchronization.
+
+17:08.228 --> 17:16.550
+Deploying a datacenter can be a month's work. Changing the schema can impact the work of others.
+
+17:17.413 --> 17:24.280
+The advantage of using Git is that you can do everything in one branch without impacting the others.
+
+17:24.280 --> 17:29.894
+It's easy to rollback. If you make a mistake in NetBox, it's more complicated to rollback.
+
+17:30.581 --> 17:33.434
+You can use a base for tests and a base for production,
+
+17:33.434 --> 17:36.286
+but you can have two people working on two different projects.
+
+17:36.745 --> 17:38.477
+Here, you can make as many branches as you want.
+
+17:38.901 --> 17:46.820
+We chose to put everything in flat files to allow us to embrace Git.
