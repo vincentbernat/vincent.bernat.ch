@@ -496,7 +496,7 @@ printf " JPG %10s %10s %10s\n" \
                     # Remove deploy/media
                     f = f[len('media/'):]
                     newname = newname[len('media/'):]
-                    if ext in [".png", ".svg", ".woff", ".woff2"]:
+                    if ext in [".png", ".svg", ".ttf", ".woff", ".woff2"]:
                         # Fix CSS
                         sed_css.append('s+{})+{})+g'.format(f, newname))
                     if ext not in [".png", ".svg"]:
