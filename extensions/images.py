@@ -14,6 +14,8 @@ import urllib
 import xml.etree.ElementTree as ET
 import lxml.html
 import types
+import subprocess
+import json
 from functools import partial
 from fractions import Fraction
 
@@ -22,7 +24,6 @@ from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
 from PIL import Image
-from pymediainfo import MediaInfo
 import langcodes
 from PyPDF2 import PdfFileReader
 
@@ -180,9 +181,13 @@ class ImageFixerPlugin(Plugin):
                                                    f.read())])
                 return dict(size=(w, h), opaque=True)
         if image.source_file.kind in {'mp4', 'ogv'}:
-            mi = MediaInfo.parse(image.path)
-            track = [t for t in mi.tracks if t.track_type == 'Video'][0]
-            return dict(size=(track.width, track.height), opaque=True)
+            p = subprocess.run(["ffprobe", "-v", "quiet",
+                                "-print_format", "json",
+                                "-show_streams",
+                                image.path], check=True, capture_output=True)
+            streams = json.loads(p.stdout.decode('ascii'))['streams']
+            track = [t for t in streams if t['codec_type'] == 'video'][0]
+            return dict(size=(track['width'], track['height']), opaque=True)
         if image.source_file.kind in {'pdf'}:
             with open(image.path, 'rb') as f:
                 pdf = PdfFileReader(f)
