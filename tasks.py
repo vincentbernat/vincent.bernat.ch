@@ -17,7 +17,7 @@ os.environ["PATH"] = os.path.expanduser('~/.virtualenvs/hyde/bin') \
 
 conf = "site-production.yaml"
 media = yaml.safe_load(open(conf))['media_url']
-hosts = ["web03.luffy.cx", "web04.luffy.cx"]
+hosts = ["web03.luffy.cx", "web04.luffy.cx", "web05.luffy.cx"]
 
 
 def confirm(question, default=False):
