@@ -209,7 +209,7 @@ def upload_videos(c, video=None):
 
 @task
 def update_monospace_fonts(c):
-    """Build Iosevka 3.7.1 fonts with Nix"""
+    """Build Iosevka ffont with Nix"""
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
         c.run("""
@@ -217,9 +217,23 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
   set = "custom";
   privateBuildPlan = {
     family = "Iosevka Custom";
-    design = ["ss05" "sp-term" "no-ligation" "v-asterisk-low"];
-    slopes = {
-      upright = "normal";
+    spacing = "term";
+    serifs = "sans";
+    no-ligation = true;
+    no-cv-ss = true;
+    variants = {
+      inherits = "ss05";
+      design = {
+        ampersand = "closed";
+        number-sign = "upright";
+        zero = "dotted";
+      };
+    };
+    slopes.upright = {
+      angle = 0;
+      shape = "upright";
+      menu = "upright";
+      css = "normal";
     };
     weights = {
       regular = {
