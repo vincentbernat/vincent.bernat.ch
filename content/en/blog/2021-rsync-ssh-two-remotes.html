@@ -1,0 +1,104 @@
+---
+title: "How to rsync files between two remotes?"
+description: |
+  Unlike scp, rsync cannot copy files between two remote hosts. Here is
+  a trick to achieve the same effect with some SSH tunnels.
+uuid: 89a6b5f5-61a2-48be-bb8b-ac5b51799a69
+---
+
+`scp -3` can copy files between two remote hosts through localhost.
+This comes in handy when the two servers cannot communicate
+directly or if they are unable to authenticate one to the
+other.[^agent] Unfortunately, `rsync` does not support such a feature.
+Here is a trick to emulate the behavior of `scp -3` with SSH tunnels.
+
+[^agent]: And [SSH agent forwarding is dangerous][]. Don't use it if you can.
+
+When syncing with a remote host, `rsync` invokes `ssh` to spawn a
+remote `rsync --server` process. It interacts with it through its
+standard input and output. The idea is to recreate the same setup
+using SSH tunnels and [socat][], a versatile tool to establish
+bidirectional data transfers.
+
+The first step is to connect to the source server and ask `rsync` the
+command-line to spawn the remote `rsync --server` process. The `-e`
+flag overrides the command to use to get a remote shell: instead of
+`ssh`, we use `echo`.
+
+    ::console hl_lines="3"
+    $ ssh web04
+    $ rsync -e 'sh -c ">&2 echo $@" echo' -aLv /data/. web05:/data/.
+    web05 rsync --server -vlogDtpre.iLsfxCIvu . /data/.
+    rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+    rsync error: error in rsync protocol data stream (code 12) at io.c(228) [sender=3.2.3]
+
+The second step is to connect to the destination server with *local*
+port forwarding. When connecting to the local port 5000, the TCP
+connection is forwarded through SSH to the remote port 5000 and
+handled by `socat`. When receiving the connection, `socat` spawns the
+`rsync --server` command we got at the previous step and connects its
+standard input and output to the incoming TCP socket.
+
+    ::console
+    $ ssh -L 127.0.0.1:5000:127.0.0.1:5000 web05
+    $ socat tcp-listen:5000,reuseaddr exec:"rsync --server -vlogDtpre.iLsfxCIvu . /data/."
+
+The last step is to connect to the source with *remote* port
+forwarding. `socat` is used in place of a regular SSH connection and
+connects its standard input and output to a TCP socket connected to the
+remote port 5000. Thanks to the remote port forwarding, SSH forwards
+the data to the local port 5000. From there, it is relayed back to the
+destination, as described in the previous step.
+
+    ::console
+    $ ssh -R 127.0.0.1:5000:127.0.0.1:5000 web04
+    $ rsync -e 'sh -c "socat stdio tcp-connect:127.0.0.1:5000"' -aLv /data/. remote:/data/.
+    sending incremental file list
+    haproxy.debian.net/
+    haproxy.debian.net/dists/buster-backports-1.8/Contents-amd64.bz2
+    haproxy.debian.net/dists/buster-backports-1.8/Contents-i386.bz2
+    […]
+    media.luffy.cx/videos/2021-frnog34-jerikan/progressive.mp4
+    
+    sent 921,719,453 bytes  received 26,939 bytes  7,229,383.47 bytes/sec
+    total size is 7,526,872,300  speedup is 8.17
+
+This little diagram may help understand how everything fits together:
+
+![Diagram showing how all processes are connected together: rsync,
+socat and ssh]([[!!images/rsync-remote-remote.svg]] "How each process
+is connected together. Arrows labeled “stdio” are implemented as two
+pipes connecting the process to the left to the standard input and
+output of the process to the right. Don't be fooled by the apparent
+symmetry!")
+
+The [rsync manual page][] prohibits the use of `--server`. Use this
+hack at your own risk!
+
+> The options `--server` and `--sender` are used internally by rsync,
+> and should never be typed by a user under normal circumstances. Some
+> awareness of these options may be needed in certain scenarios, such
+> as when setting up a login that can only run an rsync command. For
+> instance, the support directory of the rsync distribution has an
+> example script named `rrsync` (for restricted rsync) that can be
+> used with a restricted ssh login.
+
+# Addendum
+
+I was hoping to get something similar with a one-liner. But this does
+not work!
+
+    ::console
+    $ socat \
+    >  exec:"ssh web04 rsync --server --sender -vlLogDtpre.iLsfxCIvu . /data/." \
+    >  exec:"ssh web05 rsync --server -vlogDtpre.iLsfxCIvu /data/. /data/." \
+    over-long vstring received (511 > 255)
+    over-long vstring received (511 > 255)
+    rsync error: requested action not supported (code 4) at compat.c(387) [sender=3.2.3]
+    rsync error: requested action not supported (code 4) at compat.c(387) [Receiver=3.2.3]
+    socat[878291] E waitpid(): child 878292 exited with status 4
+    socat[878291] E waitpid(): child 878293 exited with status 4
+
+[SSH agent forwarding is dangerous]: [[en/blog/2020-safer-ssh-agent-forwarding.html]] "Safer SSH agent forwarding"
+[socat]: http://www.dest-unreach.org/socat/ "socat: multipurpose relay"
+[rsync manual page]: https://manpages.debian.org/bullseye/rsync/rsync.1.en.html "rsync(1) manual page"

@@ -1,0 +1,113 @@
+---
+title: "Comment utiliser rsync entre deux serveurs distants?"
+description: |
+  Contrairement à scp, rsync ne permet pas de copier des fichiers entre deux
+  serveurs distants. Voici une astuce pour contourner cette limitation
+  avec des tunnels SSH.
+uuid: 89a6b5f5-61a2-48be-bb8b-ac5b51799a69
+---
+
+`scp -3` permet de copier des fichiers entre deux hôtes distants via
+l'hôte local. Cela s'avère pratique lorsque les deux serveurs ne
+peuvent pas communiquer directement ou s'ils sont incapables de
+s'authentifier l'un auprès de l'autre[^agent]. Malheureusement, `rsync` ne
+supporte pas une telle fonctionnalité. Voici une astuce pour émuler le
+comportement de `scp -3` avec les tunnels SSH.
+
+[^agent]: Et [le transfert de l'agent SSH est dangereux][ssh-agent].
+    Évitez de l'utiliser !
+
+Lors de la synchronisation avec un hôte distant, `rsync` s'y connecte
+avec `ssh` et lance un processus `rsync --server`. Il interagit avec
+lui par le biais de son entrée et sortie standard. L'idée est de
+recréer le même dispositif en utilisant des tunnels SSH et [socat][],
+un outil polyvalent pour établir des transferts de données
+bidirectionnels.
+
+La première étape consiste à se connecter au serveur source et à
+demander à `rsync` de fournir la ligne de commande utilisée pour
+lancer le processus distant `rsync --server`. L'option `-e` remplace
+la commande à utiliser pour obtenir un shell distant : au lieu de
+`ssh`, nous utilisons `echo`.
+
+    ::console hl_lines="3"
+    $ ssh web04
+    $ rsync -e 'sh -c ">&2 echo $@" echo' -aLv /data/. web05:/data/.
+    web05 rsync --server -vlogDtpre.iLsfxCIvu . /data/.
+    rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+    rsync error: error in rsync protocol data stream (code 12) at io.c(228) [sender=3.2.3]
+
+La deuxième étape consiste à se connecter au serveur de destination
+avec une redirection de port *local*. Lors de la connexion au port
+local 5000, la connexion TCP est redirigée par SSH vers le port
+distant 5000. Elle est alors prise en charge par `socat`. Lorsqu'il
+reçoit la connexion, `socat` lance la commande `rsync --server` que
+nous avons obtenue à l'étape précédente et connecte son entrée et sa
+sortie standard à la chaussette TCP entrante.
+
+    ::console
+    $ ssh -L 127.0.0.1:5000:127.0.0.1:5000 web05
+    $ socat tcp-listen:5000,reuseaddr exec:"rsync --server -vlogDtpre.iLsfxCIvu . /data/."
+
+La dernière étape consiste à se connecter à la source avec une
+redirection de port *distant*. `socat` est utilisé à la place d'une
+connexion SSH normale et connecte son entrée et sa sortie standard à
+une chaussette TCP connectée au port distant 5000. Grâce à la
+redirection de port distant, SSH transmet les données au port
+local 5000. De là, elles sont relayées vers la destination, comme
+décrit à l'étape précédente.
+
+    ::console
+    $ ssh -R 127.0.0.1:5000:127.0.0.1:5000 web04
+    $ rsync -e 'sh -c "socat stdio tcp-connect:127.0.0.1:5000"' -aLv /data/. remote:/data/.
+    sending incremental file list
+    haproxy.debian.net/
+    haproxy.debian.net/dists/buster-backports-1.8/Contents-amd64.bz2
+    haproxy.debian.net/dists/buster-backports-1.8/Contents-i386.bz2
+    […]
+    media.luffy.cx/videos/2021-frnog34-jerikan/progressive.mp4
+    
+    sent 921,719,453 bytes  received 26,939 bytes  7,229,383.47 bytes/sec
+    total size is 7,526,872,300  speedup is 8.17
+
+Ce petit schéma peut aider à comprendre comment tout s'imbrique :
+
+![Diagramme montrant comment tous les processus sont connectés entre
+eux : rsync, socat et ssh]([[!!images/rsync-remote-remote.svg]] "
+Comment tous les processus sont connectés entre eux. Les flèches
+étiquetées « stdio » sont implémentées comme deux tuyaux reliant le
+processus de gauche à l'entrée et la sortie standard du processus de
+droite. Ne vous laissez pas tromper par l'apparente symétrie ! ")
+
+La [page de manuel de rsync][rsync manual page] dissuade d'utiliser
+l'option `--server`. Utilisez cette astuce à vos risques et périls !
+
+> Les options `--server` et `--sender` sont utilisées en interne par
+> rsync, et ne devraient jamais être tapées par un utilisateur dans
+> des circonstances normales. Une certaine connaissance de ces options
+> peut être nécessaire dans certains scénarios, comme lors de la
+> configuration d'une connexion SSH qui ne peut exécuter qu'une
+> commande rsync. Par exemple, le répertoire de `support/` de la
+> distribution rsync contient un exemple de script nommé `rrsync`
+> (pour rsync restreint) qui peut être utilisé avec une connexion SSH
+> restreinte.
+
+# Addendum
+
+J'espérais obtenir quelque chose de similaire avec une simple ligne de
+commande. Mais cela ne fonctionne pas !
+
+    ::console
+    $ socat \
+    >  exec:"ssh web04 rsync --server --sender -vlLogDtpre.iLsfxCIvu . /data/." \
+    >  exec:"ssh web05 rsync --server -vlogDtpre.iLsfxCIvu /data/. /data/." \
+    over-long vstring received (511 > 255)
+    over-long vstring received (511 > 255)
+    rsync error: requested action not supported (code 4) at compat.c(387) [sender=3.2.3]
+    rsync error: requested action not supported (code 4) at compat.c(387) [Receiver=3.2.3]
+    socat[878291] E waitpid(): child 878292 exited with status 4
+    socat[878291] E waitpid(): child 878293 exited with status 4
+
+[ssh-agent]: [[fr/blog/2020-transfert-agent-ssh-securite.html]] "Atténuation des risques liés au transfert d'agent SSH"
+[socat]: http://www.dest-unreach.org/socat/ "socat: multipurpose relay"
+[rsync manual page]: https://manpages.debian.org/bullseye/rsync/rsync.1.en.html "rsync(1) manual page"
