@@ -102,13 +102,13 @@ database. Usually, there is one staging database to test modifications
 before applying them to the production database. It does not scale
 well and reviews are difficult. Applying the same change to the
 production database can be hazardous. Rolling back a change is
-non-trivial.[^gitdb]
+non-trivial.
 
-[^gitdb]: [Dolt][] and [TerminusDB][] are two SQL database engines
-    allowing you to clone, branch, and merge, like a *Git* repository.
-    *Dolt* is compatible with *MySQL* clients. They could be part of a
-    solution to put a source of truth into a database. I don't know if
-    such a database is performant enough.
+!!! "Update (2021-11)" [Nautobot][], a fork of *NetBox*, will soon
+address this point by using [Dolt][], an SQL database engine allowing
+you to clone, branch, and merge, like a *Git* repository. *Dolt* is
+compatible with *MySQL* clients. See "[Nautobots, Roll Back!][]" for a
+preview of this feature.
 
 Moreover, *NetBox* is not usually the single source of truth. It
 contains your hardware inventory, the IP addresses, and some topology
@@ -119,11 +119,10 @@ truth is therefore fragmented between several tools with different
 workflows. Since *NetBox* 2.7, you can append additional data with
 [configuration contexts][]. This mitigates this point. The data is
 arranged hierarchically but the hierarchy cannot be
-customized.[^custom] [Nautobot][], a fork of *NetBox*, can manage
-configuration contexts in a *Git* repository, while still allowing to
-use of the API to fetch them. You get some additional perks, thanks to
-*Git*, but the remaining data is still in a database with a different
-lifecycle.
+customized.[^custom] *Nautobot* can manage configuration contexts in
+a *Git* repository, while still allowing to use of the API to fetch
+them. You get some additional perks, thanks to *Git*, but the
+remaining data is still in a database with a different lifecycle.
 
 [^custom]: Being able to customize the hierarchy is key to avoiding
     repetition in the data. For example, if switches are paired
@@ -188,3 +187,4 @@ are now comfortable using *Git*, thanks to its ubiquity.
 [Nautobot]: https://nautobot.readthedocs.io/en/latest/ "open source Network Source of Truth and Network Automation Platform"
 [NixOS]: https://nixos.org/
 [bunch of YAML files]: https://github.com/jerikan-network/cmdb/tree/main/data
+[Nautobots, Roll Back!]: https://blog.networktocode.com/post/nautobots-rollback/
