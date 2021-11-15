@@ -1,0 +1,190 @@
+---
+title: "Git as a source of truth for network automation"
+description: |
+  NetBox is often the go-to solution for a source of truth when
+  automating the network. Using Git instead brings several perks. 🎃
+uuid: ab9964eb-f08c-438a-af52-ba70bc51976b
+tags:
+  - network-automation
+---
+
+The first step when automating a network is to build the **source of
+truth**. A source of truth is a repository of data that provides the
+intended state: the list of devices, the IP addresses, the network
+protocols settings, the time servers, etc. A popular choice is
+[NetBox][]. Its documentation highlights its usage as a source of
+truth:
+
+> *NetBox* intends to represent the desired state of a network versus
+> its operational state. As such, automated import of live network
+> state is strongly discouraged. All data created in *NetBox* should
+> first be vetted by a human to ensure its integrity. *NetBox* can
+> then be used to populate monitoring and provisioning systems with a
+> high degree of confidence.
+
+When introducing [Jerikan][], a common feedback we got was: "you
+should use *NetBox* for this." Indeed, *Jerikan*'s source of truth is
+a [bunch of YAML files][] versioned with *Git*.
+
+# Why Git?
+
+If we look at how things are done with servers and services, in a
+datacenter or in the cloud, we are likely to find users of
+[Terraform][], a tool turning declarative configuration files into
+infrastructure. Declarative configuration management tools like
+[Salt][], [Puppet][],[^wikimedia] or [Ansible][] take care of server
+configuration. [NixOS][] is an alternative: it combines package
+management and configuration management with a functional language to
+build virtual machines and containers. When using a Kubernetes
+cluster, people use [Kustomize][] or [Helm][], two other declarative
+configuration management tools. Tapped together, these tools implement
+the *infrastructure as code* paradigm.
+
+[^wikimedia]: Wikimedia manages its infrastructure with *Puppet*. They
+    publish everything on [GitHub][wikimedia]. Creative Commons uses
+    *Salt*. They also publish everything on [GitHub][creativecommons].
+    Thanks to them for doing that! I wish I could provide more
+    real-life examples.
+
+> *Infrastructure as code* is an approach to infrastructure automation
+> based on practices from software development. It emphasizes
+> consistent, repeatable routines for provisioning and changing
+> systems and their configuration. You make changes to code, then use
+> automation to test and apply those changes to your systems.
+>
+> ― Kief Morris, [Infrastructure as Code][], O'Reilly.
+
+A version control system is a central tool for infrastructure as code.
+The usual candidate is *Git* with a source code management system like
+[GitLab][] or [GitHub][]. You get:
+
+Traceability and visibility
+: *Git* keeps a log of all changes: what, who, why, and when. With a
+  bit of discipline, each change is explained and self-contained. It
+  becomes part of the infrastructure documentation. When the support
+  team complains about a degraded experience for some customers over
+  the last two months or so, you quickly discover this may be related
+  to a change to an incoming policy in New York.
+
+Rolling back
+: If a change is defective, it can be reverted quickly, safely, and
+  without much effort, even if other changes happened in the meantime.
+  The policy change at the origin of the problem spanned over three
+  routers. Reverting this specific change and deploying the
+  configuration let you solve the situation until you find a better
+  fix.
+
+Branching, reviewing, merging
+: When working on a new feature or refactoring some part of the
+  infrastructure, a team member creates a branch and works on their
+  change without interfering with the work of other members. Once the
+  branch is ready, a pull request is created and the change is ready
+  to be reviewed by the other team members before merging. You
+  discover the issue was related to diverting traffic through an IX
+  where one ISP was connected without enough capacity. You propose and
+  discuss a fix that includes a change of the schema and the templates
+  used to declare policies to be able to handle this case.
+
+Continuous integration
+: For each change, automated tests are triggered. They can detect
+  problems and give more details on the effect of a change. Branches
+  can be deployed to a test infrastructure where regression tests are
+  executed. The results can be synthesized as a comment in the pull
+  request to help the review. You check your proposed change does not
+  modify the other existing policies.
+
+# Why not NetBox?
+
+*NetBox* does not share these features. It is a database with a REST
+and a GraphQL API. Traceability is limited: changes are not grouped
+into a transaction and they are not documented. You cannot fork the
+database. Usually, there is one staging database to test modifications
+before applying them to the production database. It does not scale
+well and reviews are difficult. Applying the same change to the
+production database can be hazardous. Rolling back a change is
+non-trivial.[^gitdb]
+
+[^gitdb]: [Dolt][] and [TerminusDB][] are two SQL database engines
+    allowing you to clone, branch, and merge, like a *Git* repository.
+    *Dolt* is compatible with *MySQL* clients. They could be part of a
+    solution to put a source of truth into a database. I don't know if
+    such a database is performant enough.
+
+Moreover, *NetBox* is not usually the single source of truth. It
+contains your hardware inventory, the IP addresses, and some topology
+information. However, this is not the place you put authorized SSH
+keys, syslog servers, or the BGP configuration. If you also use
+[Ansible][], this information ends in its inventory. The source of
+truth is therefore fragmented between several tools with different
+workflows. Since *NetBox* 2.7, you can append additional data with
+[configuration contexts][]. This mitigates this point. The data is
+arranged hierarchically but the hierarchy cannot be
+customized.[^custom] [Nautobot][], a fork of *NetBox*, can manage
+configuration contexts in a *Git* repository, while still allowing to
+use of the API to fetch them. You get some additional perks, thanks to
+*Git*, but the remaining data is still in a database with a different
+lifecycle.
+
+[^custom]: Being able to customize the hierarchy is key to avoiding
+    repetition in the data. For example, if switches are paired
+    together, some data should be attached to them as a group and not
+    duplicated on each of them. Tags can be used to partially work
+    around this issue but you lose the hierarchical aspect.
+
+Lastly, the schema used by *NetBox* may not fit your needs and you
+cannot tweak it. For example, you may have a rule to compute the IPv6
+address from the IPv4 address for dual-stack interfaces. Such a
+relationship cannot be easily expressed and enforced in *NetBox*. When
+changing the IPv4 address, you may forget the IPv6 address. The source
+of truth should only contain the IPv4 address but you also want the
+IPv6 address in *NetBox* because this is your IPAM and you need it to
+update your DNS entries.
+
+# Why not Git?
+
+There are some limitations when putting your source of truth in *Git*:
+
+1. If you want to expose a web interface to allow an external team to
+   request a change, it is more difficult to do it with *Git* than
+   with a database. Out-of-the-box, *NetBox* provides a nice web
+   interface and a permission system. You can also write your own web
+   interface and interact with *NetBox* through its API.
+2. YAML files are more difficult to query in different ways. For
+   example, looking for a free IP address is complex if they are
+   scattered in multiple places.
+
+In my opinion, in most cases, you are better off putting the source of
+truth in *Git* instead of *NetBox*. You get a lot of perks by doing
+that and you can still use *NetBox* as a read-only view, usable by
+other tools. We do that with an [Ansible module][]. In the remaining
+cases, *Git* could still fit the bill. Read-only access control can be
+done through submodules. Pull requests can restrict write access: a
+bot can check the changes only modify allowed files before
+auto-merging. This still requires some *Git* knowledge, but many teams
+are now comfortable using *Git*, thanks to its ubiquity.
+
+*[REST]: Representational state transfer
+*[API]: Application Programming Interface
+*[IPAM]: IP address management
+*[ISP]: Internet Service Provider
+*[IX]: Internet Exchange
+[NetBox]: https://netbox.readthedocs.io/en/stable/ "NetBox documentation"
+[Jerikan]: [[en/blog/2021-network-jerikan-ansible.html]] "Jerikan+Ansible: a configuration management system for network"
+[Ansible]: https://www.ansible.com/
+[Terraform]: https://www.terraform.io/
+[Salt]: https://saltproject.io/
+[Puppet]: https://puppet.com/
+[Kustomize]: https://kustomize.io/ "Kubernetes native configuration management"
+[Helm]: https://helm.sh/ "The package manager for Kubernetes"
+[Infrastructure as Code]: https://infrastructure-as-code.com/book/ "Infrastructure as Code book by Kief Morris"
+[wikimedia]: https://github.com/wikimedia/puppet "Wikimedia Puppet repository on GitHub"
+[creativecommons]: https://github.com/creativecommons/sre-salt-prime "Creative Common Salt repository on GitHub"
+[GitLab]: https://about.gitlab.com
+[GitHub]: https://github.com
+[Dolt]: https://github.com/dolthub/dolt
+[TerminusDB]: https://github.com/terminusdb/terminusdb
+[configuration contexts]: https://netbox.readthedocs.io/en/stable/models/extras/configcontext/
+[Ansible module]: [[en/blog/2020-syncing-netbox-ansible.html]] "Syncing NetBox with a custom Ansible module"
+[Nautobot]: https://nautobot.readthedocs.io/en/latest/ "open source Network Source of Truth and Network Automation Platform"
+[NixOS]: https://nixos.org/
+[bunch of YAML files]: https://github.com/jerikan-network/cmdb/tree/main/data

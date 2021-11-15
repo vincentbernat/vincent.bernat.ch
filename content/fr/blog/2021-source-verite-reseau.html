@@ -1,0 +1,211 @@
+---
+title: "Git comme source de vérité pour l'automatisation du réseau"
+description: |
+  NetBox est souvent la solution de référence comme source de vérité pour
+  l'automatisation du réseau. Utiliser Git à la place présente plusieurs avantages. 🎃
+uuid: ab9964eb-f08c-438a-af52-ba70bc51976b
+tags:
+  - network-automation
+---
+
+La première étape pour automatiser un réseau consiste à créer la
+**source de vérité**. Il s'agit d'un référentiel de données qui
+décrit l'état attendu : la liste des périphériques, les adresses
+IP, les paramètres des protocoles réseau, les serveurs de temps, etc.
+Un choix populaire est [NetBox][]. Sa documentation souligne son
+utilisation comme source de vérité :
+
+> *NetBox* vise à représenter l'état souhaité d'un réseau par rapport
+> à son état opérationnel. En tant que tel, l'importation automatisée
+> de l'état actuel du réseau est fortement déconseillée. Toutes les
+> données créées dans *NetBox* doivent d'abord être vérifiées par un
+> humain afin de garantir leur intégrité. *NetBox* peut ensuite être
+> utilisé pour alimenter les systèmes de surveillance et
+> d'installation avec un haut degré de confiance.
+
+Lors de la présentation de [Jerikan][], un retour fréquent que nous
+avons reçu était : « vous devriez utiliser *NetBox* pour ça ». En
+effet, la source de vérité de *Jerikan* est un [ensemble de fichiers
+YAML][bunch of YAML files] versionnés avec *Git*.
+
+# Pourquoi Git ?
+
+Si nous examinons la façon dont les choses sont faites dans le monde
+système, dans un centre de données ou dans les nuages, nous trouvons
+des utilisateurs de [Terraform][], un outil transformant des fichiers
+de configuration déclaratifs en infrastructure. Les outils de gestion
+de configuration déclarative comme [Salt][], [Puppet][][^wikimedia] ou
+[Ansible][] se chargent de la configuration des serveurs. [NixOS][]
+est une alternative : il combine la gestion des paquets et la gestion
+de configuration avec un langage fonctionnel pour construire des
+machines virtuelles et des conteneurs. Lorsqu'on utilise un cluster
+Kubernetes, on trouve [Kustomize][] ou [Helm][], deux autres outils
+déclaratifs de gestion de configuration. Utilisés ensemble, ces outils
+mettent en œuvre le paradigme de l'*infrastructure en tant que code*.
+
+[^wikimedia]: Wikimedia gère son infrastructure à l'aide de *Puppet*.
+    Ils publient l'ensemble sur [GitHub][wikimedia]. Creative Commons
+    utilise *Salt*. Ils publient également sur
+    [GitHub][creativecommons]. Merci à eux ! J'aurais souhaité pouvoir
+    énumérer des exemples supplémentaires mais peu d'équipes publient
+    leur infrastructure.
+
+> L'*infrastructure en tant que code* est une approche de
+> l'automatisation des infrastructures basée sur les pratiques du
+> développement logiciel. Elle met l'accent sur des routines
+> cohérentes et reproductibles pour l'installation et la modification
+> des systèmes et de leur configuration. Vous apportez des
+> modifications au code, puis utilisez l'automatisation pour tester et
+> appliquer ces modifications à vos systèmes.
+>
+> ― Kief Morris, [Infrastructure as Code][], O'Reilly.
+
+Un système de contrôle de version est un outil central pour
+l'infrastructure en tant que code. Le candidat habituel est *Git* avec
+un système de gestion du code source comme [GitLab][] ou [GitHub][].
+Vous obtenez :
+
+
+Traçabilité et visibilité
+: Git conserve un journal de toutes les modifications : quoi, qui,
+  pourquoi et quand. Avec un peu de discipline, chaque changement est
+  expliqué et autonome. Il devient une partie de la documentation
+  de l'infrastructure. Lorsque l'équipe de support se plaint d'une
+  dégradation de l'expérience de certains clients au cours des deux
+  derniers mois, vous découvrez rapidement que cela peut être lié à
+  une modification d'une politique de routage à New York.
+
+Revenir en arrière
+: Si un changement est défectueux, il peut être annulé sans effort
+  rapidement et en toute sécurité, même si d'autres changements sont
+  intervenus entre-temps. Le changement de politique à l'origine du
+  problème s'étend sur trois routeurs. L'annulation de celui-ci et le
+  déploiement de la configuration vous permettent de résoudre la
+  situation en attendant une meilleure solution.
+
+Branches et revue de code
+: En travaillant sur une nouvelle fonctionnalité ou en remaniant une
+  partie de l'infrastructure, une membre de l'équipe crée une branche
+  et travaille sur son changement sans interférer avec le travail des
+  autres membres. Une fois la branche prête, une demande de revue est
+  créée et les autres membres de l'équipe peuvent l'examiner avant de
+  l'accepter. Vous découvrez que le problème était lié à la déviation
+  du trafic à travers un IX où un FAI était connecté via un lien de
+  trop faible capacité. Vous proposez et discutez d'un correctif qui
+  inclut un changement du schéma et des modèles utilisés pour déclarer
+  les politiques de routage afin de pouvoir gérer ce cas.
+
+Intégration continue
+: Pour chaque changement, des tests automatisés sont déclenchés. Ils
+  peuvent détecter les problèmes et donner plus de détails sur l'effet
+  d'un changement. Chaque branche peut être déployées dans une
+  infrastructure virtuelle où des tests de régression sont exécutés.
+  Les résultats peuvent être synthétisés sous forme de commentaire
+  pour la revue de code. Vous vérifiez que le changement que vous
+  proposez ne modifie pas les autres politiques existantes.
+
+# Pourquoi pas NetBox ?
+
+*NetBox* ne partage pas ces caractéristiques. Il s'agit d'une base de
+données avec une API REST et GraphQL. La traçabilité est limitée : les
+modifications ne sont pas regroupées dans une transaction et elles ne
+sont pas documentées. Vous ne pouvez pas créer de branches sur la base
+de données. En général, il existe une seule base de données de test.
+Cela limite le travail sur plusieurs fonctionnalités. La réplication
+des modifications sur la base de production peut être hazardeux. Le
+retour en arrière n'est pas trivial.[^gitdb]
+
+[^gitdb]: [Dolt][] et [TerminusDB][] sont deux moteurs de base de
+    données SQL permettant de créer des branches, comme un dépôt Git.
+    *Dolt* est compatible avec les clients *MySQL*. Ils pourraient
+    faire partie d'une solution pour mettre une source de vérité dans
+    une base de données. J'ignore ce qu'il en est des performances
+    d'une telle base.
+
+De plus, *NetBox* n'est généralement pas la seule source de vérité. Il
+contient votre inventaire matériel, les adresses IP et quelques
+informations sur la topologie. Cependant, ce n'est pas l'endroit où
+vous mettez les clés SSH, les serveurs de temps ou la configuration
+BGP. Si vous utilisez également [Ansible][], ces informations
+aboutissent dans l'inventaire. La source de vérité est donc fragmentée
+entre plusieurs outils avec des flux de travail différents. Depuis
+*NetBox* 2.7, vous pouvez attacher des données arbitraire grâce aux
+[contextes de configuration][configuration contexts]. Cela mitige ce
+point. Les données sont organisées de manière hiérarchique mais cette
+hiérarchie ne peut pas être personnalisée[^custom]. [Nautobot][], un
+fork de *NetBox*, peut gérer les contextes de configuration dans un
+dépôt *Git*, tout en permettant d'utiliser l'API pour les consulter.
+Vous bénéficiez des avantages de *Git* mais les données restantes sont
+toujours dans une base de données avec un cycle de vie différent.
+
+[^custom]: La possibilité de personnaliser la hiérarchie est
+    essentielle pour éviter les répétitions dans les données. Par
+    exemple, si des routeurs travaillent par paire, certaines données
+    doivent être attachées au groupe et non dupliquées
+    sur chacun d'eux. Les étiquettes peuvent être utilisées pour
+    contourner partiellement ce problème, mais vous perdez l'aspect
+    hiérarchique.
+
+Enfin, le schéma utilisé par *NetBox* peut ne pas correspondre à vos
+besoins et vous ne pouvez pas le modifier. Par exemple, vous pouvez
+avoir une règle pour calculer l'adresse IPv6 à partir de l'adresse
+IPv4 pour les interfaces avec les deux familles. Une telle relation ne
+peut pas être facilement exprimée et appliquée dans *NetBox*. Lorsque
+vous changez l'adresse IPv4, vous pouvez oublier de mettre à jour
+l'adresse IPv6. La source de vérité ne devrait contenir que l'adresse
+IPv4 mais vous voulez aussi l'adresse IPv6 dans *NetBox* car c'est votre
+IPAM et vous en avez besoin pour mettre à jour vos entrées DNS.
+
+# Pourquoi pas Git ?
+
+Il y a quelques limitations lorsque vous placez votre source de vérité dans *Git* :
+
+1. Si vous souhaitez exposer une interface web pour permettre à une
+   équipe externe de demander une modification, il est plus difficile
+   de le faire avec *Git* qu'avec une base de données. *NetBox*
+   dispose d'une interface web et d'un système de gestion des
+   permissions. Vous pouvez également écrire votre propre interface
+   web et interagir avec *NetBox* via son API.
+
+2. Les fichiers YAML sont plus difficiles à interroger de différentes
+   manières. Par exemple, la recherche d'une adresse IP libre est
+   complexe si elles sont dispersées à plusieurs endroits.
+
+À mon avis, dans la plupart des cas, il est préférable de placer la
+source de vérité dans *Git* plutôt que dans *NetBox*. Vous obtenez
+beaucoup d'avantages et vous pouvez toujours utiliser *NetBox* comme
+une vue en lecture seule qui peut ensuite être utilisée par d'autres
+outils. Nous faisons cela avec un [module Ansible][Ansible module].
+Dans les autres cas, *Git* peut toujours faire l'affaire. Le contrôle
+d'accès en lecture seule peut être effectué par le biais de
+sous-modules. Les demandes de revue peuvent restreindre l'accès en
+écriture : un robot peut vérifier que les changements ne modifient que
+les fichiers autorisés. Cela nécessite quelques connaissances de
+*Git*, mais de nombreuses équipes sont maintenant à l'aise avec lui,
+grâce à son omniprésence.
+
+*[REST]: Representational state transfer
+*[API]: Application Programming Interface
+*[IPAM]: IP address management
+*[FAI]: Fournisseur d'accès à Internet
+*[IX]: Internet Exchange
+[NetBox]: https://netbox.readthedocs.io/en/stable/ "NetBox documentation"
+[Jerikan]: [[fr/blog/2021-reseau-jerikan-ansible.html]] "Jerikan+Ansible : un système de gestion de configuration pour le réseau"
+[Ansible]: https://www.ansible.com/
+[Terraform]: https://www.terraform.io/
+[Salt]: https://saltproject.io/
+[Puppet]: https://puppet.com/
+[Kustomize]: https://kustomize.io/ "Kubernetes native configuration management"
+[Helm]: https://helm.sh/ "The package manager for Kubernetes"
+[Infrastructure as Code]: https://infrastructure-as-code.com/book/ "Infrastructure as Code book by Kief Morris"
+[wikimedia]: https://github.com/wikimedia/puppet "Wikimedia Puppet repository on GitHub"
+[creativecommons]: https://github.com/creativecommons/sre-salt-prime "Creative Common Salt repository on GitHub"
+[GitLab]: https://about.gitlab.com
+[GitHub]: https://github.com
+[Dolt]: https://github.com/dolthub/dolt
+[TerminusDB]: https://github.com/terminusdb/terminusdb
+[configuration contexts]: https://netbox.readthedocs.io/en/stable/models/extras/configcontext/
+[Ansible module]: [[en/blog/2020-syncing-netbox-ansible.html]] "Syncing NetBox with a custom Ansible module"
+[Nautobot]: https://nautobot.readthedocs.io/en/latest/ "open source Network Source of Truth and Network Automation Platform"
+[NixOS]: https://nixos.org/
+[bunch of YAML files]: https://github.com/jerikan-network/cmdb/tree/main/data
