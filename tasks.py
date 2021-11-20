@@ -237,7 +237,7 @@ nix-build -E '((import <nixpkgs>{}).iosevka.override {
     };
     weights = {
       regular = {
-        shape = 300;
+        shape = 350;
         menu = 400;
         css = 400;
       };
