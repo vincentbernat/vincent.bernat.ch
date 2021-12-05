@@ -39,9 +39,12 @@ pkgs.mkShell {
     pkgs.nodejs
     pkgs.openssl
     pkgs.python3Packages.invoke
-    pkgs.rsync
     pkgs.yarn
     pkgs.less
+
+    # Deploy
+    pkgs.rsync
+    pkgs.openssh
 
     # Images
     pkgs.libavif
