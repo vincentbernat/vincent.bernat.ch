@@ -16,7 +16,7 @@ class CSSPrefixerPlugin(Plugin):
             minify = "false"
         else:
             minify = "true"
-        p = subprocess.Popen(['nodejs', '-e', """
+        p = subprocess.Popen(['node', '-e', """
 var autoprefixer = require('autoprefixer');
 var cssnano = require('cssnano');
 var postcss = require('postcss');
