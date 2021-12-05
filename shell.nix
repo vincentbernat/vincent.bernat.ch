@@ -17,14 +17,28 @@ let pkgs = import <nixpkgs> {};
         pyquery==1.4.1
         pytz==2020.1
       '';
-      packagesExtra = [
+      packagesExtra = let
+        pygmentExtension = (name: sha256: mach-nix.buildPythonPackage {
+          src = pkgs.fetchFromGitHub {
+            owner = "vincentbernat";
+            repo = "pygments-${name}";
+            rev = "master";
+            inherit sha256;
+          };
+        });
+      in [
         (mach-nix.buildPythonPackage {
-          src = "https://github.com/vincentbernat/hyde/archive/refs/heads/vbe/master.tar.gz";
+          src = pkgs.fetchFromGitHub {
+            owner = "vincentbernat";
+            repo = "hyde";
+            rev = "vbe/master";
+            sha256 = "sha256-MtGSUp1ZSbTipsdMLh57O+yZSOS37s6g60u2A1uyUzQ=";
+          };
           requirementsExtra = "python-dateutil>=2.8";
         })
-        https://github.com/vincentbernat/pygments-haproxy/archive/refs/heads/master.tar.gz
-        https://github.com/vincentbernat/pygments-ios/archive/refs/heads/master.tar.gz
-        https://github.com/vincentbernat/pygments-junos/archive/refs/heads/master.tar.gz
+        (pygmentExtension "haproxy" "sha256-DzSFS+tKBToFfh2gbKjapmEAZNLp24ufIOvAv9khcQo=")
+        (pygmentExtension "ios"     "sha256-Go7x8gZDu55M43/bTE3vUp/l6OGoQkESyguMrH/4yJU=")
+        (pygmentExtension "junos"   "sha256-aMwP/ecfawuVRUP7AY3eIxLqZK5rVY45i3yRr9qYW2k=")
       ];
     };
 in
