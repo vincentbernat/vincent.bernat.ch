@@ -1,9 +1,12 @@
 let pkgs = import <nixpkgs> {};
-    mach-nix = import (builtins.fetchGit {
-      url = "https://github.com/DavHau/mach-nix";
-      ref = "refs/tags/3.3.0";
+    mach-nix = import (pkgs.fetchFromGitHub {
+      owner = "DavHau"; repo = "mach-nix";
+      rev = "3.3.0";
+      sha256 = "sha256-RvbFjxnnY/+/zEkvQpl85MICmyp9p2EoncjuN80yrYA=";
     }) {
       inherit pkgs;
+      pypiDataRev = "99799f6300b2dc4a4063dc3da032f5f169709567";
+      pypiDataSha256 = "0kacxgr7cybd0py8d3mshr9h3wab9x3fvrlpr2fd240xg0v2k5gm";
     };
     python-env = mach-nix.mkPython {
       requirements = ''
@@ -15,13 +18,11 @@ let pkgs = import <nixpkgs> {};
         langcodes==2.0.0
         lxml==4.6.3
         pyquery==1.4.1
-        pytz==2020.1
       '';
       packagesExtra = let
         pygmentExtension = (name: sha256: mach-nix.buildPythonPackage {
           src = pkgs.fetchFromGitHub {
-            owner = "vincentbernat";
-            repo = "pygments-${name}";
+            owner = "vincentbernat"; repo = "pygments-${name}";
             rev = "master";
             inherit sha256;
           };
@@ -29,8 +30,7 @@ let pkgs = import <nixpkgs> {};
       in [
         (mach-nix.buildPythonPackage {
           src = pkgs.fetchFromGitHub {
-            owner = "vincentbernat";
-            repo = "hyde";
+            owner = "vincentbernat"; repo = "hyde";
             rev = "vbe/master";
             sha256 = "sha256-MtGSUp1ZSbTipsdMLh57O+yZSOS37s6g60u2A1uyUzQ=";
           };
