@@ -13,7 +13,7 @@ let pkgs = import <nixpkgs> {};
         Babel==2.9.1
         Pillow==8.3.2
         PyPDF2==1.26.0
-        Pygments>=2.8.0
+        Pygments==2.10.0
         fonttools==4.14.0
         langcodes==2.0.0
         lxml==4.6.3
