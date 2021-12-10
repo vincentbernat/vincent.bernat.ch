@@ -388,7 +388,7 @@ def build(c):
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     with step("update JS dependencies"):
-        c.run("yarn install --frozen-lockfile")
+        c.run("nix run -f '<nixpkgs>' yarn -- install --frozen-lockfile")
     with step("run Hyde"):
         c.run('hyde -x gen -c %s' % conf)
     with c.cd(".final"):
@@ -617,7 +617,7 @@ def analytics(c):
           "do ssh $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
           "   | grep -Fv atom.xml;"
           "done"
-          " | LANG=en_US.utf8 goaccess "
+          " | LANG=en_US.utf8 nix run -f '<nixpkgs>' goaccess -- "
           "       --ignore-crawlers "
           "       --unknowns-as-crawlers "
           "       --http-protocol=no "
