@@ -388,7 +388,7 @@ def build(c):
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     with step("update JS dependencies"):
-        c.run("nix run -f '<nixpkgs>' yarn -- install --frozen-lockfile")
+        c.run("yarn install --frozen-lockfile")
     with step("run Hyde"):
         c.run('hyde -x gen -c %s' % conf)
     with c.cd(".final"):
