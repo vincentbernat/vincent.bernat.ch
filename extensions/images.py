@@ -389,7 +389,7 @@ class ImageFixerPlugin(Plugin):
                 progressive = pq('<source>')
                 progressive.attr.src = self.site.media_url(
                     'videos/{}/progressive.mp4'.format(id))
-                progressive.attr.type = 'video/mp4; codecs="avc1.4d401f, mp4a.40.2"'
+                progressive.attr.type = 'video/mp4; codecs="mp4a.40.2,avc1.4d401f"'
                 img.append(progressive)
                 # Add subtitle tracks if any
                 vtts = [v
