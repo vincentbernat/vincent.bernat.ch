@@ -1,0 +1,107 @@
+---
+title: "Automatic login with startx and systemd"
+description: |
+  Instead of using a display manager to autologin into
+  an Xorg session on boot, we can use startx and systemd.
+uuid: 7405b6e5-277c-4bfe-a1f8-70ada0771bec
+tags:
+  - desktop
+---
+
+If your workstation is using [full-disk encryption][], you may want to
+jump directly to your desktop environment after entering the
+passphrase to decrypt the disk. Many display managers like [GDM][] and
+[LightDM][] have an autologin feature. However, only *GDM* can run
+*Xorg* with standard user privileges.
+
+Here is an alternative using `startx` and a *systemd* service:
+
+    ::ini
+    [Unit]
+    Description=X11 session for bernat
+    After=graphical.target systemd-user-sessions.service
+
+    [Service]
+    User=bernat
+    WorkingDirectory=~
+
+    PAMName=login
+    Environment=XDG_SESSION_TYPE=x11
+    TTYPath=/dev/tty8
+    StandardInput=tty
+    UnsetEnvironment=TERM
+
+    UtmpIdentifier=tty8
+    UtmpMode=user
+
+    StandardOutput=journal
+    ExecStartPre=/usr/bin/chvt 8
+    ExecStart=/usr/bin/startx -- vt8 -keeptty -verbose 3 -logfile /dev/null
+    Restart=no
+
+    [Install]
+    WantedBy=graphical.target
+
+Let me explain each block:
+
+- The unit starts after `systemd-user-sessions.service`, which enables
+  user logins after boot by removing the `/run/nologin` file.
+
+- With `User=bernat`, the unit is started with the identity of the
+  specified user. This implies that `Xorg` does not run with elevated
+  privileges.
+
+- With `PAMName=login`, the executed process is registered as a PAM
+  session for the `login` service, which includes [pam_systemd][].
+  This module registers the session to the [systemd login manager][].
+  To be effective, we also need to allocate a TTY with
+  `TTYPath=/dev/tty8`. When the TTY is active, the user is granted
+  additional access to local devices—notably display, sound, keyboard,
+  mouse. These additional rights are needed to get *Xorg* working
+  rootless.[^moredoc] The `TERM` environment variable is unset because
+  it would be set to `linux` by *systemd* as a result of attaching the
+  standard input to the TTY. Moreover, we inform `pam_systemd` we want
+  an X11 session with `Environment=XDG_SESSION_TYPE=x11`. Otherwise,
+  `logind` considers the session idle unless it receives input on
+  the TTY. Software relying on the idle hint from `logind` would be
+  ineffective.[^xcoulddo2]
+
+- The `UtmpIdentifier=tty8` and `UtmpMode=user` directives are just
+  a nice addition to register the session in `/var/run/utmp`.
+
+- The last step is to execute `Xorg` through `startx`. For `logind` to
+  allow `Xorg` to take control of the local devices, `chvt 8` switches
+  to the allocated TTY.[^xcoulddo] `StandardOutput=journal`, combined
+  with the `-verbose 3 -logfile /dev/null` flags for `Xorg`, puts the
+  logs from the X server into the journal instead of using a file.
+  While equal to the default value, the `Restart=no` directive
+  highlights we do not want this unit to be restarted. This ensures
+  the loginless session is only available on boot. By default,
+  `startx` runs `xinitrc`. If you want to run *Kodi* instead, add
+  `/usr/bin/kodi-standalone` between `startx` and `--`.
+
+[^moredoc]: For more information on how `logind` provides access to
+    devices, see this [blog post][]. The method names do not match the
+    current implementation, but the concepts are still correct. `Xorg`
+    takes control of the session when the TTY is active.
+
+[^xcoulddo2]: *Xorg* could change the type of the session itself after
+    taking control of it, but it [does not][].
+
+[^xcoulddo]: There is some code in *Xorg* to do that, but it is
+    executed too late and fails with: `xf86OpenConsole: VT_ACTIVATE
+    failed: Operation not permitted`.
+
+Drop this unit in `/etc/systemd/system/startx.service` and enable it
+with `systemctl enable startx.service`. *Xorg* is now running rootless
+and logging to the journal. After using it for a few months, I didn't
+notice any regression compared to *LightDM* with autologin.
+
+
+[full-disk encryption]: https://wiki.archlinux.org/title/Data-at-rest_encryption "ArchWiki: Data-at-rest encryption"
+[GDM]: https://help.gnome.org/admin/gdm/stable/
+[LightDM]: https://github.com/canonical/lightdm
+[pam_systemd]: https://manpages.debian.org/bullseye/libpam-systemd/pam_systemd.8.en.html "pam_systemd(8) manual page"
+[systemd login manager]: https://manpages.debian.org/bullseye/systemd/systemd-logind.8.en.html "systemd-logind.service(8) manual page"
+[blog post]: https://dvdhrm.wordpress.com/2013/08/25/sane-session-switching/ "Sane Session-Switching"
+[does not]: https://gitlab.freedesktop.org/xorg/xserver/-/issues/1194 "Issue #1194: Xorg-server not calling SetType after TakeControl, leaving the session Type as is"

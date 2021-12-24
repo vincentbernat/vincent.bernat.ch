@@ -1,0 +1,118 @@
+---
+title: "Session graphique sans authentification avec startx et systemd"
+description: |
+  Au lieu d'utiliser un gestionnaire d'affiche pour démarrer automatiquement
+  une session graphique au démarrage, nous pouvons utiliser startx et systemd.
+uuid: 7405b6e5-277c-4bfe-a1f8-70ada0771bec
+tags:
+  - desktop
+---
+
+Si votre station de travail utilise un [chiffrement complet du
+disque][full-disk encryption], vous pouvez souhaiter exécuter
+directement votre environnement de bureau après avoir saisi le mot de
+passe pour déchiffrer le disque. Beaucoup de gestionnaires d'affichage
+comme [GDM][] et [LightDM][] ont une telle fonctionnalité. Cependant,
+seul *GDM* peut exécuter *Xorg* avec les privilèges d'un utilisateur
+standard.
+
+Il existe une alternative utilisant `startx` et un service *systemd*:
+
+    ::ini
+    [Unit]
+    Description=X11 session for bernat
+    After=graphical.target systemd-user-sessions.service
+
+    [Service]
+    User=bernat
+    WorkingDirectory=~
+
+    PAMName=login
+    Environment=XDG_SESSION_TYPE=x11
+    TTYPath=/dev/tty8
+    StandardInput=tty
+    UnsetEnvironment=TERM
+
+    UtmpIdentifier=tty8
+    UtmpMode=user
+
+    StandardOutput=journal
+    ExecStartPre=/usr/bin/chvt 8
+    ExecStart=/usr/bin/startx -- vt8 -keeptty -verbose 3 -logfile /dev/null
+    Restart=no
+
+    [Install]
+    WantedBy=graphical.target
+
+Voici la fonction de chaque bloc :
+
+- Le service démarre après `systemd-user-sessions.service`, qui
+  autorise les utilisateurs à se connecter après le démarrage du
+  système en retirant le fichier `/run/nologin`.
+
+- Avec `User=bernat`, le service est démarré sous l'identité de
+  l'utilisateur mentionné. Cela implique que `Xorg` ne tourne pas avec
+  les privilèges de *root*.
+
+- Avec `PAMName=login`, le processus exécuté est enregistré comme une
+  session PAM pour le service `login`, qui comprend [pam_systemd][].
+  Ce module enregistre cette session auprès du [gestionnaire de
+  connexion de *systemd*][systemd login manager]. Pour être effectif,
+  nous devons aussi allouer un TTY avec `TTYPath=/dev/tty8`. Quand le
+  TTY est actif, l'utilisateur se voit accorder des accès
+  supplémentaires aux périphériques locaux tels que l'écran, la
+  souris, le clavier et le son. Ces droits supplémentaires permettent
+  de faire tourner *Xorg* sans être *root*[^moredoc]. La variable
+  d'environnemnet `TERM` est rémise à zéro car *systemd* l'initialise
+  à `linux` quand on utilise la directive `StandardInput=tty`. De
+  plus, nous demandons à `pam_systemd` de mettre en place une session
+  X11 avec `Environment=XDG_SESSION_TYPE=x11`. Dans le cas contraire,
+  `logind` considérera la session n'a pas d'activité à moins de
+  recevoir une entrée sur le TTY. Les logiciels reposant sur l'indice
+  d'activité de `logind` ne seraient pas fonctionnels[^xcoulddo2].
+
+- Les directives `UtmpIdentifier=tty8` et `UtmpMode=user` permettent
+  d'enregistrer la session dans le fichier `/var/run/utmp`. Elles ne
+  sont pas strictement nécessaires.
+
+- La dernière étape est d'exécuter `Xorg` via `startx`. Pour que
+  `logind` autorise `Xorg` à prendre le contrôle des périphériques
+  locaux, `chvt 8` change le TTY actif[^xcoulddo]. La directive
+  `StandardOutput=journal`, combinée aux options `-verbose 3 -logfile
+  /dev/null` pour `Xorg`, place les journaux du serveur X dans le
+  journal du système au lieu d'un fichier. Bien qu'identique à sa
+  valeur par défaut, la directive `Restart=no` met en avant que l'on
+  ne veut pas que ce service soit redémarré afin de s'assurer que la
+  session graphique sans authentification ne sera présentée qu'au
+  démarrage. Par défaut, `startx` exécute `xinitrc`. Si vous voulez
+  lancer *Kodi* à la placer, insérez `/usr/bin/kodi-standalone` entre
+  `startx` et `--`.
+
+[^moredoc]: Pour plus d'information sur comment `logind` fournit
+    l'accès aux périphériques, regardez cet [article][blog post]. Le
+    nom des méthodes ne correspond pas à l'implémentation actuelle,
+    mais les concepts sont toujours valables. `Xorg` prend le contrôle
+    de la session quand le TTY devient actif.
+
+[^xcoulddo2]: *Xorg* pourrait changer le type de la session après en
+    avoir pris le contrôle, mais [il ne le fait pas][does not].
+
+[^xcoulddo]: Il y a du code dans *Xorg* pour effectuer cette
+    opération, mais il est exécuté trop tard et échoue avec l'erreur
+    suivante : `xf86OpenConsole: VT_ACTIVATE failed: Operation not
+    permitted`.
+
+Placez cette unité dans le fichier
+`/etc/systemd/system/startx.service` et activez la avec `systemctl
+enable startx.service`. *Xorg* s'exécute maintenant sans les droits
+*root* et utilise le journal. Après quelques mois d'usage, je n'ai pas
+remarqué de régression par rapport à *LightDM* avec l'authentification
+automatique.
+
+[full-disk encryption]: https://wiki.archlinux.org/title/Data-at-rest_encryption "ArchWiki: Data-at-rest encryption"
+[GDM]: https://help.gnome.org/admin/gdm/stable/
+[LightDM]: https://github.com/canonical/lightdm
+[pam_systemd]: https://manpages.debian.org/bullseye/libpam-systemd/pam_systemd.8.en.html "pam_systemd(8) manual page"
+[systemd login manager]: https://manpages.debian.org/bullseye/systemd/systemd-logind.8.en.html "systemd-logind.service(8) manual page"
+[blog post]: https://dvdhrm.wordpress.com/2013/08/25/sane-session-switching/ "Sane Session-Switching"
+[does not]: https://gitlab.freedesktop.org/xorg/xserver/-/issues/1194 "Issue #1194: Xorg-server not calling SetType after TakeControl, leaving the session Type as is"
