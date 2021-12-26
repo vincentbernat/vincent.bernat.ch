@@ -1,0 +1,94 @@
+---
+title: "Économiseur d'écran personnalisé avec XSecureLock"
+description: |
+  XSecureLock permet de verrouiller une session X11 et délègue la partie économiseur
+  d'écran à un programme tiers, permettant de personnaliser celui-ci à l'envie.
+uuid: 049af871-2837-4d68-acbb-4f41b8770e6a
+cover: i3/xsecurelock@2x.jpg
+tags:
+  - desktop
+---
+
+[i3lock][] est une solution populaire pour verrouiller une session
+X11. Les possibilités de personnalisation sont restreintes : il ne
+permet que de définir un fond d'écran à partir d'un fichier PNG. Cette
+limitation fait partie de la conception d'*i3lock* : son objectif
+principal est de maintenir l'écran verrouillé, ce qui est déjà assez
+difficile avec X11. Chaque fonctionnalité supplémentaire augmente la
+surface d'attaque et s'éloigne de cet objectif[^source1]. Beaucoup
+sont frustrés par ces limitations et étendent *i3lock* par le biais de
+simples scripts ou en modifiant son code source[^source2]. La première
+solution est généralement sûre, mais la seconde va à l'encontre de
+l'esprit d'*i3lock*.
+
+[^source1]: Voir par exemple [ce commentaire][comment1] ou
+    [celui-ci][comment2].
+[^source2]: Ce [fil Reddit][Reddit post] énumère beaucoup de ces
+    alternatives.
+
+[XSecureLock][] est une alternative moins connue à *i3lock*. L'une des
+caractéristiques les plus attrayantes de ce programme est de déléguer
+la fonction d'économiseur d'écran à un autre processus. Ce dernier
+doit seulement s'attacher à une fenêtre existante fournie par
+*XSecureLock* qui ne lui transmettra aucune entrée. Il placera
+également une fenêtre noire en dessous pour s'assurer que l'écran
+reste verrouillé en cas de plantage.
+
+*XSecureLock* contient déjà quelques économiseurs d'écran, notamment
+un utilisant [mpv][] pour afficher des photos ou des vidéos, comme les
+[vidéos aériennes de l'Apple TV][Apple TV aerial videos]. J'ai écrit
+[mon propre économiseur][own saver] à l'aide de Python et GTK[^gtk].
+Il affiche un fond d'écran, une horloge et la méteo[^weather].
+
+![Économiseur d'écran personnalisé pour XSecureLock. Il affiche une
+horloge au centre et la météo dans un
+coin]([[!!images/i3/xsecurelock@2x.jpg]] "Économiseur d'écran
+personnalisé pour XSecureLock")
+
+[^gtk]: L'utilisation de GTK rend un peu difficile l'utilisation de
+    certaines fonctionnalités de bas niveau, comme l'intégration d'une
+    application dans une fenêtre existante. En revanche, les
+    fonctionnalités de haut niveau sont plus faciles, notamment
+    dessiner une image et un texte avec une ombre.
+
+[^weather]: La météo est récupérée par un [autre script][another
+    script] fonctionnant sur une minuterie et écrite dans un fichier.
+    L'écran de veille surveille ce dernier pour s'actualiser.
+
+J'apporte deux modifications au-dessus de *XSecureLock* :
+
+- [Faire une pause avant d'afficher la fenêtre de l'économiseur
+  d'écran][Sleep before mapping screen saver window]. Ce patch évite
+  un flash noir au démarrage de *XSecureLock* en attendant un peu que
+  l'écran de veille soit prêt avant de l'afficher. Comme j'utilise
+  également une application de fondu vers l'arrière-plan avant de
+  verrouiller l'écran, le flash noir était assez gênant pour moi. J'ai
+  bon espoir que ce patch soit accepté par l'auteur.
+- [Ne pas tenter d'éteindre l'écran][Do not mess with DPMS/blanking].
+  Ce patch empêche *XSecureLock* d'éteindre l'écran après un certain
+  temps. Je pense que c'est le rôle de l'extension X11 DPMS. Cela
+  simplifie le code. Je ne suis pas sûr que ce patch soit accepté par
+  upstream.
+
+*XSecureLock* délègue également la fenêtre d'authentification à un
+autre processus, mais je suis moins à l'aise avec l'idée de
+personnaliser celui-ci étant donné que c'est plus délicat d'un point
+de vue sécurité. Bien que basique, l'actuelle présentation me
+convient.
+
+Je pense que les gens devraient éviter de modifier le code d'*i3lock*
+et utiliser plutôt *XSecureLock*. J'espère que cet article aidera un
+peu.
+
+[XSecureLock]: https://github.com/google/xsecurelock
+[i3lock]: https://i3wm.org/i3lock/
+[Reddit post]: https://www.reddit.com/r/i3wm/comments/ixhv6d/whats_with_all_the_i3lock_forks/ "What's with all the i3lock forks?"
+[comment1]: https://github.com/i3/i3lock/pull/7#issuecomment-77109891 "Issue #7: feature: clock"
+[comment2]: https://github.com/i3/i3lock/issues/52#issuecomment-358786779 "Issue #52: feature requested: pass XF86Audio keys to i3"
+[Apple TV aerial videos]: https://bzamayo.com/watch-all-the-apple-tv-aerial-video-screensavers
+[mpv]: https://mpv.io/ "mpv: free, open source, and cross-platform media player"
+[own saver]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xsecurelock-saver
+[another script]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/weather
+[Sleep before mapping screen saver window]: https://github.com/google/xsecurelock/pull/138 "Pull request #138: Optionally sleep before mapping windows"
+[custom dimmer]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xss-dimmer
+[Do not mess with DPMS/blanking]: https://github.com/google/xsecurelock/pull/139 "Pull request #139: Do not mess with DPMS/blanking"

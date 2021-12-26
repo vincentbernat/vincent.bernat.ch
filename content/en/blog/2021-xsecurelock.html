@@ -1,0 +1,84 @@
+---
+title: "Custom screen saver with XSecureLock"
+description: |
+  XSecureLock is an X11 screen lock utility, which delegates the screen saver to a
+  third-party program, paving the way to safe customizations.
+uuid: 049af871-2837-4d68-acbb-4f41b8770e6a
+cover: i3/xsecurelock@2x.jpg
+tags:
+  - desktop
+---
+
+[i3lock][] is a popular X11 screen lock utility. As far as
+customization goes, it only allows one to set a background from a PNG
+file. This limitation is part of the design of *i3lock*: its primary
+goal is to keep the screen locked, something difficult enough with
+X11. Each additional feature would increase the attack surface and
+move away from this goal.[^source1] Many are frustrated with these
+limitations and extend *i3lock* through simple wrapper scripts or by
+forking it.[^source2] The first solution is usually safe, but the
+second goes against the spirit of *i3lock*.
+
+[^source1]: See for example [this comment][comment1] or [this
+    one][comment2] explaining the rationale.
+[^source2]: This [Reddit post][] enumerates many of these alternatives.
+
+[XSecureLock][] is a less-known alternative to *i3lock*. One of the
+most attractive features of this locker is to delegate the screen
+saver feature to another process. This process can be anything as long
+it can attach to an existing window provided by *XSecureLock*, which
+won't pass any input to it. It will also put a black window below it
+to ensure the screen stays locked in case of a crash.
+
+*XSecureLock* is shipped with a few screen savers, notably one using
+[mpv][] to display photos or videos, like the [Apple TV aerial
+videos][]. I have written my [own saver][] using Python and GTK.[^gtk]
+It shows a background image, a clock, and the current
+weather.[^weather]
+
+![Custom screen saver for XSecureLock, displaying a clock and the
+current weather]([[!!images/i3/xsecurelock@2x.jpg]] "Custom screen
+saver for XSecureLock")
+
+[^gtk]: Using GTK makes it a bit difficult to use some low-level
+    features, like embedding an application into an existing window.
+    However, the high-level features are easier, notably drawing an
+    image and a text with a shadow.
+
+[^weather]: Weather is retrieved by [another script][] running on a
+    timer and written to a file. The screen saver watches this file
+    for updates.
+
+I add two patches over *XSecureLock*:
+
+- [Sleep before mapping screen saver window][]. This patch prevents a
+  flash of black when starting *XSecureLock* by waiting a bit for the
+  screen saver to be ready before displaying it. As I am also using a
+  [custom dimmer][] fading to the expected background before locking,
+  the flash of black was quite annoying for me. I have good hope this
+  patch will be accepted upstream.
+- [Do not mess with DPMS/blanking][]. This patch prevents
+  *XSecureLock* from blanking the screen. I think this is solely the
+  role of the X11 DPMS extension. This makes the code simpler. I am
+  unsure if this patch would be accepted by upstream.
+
+*XSecureLock* also delegates the authentication window to another
+process, but I was less comfortable providing a custom one as it is a
+bit more security-sensitive. While basic, the shipped authentication
+application is fine by me.
+
+I think people should avoid modifying *i3lock* code and use
+*XSecureLock* instead. I hope this post will help a bit.
+
+[XSecureLock]: https://github.com/google/xsecurelock
+[i3lock]: https://i3wm.org/i3lock/
+[Reddit post]: https://www.reddit.com/r/i3wm/comments/ixhv6d/whats_with_all_the_i3lock_forks/ "What's with all the i3lock forks?"
+[comment1]: https://github.com/i3/i3lock/pull/7#issuecomment-77109891 "Issue #7: feature: clock"
+[comment2]: https://github.com/i3/i3lock/issues/52#issuecomment-358786779 "Issue #52: feature requested: pass XF86Audio keys to i3"
+[Apple TV aerial videos]: https://bzamayo.com/watch-all-the-apple-tv-aerial-video-screensavers
+[mpv]: https://mpv.io/ "mpv: free, open source, and cross-platform media player"
+[own saver]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xsecurelock-saver
+[another script]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/weather
+[Sleep before mapping screen saver window]: https://github.com/google/xsecurelock/pull/138 "Pull request #138: Optionally sleep before mapping windows"
+[custom dimmer]: https://github.com/vincentbernat/i3wm-configuration/blob/master/bin/xss-dimmer
+[Do not mess with DPMS/blanking]: https://github.com/google/xsecurelock/pull/139 "Pull request #139: Do not mess with DPMS/blanking"
