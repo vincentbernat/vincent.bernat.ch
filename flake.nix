@@ -23,6 +23,7 @@
             ];
           }));
           yarn = pkgs.yarn;
+          poetry = pkgs.poetry;
           iosevka = pkgs.iosevka.override {
             set = "custom";
             privateBuildPlan = {
