@@ -12,9 +12,6 @@ import contextlib
 import urllib
 import xml.etree.ElementTree as ET
 
-os.environ["PATH"] = os.path.expanduser('~/.virtualenvs/hyde/bin') \
-    + os.pathsep + os.environ["PATH"]
-
 conf = "site-production.yaml"
 media = yaml.safe_load(open(conf))['media_url']
 hosts = ["web03.luffy.cx", "web04.luffy.cx", "web05.luffy.cx", "web06.luffy.cx"]
@@ -278,7 +275,7 @@ def update_text_fonts(c):
 @task
 def linkcheck(c, remote=True, verbose=False):
     """Check links"""
-    result = c.run("nix run -f '<nixpkgs>' linkchecker -- -f ./linkcheckerrc {} {}".format(
+    result = c.run("linkchecker -f ./linkcheckerrc {} {}".format(
         verbose and '--verbose' or '',
         remote and
         'https://vincent.bernat.ch/' or
@@ -412,19 +409,15 @@ def build(c):
             c.run("find media/images -type f -name '*.jpg' -print"
                   " | xargs -n1 -P$(nproc) -i cwebp -q 84 -af '{}' -o '{}'.webp")
         with step("convert JPG to AVIF"):
-            libavif = c.run("nix-build --no-out-link -E '(import <nixpkgs>{}).libavif'").stdout.strip()
             c.run("find media/images -type f -name '*.jpg' -print"
-                  f" | xargs -n1 -P$(nproc) -i {libavif}/bin/avifenc --codec aom --yuv 420 "
-                  "                                                  --ignore-icc "
-                  "                                                  --min 20 --max 25 '{}' '{}'.avif"
+                  f" | xargs -n1 -P$(nproc) -i avifenc --codec aom --yuv 420 "
+                  "                                    --ignore-icc "
+                  "                                    --min 20 --max 25 '{}' '{}'.avif"
                   " > /dev/null")
         with step("optimize JPG"):
-            jpegoptim = c.run("nix-build --no-out-link "
-                              "  -E 'with (import <nixpkgs>{}); "
-                              "        jpegoptim.override { libjpeg = mozjpeg; }'").stdout.strip()
             c.run("find media/images -type f -name '*.jpg' -print0"
                   "  | sort -z "
-                  f" | xargs -0 -n10 -P$(nproc) {jpegoptim}/bin/jpegoptim --max=84 --all-progressive --strip-all")
+                  f" | xargs -0 -n10 -P$(nproc) jpegoptim --max=84 --all-progressive --strip-all")
         with step("optimize PNG"):
             c.run("find media/images -type f -name '*.png' -print0"
                   " | sort -z "
@@ -617,7 +610,7 @@ def analytics(c):
           "do ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
           "   | grep -Fv atom.xml;"
           "done"
-          " | LANG=en_US.utf8 nix run -f '<nixpkgs>' goaccess -- "
+          " | LANG=en_US.utf8 goaccess "
           "       --ignore-crawlers "
           "       --unknowns-as-crawlers "
           "       --http-protocol=no "
