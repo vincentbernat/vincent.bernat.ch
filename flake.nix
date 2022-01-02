@@ -48,30 +48,33 @@
             lxml==4.6.3
             pyquery==1.4.1
           '';
-          packagesExtra = let
-            pygmentsPackage = name:
-              mach-nix.buildPythonPackage {
-                src = inputs."pygments-${name}";
-                requirementsExtra = "Pygments==${pygments-version}";
-              };
-          in [
-            (mach-nix.buildPythonPackage {
-              src = inputs.hyde;
-              requirementsExtra = ''
-                python-dateutil>=2.8
-                Pygments==${pygments-version}
-              '';
-            })
-            (pygmentsPackage "haproxy")
-            (pygmentsPackage "ios")
-            (pygmentsPackage "junos")
-          ];
+          packagesExtra =
+            let
+              pygmentsPackage = name:
+                mach-nix.buildPythonPackage {
+                  src = inputs."pygments-${name}";
+                  requirementsExtra = "Pygments==${pygments-version}";
+                };
+            in
+            [
+              (mach-nix.buildPythonPackage {
+                src = inputs.hyde;
+                requirementsExtra = ''
+                  python-dateutil>=2.8
+                  Pygments==${pygments-version}
+                '';
+              })
+              (pygmentsPackage "haproxy")
+              (pygmentsPackage "ios")
+              (pygmentsPackage "junos")
+            ];
         };
-      in {
+      in
+      {
         packages = {
           linkchecker = pkgs.linkchecker;
           goaccess = (pkgs.goaccess.overrideAttrs (old: {
-            patches = (old.patches or []) ++ [
+            patches = (old.patches or [ ]) ++ [
               (pkgs.fetchpatch {
                 url = "https://github.com/allinurl/goaccess/pull/2126.patch";
                 sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
