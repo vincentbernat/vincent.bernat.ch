@@ -68,6 +68,41 @@
           ];
         };
       in {
+        packages.iosevka = pkgs.iosevka.override {
+          set = "custom";
+          privateBuildPlan = {
+            family = "Iosevka Custom";
+            spacing = "term";
+            serifs = "sans";
+            no-ligation = true;
+            no-cv-ss = true;
+            variants = {
+              inherits = "ss05";
+              design = {
+                ampersand = "closed";
+                number-sign = "upright";
+                zero = "dotted";
+              };
+            };
+            slopes.upright = {
+              angle = 0;
+              shape = "upright";
+              menu = "upright";
+              css = "normal";
+            };
+            weights = {
+              regular = {
+                shape = 350;
+                menu = 400;
+                css = 400;
+              };
+            };
+            metric-override = {
+              cap = 790;
+              xheight = 570;
+            };
+          };
+        };
         devShell = pkgs.mkShell {
           name = "www";
           buildInputs = [

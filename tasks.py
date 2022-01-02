@@ -209,43 +209,7 @@ def update_monospace_fonts(c):
     """Build Iosevka ffont with Nix"""
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
-        c.run("""
-nix-build -E '((import <nixpkgs>{}).iosevka.override {
-  set = "custom";
-  privateBuildPlan = {
-    family = "Iosevka Custom";
-    spacing = "term";
-    serifs = "sans";
-    no-ligation = true;
-    no-cv-ss = true;
-    variants = {
-      inherits = "ss05";
-      design = {
-        ampersand = "closed";
-        number-sign = "upright";
-        zero = "dotted";
-      };
-    };
-    slopes.upright = {
-      angle = 0;
-      shape = "upright";
-      menu = "upright";
-      css = "normal";
-    };
-    weights = {
-      regular = {
-        shape = 350;
-        menu = 400;
-        css = 400;
-      };
-    };
-    metric-override = {
-      cap = 790;
-      xheight = 570;
-    };
-  };
-})'
-""")
+        c.run("nix build .#iosevka")
         c.run("cp result/share/fonts/truetype/iosevka-custom-regular.ttf content/media/fonts/.")
         c.run("rm result")
     with step("compressing fonts"):
