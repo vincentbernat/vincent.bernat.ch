@@ -239,7 +239,7 @@ def update_text_fonts(c):
 @task
 def linkcheck(c, remote=True, verbose=False):
     """Check links"""
-    result = c.run("linkchecker -f ./linkcheckerrc {} {}".format(
+    result = c.run("nix run .#linkchecker -- -f ./linkcheckerrc {} {}".format(
         verbose and '--verbose' or '',
         remote and
         'https://vincent.bernat.ch/' or
@@ -349,7 +349,7 @@ def build(c):
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     with step("update JS dependencies"):
-        c.run("yarn install --frozen-lockfile")
+        c.run("nix run .#yarn -- install --frozen-lockfile")
     with step("run Hyde"):
         c.run('hyde -x gen -c %s' % conf)
     with c.cd(".final"):
@@ -574,7 +574,7 @@ def analytics(c):
           "do ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
           "   | grep -Fv atom.xml;"
           "done"
-          " | LANG=en_US.utf8 goaccess "
+          " | LANG=en_US.utf8 nix run .#goaccess -- "
           "       --ignore-crawlers "
           "       --unknowns-as-crawlers "
           "       --http-protocol=no "

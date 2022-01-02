@@ -68,38 +68,50 @@
           ];
         };
       in {
-        packages.iosevka = pkgs.iosevka.override {
-          set = "custom";
-          privateBuildPlan = {
-            family = "Iosevka Custom";
-            spacing = "term";
-            serifs = "sans";
-            no-ligation = true;
-            no-cv-ss = true;
-            variants = {
-              inherits = "ss05";
-              design = {
-                ampersand = "closed";
-                number-sign = "upright";
-                zero = "dotted";
+        packages = {
+          linkchecker = pkgs.linkchecker;
+          goaccess = (pkgs.goaccess.overrideAttrs (old: {
+            patches = (old.patches or []) ++ [
+              (pkgs.fetchpatch {
+                url = "https://github.com/allinurl/goaccess/pull/2126.patch";
+                sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
+              })
+            ];
+          }));
+          yarn = pkgs.yarn;
+          iosevka = pkgs.iosevka.override {
+            set = "custom";
+            privateBuildPlan = {
+              family = "Iosevka Custom";
+              spacing = "term";
+              serifs = "sans";
+              no-ligation = true;
+              no-cv-ss = true;
+              variants = {
+                inherits = "ss05";
+                design = {
+                  ampersand = "closed";
+                  number-sign = "upright";
+                  zero = "dotted";
+                };
               };
-            };
-            slopes.upright = {
-              angle = 0;
-              shape = "upright";
-              menu = "upright";
-              css = "normal";
-            };
-            weights = {
-              regular = {
-                shape = 350;
-                menu = 400;
-                css = 400;
+              slopes.upright = {
+                angle = 0;
+                shape = "upright";
+                menu = "upright";
+                css = "normal";
               };
-            };
-            metric-override = {
-              cap = 790;
-              xheight = 570;
+              weights = {
+                regular = {
+                  shape = 350;
+                  menu = 400;
+                  css = 400;
+                };
+              };
+              metric-override = {
+                cap = 790;
+                xheight = 570;
+              };
             };
           };
         };
@@ -114,12 +126,6 @@
             pkgs.nodejs
             pkgs.openssl
             pkgs.python3Packages.invoke
-            pkgs.yarn
-            pkgs.less
-
-            # Deploy
-            pkgs.rsync
-            pkgs.openssh
 
             # Images
             pkgs.libavif
@@ -127,17 +133,6 @@
             pkgs.pngquant
             pkgs.libwebp
             pkgs.ffmpeg
-
-            # Tools
-            pkgs.linkchecker
-            (pkgs.goaccess.overrideAttrs (old: {
-              patches = (old.patches or []) ++ [
-                (pkgs.fetchpatch {
-                  url = "https://github.com/allinurl/goaccess/pull/2126.patch";
-                  sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
-                })
-              ];
-            }))
           ];
         };
       });
