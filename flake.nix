@@ -9,6 +9,12 @@
         pkgs = inputs.nixpkgs.legacyPackages."${system}";
         python-env = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = ./.;
+          overrides = pkgs.poetry2nix.overrides.withDefaults (self: super: {
+            doCheck = false;
+            doInstallCheck = false;
+            dontUseSetuptoolsCheck = true;
+            dontUsePytestCheck = true;
+          });
         };
       in
       {
