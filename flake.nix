@@ -14,6 +14,10 @@
             doInstallCheck = false;
             dontUseSetuptoolsCheck = true;
             dontUsePytestCheck = true;
+            # For langcodes
+            marisa-trie-m = super.marisa-trie-m.overridePythonAttrs (
+              old: { buildInputs = (old.buildInputs or [ ]) ++ [ self.pytest-runner ]; }
+            );
           });
         };
       in
