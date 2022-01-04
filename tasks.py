@@ -128,7 +128,7 @@ def screenshots(c):
 # Encoding of videos needs to be done with video2hls.
 """
 while read video arguments; do
-  video2hls --hls-playlist-prefix https://media.luffy.cx/videos/${video%.*}/ \
+  video2hls --hls-playlist-prefix https://media.bernat.ch/videos/${video%.*}/ \
     --poster-grayscale --poster-quality 30 \
     $=arguments $video
 done <<EOF
@@ -189,7 +189,7 @@ def upload_videos(c, video=None):
         # Upload
         for host in hosts:
             c.run("rsync --delete -a {directory}/ {host}:"
-                  "/data/webserver/media.luffy.cx/videos/{short}/".format(
+                  "/data/webserver/media.bernat.ch/videos/{short}/".format(
                       host=host,
                       short=directory,
                       directory=os.path.join(path, directory)))
@@ -496,7 +496,7 @@ done''')
     for host in hosts:
         with step(f"push media to {host}"):
             c.run("rsync --exclude=.git --copy-unsafe-links -rt "
-                  ".final/media/ {}:/data/webserver/media.luffy.cx/".format(host))
+                  ".final/media/ {}:/data/webserver/media.bernat.ch/".format(host))
 
     # HTML
     for host in hosts:
@@ -514,14 +514,14 @@ done''')
                   "--include='*.avif' --include='*.webp' "
                   "--exclude='*' "
                   ".final/media/images "
-                  "{}:/data/webserver/media.luffy.cx/".format(host))
+                  "{}:/data/webserver/media.bernat.ch/".format(host))
     if clean:
         for host in hosts:
             with step(f"clean files on {host}"):
                 c.run("rsync --exclude=.git --copy-unsafe-links -rt "
                       "--delete-delay --exclude=videos/\\*/ "
                       ".final/media/ "
-                      "{}:/data/webserver/media.luffy.cx/".format(host))
+                      "{}:/data/webserver/media.bernat.ch/".format(host))
 
 
 @task
