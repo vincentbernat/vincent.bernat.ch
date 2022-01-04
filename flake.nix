@@ -10,10 +10,6 @@
         python-env = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = ./.;
           overrides = pkgs.poetry2nix.overrides.withDefaults (self: super: {
-            doCheck = false;
-            doInstallCheck = false;
-            dontUseSetuptoolsCheck = true;
-            dontUsePytestCheck = true;
             # For langcodes
             marisa-trie-m = super.marisa-trie-m.overridePythonAttrs (
               old: { buildInputs = (old.buildInputs or [ ]) ++ [ self.pytest-runner ]; }
