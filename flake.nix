@@ -32,8 +32,41 @@
           poetry = pkgs.poetry;
         };
         packages = {
+          build.subsetFonts =
+            # Impure!
+            # Subset fonts. Nice tool to quickly look at the result:
+            #  http://torinak.com/font/lsfont.html
+            let
+              monospace = <monospace>;
+              regular = <regular>;
+              fonttools = python-env;
+            in
+              pkgs.stdenvNoCC.mkDerivation {
+                name = "subset-fonts";
+                src = <fonts>;
+                buildPhase = ''
+                  subset() {
+                    font=$1
+                    glyphs=$2
+                    echo Subset $font with $glyphs
+                    shift 2
+                    ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
+                      --layout-features= \
+                      --text-file=$glyphs \
+                      --no-hinting --desubroutinize \
+                      --output-file=$out/$font.woff2 \
+                      "$@"
+                  }
+                  mkdir $out
+                  subset iosevka-custom-regular ${monospace}
+                  subset merriweather ${regular} --layout-features+=ss01,onum,tnum
+                  subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
+                '';
+                installPhase = "true";
+              };
           build.optimizeImages =
             # Impure!
+            # Optimize JPG and PNG
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
               inherit (pkgs) libwebp libavif pngquant;

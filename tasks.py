@@ -365,8 +365,8 @@ def build(c):
                   "        --quiet")
 
         # Image optimization
-        with step(f"optimize images"):
-            c.run(f"cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages")
+        with step("optimize images"):
+            c.run("cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages")
             c.run("cp -r --no-preserve=mode ../result/* media/images/. && rm ../result")
 
         # We want to prefer JPGs if their sizes are not too large.
@@ -400,22 +400,15 @@ printf " JPG %10s %10s %10s\n" \
    $(find media/images -name '*.jpg.avif' | wc -l)
             """, hide='err')
 
-        # Subset fonts. Nice tool to quickly look at the result:
-        #  http://torinak.com/font/lsfont.html
-        def subset(font, glyphs, options=[]):
-            options = " ".join(["--layout-features=",
-                                "--text-file=../glyphs-{}.txt".format(glyphs),
-                                "--no-hinting --desubroutinize",
-                                *options])
-            c.run("pyftsubset media/fonts/{}.woff2 "
-                  "--flavor=woff2 {}".format(font, options))
-            c.run("mv media/fonts/{}.subset.woff2 "
-                  "media/fonts/{}.woff2".format(font, font))
-
         with step("subset fonts"):
-            subset('iosevka-custom-regular', 'monospace')
-            subset('merriweather', 'regular', ["--layout-features+=ss01,onum,tnum"])
-            subset('merriweather-italic', 'regular', ["--layout-features+=ss01,onum,tnum"])
+            c.run("""
+cd ..
+env NIX_PATH=fonts=$PWD/.final/media/fonts:monospace=$PWD/glyphs-monospace.txt:regular=$PWD/glyphs-regular.txt \
+  nix build --impure .#build.subsetFonts
+cd -
+cp -r --no-preserve=mode ../result/* media/fonts/.
+rm ../result
+""")
 
         # Compute hash on various files
         with step("compute hash for static files"):
