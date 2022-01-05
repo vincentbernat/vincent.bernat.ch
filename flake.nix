@@ -18,7 +18,7 @@
         };
       in
       {
-        packages = {
+        apps = {
           linkchecker = pkgs.linkchecker;
           goaccess = (pkgs.goaccess.overrideAttrs (old: {
             patches = (old.patches or [ ]) ++ [
@@ -30,6 +30,8 @@
           }));
           yarn = pkgs.yarn;
           poetry = pkgs.poetry;
+        };
+        packages = {
           iosevka = pkgs.iosevka.override {
             set = "custom";
             privateBuildPlan = {
