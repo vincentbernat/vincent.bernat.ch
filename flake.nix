@@ -32,6 +32,50 @@
           poetry = pkgs.poetry;
         };
         packages = {
+          build.optimizeImages =
+            # Impure!
+            let
+              jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
+              inherit (pkgs) libwebp libavif pngquant;
+            in
+            pkgs.stdenvNoCC.mkDerivation {
+              name = "optimize-images";
+              src = <target>;
+              buildPhase = ''
+                find . -type d -print \
+                  | sed "s,^,$out/," \
+                  | xargs mkdir -p
+
+                # JPG→WebP
+                find . -type f -name '*.jpg' -print0 \
+                  | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -q 84 -af '{}' -o $out/'{}'.webp
+
+                # JPG→AVIF
+                find . -type f -name '*.jpg' -print0 \
+                  | xargs -0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
+                                                                       --ignore-icc \
+                                                                       --min 20 --max 25 \
+                                                                  '{}' $out/'{}'.avif
+
+                # Optimize JPG
+                for d in $(find . -type d); do
+                  find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
+                    | xargs -r0n3 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
+                                                -d $out/$d --max=84 --all-progressive --strip-all
+                done
+
+                # Optimize PNG
+                find . -type f -name '*.png' -print0 \
+                    | xargs -0 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
+                                                --quiet -o $out/'{}' '{}' \
+                    || [ $? -eq 123 ]
+
+                # PNG→WebP
+                find $out -type f -name '*.png' -print0 \
+                    | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+              '';
+              installPhase = "true";
+            };
           build.iosevka = pkgs.stdenvNoCC.mkDerivation {
             name = "custom-iosevka";
             dontUnpack = true;
@@ -95,13 +139,6 @@
             pkgs.nodejs
             pkgs.openssl
             pkgs.python3Packages.invoke
-
-            # Images
-            pkgs.libavif
-            (pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; })
-            pkgs.pngquant
-            pkgs.libwebp
-            pkgs.ffmpeg
           ];
         });
       });

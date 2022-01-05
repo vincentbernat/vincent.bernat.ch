@@ -365,28 +365,9 @@ def build(c):
                   "        --quiet")
 
         # Image optimization
-        with step("convert JPG to WebP"):
-            c.run("find media/images -type f -name '*.jpg' -print"
-                  " | xargs -n1 -P$(nproc) -i cwebp -q 84 -af '{}' -o '{}'.webp")
-        with step("convert JPG to AVIF"):
-            c.run("find media/images -type f -name '*.jpg' -print"
-                  f" | xargs -n1 -P$(nproc) -i avifenc --codec aom --yuv 420 "
-                  "                                    --ignore-icc "
-                  "                                    --min 20 --max 25 '{}' '{}'.avif"
-                  " > /dev/null")
-        with step("optimize JPG"):
-            c.run("find media/images -type f -name '*.jpg' -print0"
-                  "  | sort -z "
-                  f" | xargs -0 -n10 -P$(nproc) jpegoptim --max=84 --all-progressive --strip-all")
-        with step("optimize PNG"):
-            c.run("find media/images -type f -name '*.png' -print0"
-                  " | sort -z "
-                  " | xargs -0 -n10 -P$(nproc) pngquant --skip-if-larger --strip "
-                  "                              --quiet --ext .png --force "
-                  "|| [ $? -eq 123 ]")
-        with step("convert PNG to WebP"):
-            c.run("find media/images -type f -name '*.png' -print"
-                  " | xargs -n1 -P$(nproc) -i cwebp -z 8 '{}' -o '{}'.webp")
+        with step(f"optimize images"):
+            c.run(f"cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages")
+            c.run("cp -r --no-preserve=mode ../result/* media/images/. && rm ../result")
 
         # We want to prefer JPGs if their sizes are not too large.
         # The idea is that:
