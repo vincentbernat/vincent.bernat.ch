@@ -209,13 +209,9 @@ def update_monospace_fonts(c):
     """Build Iosevka ffont with Nix"""
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
-        c.run("nix build .#iosevka")
-        c.run("cp result/share/fonts/truetype/iosevka-custom-regular.ttf content/media/fonts/.")
+        c.run("nix build .#build.iosevka")
+        c.run("cp result/iosevka-custom-regular.woff2 content/media/fonts/.")
         c.run("rm result")
-    with step("compressing fonts"):
-        with c.cd("content/media/fonts"):
-            c.run("woff2_compress iosevka-custom-regular.ttf")
-            c.run("rm iosevka-custom*.ttf")
 
 
 @task

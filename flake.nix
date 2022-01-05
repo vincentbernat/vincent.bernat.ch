@@ -32,40 +32,58 @@
           poetry = pkgs.poetry;
         };
         packages = {
-          iosevka = pkgs.iosevka.override {
-            set = "custom";
-            privateBuildPlan = {
-              family = "Iosevka Custom";
-              spacing = "term";
-              serifs = "sans";
-              no-ligation = true;
-              no-cv-ss = true;
-              variants = {
-                inherits = "ss05";
-                design = {
-                  ampersand = "closed";
-                  number-sign = "upright";
-                  zero = "dotted";
+          build.iosevka = pkgs.stdenvNoCC.mkDerivation {
+            name = "custom-iosevka";
+            dontUnpack = true;
+            buildPhase =
+              let
+                iosevka = pkgs.iosevka.override {
+                  set = "custom";
+                  privateBuildPlan = {
+                    family = "Iosevka Custom";
+                    spacing = "term";
+                    serifs = "sans";
+                    no-ligation = true;
+                    no-cv-ss = true;
+                    variants = {
+                      inherits = "ss05";
+                      design = {
+                        ampersand = "closed";
+                        number-sign = "upright";
+                        zero = "dotted";
+                      };
+                    };
+                    slopes.upright = {
+                      angle = 0;
+                      shape = "upright";
+                      menu = "upright";
+                      css = "normal";
+                    };
+                    weights = {
+                      regular = {
+                        shape = 350;
+                        menu = 400;
+                        css = 400;
+                      };
+                    };
+                    metric-override = {
+                      cap = 790;
+                      xheight = 570;
+                    };
+                  };
                 };
-              };
-              slopes.upright = {
-                angle = 0;
-                shape = "upright";
-                menu = "upright";
-                css = "normal";
-              };
-              weights = {
-                regular = {
-                  shape = 350;
-                  menu = 400;
-                  css = 400;
-                };
-              };
-              metric-override = {
-                cap = 790;
-                xheight = 570;
-              };
-            };
+              in
+              ''
+                for ttf in ${iosevka}/share/fonts/truetype/*.ttf; do
+                  cp $ttf .
+                  ${pkgs.woff2}/bin/woff2_compress *.ttf
+                  rm *.ttf
+                done
+              '';
+            installPhase = ''
+              mkdir -p $out
+              cp *.woff2 $out
+            '';
           };
         };
         devShell = python-env.env.overrideAttrs (oldAttrs: {
