@@ -93,6 +93,7 @@
                 # Optimize JPG
                 for d in $(find . -type d); do
                   find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
+                    | sort -z \
                     | xargs -r0n3 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
                                                 -d $out/$d --max=84 --all-progressive --strip-all
                 done
