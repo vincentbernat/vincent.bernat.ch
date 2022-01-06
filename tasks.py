@@ -217,19 +217,10 @@ def update_monospace_fonts(c):
 @task
 def update_text_fonts(c):
     """Download latest Merriweather fonts"""
-    url = "https://github.com/SorkinType/Merriweather/raw/master/fonts/woffs"
-    with c.cd('content/media/fonts'):
-        for source, target in [("Merriweather-6ptLight", "merriweather"),
-                               ("Merriweather-6ptLightItalic", "merriweather-italic")]:
-            c.run("wget -O {}.woff2 "
-                  "{}/{}.woff2".format(target, url, source))
-            # Patch
-            c.run('ttx -o - {}.woff2 '
-                  '| xmlstarlet ed '
-                  '     -u /ttFont/post/underlineThickness/@value -v 150 '
-                  '> {}.ttx'.format(target, target))
-            c.run('ttx -o {}.woff2 --flavor=woff2 {}.ttx'.format(target, target))
-            c.run('rm {}.ttx'.format(target))
+    with step("building Merriweather"):
+        c.run("nix build .#build.merriweather")
+        c.run("cp result/*.woff2 content/media/fonts/.")
+        c.run("rm result")
 
 
 @task

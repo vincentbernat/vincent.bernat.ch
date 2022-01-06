@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
+    merriweather = {
+      url = "github:SorkinType/Merriweather";
+      flake = false;
+    };
   };
   outputs = { self, flake-utils, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
@@ -110,6 +114,28 @@
               '';
               installPhase = "true";
             };
+          build.merriweather = pkgs.stdenvNoCC.mkDerivation {
+            name = "custom-merriweather";
+            dontUnpack = true;
+            buildPhase = ''
+            fix() {
+              original=$1
+              target=$2
+              echo Fix $1 to $2
+              ${python-env}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
+                | tr -d '\000' \
+                > $target.ttx
+              ${pkgs.xmlstarlet}/bin/xmlstarlet \
+                ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
+                > $target-fixed.ttx
+              ${python-env}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
+            }
+            mkdir $out
+            fix Merriweather-Light merriweather
+            fix Merriweather-LightItalic merriweather-italic
+            '';
+            installPhase = "true";
+          };
           build.iosevka = pkgs.stdenvNoCC.mkDerivation {
             name = "custom-iosevka";
             dontUnpack = true;
