@@ -205,18 +205,13 @@ def upload_videos(c, video=None):
 
 
 @task
-def update_monospace_fonts(c):
-    """Build Iosevka ffont with Nix"""
+def update_fonts(c):
+    """Build fonts with Nix"""
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
         c.run("nix build .#build.iosevka")
         c.run("cp result/iosevka-custom-regular.woff2 content/media/fonts/.")
         c.run("rm result")
-
-
-@task
-def update_text_fonts(c):
-    """Download latest Merriweather fonts"""
     with step("building Merriweather"):
         c.run("nix build .#build.merriweather")
         c.run("cp result/*.woff2 content/media/fonts/.")
