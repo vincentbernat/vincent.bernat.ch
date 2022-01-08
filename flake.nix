@@ -54,29 +54,29 @@
               regular = <regular>;
               fonttools = pythonEnv;
             in
-              pkgs.stdenvNoCC.mkDerivation {
-                name = "subset-fonts";
-                src = <fonts>;
-                buildPhase = ''
-                  subset() {
-                    font=$1
-                    glyphs=$2
-                    echo Subset $font with $glyphs
-                    shift 2
-                    ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
-                      --layout-features= \
-                      --text-file=$glyphs \
-                      --no-hinting --desubroutinize \
-                      --output-file=$out/$font.woff2 \
-                      "$@"
-                  }
-                  mkdir $out
-                  subset iosevka-custom-regular ${monospace}
-                  subset merriweather ${regular} --layout-features+=ss01,onum,tnum
-                  subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
-                '';
-                installPhase = "true";
-              };
+            pkgs.stdenvNoCC.mkDerivation {
+              name = "subset-fonts";
+              src = <fonts>;
+              buildPhase = ''
+                subset() {
+                  font=$1
+                  glyphs=$2
+                  echo Subset $font with $glyphs
+                  shift 2
+                  ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
+                    --layout-features= \
+                    --text-file=$glyphs \
+                    --no-hinting --desubroutinize \
+                    --output-file=$out/$font.woff2 \
+                    "$@"
+                }
+                mkdir $out
+                subset iosevka-custom-regular ${monospace}
+                subset merriweather ${regular} --layout-features+=ss01,onum,tnum
+                subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
+              '';
+              installPhase = "true";
+            };
           build.optimizeImages =
             # Impure!
             # Optimize SVG, JPG and PNG
@@ -149,21 +149,21 @@
             name = "custom-merriweather";
             dontUnpack = true;
             buildPhase = ''
-            fix() {
-              original=$1
-              target=$2
-              echo Fix $1 to $2
-              ${pythonEnv}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
-                | tr -d '\000' \
-                > $target.ttx
-              ${pkgs.xmlstarlet}/bin/xmlstarlet \
-                ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
-                > $target-fixed.ttx
-              ${pythonEnv}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
-            }
-            mkdir $out
-            fix Merriweather-Light merriweather
-            fix Merriweather-LightItalic merriweather-italic
+              fix() {
+                original=$1
+                target=$2
+                echo Fix $1 to $2
+                ${pythonEnv}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
+                  | tr -d '\000' \
+                  > $target.ttx
+                ${pkgs.xmlstarlet}/bin/xmlstarlet \
+                  ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
+                  > $target-fixed.ttx
+                ${pythonEnv}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
+              }
+              mkdir $out
+              fix Merriweather-Light merriweather
+              fix Merriweather-LightItalic merriweather-italic
             '';
             installPhase = "true";
           };
