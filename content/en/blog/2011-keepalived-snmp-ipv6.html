@@ -8,33 +8,33 @@ tags:
   - network-snmp
 ---
 
-[Keepalived][keepalived] is a high-availability and load-balacing
-solution. Using [VRRP][vrrp], it allows you to share IP addresses
+[Keepalived][keepalived] is a high-availability and load-balancing
+solution. With [VRRP][vrrp], it allows you to share IP addresses
 between several servers or routers. At a given moment, only one of
-them (the *master*) will be handed the IP address. VRRP is usually
-setup for redundant routers, but you can also setup redundant
+them (the *master*) is handed the IP address. VRRP is usually
+set up for redundant routers, but you can also set up redundant
 services. If the master becomes unavailable or fails, one of the
-*backups* will take over the IP address. VRRP is not a cluster
-resource manager. It is targeted at sharing one (or several) IP
+*backups* takes over the IP address. VRRP is not a cluster
+resource manager. It is targeted at sharing one (or several) IPs
 between a set of hosts. If you want to share other resources with
 complex conditions like "at least two web servers should run and the
 database should not run on the same node as a web server," you should
 look at [heartbeat][ha] instead.
 
 For load-balancing, *Keepalived* relies on [IPVS][ipvs], a Linux
-subsystem featuring layer-4 switching. *Keepalived* will check if your
-servers are alive and tell it to IPVS. IPVS will handle incoming
+subsystem featuring layer-4 switching. *Keepalived* checks if your
+servers are alive and tell it to IPVS. IPVS handles incoming
 connections and send them on the appropriate alive server depending on
 the policy you can configure. For example, one policy is
 *round-robin*: servers are handled new connections in circular order.
 
 # Keepalived & SNMP
 
-*Keepalived* did not feature a native SNMP support. I have added
-complete SNMP support and I hope these patches will be accepted into
-mainstream. Meanwhile, you can grab
-[*Keepalived* with SNMP support source code][source] from
-GitHub. Currently, it is based on the latest version of *Keepalived*.
+*Keepalived* did not feature native SNMP support. I have added
+complete SNMP support and I hope these patches will be accepted
+upstream. Meanwhile, you can grab [*Keepalived* with SNMP support
+source code][source] from GitHub. Currently, it is based on the latest
+version of *Keepalived*.
 
 !!! "Update (2014-03)" SNMP support has been merged in _Keepalived_
 1.2.5.
@@ -43,7 +43,7 @@ Here is what you can do:
 
  - query the configuration of the running *Keepalived* without parsing
    configuration files;
- - query runtime status (like VRRP status, priority or current state
+ - query runtime status (like VRRP status, priority, or current state
    of a virtual server) without looking in the logs;
  - query runtime statistics about virtual servers (how many
    connections were handled by this real server, for example) without
@@ -57,6 +57,10 @@ Here is what you can do:
 
 ## Compilation
 
+!!! "Update (2022-01)" The *Git* repository below is not up-to-date.
+As SNMP support is present since 1.2.5, use a regular *Keepalived*
+release instead.
+
 To use it:
 
     ::console
@@ -66,7 +70,7 @@ To use it:
     $ ./configure --enable-snmp
     $ make
 
-You get `bin/keepalived` which is the SNMP enabled *Keepalived*
+You get `bin/keepalived` which is the SNMP-enabled *Keepalived*
 daemon. You can use it directly or install it with `make install` as
 root.
 
@@ -79,9 +83,9 @@ instead of `make`:
 ## Use
 
 To use it, you need to ensure that your main `snmpd` daemon can become
-a master agent. Check for the presence of `master agentx` line in
+a master agent. Check for the presence of the `master agentx` line in
 `snmpd.conf`. The next step is to start *Keepalived* with the `-x`
-switch. *Keepalived* will connect to your main `snmpd` daemon. You can
+switch. *Keepalived* connects to your main `snmpd` daemon. You can
 check the logs for a ligne like this:
 
     May 28 17:21:19 L1 Keepalived_vrrp: NET-SNMP version 5.4.3 AgentX subagent connected
@@ -97,7 +101,7 @@ mitigate the problem by [applying some workarounds][workarounds].
 
 ## Lab
 
-To test it, we can setup a little lab with UML. You can find
+To test it, we can set up a little lab with UML. You can find
 additional details about this kind of lab in my post about
 [network lab with UML][lab1]. Grab the
 [complete lab from GitHub][lab2]. Ensure that you correct the path to
@@ -106,9 +110,9 @@ additional details about this kind of lab in my post about
 ![Keepalived & SNMP lab][1]
 [1]: [[!!images/keepalived-lab.svg]] "Topology of Keepalived lab"
 
-The lab features four web servers that will be merged into a single
-web service with the help of *Keepalived*. Since, *Keepalived* now
-features full IPv6 support, we will also use IPv6 in our lab.
+The lab features four web servers that are merged into a single
+web service with the help of *Keepalived*. Since *Keepalived* now
+features full IPv6 support, we also use IPv6 in our lab.
 
 Here is the VRRP configuration of the first *Keepalived* :
 
