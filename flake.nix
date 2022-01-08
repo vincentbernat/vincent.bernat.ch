@@ -70,10 +70,25 @@
               };
           build.optimizeImages =
             # Impure!
-            # Optimize JPG and PNG
+            # Optimize SVG, JPG and PNG
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
               inherit (pkgs) libwebp libavif pngquant;
+              inherit (pkgs.nodePackages) svgo;
+              svgoConfig = pkgs.writeText "svgo.config.js" ''
+                module.exports = {
+                  plugins: [
+                    {
+                      name: 'preset-default',
+                      params: {
+                        overrides: {
+                          cleanupIDs: false,
+                        }
+                      }
+                    }
+                  ]
+                };
+              '';
             in
             pkgs.stdenvNoCC.mkDerivation {
               name = "optimize-images";
@@ -82,6 +97,13 @@
                 find . -type d -print \
                   | sed "s,^,$out/," \
                   | xargs mkdir -p
+
+                # SVG
+                for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
+                  find $d -maxdepth 1 -type f -name '*.svg' -print0 \
+                    | sort -z \
+                    | xargs -r0 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
+                done
 
                 # JPG→WebP
                 find . -type f -name '*.jpg' -print0 \
