@@ -20,6 +20,12 @@
             );
           });
         };
+        nodeEnv = pkgs.mkYarnModules {
+          pname = "www-yarn-modules";
+          version = "1.0.0";
+          packageJSON = ./package.json;
+          yarnLock = ./yarn.lock;
+        };
       in
       {
         apps = {
@@ -222,6 +228,9 @@
             pkgs.openssl
             pkgs.python3Packages.invoke
           ];
+          shellHook = ''
+            ln -nsf ${nodeEnv}/node_modules node_modules
+          '';
         });
       });
 }

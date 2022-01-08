@@ -330,8 +330,6 @@ def build(c):
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
     c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
-    with step("update JS dependencies"):
-        c.run("nix run .#yarn -- install --frozen-lockfile")
     with step("run Hyde"):
         c.run('hyde -x gen -c %s' % conf)
     with c.cd(".final"):
