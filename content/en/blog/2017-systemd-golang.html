@@ -20,13 +20,13 @@ requests with nifty 404 errors:
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
     )
-    
+
     func main() {
         l, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -42,16 +42,16 @@ Here is the service file, `404.service`:[^path]
     ::ini
     [Unit]
     Description=404 micro-service
-    
+
     [Service]
     Type=notify
     ExecStart=/usr/bin/404
     WatchdogSec=30s
     Restart=on-failure
-    
+
     [Install]
     WantedBy=multi-user.target
-    
+
 [^path]: Depending on the distribution, this should be installed in
     `/lib/systemd/system` or `/usr/lib/systemd/system`. Check with the
     output of the command `pkg-config systemd
@@ -96,15 +96,15 @@ for us:
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
-    
+
         "github.com/coreos/go-systemd/daemon"
     )
-    
+
     func main() {
         l, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -175,7 +175,7 @@ groups:
    checks are successful. The checks can be internal (like in the
    above example) or external (for example, check with a query to the
    database).
-   
+
  - Each component reports its status, telling if it's alive or
    not. Before sending a keep-alive, you check the reported status of
    all components (**passive check**). If some components are late or
@@ -185,7 +185,7 @@ If possible, **recovery from errors** (for example, with a backoff
 retry) and **self-healing** (for example, by reestablishing a network
 connection) is always better, but the watchdog is a good tool to
 handle the worst cases and avoid too complex recovery logic.
-   
+
 For example, if a component doesn't know how to recover from an
 *exceptional* condition,[^exception] instead of using `panic()`, it
 could signal its situation before dying. Another dedicated component

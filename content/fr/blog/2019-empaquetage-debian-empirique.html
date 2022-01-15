@@ -51,7 +51,7 @@ officiels est plutôt simple en appliquant ces quelques concessions :
     sécurité et à la maintenance à long terme, mais c'est une
     concession courante dans certains écosystèmes tels que Java,
     JavaScript et Go.
- 
+
 [TOC]
 
 # Ceinture blanche
@@ -91,9 +91,9 @@ Le premier contient uniquement `11`[^compat] :
 Le second contient ceci :
 
     memcached (0.0-0) UNRELEASED; urgency=medium
-    
+
       * Fake entry
-    
+
      -- Happy Packager <happy@example.com>  Tue, 19 Apr 2016 22:27:05 +0200
 
 La seule information d'importance est le nom du paquet source,
@@ -108,7 +108,7 @@ des paquets binaires. Un bloc est dédié à chacun d'eux.
     ::control
     Source: memcached
     Maintainer: Vincent Bernat <bernat@debian.org>
-    
+
     Package: memcached
     Architecture: any
     Description: high-performance memory object caching system
@@ -133,16 +133,16 @@ construire et installer son arborescence dans `debian/memcached/` :
 
     ::make
     #!/usr/bin/make -f
-    
+
     DISTRIBUTION = $(shell sed -n "s/^VERSION_CODENAME=//p" /etc/os-release)
     VERSION = 1.6.6
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
-    
+
     %:
     	dh $@
-    
+
     override_dh_auto_clean:
     override_dh_auto_test:
     override_dh_auto_build:
@@ -152,10 +152,10 @@ construire et installer son arborescence dans `debian/memcached/` :
     	./configure --prefix=/usr
     	make
     	make install DESTDIR=debian/memcached
-    
+
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
-    
+
 
 Les cibles vides `override_dh_auto_clean`, `override_dh_auto_test` et
 `override_dh_auto_build` permettent de s'assurer que *debhelper* ne
@@ -170,13 +170,13 @@ spécifier la version[^version] sans avoir à tenir à jour
     PACKAGEVERSION=${VERSION}-0~${DISTRIBUTION}0
     TARBALL=memcached-${VERSION}.tar.gz
     URL=http://www.memcached.org/files/${TARBALL}
-    
+
     wget -N --progress=dot:mega ${URL}
     tar --strip-components=1 -xf ${TARBALL}
     ./configure --prefix=/usr
     make
     make install DESTDIR=/tmp/installdir
-    
+
     # Build the final package
     fpm -s dir -t deb \
         -n memcached \
@@ -270,7 +270,7 @@ contenu dans `debian/memcached.service`. Par exemple :
     [Unit]
     Description=memcached daemon
     After=network.target
-    
+
     [Service]
     Type=forking
     Environment=PORT=11211
@@ -281,7 +281,7 @@ contenu dans `debian/memcached.service`. Par exemple :
     Restart=on-failure
     User=_memcached
     DynamicUser=yes
-    
+
     [Install]
     WantedBy=multi-user.target
 
@@ -311,7 +311,7 @@ Cela nous libère de la gestion d'un utilisateur système !
     `Debian-` comme préfixe. Cette dernière méthode a l'inconvénient
     de produire un nom d'utilisateur trop long pour être visible dans
     les utilitaires comme `top` et `ps`.
-    
+
     Si la directive `User` n'est pas précisée, *systemd* utilise
     simplement le nom du service comme nom d'utilisateur. Si cela vous
     convient, vous pouvez alors omettre cette directive.
@@ -410,25 +410,25 @@ suivant :
 
     ::make
     #!/usr/bin/make -f
-    
+
     DISTRIBUTION = $(shell sed -n "s/^VERSION_CODENAME=//p" /etc/os-release)
     VERSION = 1.6.6
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
-    
+
     %:
     	dh $@ --with systemd
-    
+
     override_dh_update_autotools_config:
     	wget -N --progress=dot:mega $(URL)
     	tar --strip-components=1 -xf $(TARBALL)
-    
+
     override_dh_auto_test:
     	# Don't run the whitespace test
     	rm t/whitespace.t
     	dh_auto_test
-    
+
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
 
@@ -450,7 +450,7 @@ Afin de mieux apprécier la différence, la voici sous forme de patch :
     @@ -9,15 +9,14 @@
      %:
      	dh $@
-    
+
     -override_dh_auto_clean:
     -override_dh_auto_test:
     -override_dh_auto_build:
@@ -466,7 +466,7 @@ Afin de mieux apprécier la différence, la voici sous forme de patch :
     +	# Don't run the whitespace test
     +	rm t/whitespace.t
     +	dh_auto_test
-    
+
      override_dh_gencontrol:
      	dh_gencontrol -- -v$(PACKAGEVERSION)
 

@@ -23,7 +23,7 @@ test:[^exploit]
     ::c
     #define FDC_IOPORT 0x3f5
     #define FD_CMD_READ_ID 0x0a
-    
+
     int main() {
         ioperm(FDC_IOPORT, 1, 1);
         outb(FD_CMD_READ_ID, FDC_IOPORT);
@@ -94,12 +94,12 @@ array is used to map each command to the appropriate handler:
     ::c
     /* Associate command to an index in the 'handlers' array */
     static uint8_t command_to_handler[256];
-    
+
     static void fdctrl_realize_common(FDCtrl *fdctrl, Error **errp)
     {
         int i, j;
         static int command_tables_inited = 0;
-    
+
         /* Fill 'command_to_handler' lookup table */
         if (!command_tables_inited) {
             command_tables_inited = 1;
@@ -171,7 +171,7 @@ query it, use `readelf -s`:
     ::console
     $ readelf -s /usr/lib/debug/.build-id/09/95121eb46e2a4c13747ac2bad982829365c694.debug | \
     >   sed -n -e 1,3p -e /command_to_handler/p
-    
+
     Symbol table '.symtab' contains 27066 entries:
        Num:    Value          Size Type    Bind   Vis      Ndx Name
       8485: 00000000009f9d00   256 OBJECT  LOCAL  DEFAULT   26 command_to_handler
@@ -259,7 +259,7 @@ an absolute memory address:
     ::console
     $ readelf -s not-qemu | \
     >   sed -n -e 1,3p -e /command_to_handler/p
-    
+
     Symbol table '.dynsym' contains 9 entries:
        Num:    Value          Size Type    Bind   Vis      Ndx Name
         47: 0000000000602080   256 OBJECT  LOCAL  DEFAULT   25 command_to_handler
@@ -283,7 +283,7 @@ from the base address.
 
     ::console
     $ readelf -s not-qemu-pie | sed -n -e 1,3p -e /command_to_handler/p
-    
+
     Symbol table '.dynsym' contains 17 entries:
        Num:    Value          Size Type    Bind   Vis      Ndx Name
         47: 0000000000202080   256 OBJECT  LOCAL  DEFAULT   25 command_to_handler
@@ -331,25 +331,25 @@ the target process:
     patch_attach(pid_t pid)
     {
         int status;
-    
+
         printf("[.] Attaching to PID %d...\n", pid);
         if (ptrace(PTRACE_ATTACH, pid, NULL, NULL) == -1) {
             fprintf(stderr, "[!] Unable to attach to PID %d: %m\n", pid);
             return -1;
         }
-    
+
         if (waitpid(pid, &status, 0) == -1) {
             fprintf(stderr, "[!] Error while attaching to PID %d: %m\n", pid);
             return -1;
         }
         assert(WIFSTOPPED(status)); /* Tracee may have died */
-    
+
         if (ptrace(PTRACE_GETSIGINFO, pid, NULL, &si) == -1) {
             fprintf(stderr, "[!] Unable to read siginfo for PID %d: %m\n", pid);
             return -1;
         }
         assert(si.si_signo == SIGSTOP); /* Other signals may have been received */
-    
+
         printf("[*] Successfully attached to PID %d\n", pid);
         return 0;
     }
@@ -364,7 +364,7 @@ back in memory.[^write]
         int ret = -1;
         unsigned char *command_to_handler = NULL;
         size_t i;
-    
+
         /* Get the table */
         printf("[.] Retrieving command_to_handler table...\n");
         command_to_handler = ptrace_read(pid,
@@ -374,10 +374,10 @@ back in memory.[^write]
             fprintf(stderr, "[!] Unable to read command_to_handler table: %m\n");
             goto out;
         }
-    
+
         /* Check if the table has already been patched. */
         /* […] */
-    
+
         /* Patch it */
         printf("[.] Patching QEMU...\n");
         for (i = 0; i < QEMU_COMMAND_TO_HANDLER_SIZE; i++) {
@@ -390,7 +390,7 @@ back in memory.[^write]
         }
         printf("[*] QEMU successfully patched!\n");
         ret = 0;
-    
+
     out:
         free(command_to_handler);
         return ret;
@@ -415,7 +415,7 @@ arbitrary large chunks of memory.[^vmreadv] Here is the code for
         /* Allocate the buffer */
         uword_t *buffer = malloc((size/sizeof(uword_t) + 1)*sizeof(uword_t));
         if (!buffer) return NULL;
-    
+
         /* Read word by word */
         size_t readsz = 0;
         do {

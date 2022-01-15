@@ -54,7 +54,7 @@ That's not the case. From any virtual host:
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=59 time=0.644 ms
     64 bytes from 192.168.14.3: icmp_seq=2 ttl=59 time=0.829 ms
     64 bytes from 192.168.14.3: icmp_seq=3 ttl=59 time=0.894 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     3 packets transmitted, 3 received, 0% packet loss, time 2033ms
     rtt min/avg/max/mdev = 0.644/0.789/0.894/0.105 ms
@@ -141,7 +141,7 @@ following steps will happen:
    forwarded, should it be dropped, should it be encapsulated?
    Notably, the reverse-path filtering is done during this evaluation
    in `fib_validate_source()`.
-   
+
 Reverse-path filtering (also known as uRPF, or unicast reverse-path
 forwarding, [RFC 3704][]) enables Linux to reject traffic on
 interfaces which it should never have originated: the source address
@@ -172,7 +172,7 @@ buffer is handled by `ipv6_rcv()`.
  - The routing subsystem will decide the destination of the
    packet. However, unlike IPv4, there is no reverse-path
    filtering.[^rpfilter]
-   
+
 [^rpfilter]: For IPv6, reverse-path filtering needs to be implemented
     with *Netfilter*, using the [`rpfilter` match][rpfilter match].
 
@@ -228,7 +228,7 @@ look like this:
 
     ::c
     #include <linux/bpf.h>
-    
+
     int main()
     {
         return XDP_DROP;
@@ -245,7 +245,7 @@ method but a bit inconvenient as it needs a compiler.[^ebpf]
 
 [^ebpf]: The above program is so simple it could be written without a
     compiler:
-    
+
         ::console
         $ ip -d l l dev br0 | tail -1
             prog/xdp id 1 tag 57cd311f2e27366b
@@ -351,7 +351,7 @@ doesn't have an IP address, no ARP requests will be answered.
 
     ::console
     # sysctl -qw net.ipv4.conf.br0.arp_ignore=2
-    
+
 Disabling ARP processing is not a sufficient workaround for IPv4. A
 user can still insert the appropriate entry in its neighbor cache:
 
@@ -360,7 +360,7 @@ user can still insert the appropriate entry in its neighbor cache:
     # ping -c 1 192.168.14.3
     PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.30 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     1 packets transmitted, 1 received, 0% packet loss, time 0ms
     rtt min/avg/max/mdev = 1.309/1.309/1.309/0.000 ms
@@ -373,7 +373,7 @@ even need to guess the MAC address:
     # ping -c 1 192.168.14.3
     PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.12 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     1 packets transmitted, 1 received, 0% packet loss, time 0ms
     rtt min/avg/max/mdev = 1.129/1.129/1.129/0.000 ms
@@ -391,7 +391,7 @@ The earliest place to drop an IPv4 packet is with
     to 0. Otherwise, you also need to use
     the [`physdev` match][physdev match] to not drop IPv4 packets
     going *through* the bridge.
-    
+
 If *Netfilter* is disabled, another possibility is to enable strict
 reverse-path filtering for the interface. In this case, since there is
 no IP address configured on the interface, the packet will be dropped
@@ -399,7 +399,7 @@ during the route lookup:
 
     ::console
     # sysctl -qw net.ipv4.conf.br0.rp_filter=1
-    
+
 Another option is the use of a dedicated routing rule. Compared to the
 reverse-path filtering option, the packet will be dropped a bit
 earlier, still during the route lookup.
@@ -415,7 +415,7 @@ IPv6 handler:
 
     ::console
     # sysctl -qw net.ipv6.conf.br0.disable_ipv6=1
-    
+
 As with IPv4, it's possible to use *Netfilter* or a dedicated routing
 rule.
 

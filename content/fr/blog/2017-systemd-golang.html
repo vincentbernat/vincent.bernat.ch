@@ -21,13 +21,13 @@ toutes les requêtes avec d'élégantes erreurs 404 :
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
     )
-    
+
     func main() {
         l, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -43,16 +43,16 @@ Voici le fichier de service, `404.service`[^path], associé :
     ::ini
     [Unit]
     Description=404 micro-service
-    
+
     [Service]
     Type=notify
     ExecStart=/usr/bin/404
     WatchdogSec=30s
     Restart=on-failure
-    
+
     [Install]
     WantedBy=multi-user.target
-    
+
 [^path]: Selon la distribution, celui-ci doit être installé dans
     `/lib/systemd/system` ou `/usr/lib/systemd/system`. La commande
     `pkg-config systemd --variable=systemdsystemunitdir` indique le
@@ -101,15 +101,15 @@ paquet [go-systemd][] s'occupe des détails pour nous :
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
-    
+
         "github.com/coreos/go-systemd/daemon"
     )
-    
+
     func main() {
         l, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -183,11 +183,11 @@ groupes :
    vérifications peuvent être internes (comme ci-dessus) ou externes
    (par exemple, en vérifiant que l'on peut lancer une requête vers la
    base de données).
-   
+
  - Chaque composant rapporte son état de santé. Le message de vivacité
    n'est envoyé que si tous les composants ont bien émis un rapport
    récemment et que ceux-ci sont positifs (**vérification passive**).
-   
+
 Il convient de privilégier la **correction des erreurs** (par exemple,
 en réessayant l'opération) ou l'**autoguérison** (par exemple, en
 établissant une nouvelle connexion réseau), mais le chien de garde est

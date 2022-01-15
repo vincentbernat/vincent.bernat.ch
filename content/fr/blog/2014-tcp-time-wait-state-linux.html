@@ -64,7 +64,7 @@ connexions sur le système :
 
     ::console
     $ ss -tan | head -5
-    LISTEN     0  511             *:80              *:*     
+    LISTEN     0  511             *:80              *:*
     SYN-RECV   0  0     192.0.2.145:80    203.0.113.5:35449
     SYN-RECV   0  0     192.0.2.145:80   203.0.113.27:53599
     ESTAB      0  0     192.0.2.145:80   203.0.113.27:33605
@@ -216,23 +216,23 @@ différents :
     connexions TCP établies » (bien qu'elle contienne des connexions
     dans un autre état), permet de localiser une connexion existante
     lors, par exemple, de la réception d'un nouveau segment.
-    
+
     Chaque entrée de cette table pointe sur deux listes : une liste
     des connexions dans l'état `TIME-WAIT` et une liste des connexions
     dans un autre état. La taille de cette table dépend de la quantité
     de mémoire sur le système et est indiquée lors du démarrage :
-    
+
         ::console
         $ dmesg | grep "TCP established hash table"
         [    0.169348] TCP established hash table entries: 65536 (order: 8, 1048576 bytes)
-    
+
     Il est possible de spécifier soi-même la taille avec le paramètre
     `thash_entries`.
-    
+
     Chaque élément de la liste des connexions dans l'état `TIME-WAIT`
     est de type `struct tcp_timewait_sock`, tandis que les élements de
     l'autre liste sont de type `struct tcp_sock`[^tcptimewaitsock] :
-    
+
         ::c
         struct tcp_timewait_sock {
             struct inet_timewait_sock tw_sk;
@@ -243,10 +243,10 @@ différents :
             u32    tw_ts_recent;
             long   tw_ts_recent_stamp;
         };
-    
+
         struct inet_timewait_sock {
             struct sock_common  __tw_common;
-        
+
             int                     tw_timeout;
             volatile unsigned char  tw_substate;
             unsigned char           tw_rcv_wscale;
@@ -266,7 +266,7 @@ différents :
     mort ». Il est utilisé pour expirer les connexions dans l'état
     `TIME-WAIT`. Les connexions sont ordonnées suivant la date
     d'expiration.
-    
+
     Ces connexions utilisent le même espace mémoire que pour les
     entrées dans la table de hachage décrite au point précédent. Il
     s'agit du membre `struct hlist_node tw_death_node`[^deathrow].
@@ -275,11 +275,11 @@ différents :
     déterminer ou de trouver rapidement un port local pour une
     nouvelle connexion. La taille de cette table est la même que la
     table de hachage des connexions :
-    
+
         ::console
         $ dmesg | grep "TCP bind hash table"
         [    0.169962] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
-    
+
     Chaque élément est de type `struct inet_bind_socket` qui
     correspond à un port local. Une connexion dans l'état `TIME-WAIT`
     vers un serveur web correspond au port local 80 et partage donc
@@ -322,8 +322,8 @@ qui est indiqué pour un serveur avec 50 000 connexions dans l'état
 
     ::console
     $ sudo slabtop -o | grep -E '(^  OBJS|tw_sock_TCP|tcp_bind_bucket)'
-      OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME                   
-     50955  49725  97%    0.25K   3397       15     13588K tw_sock_TCP            
+      OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME
+     50955  49725  97%    0.25K   3397       15     13588K tw_sock_TCP
      44840  36556  81%    0.06K    760       59      3040K tcp_bind_bucket
 
 
@@ -454,8 +454,8 @@ obtenues pour les connexions en cours avec la commande `ss` :
 
     ::console
     $ ss --info  sport = :2112 dport = :4057
-    State      Recv-Q Send-Q    Local Address:Port        Peer Address:Port   
-    ESTAB      0      1831936   10.47.0.113:2112          10.65.1.42:4057    
+    State      Recv-Q Send-Q    Local Address:Port        Peer Address:Port
+    ESTAB      0      1831936   10.47.0.113:2112          10.65.1.42:4057
              cubic wscale:7,7 rto:564 rtt:352.5/4 ato:40 cwnd:386 ssthresh:200 send 4.5Mbps rcv_space:5792
 
 Afin de garantir les mêmes propriétés fournies par l'état `TIME-WAIT`

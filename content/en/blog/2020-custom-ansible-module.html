@@ -70,11 +70,11 @@ subdirectory, create an empty `__init__.py` file and a
 
     ::python
     #!/usr/bin/python
-    
+
     import yaml
     from ansible.module_utils.basic import AnsibleModule
-    
-    
+
+
     def main():
         # Define options accepted by the module. ❶
         module_args = dict(
@@ -82,38 +82,38 @@ subdirectory, create an empty `__init__.py` file and a
             password=dict(type='str', required=True, no_log=True),
             data=dict(type='str', required=True),
         )
-    
+
         module = AnsibleModule(
             argument_spec=module_args,
             supports_check_mode=True
         )
-        
+
         result = dict(
             changed=False
         )
-    
+
         got = {}
         wanted = {}
-    
+
         # Populate both `got` and `wanted`. ❷
         # […]
-    
+
         if got != wanted:
             result['changed'] = True
             result['diff'] = dict(
                 before=yaml.safe_dump(got),
                 after=yaml.safe_dump(wanted)
             )
-    
+
         if module.check_mode or not result['changed']:
             module.exit_json(**result)
-    
+
         # Apply changes. ❸
         # […]
-    
+
         module.exit_json(**result)
-    
-    
+
+
     if __name__ == '__main__':
         main()
 

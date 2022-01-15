@@ -76,7 +76,7 @@ configuration :
 
     ::junos
     router id 1.1.1.2;
-    
+
     protocol static NETS { # ❶
       import all;
       export none;
@@ -232,7 +232,7 @@ La configuration d'_ExaBGP_ est très simple :
         local-as 65001;
         peer-as 65002;
       }
-    
+
       process watch-nginx {
           run /usr/bin/python /lab/healthcheck.py -s --config /lab/healthcheck-nginx.conf --start-ip 0;
       }
@@ -358,7 +358,7 @@ Voyons la deuxième partie :
       if net ~ [ 2001:db8:30::/64{128,128} ] then accept;
       reject;
     }
-    
+
     # General template for an EXABGP node
     template bgp EXABGP {
       local as 65002;
@@ -369,7 +369,7 @@ Voyons la deuxième partie :
       hold time 6; # ❹
       multihop 10;
     }
-    
+
     protocol bgp W1 from EXABGP {
       neighbor 2001:db8:6::11 as 65001;
     }
@@ -401,18 +401,18 @@ La configuration de Quagga est un peu plus verbeuse mais strictement
      bgp router-id 1.1.1.5
      bgp log-neighbor-changes
      no bgp default ipv4-unicast
-    
+
      neighbor R peer-group
      neighbor R remote-as 65003
      neighbor R ebgp-multihop 10
-    
+
      neighbor EXABGP peer-group
      neighbor EXABGP remote-as 65001
      neighbor EXABGP ebgp-multihop 10
      neighbor EXABGP timers 2 6
     !
      address-family ipv6
-    
+
      neighbor R activate
      neighbor R soft-reconfiguration inbound
      neighbor R route-server-client
@@ -423,7 +423,7 @@ La configuration de Quagga est un peu plus verbeuse mais strictement
      neighbor 2001:db8:1::6 peer-group R
      neighbor 2001:db8:1::7 peer-group R
      neighbor 2001:db8:1::8 peer-group R
-    
+
      neighbor EXABGP activate
      neighbor EXABGP soft-reconfiguration inbound
      neighbor EXABGP maximum-prefix 10
@@ -433,7 +433,7 @@ La configuration de Quagga est un peu plus verbeuse mais strictement
      neighbor 2001:db8:6::11 peer-group EXABGP
      neighbor 2001:db8:7::12 peer-group EXABGP
      neighbor 2001:db8:8::13 peer-group EXABGP
-    
+
      exit-address-family
     !
     ipv6 prefix-list LOOPBACKS seq 5 permit 2001:db8:30::/64 ge 128 le 128
@@ -489,12 +489,12 @@ routeur à l'origine de l'annonce (le serveur de routes).
 Vérifions que tout fonctionne comme attendu. Voici ce que voit _RS5_ :
 
     ::console
-    # show ipv6  bgp  
+    # show ipv6  bgp
     BGP table version is 0, local router ID is 1.1.1.5
     Status codes: s suppressed, d damped, h history, * valid, > best, i - internal,
                   r RIB-failure, S Stale, R Removed
     Origin codes: i - IGP, e - EGP, ? - incomplete
-    
+
        Network          Next Hop            Metric LocPrf Weight Path
     *  2001:db8:30::1/128
                         2001:db8:6::11         102             0 65001 i
@@ -508,7 +508,7 @@ Vérifions que tout fonctionne comme attendu. Voici ce que voit _RS5_ :
                         2001:db8:6::11         100             0 65001 i
     *                   2001:db8:8::13         101             0 65001 i
     *                   2001:db8:7::12         102             0 65001 i
-    
+
     Total number of prefixes 3
 
 Par exemple, le trafic vers `2001:db8:30::2` doit être routé via
@@ -518,7 +518,7 @@ et _W3_.
 _RS4_ voit exactement la même chose[^output] :
 
     ::console
-    $ birdc6 show route 
+    $ birdc6 show route
     BIRD 1.3.11 ready.
     2001:db8:30::1/128 [W3 22:07 from 2001:db8:8::13] * (100/20) [AS65001i]
                        [W1 23:34 from 2001:db8:6::11] (100/20) [AS65001i]

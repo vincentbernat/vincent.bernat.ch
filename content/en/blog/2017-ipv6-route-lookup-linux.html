@@ -42,13 +42,13 @@ sharing:
 
 [^ssr]: For a given destination prefix, it's possible to attach source-specific
     prefixes:
-    
+
         ::shell
         ip -6 route add 2001:db8:1::/64 \
           from 2001:db8:3::/64 \
           via fe80::1 \
           dev eth0
-    
+
     Lookup is first done on the destination address, then on the source address.
 
 The trie in the below illustration encodes 6 prefixes:
@@ -83,7 +83,7 @@ Here is a slightly simplified version without source-specific routing:
     {
         struct fib6_node *fn;
         __be32 dir;
-    
+
         /* Step 1: locate potential candidate */
         fn = root;
         for (;;) {
@@ -96,7 +96,7 @@ Here is a slightly simplified version without source-specific routing:
             }
             break;
         }
-    
+
         /* Step 2: check prefix and backtrack if needed */
         while (fn) {
             if (fn->fn_flags & RTN_RTINFO) {
@@ -107,12 +107,12 @@ Here is a slightly simplified version without source-specific routing:
                         return fn;
                 }
             }
-    
+
             if (fn->fn_flags & RTN_ROOT)
                 break;
             fn = fn->parent;
         }
-    
+
         return NULL;
     }
 

@@ -64,11 +64,11 @@ lancée en tant qu'utilisateur root afin de fonctionner.
     #include <linux/if_packet.h>
     #include <linux/filter.h>
     #include <time.h>
-    
+
     #define MFS 1514
-    
+
     #define LOG "sniffer.log"
-    
+
     int
     main(int argc, char **argv)
     {
@@ -82,7 +82,7 @@ lancée en tant qu'utilisateur root afin de fonctionner.
         struct udphdr udp;
         struct tcphdr tcp;
         FILE *log;
-    
+
         /* BPF filter:
            tcpdump -ni eth0 -s0 -dd ether dst ff:ff:ff:ff:ff:ff */
         struct sock_filter filter[] = {
@@ -93,64 +93,64 @@ lancée en tant qu'utilisateur root afin de fonctionner.
             { 0x6, 0, 0, 0x00000000 },
             { 0x6, 0, 0, 0x0000ffff },
         };
-    
+
         struct sock_fprog prog = {
             .filter = filter,
             .len = 6
         };
-    
+
         if (argc != 2) {
             fprintf(stderr, "Usage: %s interfaceface\n", argv[0]);
             exit(1);
         }
-    
+
         /* Open the raw socket, ❶ */
         if ((s = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
             fprintf(stderr, "unable to open raw socket (%m)\n");
             exit(1);
         }
-    
+
         /* Bind it to the interface we want to listen to */
         memset(&sa, 0, sizeof(sa));
         sa.sll_family = AF_PACKET;
         sa.sll_protocol = 0;
         strncpy(ifname, argv[1], IFNAMSIZ);
         ifname[IFNAMSIZ-1] = '\0';
-    
+
         if ((sa.sll_ifindex = if_nametoindex(ifname)) == 0) {
             fprintf(stderr, "unknown interface %s\n", ifname);
             exit(1);
         }
-    
+
         if (bind(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
             fprintf(stderr, "unable to listen to %s (%m)\n", ifname);
             exit(1);
         }
-    
+
         /* Setup a filter, ❷ */
         if (setsockopt(s, SOL_SOCKET, SO_ATTACH_FILTER,
                        &prog, sizeof(prog)) < 0) {
             fprintf(stderr, "unable to set filter (%m)\n");
             exit(1);
         }
-    
+
         while (1) {
             /* Receive packet */
             if ((n = recvfrom(s, packet, MFS, 0, NULL, NULL)) < 0) {
                 fprintf(stderr, "error while receiving (%m)\n");
                 exit(1);
             }
-    
+
             if (n < 2*ETH_ALEN + 2 + sizeof(struct iphdr)) continue;
-    
+
             memcpy(&ip, packet + 2*ETH_ALEN + 2, sizeof(struct iphdr));
             if (ip.version != 4)
                 continue;
-    
+
             /* Display some data, ❸ */
             printf("%s > ", inet_ntoa(*(struct in_addr *)&ip.saddr));
             printf("%s", inet_ntoa(*(struct in_addr *)&ip.daddr));
-    
+
             switch (ip.protocol) {
             case IPPROTO_UDP:
                 memcpy(&udp, packet + 2*ETH_ALEN + 2 + ip.ihl*4,
@@ -158,28 +158,28 @@ lancée en tant qu'utilisateur root afin de fonctionner.
                 printf(" : UDP [port %d > port %d]",
                        ntohs(udp.source), ntohs(udp.dest));
                 break;
-    
+
             case IPPROTO_TCP:
                 memcpy(&tcp, packet + 2*ETH_ALEN + 2 + ip.ihl*4,
                        sizeof(struct tcphdr));
                 printf(" : TCP [port %d > port %d]",
                        ntohs(tcp.source), ntohs(tcp.dest));
                 break;
-    
+
             default:
                 printf(" : protocol %d", ip.protocol);
                 break;
             }
-    
+
             printf("\n");
-    
+
             /* Log to some file, ❹ */
             if (nb++ > 20) {
                 if ((log = fopen(LOG, "a+")) == NULL) {
                     fprintf(stderr, "unable to open %s (%m)\n", LOG);
                     exit(1);
                 }
-    
+
                 fprintf(log, "%s: %ld: %d packets received\n",
                         argv[0], time(NULL), nb);
                 fclose(log);
@@ -285,23 +285,23 @@ peut être placé après l'appel à `bind()` :
         exit(1);
     }
     uid = user->pw_uid;
-    
+
     if ((group = getgrnam("nogroup")) == NULL) {
         fprintf(stderr, "no group `nogroup'\n");
         exit(1);
     }
     gid = group->gr_gid;
-    
+
     if (chroot("/var/empty") == -1) {
         fprintf(stderr, "unable to chroot (%m)\n");
         exit(1);
     }
-    
+
     if (chdir("/") != 0) {
         fprintf(stderr, "unable to chdir (%m)\n");
         exit(1);
     }
-    
+
     gidset[0] = gid;
     if ((setresgid(gid, gid, gid) == -1) ||
         (setgroups(1, gidset) == -1) ||
@@ -385,10 +385,10 @@ sniffer en utilisant deux processus séparés.
 
     ::c
     int pair[2];
-    
+
     /* Get a pair of socket */
     socketpair(AF_LOCAL, SOCK_DGRAM, PF_UNSPEC, pair);
-    
+
     /* Create monitored process */
     switch (fork()) {
     case 0:
@@ -400,7 +400,7 @@ sniffer en utilisant deux processus séparés.
         setresuid("nobody");
         close(pair[1]);
         break;
-    
+
     default:
         /* In the parent */
         close(pair[0]);
@@ -412,44 +412,44 @@ sniffer en utilisant deux processus séparés.
                 bind(s, cmd.arg);
                 setsockopt(s, filter);
                 break;
-    
+
             case GETPACKET:
                 n = recvfrom(s, packet);
                 write_child(n, packet);
                 break;
-    
+
             case OPENLOGFILE:
                 log = fopen("/var/log/sniffer.log");
                 break;
-    
+
             case WRITETOLOGFILE:
                 fprintf(log, cmd.arg);
                 break;
-    
+
             case CLOSELOGFILE:
                 fclose(log);
                 break;
-    
+
             }
-    
+
             exit(0);
         }
     }
-    
+
     /* At this point, we don't have any privilege */
     cmd = {
         .id = OPENSOCKET,
         .arg = ifname
     };
     write_parent(cmd);
-    
+
     while (1) {
         cmd = {
             .id = GETPACKET,
             .arg = NULL
         };
         write_parent(cmd);
-    
+
         n = recv_parent(packet, MFS);
         process_packet(packet, n);
         if (nb++ > 20) {
@@ -458,13 +458,13 @@ sniffer en utilisant deux processus séparés.
                 .arg = NULL
             };
             write_parent(cmd);
-    
+
             cmd = {
                 .id = WRITETOLOGFILE,
                 .arg = "..."
             };
             write_parent(cmd);
-    
+
             cmd = {
                 .id = CLOSELOGFILE,
                 .arg = NULL
@@ -585,7 +585,7 @@ projets réels, il faut bien sûr utiliser la version complète !
         struct cmsghdr *cmsg;
         struct iovec vec;
         int result;
-    
+
         memset(&msg, 0, sizeof(msg));
         msg.msg_control = (caddr_t)&cmsgbuf.buf;
         msg.msg_controllen = sizeof(cmsgbuf.buf);
@@ -600,7 +600,7 @@ projets réels, il faut bien sûr utiliser la version complète !
         msg.msg_iovlen = 1;
         sendmsg(sock, &msg, 0);
     }
-    
+
     int
     receive_fd(int sock)
     {
@@ -613,7 +613,7 @@ projets réels, il faut bien sûr utiliser la version complète !
         struct iovec vec;
         int result;
         int fd;
-    
+
         memset(&msg, 0, sizeof(msg));
         vec.iov_base = &result;
         vec.iov_len = sizeof(int);
@@ -650,19 +650,19 @@ remplacer les appels à `socket()` et `bind()` ainsi que celui à
     {
         int cmd;
         char ifname[IFNAMSIZ];
-    
+
         strncpy(ifname, name, IFNAMSIZ);
         cmd = PRIV_SOCKET;
         must_write(remote, &cmd, sizeof(int));
         must_write(remote, ifname, IFNAMSIZ);
         return receive_fd(remote);
     }
-    
+
     FILE *
     priv_fopen()
     {
         int cmd, fd;
-    
+
         cmd = PRIV_LOGFILE;
         must_write(remote, &cmd, sizeof(int));
         fd = receive_fd(remote);
@@ -694,7 +694,7 @@ actions demandées et on renvoie le descripteur de fichier :
         int s;
         struct sockaddr_ll sa;
         int alreadyopen = 0;
-    
+
         while (!may_read(remote, &cmd, sizeof(int))) {
             switch (cmd) {
             case PRIV_SOCKET:
@@ -707,7 +707,7 @@ actions demandées et on renvoie le descripteur de fichier :
                     fprintf(stderr, "unable to open raw socket (%m)\n");
                     exit(1);
                 }
-    
+
                 memset(&sa, 0, sizeof(sa));
                 sa.sll_family = AF_PACKET;
                 sa.sll_protocol = 0;
@@ -716,17 +716,17 @@ actions demandées et on renvoie le descripteur de fichier :
                     fprintf(stderr, "unknown interface %s\n", ifname);
                     exit(1);
                 }
-    
+
                 if (bind(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
                     fprintf(stderr, "unable to listen to %s (%m)\n", ifname);
                     exit(1);
                 }
-    
+
                 alreadyopen = 1;
                 send_fd(remote, s);
                 close(s);
                 break;
-    
+
             case PRIV_LOGFILE:
                 if ((s = open(LOG, O_WRONLY | O_APPEND | O_CREAT, 0600)) < 0) {
                     fprintf(stderr, "unable to open %s (%m)\n", LOG);
@@ -735,7 +735,7 @@ actions demandées et on renvoie le descripteur de fichier :
                 send_fd(remote, s);
                 close(s);
                 break;
-    
+
             default:
                 fprintf(stderr, "unknown command\n");
                 exit(1);

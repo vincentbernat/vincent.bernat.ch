@@ -158,7 +158,7 @@ les étiquettes :
         app = "extras"
         table = "tags"
         key = "name"
-    
+
         def wanted(self):
             return {"cmdb": dict(
                 slug="cmdb",
@@ -189,7 +189,7 @@ acceptant un tel attribut (équipements et adresses IP) :
         app = "tenancy"
         table = "tenants"
         key = "name"
-    
+
         def wanted(self):
             return {"Network": dict(slug="network",
                                     description="Network team")}
@@ -203,12 +203,12 @@ de données.
 
     ::python
     class SyncSites(Synchronizer):
-    
+
         app = "dcim"
         table = "sites"
         key = "name"
         only_on_create = ("status", "slug")
-    
+
         def wanted(self):
             result = set(details["datacenter"]
                          for details in self.source['devices'].values()
@@ -235,11 +235,11 @@ n'avons pas besoin de l'attribut `only_on_create` :
 
     ::python
     class SyncManufacturers(Synchronizer):
-    
+
         app = "dcim"
         table = "manufacturers"
         key = "name"
-    
+
         def wanted(self):
             result = set(details["manufacturer"]
                          for details in self.source['devices'].values()
@@ -253,12 +253,12 @@ synchroniseur qui le gère.
 
     ::python
     class SyncDeviceTypes(Synchronizer):
-    
+
         app = "dcim"
         table = "device_types"
         key = "model"
         foreign = {"manufacturer": SyncManufacturers}
-    
+
         def wanted(self):
             result = set((details["manufacturer"], details["model"])
                          for details in self.source['devices'].values()
@@ -293,11 +293,11 @@ Les rôles des équipements sont, quant à eux, définis ainsi :
 
     ::python
     class SyncDeviceRoles(Synchronizer):
-    
+
         app = "dcim"
         table = "device_roles"
         key = "name"
-    
+
         def wanted(self):
             result = set(details["role"]
                          for details in self.source['devices'].values()
@@ -323,7 +323,7 @@ précédemment.
                    "site": SyncSites,
                    "tenant": SyncTenants}
         remove_unused = 10
-    
+
         def wanted(self):
             return {name: dict(device_role=details["role"],
                                device_type=details["model"],
@@ -362,7 +362,7 @@ noms dans la description :
         key = "address"
         foreign = {"tenant": SyncTenants}
         remove_unused = 1000
-    
+
         def wanted(self):
             wanted = {}
             for details in self.source['ips']:

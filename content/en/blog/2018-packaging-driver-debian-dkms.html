@@ -70,9 +70,9 @@ add a `debian/` subdirectory with the following files:
  - `debian/changelog`:
 
         i40e-dkms (2.4.6-0) stretch; urgency=medium
-        
+
           * Initial package.
-        
+
          -- Vincent Bernat <bernat@debian.org>  Tue, 27 Feb 2018 17:20:58 +0100
 
  - `debian/control`:
@@ -81,7 +81,7 @@ add a `debian/` subdirectory with the following files:
         Source: i40e-dkms
         Maintainer: Vincent Bernat <bernat@debian.org>
         Build-Depends: debhelper (>= 9), dkms
-        
+
         Package: i40e-dkms
         Architecture: all
         Depends: ${misc:Depends}
@@ -91,18 +91,18 @@ add a `debian/` subdirectory with the following files:
 
         ::make hl_lines="9"
         #!/usr/bin/make -f
-        
+
         include /usr/share/dpkg/pkg-info.mk
-        
+
         %:
                 dh $@ --with dkms
-        
+
         override_dh_install:
                 dh_install src/* usr/src/i40e-$(DEB_VERSION_UPSTREAM)/
-        
+
         override_dh_dkms:
                 dh_dkms -V $(DEB_VERSION_UPSTREAM)
-        
+
         override_dh_auto_configure:
         override_dh_auto_build:
         override_dh_auto_test:
@@ -158,10 +158,10 @@ version, you build such a package in your CI system:
           i40e-dkms \
           linux-image-${KERNEL_VERSION} \
           linux-headers-${KERNEL_VERSION}
-    
+
     DRIVER_VERSION=$(dkms status i40e | awk -F', ' '{print $2}')
     dkms mkbmdeb i40e/${DRIVER_VERSION} -k ${KERNEL_VERSION}
-    
+
     cd /var/lib/dkms/i40e/${DRIVER_VERSION}/bmdeb/
     dpkg -c i40e-modules-${KERNEL_VERSION}_*
     dpkg -I i40e-modules-${KERNEL_VERSION}_*

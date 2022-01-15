@@ -395,7 +395,7 @@ as an anycast route:
     > show route protocol bgp
     inet.0: 6 destinations, 7 routes (7 active, 1 holddown, 0 hidden)
     + = Active Route, - = Last Active, * = Both
-    
+
     0.0.0.0/0        *[BGP/170] 00:09:01, localpref 100
                         AS path: I, validation-state: unverified
                       > to 198.51.100.1 via em1.90
@@ -446,14 +446,14 @@ the common properties to connect to a route reflector:
       direct;           # Not a multi-hop BGP session
       ttl security yes; # GTSM is enabled
       add paths rx;     # Enable ADD-PATH reception (for anycast)
-    
+
       # Low timers to establish sessions faster
       connect delay time 1;
       connect retry time 5;
       error wait time 1,5;
       error forget time 10;
     }
-    
+
     table public;
     protocol bgp RR1_public from rr_client {
       neighbor 198.51.100.126 as 65000;
@@ -570,7 +570,7 @@ per-interface *sysctl*[^sysctl] or through the `rpfilter` match of
       -j LOG --log-prefix "NF: rpfilter: " --log-level warning
     ip6tables -t raw -A RPFILTER -j DROP
     ip6tables -t raw -A PREROUTING -i vnet+ -j RPFILTER
-    
+
     # For IPv4, use sysctls
     sysctl -qw net.ipv4.conf.all.rp_filter=0
     for iface in /sys/class/net/vnet*; do

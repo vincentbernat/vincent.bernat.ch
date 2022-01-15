@@ -39,13 +39,13 @@ Let's take back our nifty 404-only web server:
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
     )
-    
+
     func main() {
         listener, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -58,14 +58,14 @@ Here is the socket-activated version, using [go-systemd][]:
 
     ::go hl_lines="11 19"
     package main
-    
+
     import (
         "log"
         "net/http"
-    
+
         "github.com/coreos/go-systemd/activation"
     )
-    
+
     func main() {
         listeners, err := activation.Listeners(true) // ❶
         if err != nil {
@@ -109,7 +109,7 @@ We can use the following socket unit, `404.socket`:
     [Socket]
     ListenStream = 8000
     BindIPv6Only = both
-    
+
     [Install]
     WantedBy = sockets.target
 
@@ -121,7 +121,7 @@ service unit, we can use the following one, `404.service`:
     ::ini
     [Unit]
     Description = 404 micro-service
-    
+
     [Service]
     ExecStart = /usr/bin/404
 
@@ -147,7 +147,7 @@ kill remaining ones:
     quit := make(chan os.Signal, 1)
     server := &http.Server{}
     signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    
+
     go func() {
         <-quit
         log.Println("server is shutting down")
@@ -163,7 +163,7 @@ kill remaining ones:
 
     // Start accepting connections.
     server.Serve(listeners[0])
-    
+
     // Wait for existing connections before exiting.
     <-done
 
@@ -197,7 +197,7 @@ executed and all existing processes are left undisturbed:
     ::ini hl_lines="6 7"
     [Unit]
     Description = slow 404 micro-service
-    
+
     [Service]
     ExecStart = /usr/bin/404
     ExecStop  = /bin/kill $MAINPID
@@ -288,7 +288,7 @@ short Python helper, wrapped in a `detachedSleep()` function:[^python]
         py := `
     import os
     import time
-    
+
     pid = os.fork()
     if pid == 0:
         for fd in {0, 1, 2}:
@@ -313,7 +313,7 @@ short Python helper, wrapped in a `detachedSleep()` function:[^python]
     the system, it is low-level enough to easily implement the
     functionality and, as an interpreted language, it doesn't require
     a specific build step.
-    
+
     There is no need to fork twice as we only
     need to detach the decoy from the current process. This simplify
     a bit the Python code.
@@ -330,7 +330,7 @@ The `404.service` unit needs an update:
     ::ini
     [Unit]
     Description = slow 404 micro-service
-    
+
     [Service]
     ExecStart    = /usr/bin/404
     ExecReload   = /bin/kill -HUP $MAINPID
@@ -415,7 +415,7 @@ an implementation replacing the `detachedSleep()` function:
             if err != nil {
                 log.Panicf("cannot execute sleep command: %s", err)
             }
-    
+
             // Advertise child's PID and exit. Child will be
             // orphaned and adopted by PID 1.
             fmt.Printf("%d", child.Pid)
@@ -427,7 +427,7 @@ an implementation replacing the `detachedSleep()` function:
         }
         // Not the sleepy helper. Business as usual.
     }
-    
+
     // self returns the absolute path to ourselves. This relies on
     // /proc/self/exe which may be a symlink to a deleted path (for
     // example, during an upgrade).
@@ -439,7 +439,7 @@ an implementation replacing the `detachedSleep()` function:
         execPath = strings.TrimSuffix(execPath, " (deleted)")
         return execpath
     }
-    
+
     // detachedSleep spawns a detached process sleeping one second and
     // returns its PID. A full daemonization is not needed as the process
     // is short-lived.
@@ -470,7 +470,7 @@ linked to the same `404.service` job:
     ListenStream = 8001
     BindIPv6Only = both
     Service      = 404.service
-    
+
     [Install]
     WantedBy=sockets.target
 
@@ -481,18 +481,18 @@ sockets:
 
     ::go hl_lines="24"
     package main
-    
+
     import (
         "log"
         "net/http"
         "sync"
-    
+
         "github.com/coreos/go-systemd/activation"
     )
-    
+
     func main() {
         var wg sync.WaitGroup
-    
+
         // Map socket names to handlers.
         handlers := map[string]http.HandlerFunc{
             "404.socket": http.NotFound,
@@ -501,13 +501,13 @@ sockets:
                     http.StatusForbidden)
             },
         }
-    
+
         // Get listening sockets.
         listeners, err := activation.ListenersWithNames(true)
         if err != nil {
             log.Panicf("cannot retrieve listeners: %s", err)
         }
-    
+
         // For each listening socket, spawn a goroutine
         // with the appropriate handler.
         for name := range listeners {
@@ -521,7 +521,7 @@ sockets:
                 }(name, idx)
             }
         }
-    
+
         // Wait for all goroutines to terminate.
         wg.Wait()
     }

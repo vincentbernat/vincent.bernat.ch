@@ -39,10 +39,10 @@ le temps d'exécution.
         int err = 0;
         struct fib_result res;
         struct flowi4 fl4;
-    
+
         memset(&fl4, 0, sizeof(fl4));
         fl4.daddr = in_aton("8.8.8.8");
-    
+
         for (i = 0; i < count; i++) {
             t1 = get_cycles();
             err |= fib_lookup(&init_net, &fl4, &res, 0);
@@ -75,14 +75,14 @@ test et retourne le résultat en tant que contenu.
 
     ::c hl_lines="33 38"
     #define pr_fmt(fmt) "kbench: " fmt
-    
+
     #include <linux/kernel.h>
     #include <linux/version.h>
     #include <linux/module.h>
     #include <linux/inet.h>
     #include <linux/timex.h>
     #include <net/ip_fib.h>
-    
+
     /* Quand un utilisateur consulte le fichier "run", exécute
        la fonction de test. */
     static ssize_t run_show(struct kobject *kobj,
@@ -91,7 +91,7 @@ test et retourne le résultat en tant que contenu.
     {
         return do_bench(buf);
     }
-    
+
     static struct kobj_attribute run_attr = __ATTR_RO(run);
     static struct attribute *bench_attributes[] = {
         &run_attr.attr,
@@ -101,7 +101,7 @@ test et retourne le résultat en tant que contenu.
         .attrs = bench_attributes,
     };
     static struct kobject *bench_kobj;
-    
+
     int init_module(void)
     {
         int rc;
@@ -109,22 +109,22 @@ test et retourne le résultat en tant que contenu.
         bench_kobj = kobject_create_and_add("kbench", kernel_kobj);
         if (!bench_kobj)
             return -ENOMEM;
-    
+
         /* ❷ Création des fichiers associés au kobject. */
         rc = sysfs_create_group(bench_kobj, &bench_attr_group);
         if (rc) {
             kobject_put(bench_kobj);
             return rc;
         }
-    
+
         return 0;
     }
-    
+
     void cleanup_module(void)
     {
         kobject_put(bench_kobj);
     }
-    
+
     MODULE_LICENSE("GPL");
     MODULE_DESCRIPTION("Microbenchmark for fib_lookup()");
 
@@ -201,9 +201,9 @@ l'utilisateur de les manipuler :
     ::c
     static unsigned long loop_count      = 5000;
     static u32           flow_dst_ipaddr = 0x08080808;
-    
+
     static DEFINE_MUTEX(kb_lock);
-    
+
     /* Retourne le nombre de boucles. */
     static ssize_t loop_count_show(struct kobject *kobj,
                                    struct kobj_attribute *attr,
@@ -215,7 +215,7 @@ l'utilisateur de les manipuler :
         mutex_unlock(&kb_lock);
         return res;
     }
-    
+
     /* Modifie le nombre de boucles. */
     static ssize_t loop_count_store(struct kobject *kobj,
                                     struct kobj_attribute *attr,
@@ -233,7 +233,7 @@ l'utilisateur de les manipuler :
         mutex_unlock(&kb_lock);
         return count;
     }
-    
+
     /* Retourne l'adresse de destination. */
     static ssize_t flow_dst_ipaddr_show(struct kobject *kobj,
                                         struct kobj_attribute *attr,
@@ -245,7 +245,7 @@ l'utilisateur de les manipuler :
         mutex_unlock(&kb_lock);
         return res;
     }
-    
+
     /* Modifie l'adresse de destination. */
     static ssize_t flow_dst_ipaddr_store(struct kobject *kobj,
                                          struct kobj_attribute *attr,
@@ -257,7 +257,7 @@ l'utilisateur de les manipuler :
         mutex_unlock(&kb_lock);
         return count;
     }
-    
+
     /* Définition des deux nouveaux attributs. */
     static struct kobj_attribute loop_count_attr      = __ATTR_RW(loop_count);
     static struct kobj_attribute flow_dst_ipaddr_attr = __ATTR_RW(flow_dst_ipaddr);
@@ -302,7 +302,7 @@ ces variables :
         count = loop_count;
         fl4.daddr = flow_dst_ipaddr;
         mutex_unlock(&kb_lock);
-        
+
         for (i = 0; i < count; i++) {
             /* … */
 
@@ -347,25 +347,25 @@ placés dans un tableau.
     {
         unsigned long long *results;
         /* … */
-        
+
         results = kmalloc(sizeof(*results) * count, GFP_KERNEL);
         if (!results)
             return scnprintf(buf, PAGE_SIZE, "msg=\"no memory\"\n");
-        
+
         for (i = 0; i < count; i++) {
             t1 = get_cycles();
             err |= fib_lookup(&init_net, &fl4, &res, 0);
             t2 = get_cycles();
             results[i] = t2 - t1;
         }
-        
+
         if (err != 0) {
             kfree(results);
             return scnprintf(buf, PAGE_SIZE, "err=%d msg=\"lookup error\"\n", err);
         }
         /* Calcule et affiche les statistiques */
         display_statistics(buf, results, count);
-        
+
         kfree(results);
         return strnlen(buf, PAGE_SIZE);
     }
@@ -403,7 +403,7 @@ médiane][median absolute deviation][^mad] :
                                               GFP_KERNEL);
         unsigned long long res;
         unsigned i;
-        
+
         if (!dmedian) return 0;
         for (i = 0; i < count; i++) {
             if (sorted[i] > median)
@@ -431,13 +431,13 @@ supplémentaires :
                                    unsigned long count)
     {
         unsigned long long p95, p90, p50;
-        
+
         sort(results, count, sizeof(*results), compare_ull, NULL);
         if (count == 0) {
             scnprintf(buf, PAGE_SIZE, "msg=\"no match\"\n");
             return;
         }
-        
+
         p95 = percentile(95, results, count);
         p90 = percentile(90, results, count);
         p50 = percentile(50, results, count);

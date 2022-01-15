@@ -47,12 +47,12 @@ placée en haut du script[^francais] :
 
     ::python
     #!/usr/bin/env python3
-    
+
     """Simple fizzbuzz generator.
-    
+
     This script prints out a sequence of numbers from a provided range
     with the following restrictions:
-    
+
      - if the number is divisble by 3, then print out "fizz,"
      - if the number is divisible by 5, then print out "buzz,"
      - if the number is divisible by 3 and 5, then print out "fizzbuzz."
@@ -77,19 +77,19 @@ lui permettons de modifier les valeurs modulo pour « fizz » et « buzz
     ::python
     import argparse
     import sys
-    
-    
+
+
     class CustomFormatter(argparse.RawDescriptionHelpFormatter,
                           argparse.ArgumentDefaultsHelpFormatter):
         pass
-    
-    
+
+
     def parse_args(args=sys.argv[1:]):
         """Parse arguments."""
         parser = argparse.ArgumentParser(
             description=sys.modules[__name__].__doc__,
             formatter_class=CustomFormatter)
-    
+
         g = parser.add_argument_group("fizzbuzz settings")
         g.add_argument("--fizz", metavar="N",
                        default=3,
@@ -99,13 +99,13 @@ lui permettons de modifier les valeurs modulo pour « fizz » et « buzz
                        default=5,
                        type=int,
                        help="Modulo value for buzz")
-    
+
         parser.add_argument("start", type=int, help="Start value")
         parser.add_argument("end", type=int, help="End value")
-    
+
         return parser.parse_args(args)
-    
-    
+
+
     options = parse_args()
     for n in range(options.start, options.end + 1):
         # ...
@@ -118,23 +118,23 @@ nous avons écrite dans la section précédente est également affichée :
     ::console
     $ ./fizzbuzz.py --help
     usage: fizzbuzz.py [-h] [--fizz N] [--buzz N] start end
-    
+
     Simple fizzbuzz generator.
-    
+
     This script prints out a sequence of numbers from a provided range
     with the following restrictions:
-    
+
      - if the number is divisble by 3, then print out "fizz,"
      - if the number is divisible by 5, then print out "buzz,"
      - if the number is divisible by 3 and 5, then print out "fizzbuzz."
-    
+
     positional arguments:
       start         Start value
       end           End value
-    
+
     optional arguments:
       -h, --help    show this help message and exit
-    
+
     fizzbuzz settings:
       --fizz N      Modulo value for fizz (default: 3)
       --buzz N      Modulo value for buzz (default: 5)
@@ -156,7 +156,7 @@ effet. Tout d'abord, nous définissons le « *logger* » :
     import logging.handlers
     import os
     import sys
-    
+
     logger = logging.getLogger(os.path.splitext(os.path.basename(sys.argv[0]))[0])
 
 Ensuite, nous rendons sa verbosité configurable : `logger.debug()` ne
@@ -195,7 +195,7 @@ Le corps de notre script devient ceci :
     if __name__ == "__main__":
         options = parse_args()
         setup_logging(options)
-    
+
         try:
             logger.debug("compute fizzbuzz from {} to {}".format(options.start,
                                                                  options.end))
@@ -261,7 +261,7 @@ quelques exemples interactifs d'utilisation dans sa documentation :
     ::python
     def fizzbuzz(n, fizz, buzz):
         """Compute fizzbuzz nth item given modulo values for fizz and buzz.
-    
+
         >>> fizzbuzz(5, fizz=3, buzz=5)
         'buzz'
         >>> fizzbuzz(3, fizz=3, buzz=5)
@@ -272,7 +272,7 @@ quelques exemples interactifs d'utilisation dans sa documentation :
         4
         >>> fizzbuzz(4, fizz=4, buzz=6)
         'fizz'
-    
+
         """
         if n % fizz == 0 and n % buzz == 0:
             return "fizzbuzz"
@@ -293,9 +293,9 @@ corrects[^extension] :
     rootdir: /home/bernat/code/perso/python-script, inifile:
     plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
     collected 1 item
-    
+
     fizzbuzz.py::fizzbuzz.fizzbuzz PASSED                                  [100%]
-    
+
     ========================== 1 passed in 0.05 seconds ==========================
 
 [^extension]: Ceci nécessite que le nom du script se termine par
@@ -316,9 +316,9 @@ et la nature du problème :
     rootdir: /home/bernat/code/perso/python-script, inifile:
     plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
     collected 1 item
-    
+
     fizzbuzz.py::fizzbuzz.fizzbuzz FAILED                                  [100%]
-    
+
     ================================== FAILURES ==================================
     ________________________ [doctest] fizzbuzz.fizzbuzz _________________________
     100
@@ -335,7 +335,7 @@ et la nature du problème :
         fizz
     Got:
         4
-    
+
     /home/bernat/code/perso/python-script/fizzbuzz.py:109: DocTestFailure
     ========================== 1 failed in 0.02 seconds ==========================
 
@@ -358,8 +358,8 @@ utilisant les [tests paramétrés][parametrized test functions] de
     # Unit tests
     import pytest                   # noqa: E402
     import shlex                    # noqa: E402
-    
-    
+
+
     @pytest.mark.parametrize("args, expected", [
         ("0 0", ["fizzbuzz"]),
         ("3 5", ["fizz", "4", "buzz"]),
@@ -390,7 +390,7 @@ fournis. La partie `args` est utilisée comme entrée pour la fonction
     rootdir: /home/bernat/code/perso/python-script, inifile:
     plugins: xdist-1.26.1, timeout-1.3.3, forked-1.0.2, cov-2.6.0
     collected 7 items
-    
+
     fizzbuzz.py::fizzbuzz.fizzbuzz PASSED                                  [ 14%]
     fizzbuzz.py::test_main[0 0-expected0] PASSED                           [ 28%]
     fizzbuzz.py::test_main[3 5-expected1] PASSED                           [ 42%]
@@ -398,7 +398,7 @@ fournis. La partie `args` est utilisée comme entrée pour la fonction
     fizzbuzz.py::test_main[14 17-expected3] PASSED                         [ 71%]
     fizzbuzz.py::test_main[14 17 --fizz=2-expected4] PASSED                [ 85%]
     fizzbuzz.py::test_main[17 20 --buzz=10-expected5] PASSED               [100%]
-    
+
     ========================== 7 passed in 0.03 seconds ==========================
 
 Quand une erreur survient, *pytest* fournit une évaluation de la
@@ -409,9 +409,9 @@ situation :
     […]
     ================================== FAILURES ==================================
     __________________________ test_main[0 0-expected0] __________________________
-    
+
     args = '0 0', expected = ['0']
-    
+
         @pytest.mark.parametrize("args, expected", [
             ("0 0", ["0"]),
             ("3 5", ["fizz", "4", "buzz"]),
@@ -428,7 +428,7 @@ situation :
     E         Full diff:
     E         - ['fizzbuzz']
     E         + ['0']
-    
+
     fizzbuzz.py:160: AssertionError
     ----------------------------- Captured log call ------------------------------
     fizzbuzz.py                125 DEBUG    compute fizzbuzz from 0 to 0

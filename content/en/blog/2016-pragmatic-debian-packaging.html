@@ -47,7 +47,7 @@ straightforward if you bend some rules:
     to raise some concerns about security and long-term maintenance,
     but this is a common trade-off in many ecosystems, notably Java,
     JavaScript and Go.
- 
+
 [TOC]
 
 # Pragmatic packages 101
@@ -82,9 +82,9 @@ The first one is easy. Put `9` in it:[^compat]
 The second one has the following content:
 
     memcached (0.0-0) UNRELEASED; urgency=medium
-    
+
       * Fake entry
-    
+
      -- Happy Packager <happy@example.com>  Tue, 19 Apr 2016 22:27:05 +0200
 
 The only important information is the name of the source package,
@@ -100,7 +100,7 @@ them.
     ::control
     Source: memcached
     Maintainer: Vincent Bernat <bernat@debian.org>
-    
+
     Package: memcached
     Architecture: any
     Description: high-performance memory object caching system
@@ -125,16 +125,16 @@ file tree in `debian/memcached/`. It looks like this:
 
     ::make
     #!/usr/bin/make -f
-    
+
     DISTRIBUTION = $(shell lsb_release -sr)
     VERSION = 1.4.25
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
-    
+
     %:
     	dh $@
-    
+
     override_dh_auto_clean:
     override_dh_auto_test:
     override_dh_auto_build:
@@ -144,10 +144,10 @@ file tree in `debian/memcached/`. It looks like this:
     	./configure --prefix=/usr
     	make
     	make install DESTDIR=debian/memcached
-    
+
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
-    
+
 
 The empty targets `override_dh_auto_clean`, `override_dh_auto_test`
 and `override_dh_auto_build` keep *debhelper* from being too
@@ -162,13 +162,13 @@ have done with `fpm`:
     PACKAGEVERSION=${VERSION}-0~${DISTRIBUTION}0
     TARBALL=memcached-${VERSION}.tar.gz
     URL=http://www.memcached.org/files/${TARBALL}
-    
+
     wget -N --progress=dot:mega ${URL}
     tar --strip-components=1 -xf ${TARBALL}
     ./configure --prefix=/usr
     make
     make install DESTDIR=/tmp/installdir
-    
+
     # Build the final package
     fpm -s dir -t deb \
         -n memcached \
@@ -288,13 +288,13 @@ Providing an *Upstart* job is similar: put it in
 `debian/memcached.upstart`. For example:
 
     description "memcached daemon"
-    
+
     start on runlevel [2345]
     stop on runlevel [!2345]
     respawn
     respawn limit 5 60
     expect daemon
-    
+
     script
       . /etc/default/memcached
       exec memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
@@ -313,13 +313,13 @@ file should go in `debian/memcached.service`. For example:
     [Unit]
     Description=memcached daemon
     After=network.target
-    
+
     [Service]
     Type=forking
     EnvironmentFile=/etc/default/memcached
     ExecStart=/usr/bin/memcached -d -u $USER -p $PORT -m $CACHESIZE -c $MAXCONN $OPTIONS
     Restart=on-failure
-    
+
     [Install]
     WantedBy=multi-user.target
 
@@ -379,18 +379,18 @@ Add a `debian/memcached.postinst` file with the following content:
 
     ::shell
     #!/bin/sh
-    
+
     set -e
-    
+
     case "$1" in
         configure)
             adduser --system --disabled-password --disabled-login --home /var/empty \
                     --no-create-home --quiet --force-badname --group _memcached
             ;;
     esac
-    
+
     #DEBHELPER#
-    
+
     exit 0
 
 There is no cleanup of the user when the package is removed for two reasons:
@@ -499,25 +499,25 @@ can let it handle most of the work with this `debian/rules` file:
 
     ::make
     #!/usr/bin/make -f
-    
+
     DISTRIBUTION = $(shell lsb_release -sr)
     VERSION = 1.4.25
     PACKAGEVERSION = $(VERSION)-0~$(DISTRIBUTION)0
     TARBALL = memcached-$(VERSION).tar.gz
     URL = http://www.memcached.org/files/$(TARBALL)
-    
+
     %:
     	dh $@ --with systemd
-    
+
     override_dh_auto_clean:
     	wget -N --progress=dot:mega $(URL)
     	tar --strip-components=1 -xf $(TARBALL)
-    
+
     override_dh_auto_test:
     	# Don't run the whitespace test
     	rm t/whitespace.t
     	dh_auto_test
-    
+
     override_dh_gencontrol:
     	dh_gencontrol -- -v$(PACKAGEVERSION)
 

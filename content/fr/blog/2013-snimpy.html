@@ -55,7 +55,7 @@ Des outils tels que `snmpget` et `snmpwalk` permettent de collecter
 manuellement ces informations :
 
     ::console
-    $ snmpwalk -v 2c -c public localhost IF-MIB::ifDescr      
+    $ snmpwalk -v 2c -c public localhost IF-MIB::ifDescr
     IF-MIB::ifDescr.1 = STRING: lo
     IF-MIB::ifDescr.2 = STRING: eth0
     IF-MIB::ifDescr.3 = STRING: eth1
@@ -67,13 +67,13 @@ nombre total d'octets transmis :
 
     ::sh
     #!/bin/sh
-    
+
     set -e
-    
+
     host="${1:-localhost}"
     community="${2:-public}"
     args="-v2c -c $community $host"
-    
+
     for idx in $(snmpwalk -Ov -OQ $args IF-MIB::ifIndex); do
         descr=$(snmpget -Ov -OQ $args IF-MIB::ifDescr.$idx)
         oper=$(snmpget -Ov -OQ $args IF-MIB::ifOperStatus.$idx)
@@ -92,7 +92,7 @@ avec Net-SNMP :
     ::python
     import argparse
     import netsnmp
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "host", default="localhost", nargs="?",
@@ -106,7 +106,7 @@ avec Net-SNMP :
         "DestHost": options.host,
         "Community": options.community
     }
-    
+
     for idx in netsnmp.snmpwalk(netsnmp.Varbind("IF-MIB::ifIndex"),
                                 **args):
         descr, oper, cin, cout = netsnmp.snmpget(
@@ -151,9 +151,9 @@ Voici comment le précédent script pourrait être réécrit :
 
     ::python
     #!/usr/bin/env snimpy
-    
+
     import argparse
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "host", default="localhost", nargs="?",
@@ -162,9 +162,9 @@ Voici comment le précédent script pourrait être réécrit :
         "community", default="public", nargs="?",
         help="Community to query the agent")
     options = parser.parse_args()
-    
+
     m = M(options.host, options.community, 2)
-    
+
     load("IF-MIB")
     for idx in m.ifDescr:
         if m.ifDescr[idx] == "lo":

@@ -54,7 +54,7 @@ Ce n'est pas le cas. Depuis n'importe quelle machine virtuelle :
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=59 time=0.644 ms
     64 bytes from 192.168.14.3: icmp_seq=2 ttl=59 time=0.829 ms
     64 bytes from 192.168.14.3: icmp_seq=3 ttl=59 time=0.894 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     3 packets transmitted, 3 received, 0% packet loss, time 2033ms
     rtt min/avg/max/mdev = 0.644/0.789/0.894/0.105 ms
@@ -167,7 +167,7 @@ la fonction `ipv6_rcv()`.
  - Le système de routage décide de la destination du
    paquet. Toutefois, contrairement à IPv4, il n'y a pas de filtrage
    par la source[^rpfilter].
-   
+
 [^rpfilter]: Pour IPv6, le filtrage par la source se fait uniquement
     via *Netfilter*, en utilisant
     la [condition `rpfilter`][rpfilter match].
@@ -224,7 +224,7 @@ attachés à l'interface sont évalués avant très tôt. Voici le code de
 
     ::c
     #include <linux/bpf.h>
-    
+
     int main()
     {
         return XDP_DROP;
@@ -242,7 +242,7 @@ la nécessité d'un compilateur[^ebpf].
 
 [^ebpf]: Le programme ci-dessus est si simple qu'il pourrait être
     construit sans l'aide d'un compilateur :
-    
+
         ::console
         $ ip -d l l dev br0 | tail -1
             prog/xdp id 1 tag 57cd311f2e27366b
@@ -293,7 +293,7 @@ possible de la rejeter à ce moment là :
 
 Toutefois, à ma connaissance, cette partie de *Netfilter* est connue
 pour être assez inefficace.
-    
+
 ### Utilisation des espaces de noms
 
 L'isolation peut également être obtenue en plaçant toutes les
@@ -360,7 +360,7 @@ effet ajouter manuellement une entrée dans son cache ARP :
     # ping -c 1 192.168.14.3
     PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.30 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     1 packets transmitted, 1 received, 0% packet loss, time 0ms
     rtt min/avg/max/mdev = 1.309/1.309/1.309/0.000 ms
@@ -373,7 +373,7 @@ autorisées, il n'est même pas nécessaire de deviner l'adresse MAC :
     # ping -c 1 192.168.14.3
     PING 192.168.14.3 (192.168.14.3) 56(84) bytes of data.
     64 bytes from 192.168.14.3: icmp_seq=1 ttl=49 time=1.12 ms
-    
+
     --- 192.168.14.3 ping statistics ---
     1 packets transmitted, 1 received, 0% packet loss, time 0ms
     rtt min/avg/max/mdev = 1.129/1.129/1.129/0.000 ms
@@ -391,7 +391,7 @@ La première méthode pour rejeter un paquet IPv4 est d'utiliser
     à 0. Sinon, il est nécessaire de spécifier
     une [condition `physdev`][physdev match] pour ne pas rejeter
     également les paquets IPv4 *traversant* le pont.
-    
+
 Si *Netfilter* est désactivé, une autre possibilité est d'activer le
 filtrage par la source sur l'interface du pont. Dans ce cas, comme il
 n'y a pas d'adresse IP configurée sur l'interface, le paquet sera

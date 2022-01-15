@@ -128,16 +128,16 @@ Voici comment construire un _ramdisk_ minimal:
         info "Build initrd"
         DESTDIR=$TMP/initrd
         mkdir -p $DESTDIR
-    
+
         # Setup busybox
         copy_exec $($WHICH busybox) /bin/busybox
         for applet in $(${DESTDIR}/bin/busybox --list); do
             ln -s busybox ${DESTDIR}/bin/${applet}
         done
-    
+
         # Setup init
         cp $PROGNAME ${DESTDIR}/init
-    
+
         cd "${DESTDIR}" && find . | \
            cpio --quiet -R 0:0 -o -H newc | \
            gzip > $TMP/initrd.gz
@@ -217,14 +217,14 @@ Ne pas oublier d'activer `CONFIG_OVERLAYFS_FS` dans le
     mount -t overlayfs overlayfs /target/overlay -o lowerdir=/target/ro,upperdir=/target/rw
     mount -n -t proc  proc /target/overlay/proc
     mount -n -t sysfs sys  /target/overlay/sys
-    
+
     info "Mount home directory on /root"
     mount -t 9p homeshare /target/overlay/root -o trans=virtio,version=9p2000.L,access=0,rw
-    
+
     info "Mount lab directory on /lab"
     mkdir /target/overlay/lab
     mount -t 9p labshare /target/overlay/lab -o trans=virtio,version=9p2000.L,access=0,rw
-    
+
     info "Chroot"
     export STATE=1
     cp "$PROGNAME" /target/overlay
@@ -305,7 +305,7 @@ s'attacher au débuggueur distant :
     Remote debugging using | socat UNIX:/tmp/tmp.W36qWnrCEj/vm-r1-gdb.pipe -
     native_safe_halt () at /home/bernat/src/linux/arch/x86/include/asm/irqflags.h:50
     50  }
-    (gdb) 
+    (gdb)
 
 Le noyau se débuggue alors comme un programme classique.
 

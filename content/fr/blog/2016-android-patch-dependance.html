@@ -95,7 +95,7 @@ méthode [`shouldDenyRequest()`][shouldDenyRequest] de la classe
     public static boolean shouldDenyRequest(int error) {
         return false;
     }
-    
+
 ## Squelette de la transformation
 
 L'[API de transformation][Transform API] de *Gradle* permet de
@@ -111,34 +111,34 @@ suivant au fichier `build.gradle`:
     import com.android.build.api.transform.TransformInput
     import com.android.build.api.transform.TransformOutputProvider
     import org.gradle.api.logging.Logger
-    
+
     class PatchXWalkTransform extends Transform {
         Logger logger = null;
-    
+
         public PatchXWalkTransform(Logger logger) {
             this.logger = logger
         }
-    
+
         @Override
         String getName() {
             return "PatchXWalk"
         }
-    
+
         @Override
         Set<QualifiedContent.ContentType> getInputTypes() {
             return Collections.singleton(QualifiedContent.DefaultContentType.CLASSES)
         }
-    
+
         @Override
         Set<QualifiedContent.Scope> getScopes() {
             return Collections.singleton(QualifiedContent.Scope.EXTERNAL_LIBRARIES)
         }
-    
+
         @Override
         boolean isIncremental() {
             return true
         }
-    
+
         @Override
         void transform(Context context,
                        Collection<TransformInput> inputs,
@@ -148,10 +148,10 @@ suivant au fichier `build.gradle`:
             // Il faudrait faire quelque chose ici...
         }
     }
-    
+
     // Enregistrement de la transformation
     android.registerTransform(new PatchXWalkTransform(logger))
-    
+
 La méthode `getInputTypes()` retourne un ensemble de types de données
 gérés par la transformation. Dans notre cas, nous allons transformer
 des classes. Une autre possibilité est de transformer des ressources.
@@ -186,7 +186,7 @@ modifications, nous devons copier les fichiers fournis :
             it.jarInputs.each {
                 def jarName = it.name
                 def src = it.getFile()
-                def dest = outputProvider.getContentLocation(jarName, 
+                def dest = outputProvider.getContentLocation(jarName,
                                                              it.contentTypes, it.scopes,
                                                              Format.JAR);
                 def status = it.getStatus()
@@ -200,7 +200,7 @@ modifications, nous devons copier les fichiers fournis :
             }
         }
     }
-    
+
 Le code ci-dessus nécessite deux imports additionnels :
 
     ::groovy
@@ -236,14 +236,14 @@ modifier. Voici la première partie du code (en replacement du code en
     """, ctc)) // ❺
 
         def sslUtilBytecode = ctc.toBytecode() // ❻
-    
+
         // Écriture du nouveau fichier JAR
         // …
     } else {
         logger.info("Copy ${src}")
         FileUtils.copyFile(src, dest)
     }
-    
+
 Il est nécessaire d'ajouter les imports suivant pour utiliser
 *Javassist* :
 
@@ -274,7 +274,7 @@ Il reste enfin à reconstruire le fichier JAR :
             s.close()
         }
     }
-    
+
     // ❽
     output.putNextEntry(new JarEntry("org/xwalk/core/internal/SslUtil.class"))
     output.write(sslUtilBytecode)
@@ -282,7 +282,7 @@ Il reste enfin à reconstruire le fichier JAR :
     output.close()
 
 Il convient d'importer les classes suivantes :
-    
+
     ::groovy
     import java.util.jar.JarEntry
     import java.util.jar.JarFile
@@ -378,7 +378,7 @@ externes et de les ajouter au *classpath* :
     pool.importPackage('org.chromium.net.NetError');
     ctc.addMethod(CtNewMethod.make("…"))
     // Puis reconstruction du fichier JAR...
-    
+
 Happy hacking !
 
 *[DEX]: Dalvik Executable Format

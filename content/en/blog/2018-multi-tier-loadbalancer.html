@@ -114,7 +114,7 @@ on how to configure them. You could look at [HAProxy][], [Envoy][] or
       acl disabled nbsrv(enabler) lt 1
       monitor-uri /healthcheck
       monitor fail if dead || disabled
-    
+
     # IPv6-only servers with HTTP healthchecking and remote agent checks
     backend servers
       balance roundrobin
@@ -123,7 +123,7 @@ on how to configure them. You could look at [HAProxy][], [Envoy][] or
       server web2 [2001:db8:1:0:2::2]:80 send-proxy check agent-check agent-port 5555
       server web3 [2001:db8:1:0:2::3]:80 send-proxy check agent-check agent-port 5555
       server web4 [2001:db8:1:0:2::4]:80 send-proxy check agent-check agent-port 5555
-    
+
     # Fake backend: if the local agent check fails, we assume we are dead
     backend enabler
       server enabler [::1]:0 agent-check agent-port 5555
@@ -212,7 +212,7 @@ is a configuration for one of the load-balancers:
       run python -m exabgp healthcheck -s --interval 10 --increase 0 --cmd "test -f /etc/lb/v6-ready -a ! -f /etc/lb/disable";
       encoder text;
     }
-    
+
     template {
       # Template for IPv6 neighbors
       neighbor v6 {
@@ -229,12 +229,12 @@ is a configuration for one of the load-balancers:
         }
       }
     }
-    
+
     # First router
     neighbor 2001:db8::192.0.2.254 {
       inherit v6;
     }
-    
+
     # Second router
     neighbor 2001:db8::192.0.2.253 {
       inherit v6;
@@ -346,7 +346,7 @@ section, let's start with the configuration of *Keepalived*:
       omega           # Execute quorum_down on shutdown
       quorum_up   "/bin/touch /etc/lb/v6-ready"
       quorum_down "/bin/rm -f /etc/lb/v6-ready"
-    
+
       # First L7 load-balancer
       real_server 2001:db8::192.0.2.132 80 {
         weight 1
@@ -358,7 +358,7 @@ section, let's start with the configuration of *Keepalived*:
           connect_timeout 2
         }
       }
-    
+
       # Many others...
     }
 
@@ -388,7 +388,7 @@ setup.
 [^backport]: The backport is not strictly equivalent to its original version. Be
     sure to check the [`README` file][README] to understand the differences.
     Briefly, in *Keepalived* configuration, you should:
-    
+
      - not use `inhibit_on_failure`
      - use `sh-port`
      - not use `sh-fallback`
@@ -493,7 +493,7 @@ can serve zones from master files using the [RFC 1035][] zone format:
     @ NS ns1.example.com.
     @ NS ns1.example.net.
     @ MX 10 smtp
-    
+
     @     60 DYNA multifo!web
     www   60 DYNA multifo!web
     smtp     A    198.51.100.99
@@ -516,7 +516,7 @@ of monitored addresses:
         def_down => false
       }
     }
-    
+
     plugins => {
       multifo => {
         web => {

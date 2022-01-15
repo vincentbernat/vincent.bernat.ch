@@ -64,13 +64,13 @@ something like that:
 
     ::sh
     #!/bin/sh
-    
+
     set -e
-    
+
     host="${1:-localhost}"
     community="${2:-public}"
     args="-v2c -c $community $host"
-    
+
     for idx in $(snmpwalk -Ov -OQ $args IF-MIB::ifIndex); do
         descr=$(snmpget -Ov -OQ $args IF-MIB::ifDescr.$idx)
         oper=$(snmpget -Ov -OQ $args IF-MIB::ifOperStatus.$idx)
@@ -87,7 +87,7 @@ example, Net-SNMP ships with a Python binding:
     ::python
     import argparse
     import netsnmp
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "host", default="localhost", nargs="?",
@@ -101,7 +101,7 @@ example, Net-SNMP ships with a Python binding:
         "DestHost": options.host,
         "Community": options.community
     }
-    
+
     for idx in netsnmp.snmpwalk(netsnmp.Varbind("IF-MIB::ifIndex"),
                                 **args):
         descr, oper, cin, cout = netsnmp.snmpget(
@@ -145,9 +145,9 @@ Here is how the previous script could be written:
 
     ::python
     #!/usr/bin/env snimpy
-    
+
     import argparse
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "host", default="localhost", nargs="?",
@@ -156,9 +156,9 @@ Here is how the previous script could be written:
         "community", default="public", nargs="?",
         help="Community to query the agent")
     options = parser.parse_args()
-    
+
     m = M(options.host, options.community, 2)
-    
+
     load("IF-MIB")
     for idx in m.ifDescr:
         if m.ifDescr[idx] == "lo":

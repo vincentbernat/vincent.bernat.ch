@@ -72,12 +72,12 @@ behavior**.[^alternatives]
     own trust store to a webview. Moreover, the system trust store is
     not used either. You also may want to use TLS for authentication
     only with client certificates, a feature supported by *Dashkiosk*.
-    
+
 [^alternatives]: *Crosswalk* being an opensource project, an
     alternative would have been to patch *Crosswalk* source code and
     recompile it. However, *Crosswalk* embeds *Chromium* and
     recompiling the whole stuff consumes a lot of resources.
-    
+
 # Simple method replacement
 
 Let's replace the [`shouldDenyRequest()`][shouldDenyRequest] method
@@ -88,7 +88,7 @@ from the `org.xwalk.core.internal.SslUtil` class with this version:
     public static boolean shouldDenyRequest(int error) {
         return false;
     }
-    
+
 ## Transform registration
 
 *Gradle* [Transform API][] enables the manipulation of compiled class
@@ -103,34 +103,34 @@ and register it, include the following code in your `build.gradle`:
     import com.android.build.api.transform.TransformInput
     import com.android.build.api.transform.TransformOutputProvider
     import org.gradle.api.logging.Logger
-    
+
     class PatchXWalkTransform extends Transform {
         Logger logger = null;
-    
+
         public PatchXWalkTransform(Logger logger) {
             this.logger = logger
         }
-    
+
         @Override
         String getName() {
             return "PatchXWalk"
         }
-    
+
         @Override
         Set<QualifiedContent.ContentType> getInputTypes() {
             return Collections.singleton(QualifiedContent.DefaultContentType.CLASSES)
         }
-    
+
         @Override
         Set<QualifiedContent.Scope> getScopes() {
             return Collections.singleton(QualifiedContent.Scope.EXTERNAL_LIBRARIES)
         }
-    
+
         @Override
         boolean isIncremental() {
             return true
         }
-    
+
         @Override
         void transform(Context context,
                        Collection<TransformInput> inputs,
@@ -140,10 +140,10 @@ and register it, include the following code in your `build.gradle`:
             // We should do something here
         }
     }
-    
+
     // Register the transform
     android.registerTransform(new PatchXWalkTransform(logger))
-    
+
 The `getInputTypes()` method should return the set of types of data
 consumed by the transform. In our case, we want to transform
 classes. Another possibility is to transform resources.
@@ -175,7 +175,7 @@ To keep all external dependencies unmodified, we must copy them:
             it.jarInputs.each {
                 def jarName = it.name
                 def src = it.getFile()
-                def dest = outputProvider.getContentLocation(jarName, 
+                def dest = outputProvider.getContentLocation(jarName,
                                                              it.contentTypes, it.scopes,
                                                              Format.JAR);
                 def status = it.getStatus()
@@ -189,13 +189,13 @@ To keep all external dependencies unmodified, we must copy them:
             }
         }
     }
-    
+
 We also need two additional imports:
 
     ::groovy
     import com.android.build.api.transform.Status
     import org.apache.commons.io.FileUtils
-    
+
 Since we are handling external dependencies, we only have to manage
 JAR files. Therefore, we only iterate on `jarInputs` and not on
 `directoryInputs`. There are two cases when handling incremental build:
@@ -224,14 +224,14 @@ to modify it. Here is the first part of the code (replacing ❷):
     """, ctc)) // ❺
 
         def sslUtilBytecode = ctc.toBytecode() // ❻
-    
+
         // Write back the JAR file
         // …
     } else {
         logger.info("Copy ${src}")
         FileUtils.copyFile(src, dest)
     }
-    
+
 We also need the following additional imports to use *Javassist*:
 
     ::groovy
@@ -260,15 +260,15 @@ The remaining step is to rebuild the JAR file:
             s.close()
         }
     }
-    
+
     // ❽
     output.putNextEntry(new JarEntry("org/xwalk/core/internal/SslUtil.class"))
     output.write(sslUtilBytecode)
 
     output.close()
-    
+
 We need the following additional imports:
-    
+
     ::groovy
     import java.util.jar.JarEntry
     import java.util.jar.JarFile
@@ -364,7 +364,7 @@ classpath.
     pool.importPackage('org.chromium.net.NetError');
     ctc.addMethod(CtNewMethod.make("…"))
     // Then, rebuild the JAR...
-    
+
 Happy hacking!
 
 *[DEX]: Dalvik Executable Format

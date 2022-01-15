@@ -45,13 +45,13 @@ la solution utilisée pour IPv4 :
 
 [^ssr]: Pour un préfixe destination, il est possible d'y attacher des
     préfixes sources :
-    
+
         ::shell
         ip -6 route add 2001:db8:1::/64 \
           from 2001:db8:3::/64 \
           via fe80::1 \
           dev eth0
-    
+
     La recherche se fait d'abord sur la destination puis sur la source.
 
 À titre d'exemple, l'illustration ci-dessous montre un arbre radix codant 6
@@ -88,7 +88,7 @@ Voici une version légèrement simplifiée (sans routage par la source) :
     {
         struct fib6_node *fn;
         __be32 dir;
-    
+
         /* Step 1: locate potential candidate */
         fn = root;
         for (;;) {
@@ -101,7 +101,7 @@ Voici une version légèrement simplifiée (sans routage par la source) :
             }
             break;
         }
-    
+
         /* Step 2: check prefix and backtrack if needed */
         while (fn) {
             if (fn->fn_flags & RTN_RTINFO) {
@@ -112,12 +112,12 @@ Voici une version légèrement simplifiée (sans routage par la source) :
                         return fn;
                 }
             }
-    
+
             if (fn->fn_flags & RTN_ROOT)
                 break;
             fn = fn->parent;
         }
-    
+
         return NULL;
     }
 

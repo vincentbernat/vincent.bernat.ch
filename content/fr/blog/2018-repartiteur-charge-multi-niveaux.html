@@ -122,7 +122,7 @@ abondante sur la façon de les configurer. Vous pouvez regarder [HAProxy][],
       acl disabled nbsrv(enabler) lt 1
       monitor-uri /healthcheck
       monitor fail if dead || disabled
-    
+
     # Serveurs frontaux en IPv6 avec tests HTTP et via un agent
     backend servers
       balance roundrobin
@@ -131,7 +131,7 @@ abondante sur la façon de les configurer. Vous pouvez regarder [HAProxy][],
       server web2 [2001:db8:1:0:2::2]:80 send-proxy check agent-check agent-port 5555
       server web3 [2001:db8:1:0:2::3]:80 send-proxy check agent-check agent-port 5555
       server web4 [2001:db8:1:0:2::4]:80 send-proxy check agent-check agent-port 5555
-    
+
     # Faux serveur gérant la disponibilitant du répartiteur de charge lui-même
     backend enabler
       server enabler [::1]:0 agent-check agent-port 5555
@@ -226,7 +226,7 @@ disponibilité. Voici un exemple de configuration :
       run python -m exabgp healthcheck -s --interval 10 --increase 0 --cmd "test -f /etc/lb/v6-ready -a ! -f /etc/lb/disable";
       encoder text;
     }
-    
+
     template {
       # Patron pour un routeur IPv6
       neighbor v6 {
@@ -243,12 +243,12 @@ disponibilité. Voici un exemple de configuration :
         }
       }
     }
-    
+
     # Premier routeur
     neighbor 2001:db8::192.0.2.254 {
       inherit v6;
     }
-    
+
     # Second routeur
     neighbor 2001:db8::192.0.2.253 {
       inherit v6;
@@ -371,7 +371,7 @@ pouvons passer à la configuration de *Keepalived* :
       omega           # Exécute quorum_down à l'arrêt
       quorum_up   "/bin/touch /etc/lb/v6-ready"
       quorum_down "/bin/rm -f /etc/lb/v6-ready"
-    
+
       # Premier répartiteur de charge L7
       real_server 2001:db8::192.0.2.132 80 {
         weight 1
@@ -383,7 +383,7 @@ pouvons passer à la configuration de *Keepalived* :
           connect_timeout 2
         }
       }
-    
+
       # Tous les autres...
     }
 
@@ -414,7 +414,7 @@ que `sh`, rend l'ensemble moins robuste.
 [^backport]: Le rétroportage n'est pas fonctionnellement équivalent à la version
     originale. Consultez le [fichier `README`][README] pour comprendre les
     différences. Brièvement, dans la configuration de *Keepalived*, il faut :
-    
+
      - ne pas utiliser `inhibit_on_failure`
      - utiliser `sh-port`
      - ne pas utiliser `sh-fallback`
@@ -523,7 +523,7 @@ intégrés. Il peut servir des zones au format [RFC 1035][] :
     @ NS ns1.example.com.
     @ NS ns1.example.net.
     @ MX 10 smtp
-    
+
     @     60 DYNA multifo!web
     www   60 DYNA multifo!web
     smtp     A    198.51.100.99
@@ -546,7 +546,7 @@ surveillance en mode actif/actif des adresses IP de la ferme :
         def_down => false
       }
     }
-    
+
     plugins => {
       multifo => {
         web => {

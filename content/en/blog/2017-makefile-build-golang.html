@@ -82,7 +82,7 @@ in the `GOPATH`:
     PACKAGE  = hellogopher
     GOPATH   = $(CURDIR)/.gopath
     BASE     = $(GOPATH)/src/$(PACKAGE)
-    
+
     $(BASE):
     	@mkdir -p $(dir $@)
     	@ln -sf $(CURDIR) $@
@@ -145,10 +145,10 @@ them to be already installed or **compile them** in our private
     ::make
     BIN    = $(GOPATH)/bin
     GOLINT = $(BIN)/golint
-    
+
     $(BIN)/golint: | $(BASE) # ❶
     	go get github.com/golang/lint/golint
-    
+
     .PHONY: lint
     lint: vendor | $(BASE) $(GOLINT) # ❷
     	@cd $(BASE) && ret=0 && for pkg in $(PKGS); do \
@@ -209,7 +209,7 @@ Here are some rules to run tests:
     test-verbose: ARGS=-v
     test-race:    ARGS=-race
     $(TEST_TARGETS): test
-    
+
     check test tests: fmt lint vendor | $(BASE)
     	@cd $(BASE) && $(GO) test -timeout $(TIMEOUT)s $(ARGS) $(PKGS)
 
@@ -236,7 +236,7 @@ tools.
     COVERAGE_PROFILE = $(COVERAGE_DIR)/profile.out
     COVERAGE_XML     = $(COVERAGE_DIR)/coverage.xml
     COVERAGE_HTML    = $(COVERAGE_DIR)/index.html
-    
+
     .PHONY: test-coverage test-coverage-tools
     test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) # ❸
     test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -Iseconds)

@@ -91,7 +91,7 @@ file—heavily relying on some [Zsh][]-fu:[^zsh]
     ::sh
     #!/bin/zsh
     set -e
-    
+
     work=$(mktemp -d)
     trap "rm -rf $work" EXIT
 
@@ -124,7 +124,7 @@ file—heavily relying on some [Zsh][]-fu:[^zsh]
         echo ${${(q-)@}//\'/\"} >> ${work}/${0}-${table}-rules #'
     }
     functions[ip6tables]=${functions[iptables]}
-    
+
     # ❷ Build the final ruleset that can be parsed by ip{,6}tables-restore
     save() {
         for table (${work}/${1}-*-rules(:t:s/-rules//)) {
@@ -189,7 +189,7 @@ is the gist (still using [Zsh][] syntax):
     ::sh
     #!/bin/zsh
     set -e
-    
+
     alias main='/bin/true ||'
     [ -n $iptables ] || {
         # ❶ Execute ourself in a dedicated network namespace
@@ -200,12 +200,12 @@ is the gist (still using [Zsh][] syntax):
         alias ip6tables=/bin/true
         alias main='/bin/false ||'
     }
-    
+
     # ❸ In both namespaces, execute rule files
     for rule in $(run-parts --list --regex '^[.a-zA-Z0-9_-]+$' ${0%/*}/rules); do
         . $rule
     done
-    
+
     # ❹ In test namespace, save the rules
     [ -z $iptables ] || {
         iptables-save >&4

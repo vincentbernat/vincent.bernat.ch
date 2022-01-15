@@ -32,7 +32,7 @@ that in C. Another supported option is [Vala][].
 
     ::c
     #include <vte/vte.h>
-    
+
     static void
     child_ready(VteTerminal *terminal, GPid pid, GError *error, gpointer user_data)
     {
@@ -44,13 +44,13 @@ that in C. Another supported option is [Vala][].
     main(int argc, char *argv[])
     {
         GtkWidget *window, *terminal;
-    
+
         /* Initialise GTK, the window and the terminal */
         gtk_init(&argc, &argv);
         terminal = vte_terminal_new();
         window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
         gtk_window_set_title(GTK_WINDOW(window), "myterm");
-    
+
         /* Start a new shell */
         gchar **envp = g_get_environ();
         gchar **command = (gchar *[]){g_strdup(g_environ_getenv(envp, "SHELL")), NULL };
@@ -67,11 +67,11 @@ that in C. Another supported option is [Vala][].
             NULL,         /* cancellable */
             child_ready,  /* callback */
             NULL);        /* user_data */
-    
+
         /* Connect some signals */
         g_signal_connect(window, "delete-event", gtk_main_quit, NULL);
         g_signal_connect(terminal, "child-exited", gtk_main_quit, NULL);
-    
+
         /* Put widgets together and run the main loop */
         gtk_container_add(GTK_CONTAINER(window), terminal);
         gtk_widget_show_all(window);
@@ -127,7 +127,7 @@ You can define the 16 basic colors with the following code:
             CLR_GDK(0xA3BABF),
             CLR_GDK(0xffffff)
     }, 16);
-        
+
 While you can't see it on the screenshot,[^compositing] this also
 enables background transparency.
 
@@ -154,7 +154,7 @@ This will:
  - not scroll to the bottom on new output;
  - scroll to the bottom on keystroke; and
  - hide the mouse cursor when typing.
- 
+
 ## Update the window title
 
 An application can change the window title
@@ -175,7 +175,7 @@ this, you need to define this function:
 Then, connect it to the appropriate signal, in `main()`:
 
     ::c
-    g_signal_connect(terminal, "window-title-changed", 
+    g_signal_connect(terminal, "window-title-changed",
         G_CALLBACK(on_title_changed), GTK_WINDOW(window));
 
 # Final words

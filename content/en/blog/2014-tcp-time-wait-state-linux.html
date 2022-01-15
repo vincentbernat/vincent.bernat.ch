@@ -221,23 +221,23 @@ purposes):
     table" (despite containing connections in other states) is used to
     locate an existing connection, for example when receiving a new
     segment.
-    
+
     Each bucket of this hash table contains both a list of connections
     in the `TIME-WAIT` state and a list of regular active
     connections. The size of the hash table depends on the system
     memory and is printed at boot:
-    
+
         ::console
         $ dmesg | grep "TCP established hash table"
         [    0.169348] TCP established hash table entries: 65536 (order: 8, 1048576 bytes)
-    
+
     It is possible to override it by specifying the number of entries
     on the kernel command line with the `thash_entries` parameter.
-    
+
     Each element of the list of connections in the `TIME-WAIT` state
     is a `struct tcp_timewait_sock`, while the type for other
     states is `struct tcp_sock`:[^tcptimewaitsock]
-    
+
         ::c
         struct tcp_timewait_sock {
             struct inet_timewait_sock tw_sk;
@@ -248,10 +248,10 @@ purposes):
             u32    tw_ts_recent;
             long   tw_ts_recent_stamp;
         };
-    
+
         struct inet_timewait_sock {
             struct sock_common  __tw_common;
-        
+
             int                     tw_timeout;
             volatile unsigned char  tw_substate;
             unsigned char           tw_rcv_wscale;
@@ -270,7 +270,7 @@ purposes):
  2. A **set of lists of connections**, called the "death row," is used
     to expire the connections in the `TIME-WAIT` state. They are
     ordered by how much time is left before expiration.
-    
+
     It uses the same memory space as for the entries in the hash table
     of connections. This is the `struct hlist_node tw_death_node`
     member of `struct inet_timewait_sock`.[^deathrow]
@@ -280,11 +280,11 @@ purposes):
     to listen to a given port or to find a free port in the case of a
     dynamic bind. The size of this hash table is the same as the size
     of the hash table of connections:
-    
+
         ::console
         $ dmesg | grep "TCP bind hash table"
         [    0.169962] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
-    
+
     Each element is a `struct inet_bind_socket`. There is
     one element for each locally bound port. A `TIME-WAIT` connection
     to a web server is locally bound to the port 80 and shares the
@@ -331,8 +331,8 @@ outbound connections:
 
     ::console
     $ sudo slabtop -o | grep -E '(^  OBJS|tw_sock_TCP|tcp_bind_bucket)'
-      OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME                   
-     50955  49725  97%    0.25K   3397       15     13588K tw_sock_TCP            
+      OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME
+     50955  49725  97%    0.25K   3397       15     13588K tw_sock_TCP
      44840  36556  81%    0.06K    760       59      3040K tcp_bind_bucket
 
 There is nothing to change here: the memory used by `TIME-WAIT`
@@ -468,8 +468,8 @@ values for a living connection with the `ss` command:
 
     ::console
     $ ss --info  sport = :2112 dport = :4057
-    State      Recv-Q Send-Q    Local Address:Port        Peer Address:Port   
-    ESTAB      0      1831936   10.47.0.113:2112          10.65.1.42:4057    
+    State      Recv-Q Send-Q    Local Address:Port        Peer Address:Port
+    ESTAB      0      1831936   10.47.0.113:2112          10.65.1.42:4057
              cubic wscale:7,7 rto:564 rtt:352.5/4 ato:40 cwnd:386 ssthresh:200 send 4.5Mbps rcv_space:5792
 
 To keep the same guarantees the `TIME-WAIT` state was providing, while

@@ -49,13 +49,13 @@ Reprenons notre sympathique serveur de pages 404 :
 
     ::go
     package main
-    
+
     import (
         "log"
         "net"
         "net/http"
     )
-    
+
     func main() {
         listener, err := net.Listen("tcp", ":8081")
         if err != nil {
@@ -69,14 +69,14 @@ Voici la version utilisant l'activation par socket, à l'aide de
 
     ::go hl_lines="11 19"
     package main
-    
+
     import (
         "log"
         "net/http"
-    
+
         "github.com/coreos/go-systemd/activation"
     )
-    
+
     func main() {
         listeners, err := activation.Listeners(true) // ❶
         if err != nil {
@@ -121,7 +121,7 @@ Voici le contenu du fichier `404.socket` :
     [Socket]
     ListenStream = 8000
     BindIPv6Only = both
-    
+
     [Install]
     WantedBy = sockets.target
 
@@ -133,7 +133,7 @@ contenu du fichier `404.service` :
     ::ini
     [Unit]
     Description = 404 micro-service
-    
+
     [Service]
     ExecStart = /usr/bin/404
 
@@ -161,7 +161,7 @@ sont tuées :
     quit := make(chan os.Signal, 1)
     server := &http.Server{}
     signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    
+
     go func() {
         <-quit
         log.Println("server is shutting down")
@@ -177,7 +177,7 @@ sont tuées :
 
     // Accepte de nouvelles connexions.
     server.Serve(listeners[0])
-    
+
     // Attend la fin des connexions en cours avant de sortir.
     <-done
 
@@ -216,7 +216,7 @@ perturbés :
     ::ini hl_lines="6 7"
     [Unit]
     Description = slow 404 micro-service
-    
+
     [Service]
     ExecStart = /usr/bin/404
     ExecStop  = /bin/kill $MAINPID
@@ -311,7 +311,7 @@ fonction `detachedSleep()`[^python] :
         py := `
     import os
     import time
-    
+
     pid = os.fork()
     if pid == 0:
         for fd in {0, 1, 2}:
@@ -336,7 +336,7 @@ fonction `detachedSleep()`[^python] :
     sur le système, il est d'assez bas niveau pour implémenter
     facilement la fonctionnalité et, en tant que langage interprété,
     il ne nécessite pas d'étape de compilation.
-    
+
     Il n'y a pas besoin d'appeler `fork()`
     deux fois car il faut uniquement détacher le leurre du processus
     courant. Cela simplifie sensiblement le code Python.
@@ -354,7 +354,7 @@ Le fichier `404.service` doit être mis à jour :
     ::ini
     [Unit]
     Description = slow 404 micro-service
-    
+
     [Service]
     ExecStart    = /usr/bin/404
     ExecReload   = /bin/kill -HUP $MAINPID
@@ -448,7 +448,7 @@ function :
             if err != nil {
                 log.Panicf("cannot execute sleep command: %s", err)
             }
-    
+
             // Publie le PID du fils et sort.
             fmt.Printf("%d", child.Pid)
             os.Exit(0)
@@ -458,7 +458,7 @@ function :
             os.Exit(0)
         }
     }
-    
+
     // self retourne le chemin absolu vers nous-même. Cela repose sur
     // /proc/self/exe qui peut être un lien symbolique vers un fichier
     // supprimé (durant une mise à jour par exemple).
@@ -470,7 +470,7 @@ function :
         execPath = strings.TrimSuffix(execPath, " (deleted)")
         return execpath
     }
-    
+
     // detachedSleep détache un processus qui dort une seconde et retourne
     // son PID.
     func detachedSleep() uint64 {
@@ -501,7 +501,7 @@ définition de socket supplémentaire, `403.socket`, liée à la tâche
     ListenStream = 8001
     BindIPv6Only = both
     Service      = 404.service
-    
+
     [Install]
     WantedBy=sockets.target
 
@@ -512,15 +512,15 @@ pour récupérer une correspondance entre les noms et les sockets :
 
     ::go hl_lines="24"
     package main
-    
+
     import (
         "log"
         "net/http"
         "sync"
-    
+
         "github.com/coreos/go-systemd/activation"
     )
-    
+
     func main() {
         var wg sync.WaitGroup
 
@@ -532,13 +532,13 @@ pour récupérer une correspondance entre les noms et les sockets :
                     http.StatusForbidden)
             },
         }
-    
+
         // Récupère les sockets en écoute.
         listeners, err := activation.ListenersWithNames(true)
         if err != nil {
             log.Panicf("cannot retrieve listeners: %s", err)
         }
-    
+
         // Pour chaque socket, invoque une goroutine en utilisant
         // la fonction de gestion adéquate.
         for name := range listeners {
@@ -552,7 +552,7 @@ pour récupérer une correspondance entre les noms et les sockets :
                 }(name, idx)
             }
         }
-    
+
         // Attend que toutes les goroutines terminent.
         wg.Wait()
     }
