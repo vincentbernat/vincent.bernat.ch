@@ -17,10 +17,6 @@
             pytest = super.pytest.overridePythonAttrs (
               old: { doCheck = false; doInstallCheck = false; }
             );
-            # For langcodes
-            marisa-trie-m = super.marisa-trie-m.overridePythonAttrs (
-              old: { buildInputs = (old.buildInputs or [ ]) ++ [ self.pytest-runner ]; }
-            );
           });
         };
         nodeEnv = pkgs.mkYarnModules {
