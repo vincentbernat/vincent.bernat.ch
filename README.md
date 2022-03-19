@@ -42,7 +42,7 @@ nix run .#yarn -- outdated
 Upgrade a dependency:
 
 ```
-nix run .#yarn -- upgrade-interactive --modules-folder ~/tmp/node_modules --latest
+nix run .#yarn -- upgrade-interactive --modules-folder ~/tmp/node_modules --ignore-scripts --latest
 ```
 
 ### Nix
