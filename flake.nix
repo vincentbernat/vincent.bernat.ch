@@ -28,17 +28,31 @@
       in
       {
         apps = {
-          linkchecker = pkgs.linkchecker;
-          goaccess = (pkgs.goaccess.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [
-              (pkgs.fetchpatch {
-                url = "https://github.com/allinurl/goaccess/pull/2126.patch";
-                sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
-              })
-            ];
-          }));
-          yarn = pkgs.yarn;
-          poetry = pkgs.poetry;
+          linkchecker = {
+            type = "app";
+            program = "${pkgs.linkchecker}/bin/linkchecker";
+          };
+          goaccess = let
+            pkg = (pkgs.goaccess.overrideAttrs (old: {
+              patches = (old.patches or [ ]) ++ [
+                (pkgs.fetchpatch {
+                  url = "https://github.com/allinurl/goaccess/pull/2126.patch";
+                  sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
+                })
+              ];
+            }));
+          in {
+            type = "app";
+            program = "${pkg}/bin/goaccess";
+          };
+          yarn = {
+            type = "app";
+            program = "${pkgs.yarn}/bin/yarn";
+          };
+          poetry = {
+            type = "app";
+            program = "${pkgs.poetry}/bin/poetry";
+          };
         };
         packages = {
           build.subsetFonts =
