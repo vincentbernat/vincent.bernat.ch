@@ -1,0 +1,53 @@
+---
+title: Thunderbird's X-Mozilla-Status and X-Mozilla-Status2 flags
+uuid: 5156940b-dc97-4fa1-a5c5-9f6344b29bb5
+share: true
+---
+
+[Thunderbird][] stores mails in the [mbox format][]. In addition to
+the header lines set by the MUA or by the MTAs in transit, Thunderbird
+stores the message status in two headers: `X-Mozilla-Status` and
+`X-Mozilla-Status2`. These headers are hexadecimal representations of
+the message flags.
+
+The content of the following tables are extracted from the [source
+code][] of Thunderbird 102.
+
+# X-Mozilla-Status
+
+| Flag       | Name           | Description                                                                 |
+|------------|----------------|-----------------------------------------------------------------------------|
+| 0x00000001 | `Read`         | This message has been read                                                  |
+| 0x00000002 | `Replied`      | A reply to this message has been successfully sent                          |
+| 0x00000004 | `Marked`       | This message has been flagged                                               |
+| 0x00000008 | `Expunged`     | This message has already gone, but the folder hasn't been compacted yet     |
+| 0x00000010 | `HasRe`        | The subject of this message has "Re:" on the front                          |
+| 0x00000020 | `Elided`       | The children of this sub-thread are folded in the display                   |
+| 0x00000040 | `FeedMsg`      | The message is a feed, originally downloaded in a `server.type=rss` account |
+| 0x00000080 | `Offline`      | This news article or IMAP message is present in the disk cache              |
+| 0x00000100 | `Watched`      | This thread is being watched                                                |
+| 0x00000200 | `SenderAuthed` | This message's sender has been authenticated when sending this message      |
+| 0x00000400 | `Partial`      | Partial message whose body should be downloaded from the POP server         |
+| 0x00000800 | `Queue`        | This message is queued for delivery                                         |
+| 0x00001000 | `Forwarded`    | This message has been forwarded                                             |
+| 0x00002000 | `Redirected`   | This message has been redirected                                            |
+| 0x0000E000 | `Priorities`   | These are used to remember the message priority                             |
+
+# X-Mozilla-Status2
+
+| Flag       | Name            | Description                                                                      |
+|------------|-----------------|----------------------------------------------------------------------------------|
+| 0x00010000 | `New`             | This message is new since the last time the folder was closed                    |
+| 0x00040000 | `Ignored`         | This thread has been ignored                                                     |
+| 0x00200000 | `IMAPDeleted`     | This IMAP message has been marked deleted on the server                          |
+| 0x00400000 | `MDNReportNeeded` | This message has requested to send a message delivery notification to its sender |
+| 0x00800000 | `MDNReportSent`   | A message delivery notification has been sent for this message                   |
+| 0x01000000 | `Template`        | This message is a template                                                       |
+| 0x0E000000 | `Labels`          | These are used to remember the message labels                                    |
+| 0x10000000 | `Attachment`      | This message has files attached to it                                            |
+
+*[MUA]: Mail User Agent
+*[MTAs]: Mail Transport Agent
+[mbox format]: https://en.wikipedia.org/wiki/Mbox "Mbox on Wikipedia"
+[source code]: https://hg.mozilla.org/comm-central/file/68ac92f5fc3cdaf8febc623abbdaea7165b44004/mailnews/base/public/nsMsgMessageFlags.idl "nsMsgMessageFlags.idl source code"
+[Thunderbird]: https://www.thunderbird.net/
