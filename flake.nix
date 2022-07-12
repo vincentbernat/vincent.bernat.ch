@@ -213,7 +213,8 @@
                     };
                     metric-override = {
                       cap = 790;
-                      xheight = 570;
+                      ascender = 790;
+                      xHeight = 570;
                     };
                   };
                 };
