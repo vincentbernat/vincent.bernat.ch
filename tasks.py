@@ -130,7 +130,7 @@ def screenshots(c):
 while read video arguments; do
   video2hls --hls-playlist-prefix https://media.bernat.ch/videos/${video%.*}/ \
     --poster-grayscale --poster-quality 30 \
-    $=arguments $video
+    $=arguments -- $video
 done <<EOF
 2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
 2012-network-lab-kvm.ogv         --video-bitrate-factor 0.3
@@ -162,6 +162,9 @@ done <<EOF
 2021-network-cmdb.mkv            --video-bitrate-factor 0.5 \
                                  --poster-seek 20%
 2021-frnog34-jerikan.mp4         --video-bitrate-factor 0.5
+2022-clickhouse-meetup-akvorado.mkv \
+                                 --video-widths 1280 428 \
+                                 --video-bitrates 500 100
 EOF
 """
 
@@ -188,11 +191,11 @@ def upload_videos(c, video=None):
             continue
         # Upload
         for host in hosts:
-            c.run("rsync --delete -a {directory}/ {host}:"
+            c.run("rsync --delete --info=progress2 -a {directory}/ {host}:"
                   "/data/webserver/media.bernat.ch/videos/{short}/".format(
                       host=host,
                       short=directory,
-                      directory=os.path.join(path, directory)))
+                      directory=os.path.join(path, directory)), hide=False)
         # Copy poster and index.m3u8
         c.run("cp {directory}/poster.jpg "
               "content/media/images/posters/{short}.jpg".format(

@@ -1,0 +1,2019 @@
+WEBVTT
+
+00:03.140 --> 00:09.160
+Bonjour. Je suis Vincent Bernat.
+Je suis un ingénieur réseau français qui travaille chez Free.
+
+2
+00:09.540 --> 00:12.560
+Je fais cette présentation depuis Paris, France.
+
+3
+00:13.240 --> 00:14.950
+C'est un plaisir de vous voir.
+
+00:15.840 --> 00:18.150
+Je vais vous présenter Akvorado,
+
+6
+00:18.540 --> 00:22.950
+un collecteur de flux réseaux et utilisant ClickHouse.
+
+8
+00:28.310 --> 00:30.350
+Il a été développé en interne chez Free.
+
+9
+00:30.890 --> 00:34.450
+Free est un FAI français fondé en 1999.
+
+10
+00:34.840 --> 00:37.810
+C'est l'un des tous premiers fournisseurs d'accès accessible
+
+11
+00:37.810 --> 00:41.380
+sans abonnement et sans numéro surtaxé en France.
+
+12
+00:41.940 --> 00:46.760
+Il a contribué à la démocratisation de l'ADSL en France en faisant baisser les prix.
+
+13
+00:47.340 --> 00:51.020
+Il a été particulièrement innovant avec l'introduction de la Freebox.
+
+14
+00:51.020 --> 00:55.460
+Il s'agit de la première boîte d'accès "Triple Play", incluant Internet, télévision
+
+15
+00:55.840 --> 00:57.160
+et téléphone.
+
+00:57.940 --> 01:05.459
+Il a aussi beaucoup contribué à l'adoption d'IPv6 en France en 2008.
+
+18
+01:06.640 --> 01:10.970
+L'offre mobile a aussi été très innovante avec un quota de données très élevé.
+
+19
+01:10.970 --> 01:15.600
+Actuellement, il y a plus de 100 Go inclus
+
+20
+01:15.840 --> 01:18.250
+et vous pouvez l'utiliser un peu partout dans le monde.
+
+21
+01:18.840 --> 01:24.860
+Mais nous ne sommes pas disponibles à San Francisco.
+
+01:27.940 --> 01:32.460
+Akvorado est un collecteur NetFlow, IPFIX, sFlow.
+
+24
+01:32.940 --> 01:37.240
+Les routeurs envoient un extrait des paquets qu'ils reçoivent à Akvorado,
+
+25
+01:37.570 --> 01:40.560
+quelque chose comme un paquet sur 10000.
+
+26
+01:41.440 --> 01:46.480
+Il y a plusieurs protocoles pour ça.
+
+27
+01:46.480 --> 01:51.360
+IPFIX est la version IETF de NetFlow. Netflow est un protocole propriétaire de Cisco.
+
+28
+01:52.140 --> 01:54.840
+sFlow est un autre type de protocole.
+
+29
+01:54.850 --> 01:58.150
+La différence est qu'il n'aggrège pas les données.
+
+30
+01:58.260 --> 02:00.360
+Il les envoie en temps réel.
+
+02:00.740 --> 02:05.780
+Mais c'est une différence mineure car NetFlow est aussi capable
+
+33
+02:05.790 --> 02:09.020
+d'envoyer les données quasiment en temps réel avec la bonne configuration.
+
+34
+02:09.030 --> 02:10.850
+Vous pouvez obtenir un retard de 10 secondes.
+
+35
+02:11.540 --> 02:15.750
+En pratique, vous choisissez le protocole que vos routeurs savent gérer.
+
+36
+02:15.760 --> 02:18.300
+Il est donc important de comprendre plusieurs protocoles
+
+37
+02:18.300 --> 02:21.160
+car tous les routeurs ne proposent pas tous les protocoles.
+
+02:22.140 --> 02:28.760
+Akvorado reçoit les flux et les enrichit avec des informations supplémentaires.
+
+02:29.240 --> 02:33.700
+Notamment, il ajoute les informations liés à la localisation en utilisant les bases de données de Maxmind.
+
+02:34.560 --> 02:38.860
+Il ajoute les noms et les descriptions des interfaces en utilisant le protocole SNMP.
+
+44
+02:39.240 --> 02:41.160
+Il ajoute les numéros d'AS.
+
+45
+02:41.640 --> 02:46.830
+Les numéros d'AS sont le moyen d'identifier les organisations sur Internet.
+
+46
+02:46.830 --> 02:51.860
+Depuis l'adresse IP, vous obtenez le numéro d'AS et le numéro d'AS vous permet d'obtenir le nom.
+
+02:52.840 --> 03:00.600
+On ajoute également certains attributs aux routeurs en utilisant des règles de classification : on ajoute la localisation, le rôle,
+
+49
+03:00.600 --> 03:07.190
+le propriétaire du routeur et on ajoute également des attributs aux interfaces : le fournisseur,
+
+50
+03:07.200 --> 03:07.870
+la frontière,
+
+51
+03:07.990 --> 03:12.060
+la connectivité (est-ce qu'il s'agit d'une interface de transit ou de peering).
+
+52
+03:12.070 --> 03:15.310
+Ces informations sont très utiles à avoir
+
+53
+03:15.310 --> 03:17.860
+quand vous avez besoin d'interroger les données récoltées.
+
+03:19.240 --> 03:25.010
+Ensuite, Akvorado sérialise les flux avec Protobuf
+
+56
+03:25.410 --> 03:27.350
+et les envoie vers un cluster Kafka.
+
+57
+03:28.240 --> 03:33.760
+Depuis récemment, c'est un projet libre. Nous l'avons publiés sur GitHub.
+
+03:34.810 --> 03:38.750
+Il y a aussi une jolie interface graphique pour interroger les données.
+
+61
+03:40.540 --> 03:45.550
+Voici quelques captures d'écran mais je vais vous faire une démonstration.
+
+03:54.540 --> 04:01.560
+Vous pouvez essayer la démo sur demo.akvorado.net.
+
+66
+04:02.340 --> 04:08.850
+Elle tourne sur une petite machine virtuelle et utilise des données générées.
+
+67
+04:10.940 --> 04:16.050
+La page d'accueil montre quelques métriques pour indiquer si
+
+68
+04:16.050 --> 04:19.959
+tout fonctionne correctement. Il affiche aussi le dernier flux reçu.
+
+69
+04:20.339 --> 04:22.970
+Vous pouvez voir à quoi cela ressemble.
+
+70
+04:22.980 --> 04:27.150
+Il y a la date de réception, le nombre d'octets et de paquets,
+
+71
+04:27.240 --> 04:29.200
+le routeur qui a envoyé le flux,
+
+72
+04:29.220 --> 04:30.150
+son nom.
+
+73
+04:30.640 --> 04:35.280
+Les attributs suivants proviennent des règles de classification.
+
+74
+04:35.280 --> 04:38.350
+Le taux d'échantillonnage est particulièrement élevé pour cette démo.
+
+75
+04:39.240 --> 04:45.960
+Il indique que le routeur envoie un flux pour 50000 flux reçu.
+
+76
+04:47.210 --> 04:47.710
+L'adresse source.
+
+77
+04:47.990 --> 04:49.150
+Le numéro d'AS source.
+
+78
+04:49.260 --> 04:52.860
+La géolocalisation n'est pas configurée donc on n'obtient pas le pays.
+
+79
+04:53.640 --> 05:00.930
+Vous obtenez le port source. En ce qui concerne l'interface d'entrée, vous avez le nom, la description,
+
+80
+05:00.940 --> 05:03.790
+la vitesse et aussi, via les règles de classification,
+
+81
+05:03.790 --> 05:06.280
+le fait qu'il s'agit d'une interface externe
+
+82
+05:06.280 --> 05:07.760
+(connectée à Internet)
+
+83
+05:08.140 --> 05:13.960
+Il s'agit d'une interface de transit connectée à Cogent, qui est un fournisseur de transit
+
+84
+05:14.440 --> 05:18.980
+et vous avez des choses similaires pour l'adresse destination, le pays
+
+85
+05:18.990 --> 05:21.960
+et l'interface de sortie.
+
+86
+05:22.540 --> 05:26.820
+Il y a EType qui indique principalement IPv4 ou IPv6.
+
+87
+05:26.820 --> 05:31.660
+Forwarding status. 64 signifie que le paquet a été routé.
+
+88
+05:32.040 --> 05:36.110
+128 signifie qu'il a été supprimé.
+
+89
+05:36.120 --> 05:40.150
+Si vous avez des règles de filtrage, c'est intéressant.
+
+90
+05:40.160 --> 05:43.720
+Et le protocole : 17 pour UDP, 6 pour TCP.
+
+91
+05:45.340 --> 05:51.550
+La plupart des champs sont reçus avec le flux, mais certains son ajoutés plus tard.
+
+92
+05:52.640 --> 05:57.420
+La partie la plus intéressante et l'onglet "visualisation".
+
+93
+05:57.430 --> 06:01.360
+Regardons sur 7 jours.
+
+94
+06:01.740 --> 06:03.750
+Cela répond à la question
+
+95
+06:04.140 --> 06:06.660
+« d'où vient mon trafic ? »
+
+96
+06:07.740 --> 06:12.350
+On voit par exemple dans cette démo que la plupart du trafic provient de Netflix
+
+97
+06:12.470 --> 06:14.550
+mais aussi de Google et de Facebook.
+
+98
+06:16.340 --> 06:21.770
+Il y a un filtre et vous pouvez ajouter d'autres choses.
+
+06:21.770 --> 06:26.360
+Par exemple, si on ne veut voir que le trafic IPv6.
+
+101
+06:26.740 --> 06:31.660
+Je peux mettre ce filtre et quand j'applique, j'obtiens uniquement le trafic IPv6.
+
+06:32.140 --> 06:37.250
+Comme les données sont générées, c'est un peu compliqué de voir la différence. IPv6 représente
+
+104
+06:37.250 --> 06:41.950
+quasiment 60 Gbps tandis que le trafic total
+
+105
+06:41.950 --> 06:46.660
+est d'environ 90 Gbps.
+
+106
+06:49.140 --> 06:57.630
+Une autre représentation intéressante que peut fournir l'interface web est le graphique « sankey »
+
+107
+06:57.640 --> 07:02.760
+On voit les trois plus gros parleurs :
+
+108
+07:03.640 --> 07:06.060
+Netflix, Google et Facebook.
+
+110
+07:08.380 --> 07:14.530
+Il montre aussi que les 2/3 du trafic passent par des fournisseurs de transit.
+
+111
+07:14.540 --> 07:17.960
+Le tiers restant passe par des points d'échange.
+
+112
+07:18.340 --> 07:21.910
+Un point d'échange est un endroit où les gens peuvent se connecter
+
+113
+07:21.910 --> 07:25.360
+sur le même switch et échanger du trafic gratuitement
+
+114
+07:25.740 --> 07:27.220
+ou non.
+
+115
+07:29.040 --> 07:33.810
+Mais vous n'avez pas la totalité d'Internet sur un point d'échange.
+
+116
+07:33.810 --> 07:37.160
+Si vous voulez accéder à la totalité d'Internet, vous devez aussi avoir un fournisseur de transit.
+
+117
+07:39.130 --> 07:43.760
+On peut par exemple répondre à la question « comment obtient-on le trafic de Google ? »
+
+118
+07:44.140 --> 07:48.990
+Il semble que le gros du trafic passe par du transit
+
+119
+07:48.990 --> 07:53.560
+mais une petite partie vient des points d'échange.
+
+07:53.570 --> 07:59.260
+C'est une visualisation très appréciée chez les ingénieurs réseau.
+
+123
+08:02.040 --> 08:04.260
+Retournons à la présentation.
+
+08:10.240 --> 08:16.750
+Comment avez-nous utiliser ClickHouse ? Ce sont les tables que nous avons actuellement.
+
+127
+08:17.140 --> 08:21.040
+Petit avertissement. C'est la première fois que j'utilise ClickHouse.
+
+128
+08:21.230 --> 08:26.400
+Je suis un ingénieur réseau et non un ingénieur de bases de données.
+
+129
+08:26.410 --> 08:31.560
+J'ai quelques notions, mais c'est assez léger.
+
+130
+08:32.140 --> 08:38.559
+Tout retour est le bienvenu et prenez tout avec un peu de distance.
+
+131
+08:40.240 --> 08:44.760
+Les rectangles violets sont les tables,
+
+132
+08:44.770 --> 08:49.820
+ceux en bleu sont les vues et les blancs sont les dictionnaires.
+
+08:51.640 --> 08:58.460
+J'ai été trop rapide et j'ai oublié de dire. Non, non, c'est okay, désolé.
+
+136
+08:59.040 --> 09:03.560
+Donc comme je vous disais, les flux arrivent de Kafka
+
+137
+09:04.140 --> 09:10.190
+dans la table flows_2_raw table qui n'utilise pas le disque.
+
+09:10.360 --> 09:14.380
+Il y a un consommateur qui extrait les flux et les envoie dans la table flows
+
+140
+09:14.380 --> 09:18.060
+qui est la table principale contenant tous les flux.
+
+141
+09:18.640 --> 09:21.480
+Il y a quelques autres tables flows
+
+142
+09:21.940 --> 09:28.260
+qui aggrègent les données sur le temps pour prendre moins de place et accélérer les requêtes.
+
+143
+09:28.840 --> 09:31.510
+Je donnerai plus de détails par la suite.
+
+144
+09:34.340 --> 09:37.860
+Donc l'ingestion se fait en utilisant Kafka.
+
+145
+09:37.860 --> 09:40.160
+Nous recevons les données en utilisant le moteur Kafka.
+
+146
+09:40.640 --> 09:43.760
+Les données sont encodées avec le format Protbuf.
+
+147
+09:44.380 --> 09:48.210
+Les schémas Protobuf sont versionnés. Ils arrivent depuis un sujet
+
+148
+09:48.210 --> 09:51.760
+versionné de Kafka et ils sont stockés dans des tables versionnés.
+
+150
+09:55.900 --> 09:58.990
+La table flows n'est pas versionnée. Les consommateurs
+
+151
+09:58.990 --> 10:02.900
+normalisent la donnée pour correspondre au format de
+
+152
+10:03.170 --> 10:04.360
+la table flows.
+
+153
+10:04.940 --> 10:08.750
+Quand il y a un changement de schéma, on incrémente le numéro de version.
+
+154
+10:09.240 --> 10:13.730
+Cela permet de faire des mises à jour sans impact.
+
+155
+10:13.740 --> 10:18.270
+Si vous avez d'anciens collecteurs qui tournent dans le réseau, ils continuent de fonctionner.
+
+156
+10:18.270 --> 10:22.950
+Par exemple, ils vont continuer à envoyer des flux dans le sujet flows-v1 de Kafka.
+
+157
+10:23.340 --> 10:28.250
+Ils utilisent le format FlowMessagev1.
+
+158
+10:28.490 --> 10:31.650
+Ils seront traité dans la table flows_1_raw
+
+159
+10:32.000 --> 10:34.560
+et flows_1_raw_consumer
+
+160
+10:34.940 --> 10:35.410
+normalise la donnée.
+
+161
+10:38.140 --> 10:43.960
+Il n'y a pas de registre pour les schémas.
+
+10:44.340 --> 10:53.280
+À chaque mise à jour, il faut copier les schémas sur le serveur ClickHouse.
+
+164
+10:54.940 --> 10:58.160
+C'est un peu embêtant mais on ne perd pas de données car
+
+165
+10:58.610 --> 11:00.410
+Kafka garde les messages pendant que
+
+166
+11:00.600 --> 11:02.230
+ClickHouse redémarre.
+
+167
+11:02.440 --> 11:06.990
+ClickHouse sait utiliser un registre quand on utilise le format Avro
+
+168
+11:07.000 --> 11:10.060
+mais je crois que cela n'est pas possible avec Protobuf.
+
+169
+11:12.940 --> 11:18.130
+La table principale est la table flows. En voici une vue partielle.
+
+170
+11:18.140 --> 11:19.700
+Beaucoup de colonnes sont manquantes.
+
+171
+11:20.340 --> 11:26.560
+Pour chaque colonne Src, vous avez une colonne Dst. Pour chaque colonne InIf,
+
+11:26.570 --> 11:30.260
+vous avez une colonne OutIf qui correspond.
+
+174
+11:30.840 --> 11:32.950
+Il n'y a rien de spécial.
+
+175
+11:32.960 --> 11:39.500
+On utilise LowCardinality quand cela a un sens et la table est
+
+176
+11:39.500 --> 11:45.060
+ordonnée avec TimeReceived car chaque requête va utiliser ça.
+
+177
+11:50.740 --> 11:56.530
+La table flows garde 15 jours de données dans notre configuration.
+
+178
+11:56.540 --> 11:58.560
+Cela représente 500 Go.
+
+179
+11:59.040 --> 12:02.490
+C'est très lent d'interroger une heure de données
+
+180
+12:02.490 --> 12:07.020
+et presque impossible de prendre un jour,
+
+181
+12:07.020 --> 12:07.550
+deux jours,
+
+182
+12:07.550 --> 12:10.070
+trois jours. C'est possible, mais très lent.
+
+183
+12:10.070 --> 12:13.460
+Cela prend plusieurs secondes.
+
+184
+12:14.140 --> 12:20.680
+Et on veut des réponses rapides. On veut aussi garder les données pendant 5 ans.
+
+185
+12:20.690 --> 12:23.940
+C'est un prérequis courant pour ce type de besoins.
+
+186
+12:23.940 --> 12:28.320
+On veut pouvoir regarder ce qui s'est passé il y a un an sur la même période.
+
+188
+12:30.740 --> 12:34.460
+Pour se faire, on doit aggréger les données
+
+189
+12:34.840 --> 12:36.160
+quand elles deviennent plus vieilles.
+
+191
+12:39.380 --> 12:45.950
+ClickHouse aggrège les données, mais ce n'est pas assez flexible pour nous.
+
+192
+12:46.340 --> 12:50.250
+On utilise une approche inspirée des bases RRD.
+
+193
+12:50.710 --> 12:53.760
+Les bases RRD sont les ancêtres des bases de données basées sur le temps.
+
+194
+12:53.770 --> 12:58.490
+Les données sont stockées dans un tampon circulaire et après un certain temps
+
+195
+12:58.490 --> 13:03.650
+les données sont consolidées en utilisant une fonction spécifique, comme min, max ou la moyenne.
+
+196
+13:04.440 --> 13:12.800
+Nous faisons ça avec un "summing merge tree" sur les octets et les paquets.
+
+197
+13:12.800 --> 13:16.460
+On retire également les adresses IP et les ports TCP/UDP.
+
+13:16.940 --> 13:20.730
+On ne peut pas garder les adresses IP pendant trop longtemps pour des raisons légales
+
+200
+13:20.730 --> 13:25.160
+mais aussi parce qu'elles contiennent des informations identifiant les abonnés.
+
+201
+13:26.680 --> 13:31.940
+De plus, ce n'est pas très intéressant au-delà d'un certain nombre de jours.
+
+202
+13:31.950 --> 13:34.050
+Les parties intéressantes des adresses IP
+
+203
+13:34.050 --> 13:38.720
+survivent via les règles de classifications. On attache une région à une IP.
+
+204
+13:38.720 --> 13:43.450
+Ainsi que via les numéros d'AS :
+
+205
+13:43.450 --> 13:44.850
+on sait que cette adresse IP
+
+206
+13:45.140 --> 13:47.360
+appartient à Facebook par exemple.
+
+207
+13:48.440 --> 13:53.450
+Ainsi, au-delà de quelques jours, nous ne gardons pas les IP.
+
+208
+13:54.360 --> 13:57.400
+Pour les ports TCP et UDP, la raison est autre.
+
+209
+13:57.920 --> 14:01.250
+Nous aurions pu les garder, mais ils sont assez aléatoires.
+
+210
+14:01.740 --> 14:07.790
+La plupart du temps, soit le port source, soit le port destination est connu.
+
+211
+14:07.790 --> 14:11.660
+Par exemple, les ports 80 ou 443 pour HTTP.
+
+212
+14:12.040 --> 14:17.860
+Mais l'autre port peut être totalement aléatoire.
+
+213
+14:18.240 --> 14:23.020
+Il n'est pas facile de savoir quel est le port serveur
+
+214
+14:23.020 --> 14:27.310
+et ainsi, il est plus facile de ne pas les garder.
+
+215
+14:27.320 --> 14:30.880
+De plus, passé quelques jours, ce n'est pas très intéressant de garder les ports
+
+216
+14:30.880 --> 14:35.850
+et cela aide à compresser mieux les données.
+
+217
+14:36.240 --> 14:40.050
+Cela aide à aggréger plus efficacement les données en ne gardant pas cette information.
+
+218
+14:41.040 --> 14:48.360
+À la différence de RRD, on ne garde pas les valeurs maximales.
+
+219
+14:49.120 --> 14:53.150
+C'est quelque chose qui serait à faire à un moment car quand on considère une plage de templs plus grande...
+
+220
+14:53.640 --> 14:59.810
+Je vais vous montrer sur la démo, c'est intéressant...
+
+221
+14:59.820 --> 15:03.900
+Vous pouvez voir ici que le maximum est autour de 60 Gbps.
+
+222
+15:04.720 --> 15:11.360
+Mais si je demande des données sur 30 jours,
+
+223
+15:12.440 --> 15:14.390
+le maximum est un peu plus bas.
+
+224
+15:14.400 --> 15:21.370
+C'est parce qu'il ne s'agit pas réellement d'un maximum, mais d'une moyenne selon la résolution de la table.
+
+225
+15:21.380 --> 15:24.010
+Une moyenne sur 5 minutes et une moyenne sur une heure,
+
+226
+15:24.020 --> 15:27.260
+cela donne une valeur maximale différente.
+
+227
+15:27.940 --> 15:30.140
+Mais c'est quelque chose que l'on peut sans doute corriger
+
+228
+15:30.480 --> 15:31.360
+avec ClickHouse, je pense.
+
+15:33.440 --> 15:40.460
+On a donc une table qui aggrège sur 1 minute, une table sur 5 minutes et une table sur une heure.
+
+231
+15:40.940 --> 15:47.870
+Elles gardent les données sur 7 jours, 90 jours et 5 ans. C'est très efficace.
+
+232
+15:48.410 --> 15:52.130
+Akvorado choisit automatiquement la meilleure table selon la période demandée,
+
+233
+15:52.130 --> 15:56.180
+les colonnes demandées (si vous demandez une adresse IP source,
+
+15:56.180 --> 16:00.430
+il faut utiliser la table principale)
+
+237
+16:07.340 --> 16:15.260
+Je voulais aussi vous montrer comment on remplit une table aggrégée
+
+238
+16:16.140 --> 16:19.370
+car cela montre une fonctionnalité assez intéressante de ClickHouse.
+
+239
+16:19.380 --> 16:24.540
+Vous pouvez sélectionner tout avec l'étoile, sauf quelques colonnes.
+
+240
+16:24.820 --> 16:25.680
+On veut exclure les adresses source et destination et les ports source et destination.
+
+241
+16:26.270 --> 16:28.650
+C'est très facile à faire.
+
+242
+16:29.340 --> 16:33.340
+On peut aussi remplacer des colonnes.
+
+243
+16:33.340 --> 16:37.460
+Par exemple, la colonne TimeReceived est tronquée à l'heure précédente.
+
+245
+16:39.640 --> 16:43.570
+C'est une fonctionnalité appréciable.
+
+246
+16:44.940 --> 16:46.310
+La table exporters.
+
+247
+16:46.320 --> 16:52.780
+C'est juste une petite table pour garder une liste des routeurs, de leurs noms
+
+248
+16:52.780 --> 16:56.570
+et des interfaces avec leurs descriptions.
+
+249
+16:57.040 --> 17:01.110
+Elle est utilisée pour la complétion des filtres
+
+17:01.110 --> 17:04.859
+dans l'interface web.
+
+252
+17:06.040 --> 17:10.970
+Je voulais vous montrer ça pour illustrer une autre fonctionnalité intéressante
+
+253
+17:11.380 --> 17:15.329
+de ClickHouse. Il y a plein de moyens de manipuler des tableaux.
+
+254
+17:15.339 --> 17:19.849
+Avec une seule requête, je peux remplir la table avec
+
+255
+17:20.079 --> 17:21.940
+ARRAY JOIN et arrayEnumerate.
+
+256
+17:27.040 --> 17:32.340
+Une autre partie intéressante, ce sont les dictionnaires. On en utilise trois.
+
+257
+17:32.350 --> 17:37.000
+Un dictionnaire pour donner un nom à chaque numéro d'AS.
+
+258
+17:37.120 --> 17:40.450
+Il y a environ 100 000 numéros d'AS.
+
+259
+17:41.440 --> 17:44.860
+À partir d'un numéro d'AS, vous pouvez avoir un nom.
+
+260
+17:45.540 --> 17:49.420
+On a un autre dictionnaire pour les numéros de protocole.
+
+17:49.430 --> 17:54.680
+Ainsi, le protocole 17, c'est UDP.
+
+263
+17:55.540 --> 17:58.460
+Les protocoles ne changent jamais.
+
+264
+17:58.540 --> 18:02.460
+Les numéros d'AS ne changent que de manière peu fréquentes et c'est principalement cosmétique.
+
+18:02.940 --> 18:06.940
+Par exemple, l'AS de Twitch TV
+
+267
+18:06.940 --> 18:10.770
+peut devenir plus tard l'AS d'Amazon Twitch TV.
+
+268
+18:10.770 --> 18:14.640
+C'est principalement cosmétique et c'est utilisé que lors de l'affichage.
+
+269
+18:14.650 --> 18:18.270
+On utilise donc ces dictionnaires pendant les requêtes.
+
+18:20.810 --> 18:22.850
+Le troisième dictionnaire permet de faire une correspondance entre les réseaux,
+
+274
+18:23.240 --> 18:24.560
+comme celui-ci,
+
+275
+18:24.940 --> 18:29.130
+et un nom, un rôle, une région et un propriétaire.
+
+276
+18:29.350 --> 18:35.110
+Cette fois, on utilise ce dictionnaire pendant l'ingestion pour matérialiser certaines colonnes.
+
+18:35.110 --> 18:43.960
+On ne veut pas que les données historiques soient altérées quand on alloue un réseau à une région différente.
+
+279
+18:47.140 --> 18:53.370
+La classification des réseaux est faite à la gestion via la vue matérialisée
+
+280
+18:53.380 --> 18:59.020
+où on sélectionne tout ce que l'on reçoit depuis Kafka
+
+281
+18:59.030 --> 19:01.510
+et on ajoute juste les noms, rôles, etc.
+
+282
+19:01.880 --> 19:04.560
+En utilisant le dictionnaire.
+
+283
+19:05.340 --> 19:07.480
+Le dictionnaire networks utilise la méthode IP_TRIE.
+
+19:08.380 --> 19:14.780
+Cela signifie qu'à partir d'une adresse IP,
+
+286
+19:15.870 --> 19:18.560
+ClickHouse peut rapidement effectuer une recherche
+
+287
+19:18.940 --> 19:21.160
+pour sélectionner le réseau correspondant.
+
+288
+19:21.540 --> 19:25.570
+Ce ne sont pas les seules données qui sont générées à partir d'autres données.
+
+289
+19:25.700 --> 19:29.020
+Si vous vous souvenez, on génère aussi les données
+
+290
+19:29.400 --> 19:33.450
+de localisation, les numéros d'AS et la classification.
+
+291
+19:34.040 --> 19:36.330
+Pour la géolocalisation, on ne le fait pas dans ClickHouse.
+
+292
+19:36.330 --> 19:40.110
+On aurait pu le faire dans ClickHouse avec un dictionnaire.
+
+293
+19:40.120 --> 19:45.670
+Cela aurait fonctionné, mais c'est assez simple de le faire dans Akvorado directement.
+
+294
+19:46.540 --> 19:50.220
+La classification est faite en utilisant des règles fournies par l'utilisateur.
+
+295
+19:50.230 --> 19:54.270
+Cette fois, c'est plus simple de le faire dans Akvorado,
+
+296
+19:54.800 --> 19:56.560
+pas dans ClickHouse.
+
+297
+19:59.240 --> 20:05.020
+Si vous vous souvenez de la démo, l'utilisateur fournit une période, des colonnes
+
+298
+20:05.020 --> 20:08.770
+(dans l'interface web, on appelle cela des dimensions) et une expression pour filtrer.
+
+299
+20:09.440 --> 20:14.860
+L'expression de filtre, c'est quelque chose d'assez intéressant.
+
+300
+20:14.870 --> 20:17.770
+Nos utilisateurs sont des ingénieurs réseau.
+
+20:18.140 --> 20:21.860
+Ils peuvent connaître SQL,
+
+304
+20:22.440 --> 20:26.430
+mais ce ne sont pas des spécialistes.
+
+305
+20:26.430 --> 20:31.170
+On utilise donc un langage qui ressemble à SQL pour les filtres
+
+306
+20:31.640 --> 20:35.770
+et on le traduit vers le SQL utilisé par ClickHouse avec un analyseur syntaxique.
+
+307
+20:36.440 --> 20:43.460
+Notre domaine est plus simple, donc on prend des raccourcis pour simplifier certaines choses.
+
+308
+20:43.470 --> 20:47.320
+Par exemple, on peut donner les adresses IP directement.
+
+309
+20:47.940 --> 20:51.610
+On peut utiliser des guillemets simples ou doubles, il n'y a pas de différences.
+
+310
+20:51.620 --> 20:55.910
+On peut utiliser des constantes. EType est normalement un entier,
+
+311
+20:55.910 --> 20:58.890
+mais on peut donner un nom.
+
+312
+20:59.840 --> 21:04.160
+On essaie de rendre les choses plus simple.
+
+313
+21:04.540 --> 21:07.090
+L'analyseur traduit ça vers le SQL de ClickHouse.
+
+314
+21:08.840 --> 21:13.600
+C'est aussi sûr parce qu'on analyse le filtre et on construit la requête SQL.
+
+315
+21:14.030 --> 21:16.840
+Si vous utilisez une colonne inconnue ou faites une erreur de syntaxe,
+
+316
+21:17.090 --> 21:20.030
+ou quelque chose commme ça,
+
+317
+21:20.040 --> 21:22.180
+l'analyseur va échouer avec un message d'erreur
+
+318
+21:22.530 --> 21:25.460
+et on ne construit pas de requête.
+
+319
+21:25.840 --> 21:32.670
+On ne peut pas injecter des données dans ClickHouse, même si ClickHouse n'est déjà pas très vulnérable
+
+320
+21:33.040 --> 21:34.740
+à ce type d'attaque,
+
+321
+21:34.750 --> 21:38.040
+ce n'est pas possible car l'analyseur doit comprendre
+
+322
+21:38.040 --> 21:39.570
+ce que vous voulez pour le traduire à ClickHouse.
+
+323
+21:41.540 --> 21:44.980
+Ensuite, l'intégralité de la requête de l'utilisateur est transformée en SQL.
+
+324
+21:44.990 --> 21:48.880
+ClickHouse aide beaucoup pour retourner des données
+
+325
+21:48.890 --> 21:52.270
+qui sont directement utilisables par l'interface web.
+
+326
+21:52.840 --> 21:56.700
+Ainsi, quand il y a des données qui manquent,
+
+327
+21:56.700 --> 21:59.050
+on peut automatiquement compléter avec des 0.
+
+328
+21:59.840 --> 22:01.360
+C'est ce qui est fait ici.
+
+329
+22:01.840 --> 22:07.960
+Notez que j'utilse la table aggrégée à 5 minutes.
+
+22:08.910 --> 22:12.660
+Il y a une valeur magique ici, 600.
+
+332
+22:13.140 --> 22:20.550
+On adapte la résolution demandée par l'utilisateur. Par exemple,
+
+333
+22:20.550 --> 22:26.500
+il peut demander une valeur toutes les 632 secondes. On adapte pour correspondre à la résolution de la table.
+
+334
+22:26.510 --> 22:32.270
+Cela doit être un mutiple de la résolution de la table pour que le résultat soit correct.
+
+335
+22:32.840 --> 22:35.930
+Comme la résolution est de 300 secondes
+
+336
+22:35.930 --> 22:39.480
+et que l'utilisateur a demandé un point environ toutes les 600 secondes,
+
+337
+22:39.480 --> 22:43.550
+on va lui donner un point toutes les 600 secondes.
+
+338
+22:44.740 --> 22:49.440
+Il y a une sous-requête. L'utilisateur a demandé à grouper selon
+
+339
+22:49.600 --> 22:51.030
+les numéros d'AS.
+
+340
+22:51.220 --> 22:56.270
+On va calculer les 10 premiers AS correspondant
+
+342
+22:58.560 --> 23:01.360
+au même filtre sur la même période.
+
+343
+23:02.240 --> 23:04.260
+On sélectionne les 10 plus gros AS.
+
+23:04.410 --> 23:10.100
+Pour chaque numéro d'AS que l'on obtient,
+
+346
+23:10.110 --> 23:15.600
+s'il fait partie du top 10, on affiche le numéro d'AS avec son nom
+
+347
+23:15.750 --> 23:16.360
+en utilisant le dictionnaire.
+
+348
+23:17.240 --> 23:18.920
+Sinon, on affiche juste "Others".
+
+23:20.240 --> 23:25.760
+Ainsi, on ne retourne pas une énorme liste d'AS à l'utilisateur.
+
+351
+23:28.640 --> 23:32.050
+Passons maintenant à Akvorado.
+
+352
+23:32.050 --> 23:35.360
+C'est écrit en Go.
+
+353
+23:35.370 --> 23:39.670
+On utilise clickhouse-go/v2
+
+355
+23:41.740 --> 23:44.510
+qui utilise le protocole client/serveur natif.
+
+356
+23:44.520 --> 23:47.610
+C'est une interface de bas niveau, mais cela nous convient
+
+357
+23:47.610 --> 23:51.360
+parce que les abstractions viennent souvent avec des restrictions.
+
+358
+23:52.040 --> 23:54.010
+La documentation n'est pas terrible.
+
+359
+23:54.020 --> 23:56.840
+Elle ne correspond pas aux standards habituelles de Go.
+
+360
+23:56.840 --> 24:01.670
+Il y a quelques exemples pour comprendre mais cela fonctionne très bien sinon.
+
+362
+24:03.840 --> 24:07.880
+On écrit pas mal de tests unitaires mais ils ne tournent pas sur une vraie base de données.
+
+363
+24:08.540 --> 24:11.270
+Pour chaque requête, on renvoie des réponses pré-calculées
+
+364
+24:11.640 --> 24:14.310
+en utilisant un "mock" généré par GoMock.
+
+365
+24:14.470 --> 24:15.680
+Par exemple,
+
+366
+24:15.900 --> 24:21.060
+durant les tests, cette requête est effectuée.
+
+367
+24:21.440 --> 24:28.310
+GoMock génère une fausse fonction qui va répondre avec ces résultats :
+
+368
+24:28.480 --> 24:30.900
+customer-1, customer-2, customer-3.
+
+369
+24:30.910 --> 24:35.570
+Cela nous permet de faire de nombreux tests rapidement sans se reposer sur une
+
+370
+24:35.570 --> 24:37.060
+base de données externe.
+
+371
+24:39.740 --> 24:44.770
+La dernière chose dont je veux parler, ce sont les migrations.
+
+372
+24:45.140 --> 24:48.700
+Avec une base de données traditionnelles,
+
+373
+24:49.360 --> 24:54.860
+un logiciel va souvent proposer des migrations à exécuter lors des mises à jour.
+
+374
+24:55.240 --> 24:56.640
+Avec ClickHouse,
+
+375
+24:57.190 --> 25:01.860
+c'est plus compliqué, parce qu'on ne peut pas faire ce qu'on veut.
+
+376
+25:02.440 --> 25:04.700
+On a donc un chef d'orchestre qui va gérer
+
+377
+25:04.700 --> 25:08.200
+les différents composants, internes et externes, y compris ClickHouse et Kafka.
+
+25:09.240 --> 25:14.550
+Il va gérer les migrations et c'est fait avec du code en Go.
+
+380
+25:15.370 --> 25:19.460
+Chaque étape de migration a une description, un test et une fonction.
+
+381
+25:19.840 --> 25:23.790
+Il n'y a pas d'état : chaque étape est executée au démarrage.
+
+382
+25:24.050 --> 25:29.260
+Le test permet de sauter une étape qui n'est pas nécessaire.
+
+383
+25:29.740 --> 25:32.950
+On ne gère pas les retours en arrière.
+
+384
+25:34.540 --> 25:39.630
+Il y a une étape pour créer les dictionnaires : protocole, ASN et réseau.
+
+385
+25:39.910 --> 25:45.850
+Une autre pour créer les tables flows, la principale et les aggrégées.
+
+386
+25:46.240 --> 25:51.270
+Si vous mettez à jour depuis une ancienne version, il y a une étape qui ajoute les colonnes manquantes.
+
+387
+25:51.840 --> 25:57.680
+Il y a une étape pour créer les consommateurs des tables flows.
+
+388
+25:58.340 --> 26:00.180
+Une étape pour configurer les TTL.
+
+389
+26:00.390 --> 26:05.170
+Cela signifie que si l'utilisateur change la configuration des TTL et redémarre,
+
+390
+26:06.930 --> 26:07.860
+les TTL seront effectivement mis à jour.
+
+391
+26:08.840 --> 26:12.730
+Et une étape pour la table exporters et les tables "raw".
+
+392
+26:14.040 --> 26:18.940
+Il y a deux types d'étapes.
+
+393
+26:18.950 --> 26:22.740
+Il y a celles qui modifient les dictionnaires et les vues.
+
+394
+26:22.740 --> 26:25.400
+On n'a pas besoin de garder des données pour celles-ci.
+
+395
+26:25.410 --> 26:31.490
+On fait deux tests. On teste si la table existe.
+
+396
+26:31.500 --> 26:32.610
+La table, la vue ou le dictionnaire existe.
+
+397
+26:32.610 --> 26:36.250
+Et on teste si la table
+
+398
+26:36.250 --> 26:39.060
+a les bonnes colonnes aux bons endroits.
+
+399
+26:39.440 --> 26:46.550
+C'est fait un créant un condensat du nom, du type et de la position sur la table système "columns"
+
+400
+26:47.040 --> 26:50.360
+et en le comparant à une valeur fixe.
+
+401
+26:50.840 --> 26:54.750
+C'est pas mal que ClickHouse expose beaucoup de choses dans les tables systèmes.
+
+402
+26:54.750 --> 26:59.170
+car cela nous permet de faire ça.
+
+403
+27:00.740 --> 27:05.390
+Le deuxième type d'étapes, c'est quand on veut conserver les données.
+
+404
+27:05.400 --> 27:07.250
+Dans ce cas, on utilise des mutations.
+
+405
+27:07.260 --> 27:11.050
+On teste « est-ce qu'on a déjà la colonne que l'on veut ajouter ? »
+
+406
+27:11.060 --> 27:14.270
+Dans le cas contraire, on utilise ALTER TABLE pour ajouter la colonne.
+
+407
+27:14.740 --> 27:20.700
+Il y a beaucoup de limites sur ce qu'on peut modifier, mais avec quelques compromis,
+
+408
+27:20.710 --> 27:24.060
+jusqu'à aujourd'hui, on a été capable de faire ce qu'on voulait.
+
+409
+27:25.340 --> 27:27.060
+Les migrations sont testées.
+
+411
+27:29.880 --> 27:34.560
+Cela fait partie des tests automatiques. Il y a une base de données ClickHouse qui est démarrée dans un conteneur.
+
+412
+27:35.240 --> 27:40.760
+Les migrations sont testées depuis des états variés, incluant une base vide.
+
+413
+27:40.770 --> 27:44.200
+Chaque test doit donner le même état final
+
+414
+27:44.310 --> 27:47.010
+et à chaque fois qu'on ajoute une étapde de migration,
+
+415
+27:47.020 --> 27:53.060
+l'état final est enregistré pour être utilisés dans des futurs tests, via la requête affichée ici.
+
+416
+27:53.740 --> 27:59.500
+Cela nous permet de nous assurer qu'un utilisateur
+
+417
+27:59.510 --> 28:03.360
+peut migrer d'une version à une autre.
+
+418
+28:05.940 --> 28:08.430
+Notre configuration est plutôt petite.
+
+419
+28:08.430 --> 28:12.660
+Tout tourne dans une seule VM, y compris Kafka
+
+420
+28:13.120 --> 28:13.770
+et Akvorado.
+
+421
+28:14.140 --> 28:17.730
+On fait tout tourner dans des conteneurs avec docker-compose.
+
+422
+28:17.740 --> 28:23.460
+C'est une configuration très simple. 1 To de disque, 64 Go de mémoire.
+
+423
+28:23.840 --> 28:30.260
+Pour le moment, on a 30 000 flux/s mais la cible, c'est 100 000 flux/s.
+
+424
+28:30.740 --> 28:36.270
+Vous avez des graphiques pour le CPU, la mémoire et le disque.
+
+425
+28:36.270 --> 28:40.610
+Tout est assez faible, mais il y a aussi le système anti-DDoS
+
+426
+28:40.610 --> 28:44.180
+qui tourne en fond, toutes les 5 secondes, en faisant des requêtes
+
+427
+28:44.180 --> 28:46.850
+Il génère une bonne partie de la charge.
+
+428
+28:48.440 --> 28:51.790
+En conclusion, mon opinion sur ClickHouse.
+
+429
+28:52.940 --> 28:58.030
+Facile d'accès, bonne documentation.
+
+430
+28:58.040 --> 29:00.830
+Il y a beaucoup de fonctions disponibles.
+
+431
+29:00.930 --> 29:07.670
+Les fonctions liées au chaînes par exemple, avec la conversion vers des quantités faciles à lire. On a vraiment l'impression
+
+432
+29:08.040 --> 29:11.560
+que c'est quelque chose qui cherche à résoudre directement
+
+433
+29:11.570 --> 29:15.390
+les problèmes dans ClickHouse plutôt que de déléguer
+
+434
+29:15.720 --> 29:16.560
+cela à une autre couche.
+
+435
+29:17.040 --> 29:22.350
+Cela donne un peu l'impression d'être magique.
+
+436
+29:22.940 --> 29:28.250
+Une autre solution populaire pour cet usage est ElasticSearch.
+
+437
+29:28.370 --> 29:29.760
+Contrairement à ElasticSearch,
+
+438
+29:29.760 --> 29:34.060
+ClickHouse est très rapide sans effort et reste très rapide.
+
+439
+29:34.540 --> 29:35.300
+Gérer un cluster ElasticSearch
+
+440
+29:36.510 --> 29:39.250
+est beaucoup plus difficile pour ce cas d'usage.
+
+441
+29:40.540 --> 29:45.030
+Il faut un peu de temps pour comprendre les tables aggrégées
+
+442
+29:45.190 --> 29:50.190
+et on a vite fait de faire quelque chose qui paraît correct mais qui ne l'est pas.
+
+443
+29:50.200 --> 29:55.580
+Par exemple, en aggrégant en utilisant des moyennes,
+
+444
+29:55.580 --> 29:56.460
+on obtient pas ce que l'on attend.
+
+445
+29:56.940 --> 29:58.030
+Cependant, ClickHouse
+
+446
+29:58.510 --> 30:01.260
+a des fonctions pour faire ça.
+
+447
+30:03.840 --> 30:09.060
+C'est tout pour moi. Avez-vous des questions ?
+
+448
+30:11.940 --> 30:14.930
+Vincent, c'était un exposé absolument génial et
+
+449
+30:14.930 --> 30:17.030
+on a quelques questions en attente.
+
+450
+30:17.030 --> 30:18.900
+Je peux les voir.
+
+451
+30:19.640 --> 30:21.860
+Il y en a deux de Gilad.
+
+452
+30:22.440 --> 30:25.860
+Peux-tu voir la partie Q&A ?
+
+453
+30:26.940 --> 30:27.560
+Oui
+
+454
+30:27.720 --> 30:29.730
+La première est
+
+455
+30:30.540 --> 30:33.890
+Akvorado ne prend en compte que les protocoles de la couche 3,
+
+456
+30:33.890 --> 30:36.770
+comment il détecte de quelle application il s'agit.
+
+457
+30:38.240 --> 30:45.350
+Il s'agit d'une limitation des protocoles
+
+458
+30:47.240 --> 30:48.810
+NetFlow/IPFIX/sFlow.
+
+459
+30:48.810 --> 30:54.160
+Ces protocoles ne collectent que des informations de couche 4.
+
+460
+30:54.160 --> 30:57.420
+NetFlow/IPFIX sont limités aux informations de la couche 4, plus
+
+461
+30:57.420 --> 31:05.860
+quelques métadonnées comme les numéros d'AS. sFlow peut voir plus loin
+
+462
+31:06.340 --> 31:13.860
+à l'intérieur des paquets. Vous pouvez obenir les entêtes de niveau 4
+
+463
+31:14.240 --> 31:20.410
+ainsi que 200 octets dans chaque paquet retourné.
+
+464
+31:20.410 --> 31:24.770
+Vous pouvez faire ça mais Akvorado n'utilise pas ça pour le moment.
+
+465
+31:25.540 --> 31:31.270
+Vous pouvez deviner l'application en utilisant les ports
+
+31:33.340 --> 31:38.300
+ou les adresses IP. Cela dépend. Par exemple, si vous avez un cluster Kubernetes,
+
+468
+31:40.010 --> 31:44.170
+l'adresse IP doit vous donner l'application cible.
+
+469
+31:44.740 --> 31:45.510
+Vous pouvez utiliser ça.
+
+471
+31:46.270 --> 31:51.410
+Pour le moment, vous ne pouvez pas vraiment savoir à coup sûr que c'est une requête HTTP.
+
+472
+31:51.410 --> 31:54.760
+Vous ne pouvez pas savoir quelle requête HTTP a été faite.
+
+473
+31:54.770 --> 31:58.060
+Ce n'est pas ce type d'outils.
+
+474
+31:59.940 --> 32:00.390
+Cool.
+
+475
+32:00.400 --> 32:05.760
+La question suivante de Gilad a mon nom dedans, mais je ne sais pas si je peux vraiment y répondre.
+
+476
+32:06.140 --> 32:08.870
+Gilad demande s'il ne serait pas mieux d'avoir une seule table
+
+477
+32:08.870 --> 32:12.260
+plutôt que 3 tables. Gilad, peux-tu parler ?
+
+478
+32:12.740 --> 32:16.640
+Je crois que tu peux parler.
+
+479
+32:16.650 --> 32:18.350
+Qu'as-tu à l'esprit avec cette question ?
+
+480
+32:19.440 --> 32:20.960
+Oui.
+
+482
+32:23.340 --> 32:25.230
+Je vois que tu as trois tables,
+
+483
+32:25.460 --> 32:29.670
+une pour l'aggrégation à 1 minute, une pour 5 minutes
+
+484
+32:29.670 --> 32:30.860
+et une pour 1 heure.
+
+485
+32:31.640 --> 32:34.580
+Est-ce que tu as testé avec une seule table
+
+32:34.810 --> 32:40.850
+en utilisant le TTL pour aggréger les données à 1 minute, depuis de 1 à 5 minutes,
+
+488
+32:41.240 --> 32:44.770
+puis de 5 minutes à 1 heure, tout dans la même table
+
+32:44.910 --> 32:50.460
+avec une colonne pour indiquer la résolution ?
+
+491
+32:51.340 --> 32:52.350
+Oui.
+
+492
+32:52.840 --> 32:58.540
+J'ai essayé, mais quand on essaie d'aggréger des données dans la même table,
+
+493
+32:58.540 --> 33:03.160
+il y a un prérequis sur la clef primaire...
+
+494
+33:03.540 --> 33:06.720
+Je peux me tromper mais je n'ai pas réussi à faire ça
+
+495
+33:06.720 --> 33:10.260
+car la clef primaire ne doit pas changer.
+
+496
+33:10.260 --> 33:13.790
+Dans la clef primaire, nous avons TimeReceived
+
+497
+33:13.830 --> 33:18.060
+et nous voulons la tronquer à la minute la proche,
+
+498
+33:18.070 --> 33:22.640
+aux 5 minutes les plus proches et à l'heure la plus proche.
+
+499
+33:22.640 --> 33:25.860
+Je peux faire ça avec une colonne pour TimeReceived,
+
+500
+33:25.870 --> 33:29.360
+une autre colonne avec TimeReceived tronqué à la minute,
+
+33:29.640 --> 33:31.590
+TimeReceived tronqué aux 5 minutes
+
+33:31.780 --> 33:34.020
+et TimeReceived tronqué à l'heure.
+
+505
+33:34.030 --> 33:36.810
+Je dois avoir les trois colonnes qui existent
+
+506
+33:36.810 --> 33:39.560
+pour permettre l'aggrégation.
+
+507
+33:40.040 --> 33:44.630
+Cela paraît plus compliqué mais il y a peut-être une meilleure approche.
+
+508
+33:44.640 --> 33:48.160
+Je serais intéressé de le savoir.
+
+509
+33:48.170 --> 33:51.910
+Cela aurait pu fonctionner, mais comme on ne peut pas modifier...
+
+510
+33:52.430 --> 33:56.560
+cela veut dire que si je veux ajouter une nouvelle aggrégation,
+
+511
+33:56.840 --> 34:00.560
+par exemple en ajoutant une aggrégation
+
+512
+34:00.840 --> 34:01.770
+à 10 minutes,
+
+34:02.240 --> 34:06.670
+je ne peux pas modifier la table car la clef primaire ne peut pas changer.
+
+517
+34:09.139 --> 34:13.860
+C'est la raison principale qui fait que j'ai choisi 3 tables
+
+518
+34:13.870 --> 34:18.670
+même si cela rend l'application un peu plus complexe car on doit choisir la bonne table.
+
+34:21.699 --> 34:28.170
+Je voulais dire que nous avons une solution assez similaire et que nous avons utilisé une seule table
+
+521
+34:28.540 --> 34:33.560
+mais on a pas testé les performances entre plusieurs tables et une seule.
+
+522
+34:33.739 --> 34:35.560
+C'était intéressant de demander.
+
+523
+34:37.639 --> 34:42.739
+Gilad, tu avais une autre question pour Vincent,
+
+524
+34:42.739 --> 34:46.550
+à propos de comment tu as déployé ClickHouse, est-ce que tu as utilisé Kubernetes.
+
+525
+34:46.940 --> 34:50.969
+Vincent, il semble que tu as utilisé docker-compose,
+
+526
+34:50.969 --> 34:52.060
+Est-ce bien ça ?
+
+527
+34:52.739 --> 34:53.380
+Oui.
+
+528
+34:53.389 --> 34:56.739
+Parce que c'est toujours un peu un PoC,
+
+529
+34:56.739 --> 35:00.110
+mais comme cela marche si bien, on a pas essayé de faire mieux.
+
+530
+35:00.120 --> 35:05.130
+Je ne m'attendais pas que tout tienne dans une seule VM.
+
+531
+35:05.140 --> 35:10.960
+Pour le moment, c'est toujours un peu un essai, mais on est allé en production comme ça.
+
+35:10.970 --> 35:14.650
+Donc c'est une seule VM avec docker-compose.
+
+534
+35:14.660 --> 35:23.270
+Vous faites "docker-compose up" et tu obtiens quelque chose qui fonctionne.
+
+535
+35:23.410 --> 35:28.170
+Donc tout tourne dans des conteneurs, y compris ClickHouse.
+
+536
+35:28.740 --> 35:32.360
+Il n'y a pas de cluster. C'est un déploiement sur un seul nœud.
+
+537
+35:33.040 --> 35:33.550
+Cool.
+
+538
+35:34.140 --> 35:37.670
+Oui, c'est un très bon exemple.
+
+539
+35:38.040 --> 35:41.650
+J'ai une question. Je n'ai pas vu de questions sur Youtube.
+
+540
+35:41.660 --> 35:45.040
+Si vous voulez poser des questions, vous pouvez le faire dans le chat.
+
+541
+35:45.050 --> 35:50.670
+Vincent, j'en ai une. L'interface web est superbe.
+
+542
+35:51.240 --> 35:52.260
+Comme tu as construit ça ?
+
+543
+35:54.540 --> 36:00.930
+Ça a été un peu pénible car je ne suis pas dev Javascript.
+
+36:00.940 --> 36:07.330
+Il s'agit de vue.js.
+
+547
+36:07.570 --> 36:08.240
+Celui-ci.
+
+548
+36:08.930 --> 36:10.040
+C'est ce framework.
+
+36:10.530 --> 36:12.840
+Avec TailwindCSS.
+
+551
+36:14.130 --> 36:15.240
+Ce framework.
+
+552
+36:15.630 --> 36:20.560
+C'est tout.
+
+553
+36:20.560 --> 36:23.610
+Je pense que c'est expliqué un peu dans la documentation.
+
+554
+36:23.620 --> 36:29.280
+C'est open source, donc vous pouvez aller regarder.
+
+555
+36:29.290 --> 36:35.440
+Un composant important, c'est les graphiques. Il s'agit de ECharts. C'est un projet Apache
+
+556
+36:35.670 --> 36:36.960
+qui s'appele ECharts.
+
+557
+36:37.130 --> 36:40.020
+C'est lui qui fait les graphiques et c'est un super projet
+
+558
+36:40.020 --> 36:42.770
+si vous avez besoin de développer une interface avec des graphiques.
+
+559
+36:42.780 --> 36:45.130
+C'est très robuste et polyvalent.
+
+560
+36:45.840 --> 36:49.160
+J'ai mis pas mal de temps avant de le trouver.
+
+561
+36:49.930 --> 36:53.250
+Oui, il semble superbe
+
+562
+36:53.630 --> 36:58.040
+the interactivity est exceptionnelle. C'est très cool.
+
+563
+36:58.930 --> 37:04.750
+Bien. Y'a-t'il d'autres questions pour Vincent avant de passer à la suite ?
+
+564
+37:05.730 --> 37:07.160
+Oui, il y en a une autre.
+
+37:07.530 --> 37:11.160
+Est-ce que vous avez un plan pour analyser HTTP ?
+
+567
+37:13.830 --> 37:15.150
+Un plan pour quoi ? Désolé.
+
+568
+37:15.630 --> 37:16.950
+Analyser HTTP.
+
+569
+37:20.330 --> 37:24.160
+Ah, à propos de la couche 7.
+
+570
+37:25.530 --> 37:30.320
+Chez Free, on utilise le protocole NetFlow
+
+571
+37:30.320 --> 37:34.350
+et ce protocole ne permet pas d'aller regarder ce qui se passe en couche 7.
+
+572
+37:35.130 --> 37:38.610
+On aurait dû utiliser sFlow.
+
+573
+37:38.610 --> 37:42.610
+Aussi, on est un FAI et on a pas vraiment besoin de ça.
+
+37:42.610 --> 37:49.550
+Donc, rien n'est planifié pour le moment.
+
+37:49.930 --> 37:57.000
+C'est principalement pour les opérateurs réseaux telecom
+
+578
+37:57.670 --> 38:02.160
+et ceux en datacenter. Cela pourrait être intéressant, mais pas prévu pour le moment.
+
+579
+38:03.730 --> 38:04.150
+
+
+580
+38:05.030 --> 38:06.050
+Merci !
+
+581
+38:07.230 --> 38:09.860
+Merci pour toutes ces questions.
+
+582
+38:10.430 --> 38:12.380
+Je crois que je ne vois pas d'autres questions
+
+583
+38:12.380 --> 38:14.450
+sauf si je me trompe.
+
+584
+38:15.030 --> 38:18.110
+Vincent. Merci beaucoup pour cette présentation.
+
+585
+38:18.120 --> 38:20.160
+C'était très enrichissant.
+
+586
+38:20.630 --> 38:25.460
+Et je pense qu'on peut t'accorder le titre d'ingénieur de base données honoraire.
+
+587
+38:26.030 --> 38:28.850
+Tu as tout bien fait.

@@ -1,0 +1,56 @@
+---
+title: "ClickHouse SF Bay Area Meetup about Akvorado"
+description: |
+   Presentation of Akvorado, a network flow collector and visualizer, during a
+   ClickHouse SF Bay Area Meetup.
+uuid: b19c38ee-82f4-4689-a27a-f77056505c78
+tags:
+  - talks
+  - network-automation
+attachments:
+  "slides-clickhouse-meetup.pdf": slides
+created: !!timestamp 2022-07-27 21:00:00
+---
+
+Here are the slides I presented for a [ClickHouse SF Bay Area Meetup in
+July 2022][], hosted by [Altinity][]. They are about [Akvorado][], a
+network flow collector and visualizer, and notably on how it relies on
+[ClickHouse][], a column-oriented database.
+
+![Slides in PDF format]([[!!files/slides-clickhouse-meetup.pdf]])
+
+The meetup was recorded and available on [YouTube][]. Here is the part
+relevant to my presentation, with subtitles:[^subtitles]
+
+![]([[!!videos/2022-clickhouse-meetup-akvorado.m3u8]])
+
+[^subtitles]: To generate the subtitles, I have used [Amazon
+    Transcribe][], the speech-to-text solution from *Amazon AWS*.
+    Unfortunately, there is no `en-FR` language available, which would
+    have been useful for my <del>terrible</del> accent. While the
+    subtitles were 100% accurate when the host, Robert Hodge from
+    *Altinity*, was speaking, the success rate on my talk was quite
+    lower. I had to rewrite almost all sentences. However, using
+    speech-to-text is still useful to get the timings, as it is also
+    something requiring a lot of work to do manually.
+
+I got a few questions about how to get information from the higher
+layers, like HTTP. As my use case for Akvorado was at the network
+edge, my answers were mostly negative. However, as sFlow is
+extensible, when collecting flows from Linux servers instead, you
+could embed additional data and they could be exported as well.
+
+I also got a question about doing aggregation in a single table.
+ClickHouse can aggregate automatically data using TTL. My answer for
+not doing that is partial. There is another reason: the retention
+periods of the various tables may overlap. For example, the main table
+keeps data for 15 days, but even in these 15 days, if I do a query on
+a 12-hour window, it is faster to use the `flows_1m0s` aggregated
+table, unless I request something about ports and IP addresses.
+
+[ClickHouse SF Bay Area Meetup in July 2022]: https://www.meetup.com/san-francisco-bay-area-clickhouse-meetup/events/286100747/ "ClickHouse July 2022 Meetup"
+[Akvorado]: https://akvorado.net
+[ClickHouse]: https://clickhouse.com/
+[YouTube]: https://www.youtube.com/watch?v=eiGmMyQifmU "July 2022 ClickHouse Bay Area Meetup"
+[Amazon Transcribe]: https://aws.amazon.com/transcribe/
+[Altinity]: https://altinity.com/

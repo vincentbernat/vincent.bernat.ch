@@ -1,0 +1,64 @@
+---
+title: "ClickHouse Bay Area Meetup à propos d'Akvorado"
+description: |
+   Présentation d'Akvorado, un collecteur et visualisateur de flux réseau,
+   lors d'un meetup ClickHouse.
+uuid: b19c38ee-82f4-4689-a27a-f77056505c78
+tags:
+  - talks
+  - network-automation
+attachments:
+  "slides-clickhouse-meetup.pdf": diapositives
+created: !!timestamp 2022-07-27 21:00:00
+---
+
+Voici les diapositives que j'ai présentées lors d'un [meetup
+ClickHouse Bay Area en juillet 2022][ClickHouse SF Bay Area meetup in
+July 2022], organisé par [Altinity][]. Elles portent sur [Akvorado][],
+un collecteur et visualisateur de flux réseau, et notamment sur la
+façon dont il s'appuie sur [ClickHouse][], une base de données
+orientée colonnes.
+
+![Diapositives au fomrat PDF]([[!!files/slides-clickhouse-meetup.pdf]])
+
+La réunion a été enregistrée et est disponible sur [YouTube][]. Voici
+la partie qui concerne ma présentation, avec des
+sous-titres[^subtitles] :
+
+![]([[!!videos/2022-clickhouse-meetup-akvorado.m3u8]])
+
+[^subtitles]: Pour générer les sous-titres, j'ai utilisé [Amazon
+    Transcribe][], la solution de conversion de la parole en texte
+    d'*Amazon AWS*. Malheureusement, il n'y a pas de langue `en-FR`
+    disponible, ce qui aurait été utile pour mon <del>terrible</del>
+    accent. Si les sous-titres étaient exacts à 100 % lorsque
+    l'animateur, Robert Hodge d'Altinity, s'exprimait, le taux de
+    réussite pour mon intervention était bien plus faible. J'ai dû
+    réécrire presque toutes les phrases. Cependant, l'utilisation de
+    la reconnaissance vocale reste utile pour synchroniser le texte et
+    la voix, car c'est aussi quelque chose qui demande beaucoup de
+    travail à faire manuellement.
+
+J'ai eu quelques questions sur la façon d'obtenir des informations des
+couches supérieures, comme HTTP. Comme mon cas d'utilisation
+d'Akvorado se situait à la périphérie du réseau, mes réponses étaient
+principalement négatives. Cependant, comme sFlow est extensible,
+lorsque vous collectez des flux à partir de serveurs Linux, vous
+pouvez intégrer des données supplémentaires et les exporter également.
+
+J'ai également reçu une question sur l'agrégation dans une seule
+table. ClickHouse peut agréger automatiquement des données en
+utilisant le TTL. Ma réponse pour ne pas le faire est partielle. Il y
+a une autre raison : les périodes de rétention des différentes tables
+peuvent se chevaucher. Par exemple, la table principale conserve les
+données pendant 15 jours, mais même pendant ces 15 jours, si je fais
+une requête sur une fenêtre de 12 heures, il est plus rapide
+d'utiliser la table agrégée `flows_1m0s`, sauf si je demande quelque
+chose sur les ports et les adresses IP.
+
+[ClickHouse SF Bay Area meetup in July 2022]: https://www.meetup.com/san-francisco-bay-area-clickhouse-meetup/events/286100747/ "ClickHouse July 2022 Meetup"
+[Akvorado]: https://akvorado.net
+[ClickHouse]: https://clickhouse.com/
+[YouTube]: https://www.youtube.com/watch?v=eiGmMyQifmU "July 2022 ClickHouse Bay Area Meetup"
+[Amazon Transcribe]: https://aws.amazon.com/transcribe/
+[Altinity]: https://altinity.com/
