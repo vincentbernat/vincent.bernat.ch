@@ -437,6 +437,7 @@ rm ../result
 
         # Delete unwanted files
         c.run("find . -type f -name '.*' -delete")
+        c.run(r"find media/videos -type l -regextype egrep  \! -regex '.*\.(m3u8|vtt|txt)$' -delete")
 
         c.run("git add *")
         c.run("git diff --stat HEAD || true", pty=True, hide=False)
