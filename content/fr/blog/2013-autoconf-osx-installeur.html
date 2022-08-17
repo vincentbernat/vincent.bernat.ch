@@ -87,9 +87,13 @@ Pour créer un composant, les fichiers adéquats doivent être installés
 dans un répertoire cible :
 
     ::console
-    $ ./configure --prefix=/usr --sysconfdir=/private/etc
+    $ ./configure --prefix=/usr/local --sysconfdir=/private/etc
     $ make
     $ make install DESTDIR=$PWD/osx-pkg
+
+!!! "Mise à jour (08.2022)" Depuis macOS 10.11, il n'est plus possible
+d'installer dans `/usr`. Il faut utiliser `/usr/local`. Ce document a
+été mis à jour dans ce sens.
 
 Le contenu du répertoire `osx-pkg` peut alors être transformé en un
 composant avec `pkgbuild` :
@@ -184,7 +188,7 @@ un fichier `org.someid.plist` avec un contenu similaire à ceci :
       <string>org.someid</string>
       <key>ProgramArguments</key>
       <array>
-        <string>/usr/sbin/mydaemon</string>
+        <string>/usr/local/sbin/mydaemon</string>
         <string>-d</string>
       </array>
       <key>RunAtLoad</key><true/>
@@ -233,8 +237,8 @@ La sortie de `otool -L` permet de détecter les dépendances
 superflues :
 
     ::console
-    $ otool -L build/usr/sbin/lldpd
-    build/usr/sbin/lldpd:
+    $ otool -L build/usr/local/sbin/lldpd
+    build/usr/local/sbin/lldpd:
             /usr/lib/libresolv.9.dylib (compatibility version 1.0.0, current version 1.0.0)
             /System/Library/Frameworks/IOKit.framework/Versions/A/IOKit (compatibility version 1.0.0, current version 275.0.0)
             /System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 744.19.0)
@@ -260,7 +264,7 @@ ainsi que l'emplacement du SDK. Cela peut se faire via les variables
 
     ::console
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
-    $ ./configure --prefix=/usr --sysconfdir=/private/etc \
+    $ ./configure --prefix=/usr/local --sysconfdir=/private/etc \
     >         CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
     >         LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
 
@@ -271,6 +275,9 @@ avoir une influence sur l'éditeur de liens.
 
 L'option `-isysroot` indique l'emplacement du SDK. Les fichiers
 d'entête et les bibliothèques seront d'abord recherchés à cet endroit
+
+!!! "Mise à jour (08.2022)" Depuis le SDK 10.9, il n'est plus
+nécessaire de spécifier `-isysroot`.
 
 ## Binaires universels
 
@@ -286,7 +293,7 @@ Une façon simple de générer de tels fichiers est de passer les options
 `-arch i386 -arch x86_64` au compilateur :
 
     ::console
-    $ ./configure --prefix=/usr --sysconfdir=/private/etc \
+    $ ./configure --prefix=/usr/local --sysconfdir=/private/etc \
     >     CC="gcc -arch i386 -arch x86_64" \
     >     CPP="gcc -E"
 
@@ -304,7 +311,7 @@ avec [lipo][] :
     ::console
     $ for arch in i386 x86_64; do
     >   mkdir $arch ; cd $arch
-    >   ../configure --prefix=/usr --sysconfdir=/private/etc \
+    >   ../configure --prefix=/usr/local --sysconfdir=/private/etc \
     >       CC="gcc -arch $ARCH" \
     >       CPP="gcc -E"
     >   make
@@ -312,11 +319,21 @@ avec [lipo][] :
     >   cd ..
     > done
     […]
-    $ lipo -create -output daemon i386/usr/sbin/daemon x86_64/usr/sbin/daemon
+    $ lipo -create -output daemon i386/usr/local/sbin/daemon x86_64/usr/local/sbin/daemon
 
 Étant donné que `lipo` ne fonctionne que sur des fichiers, j'ai écrit
 un script Python permettant
 d'[appliquer `lipo` récursivement sur un ensemble de répertoires][rlipo].
+
+!!! "Mise à jour (08.2022)" De nos jours, vous devriez remplacer
+`i386` par `arm64`. [Apple recommande][] d'utiliser `-target` pour
+combiner à la fois l'architecture et le SDK cible. Toutefois, le
+drapeau `-arch` continue de fonctionner et il est possible de le
+combiner avec `-mmacosx-version-min` si besoin. À noter que cela
+nécessite de compiler sur une plateforme capable d'exécuter les deux
+architectures (comme un Apple M1).
+
+[Apple recommande]: https://developer.apple.com/documentation/apple-silicon/building-a-universal-macos-binary#Update-the-Architecture-List-of-Custom-Makefiles "Building a Universal macOS Binary"
 
 ## Mise en place
 
@@ -424,7 +441,7 @@ macOS avec ce système de construction :
     ::console
     $ SDK=/Developer/SDKs/MacOSX10.6.sdk
     $ mkdir build && cd build
-    $ ../configure --prefix=/usr --sysconfdir=/private/etc --with-embedded-libevent \
+    $ ../configure --prefix=/usr/local --sysconfdir=/private/etc --with-embedded-libevent \
     >   CFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK" \
     >   LDFLAGS="-mmacosx-version-min=10.6 -isysroot $SDK"
     […]
