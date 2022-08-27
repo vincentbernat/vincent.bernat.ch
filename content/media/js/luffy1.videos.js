@@ -5,14 +5,15 @@ luffy.do(() => {
         selector = selector || "";
         return document.querySelectorAll(`video.lf-media ${selector}`);
     }
-    const pauseOthers = (event) => {
-        const others = allVideos();
-        others.forEach((video) => {
-            if (event.target != video && !video.paused)
-                video.pause();
-        });
+    const pauseOthersWhenPlaying = (video) => {
+        video.addEventListener('play', ({target}) => {
+            allVideos().forEach((ovideo) => {
+                if (target != ovideo && !ovideo.paused)
+                    ovideo.pause();
+            });
+        }, false);
     };
-    allVideos().forEach((video) => video.addEventListener('play', pauseOthers, false));
+    allVideos().forEach(pauseOthersWhenPlaying);
 
     const videoSources = document.querySelectorAll("video.lf-media source[type='application/vnd.apple.mpegurl']");
     if (videoSources.length == 0) return;
@@ -52,7 +53,7 @@ luffy.do(() => {
                 once = true;
             };
             newVideo.addEventListener('play', play, false);
-            newVideo.addEventListener('play', pauseOthers, false);
+            pauseOthersWhenPlaying(newVideo);
         });
     });
 });
