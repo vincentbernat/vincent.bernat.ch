@@ -127,8 +127,9 @@ autres environnements, le paramétrage est assez simple, grâce à
     EOF
     pkill -HUP xsettingsd || xsettingsd &
 
-    # Pour les applications QT.
+    # Pour les applications Qt.
     export QT_AUTO_SCREEN_SCALE_FACTOR=1
+    export QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough
 
     # Pour certaines autres applications.
     echo Xft.dpi: $dpi | xrdb -merge
@@ -147,7 +148,7 @@ dynamiquement leurs paramètres lorsqu'elles sont notifiées via
 
 | Application                      | Échelle du texte | Échelle de l'interface | Sans redémarrer ? |
 |----------------------------------|------------------|------------------------|-------------------|
-| Applications QT 5                | ✔                | ✔                      | ✔                 |
+| Applications Qt 5                | ✔                | ✔                      | ✔                 |
 | Chromium[^chromium]              | ✔                | ✔                      | ✔                 |
 | Firefox (GTK 3)                  | ✔                | ✔                      | ✔                 |
 | Applications Electron[^electron] | ✔                | ✔                      | ✔                 |
@@ -176,7 +177,7 @@ dynamiquement leurs paramètres lorsqu'elles sont notifiées via
     d'environnement `GDK_SCALE=2`, sans quoi, aucune mise à l'échelle
     n'est effectuée.
 
-Les applications **QT 5** offrent une excellente prise en charge. Les
+Les applications **Qt 5** offrent une excellente prise en charge. Les
 applications **GTK 3** ne peuvent utiliser qu'un coefficient
 multiplicateur entier pour mettre à l'échelle leurs interfaces, ce qui
 est ennuyeux quand on a besoin d'un facteur 1.5×. Les applications
@@ -187,14 +188,15 @@ Au-delà de X11, [Wayland][] permet d'utiliser une densité différente
 pour chaque écran[^mixed-dpi] et de mettre à l'échelle les
 applications qui ne savent pas prendre en charge les densités élevées.
 
-[^mixed-dpi]: QT sait gérer les écrans de densités différentes avec
-    `QT_AUTO_SCREEN_SCALE_FACTOR=1`. GTK ne le permet pas mais les
-    écrans avec un DPI plus faibles peuvent opter pour une résolution
-    plus élevée et mis à l'échelle vers leur résolution d'origine avec
-    l'option `--scale` de `xrandr`. L'article « [Mixed DPI and the X
-    Window System][] » aborde le sujet en détails tandis que
-    « [Configuring mixed DPI monitors with xrandr][] » se concentre
-    sur l'usage de `xrandr`.
+[^mixed-dpi]: Qt sait gérer les écrans de densités différentes avec
+    `QT_AUTO_SCREEN_SCALE_FACTOR=1` et
+    `QT_SCALE_FACTOR_ROUNDING_POLICY=PassThrough`. GTK ne le permet
+    pas mais les écrans avec un DPI plus faibles peuvent opter pour
+    une résolution plus élevée et mis à l'échelle vers leur résolution
+    d'origine avec l'option `--scale` de `xrandr`. L'article « [Mixed
+    DPI and the X Window System][] » aborde le sujet en détails tandis
+    que « [Configuring mixed DPI monitors with xrandr][] » se
+    concentre sur l'usage de `xrandr`.
 
 En conclusion, la situation actuelle dépend énormément des
 applications utilisées. Mes principales applications étant Firefox,
