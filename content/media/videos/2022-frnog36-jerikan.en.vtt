@@ -1,0 +1,1430 @@
+WEBVTT
+
+0
+00:00.630 --> 00:03.580
+Hello. I will show you a new tool called Akvorado.
+
+1
+00:03.580 --> 00:06.160
+It collects network flows
+
+2
+00:06.160 --> 00:07.830
+and display them.
+
+3
+00:09.220 --> 00:12.720
+There are several existing solutions for this.
+
+4
+00:12.950 --> 00:15.240
+For example, a commercial solution is Kentik.
+
+5
+00:16.040 --> 00:19.980
+It is easy to setup and it is bundled with a lot of features.
+
+6
+00:20.100 --> 00:21.570
+It's hosted in the cloud.
+
+7
+00:21.810 --> 00:24.770
+C'est payant et ce n'est pas du tout open source.
+
+8
+00:25.480 --> 00:27.010
+Another commercial solution is Elastiflow.
+
+9
+00:27.510 --> 00:28.520
+Previously, it was open source, but not anymore.
+
+10
+00:29.880 --> 00:32.490
+This time, you need to host it yourself.
+
+00:32.720 --> 00:39.760
+There is a free version that can handle up to 4000 flows/seconde.
+
+13
+00:41.080 --> 00:42.790
+You need to pay if you want more.
+
+14
+00:44.260 --> 00:45.930
+And there are solutions
+
+15
+00:45.930 --> 00:49.260
+you can build yourself using open-source components.
+
+00:50.470 --> 00:53.680
+pmacct with RabbitMQ and data stored inside Elasticsearch.
+
+18
+00:54.300 --> 00:57.230
+You can browse the results with Kibana.
+
+19
+00:57.390 --> 01:00.890
+You can also use GoFlow2, export the data to Kafka,
+
+20
+01:00.900 --> 01:02.670
+and store them in ClickHouse.
+
+21
+01:03.200 --> 01:04.060
+You can leverage Grafana to display the results.
+
+22
+01:04.450 --> 01:08.540
+Another combination is vflow, Kafka, Apache Pinot,
+
+23
+01:08.540 --> 01:09.970
+which is another analytics database,
+
+01:10.870 --> 01:13.830
+and Apache Superset to display flows.
+
+26
+01:14.330 --> 01:17.740
+It's free (as in beer and speech). It's quite flexible.
+
+27
+01:17.750 --> 01:19.220
+You can customize to your needs,
+
+01:19.220 --> 01:22.330
+as long as you have the right skills. You need to host the result yourself.
+
+30
+01:22.510 --> 01:25.460
+You have to do some research.
+
+31
+01:25.460 --> 01:28.170
+You need to assemble everything, choose the components, fix the bugs,
+
+32
+01:28.170 --> 01:30.220
+understand how everything fits...
+
+33
+01:30.350 --> 01:31.910
+You need some time to do all that.
+
+34
+01:33.370 --> 01:37.190
+At Free, we have built our own tool,
+
+35
+01:38.050 --> 01:42.390
+called Akvorado, which means "water wheel" in Esperanto.
+
+36
+01:43.320 --> 01:45.600
+If you type that in Google, you are pretty sure to find us.
+
+37
+01:46.680 --> 01:49.260
+It's a Netflow/sFlow collector.
+
+38
+01:50.780 --> 01:52.700
+It adds more information with GeoIP,
+
+39
+01:53.020 --> 01:58.530
+classification rules, interface names, and serialize to Protobuf.
+
+40
+01:58.740 --> 02:01.160
+Kafka is used as a buffer.
+
+02:01.310 --> 02:06.230
+Then, data is stored in a ClickHouse database.
+
+43
+02:06.230 --> 02:10.259
+There is a web interface to display the results.
+
+44
+02:12.520 --> 02:16.290
+It's free (beer and speech). It's quite performant.
+
+46
+02:17.470 --> 02:21.590
+Everything is bundled : it is easy to deploy.
+
+47
+02:21.600 --> 02:23.750
+It is not as flexible as your own custom solution,
+
+48
+02:23.750 --> 02:26.630
+where you can choose each component.
+
+49
+02:26.630 --> 02:30.720
+The whole thing is imposed on you, but it allows you to get something quickly.
+
+50
+02:31.530 --> 02:32.820
+Again, there is a web interface.
+
+51
+02:33.120 --> 02:36.300
+It's a big pro compared to other solutions where you need Grafana or Kibana.
+
+52
+02:36.700 --> 02:40.180
+You have to host it yourself.
+
+53
+02:40.190 --> 02:43.420
+Depending on how you see things, this can be an advantage or not.
+
+54
+02:44.800 --> 02:46.790
+It's free (speech and beer).
+
+55
+02:47.000 --> 02:48.380
+It's published with the AGPLv3 license.
+
+56
+02:48.850 --> 02:51.970
+It is an internal tool we use at Free.
+
+02:52.110 --> 03:01.570
+We have no plan to sell it or sell services around it.
+
+59
+03:01.750 --> 03:03.990
+It should stay free quite some time.
+
+61
+03:12.830 --> 03:16.160
+About the performances, I was quite surprised.
+
+62
+03:16.160 --> 03:19.370
+This is quite performant, because, today,
+
+63
+03:19.370 --> 03:21.390
+we are still running it on a single VM
+
+03:21.740 --> 03:24.860
+with 1TB of storage, 64 GB of memory, and 24 vCPU.
+
+66
+03:26.490 --> 03:30.400
+We are handling 30,000 flows/second, but
+
+67
+03:30.400 --> 03:31.660
+looking at the stats,
+
+68
+03:31.660 --> 03:33.510
+we should be able to go up to 100,000 flows/s
+
+69
+03:33.510 --> 03:36.470
+on this single VM, while keeping 5 year worth of data.
+
+70
+03:37.000 --> 03:41.310
+When data are getting older,
+
+71
+03:41.540 --> 03:44.970
+they are aggregated over 1 minute, 5 minutes and 1 hour.
+
+72
+03:44.970 --> 03:47.760
+IP and ports are also lost.
+
+73
+03:47.770 --> 03:49.970
+Not keeping the IP addresses for too long
+
+74
+03:49.970 --> 03:52.160
+is a good thing, nonetheless.
+
+76
+03:54.560 --> 03:57.520
+This is configurable.
+
+77
+03:57.970 --> 04:00.170
+With our setup, we should be able to keep data for 5 years.
+
+04:00.180 --> 04:04.840
+As the project is still young, we will see if that's true.
+
+81
+04:08.290 --> 04:10.570
+One way to deploy is to use Docker.
+
+82
+04:10.570 --> 04:13.760
+You can download the project,
+
+83
+04:13.760 --> 04:17.470
+run docker-compose and get something working.
+
+84
+04:17.480 --> 04:19.079
+No need to know Kafka or ClickHouse,
+
+85
+04:20.010 --> 04:21.820
+but this can help.
+
+86
+04:22.150 --> 04:26.020
+There is a very special attention that has been paid to the operations.
+
+87
+04:26.020 --> 04:27.860
+There are logs and metrics.
+
+88
+04:27.870 --> 04:31.760
+We try to not break user configuration during upgrade,
+
+89
+04:32.490 --> 04:34.390
+even if this does not always work.
+
+90
+04:34.560 --> 04:37.010
+ClickHouse migrations are automated.
+
+91
+04:37.440 --> 04:40.270
+There is a documentation you can look up.
+
+93
+04:43.040 --> 04:45.300
+A big pro is the web interface.
+
+94
+04:45.310 --> 04:47.440
+We are quite happy about it.
+
+95
+04:47.450 --> 04:50.640
+You can test it on demo.akvorado.net.
+
+96
+04:52.460 --> 04:53.750
+Here is the home page
+
+97
+04:54.090 --> 04:55.090
+with some widgets,
+
+98
+04:55.540 --> 04:59.320
+a dark mode which makes it apart from the competition.
+
+100
+05:02.420 --> 05:06.070
+The "visualization" tab is the most interesting.
+
+101
+05:06.070 --> 05:08.740
+You can check your data.
+
+102
+05:08.970 --> 05:10.020
+It looks like Kentik.
+
+103
+05:10.630 --> 05:11.740
+Dunno why.
+
+104
+05:13.250 --> 05:15.720
+The documentation is builtin.
+
+106
+05:18.540 --> 05:20.690
+As I said, getting started is easy.
+
+107
+05:20.690 --> 05:23.260
+You download the tarball on GitHub,
+
+108
+05:23.260 --> 05:25.200
+unpack it in a directory named "akvorado",
+
+109
+05:25.210 --> 05:28.970
+run "docker-compose up"
+
+110
+05:28.970 --> 05:30.980
+point your browser to port 8081
+
+111
+05:30.980 --> 05:32.470
+and you get the demo site.
+
+112
+05:32.480 --> 05:35.270
+Without the data.
+
+113
+05:35.720 --> 05:38.510
+You need to wait a bit to have fake data.
+
+114
+05:39.780 --> 05:42.430
+If you have a bit more time,
+
+115
+05:42.660 --> 05:46.280
+you can remove the part generating the random data
+
+116
+05:46.290 --> 05:47.830
+from Akvorado configuration file (which is written in YAML)
+
+117
+05:47.830 --> 05:51.580
+and also from docker-compose, which starts the services to generate the data.
+
+118
+05:51.580 --> 05:54.800
+Then, you can configure everything else.
+
+119
+05:54.810 --> 05:55.680
+It's easy.
+
+120
+05:57.880 --> 06:00.990
+About flow configuration.
+
+121
+06:00.990 --> 06:04.210
+Akvorado accepts flows from anyone.
+
+122
+06:04.210 --> 06:06.770
+There is nothing to configure.
+
+123
+06:07.120 --> 06:09.300
+Send Netflow/IPFIX flows on port 2055
+
+06:09.460 --> 06:12.420
+and sFlow on port 6343.
+
+126
+06:14.250 --> 06:16.570
+Then, you need to configure SNMP.
+
+127
+06:17.130 --> 06:18.840
+It's not super modern
+
+128
+06:18.840 --> 06:21.080
+but it is widely supported.
+
+129
+06:21.470 --> 06:23.670
+Currently, this is not really flexible.
+
+130
+06:23.670 --> 06:26.350
+When sending flows from a given IP address,
+
+06:27.080 --> 06:28.920
+Akvorado uses the same IP to send SNMP queries,
+
+133
+06:30.060 --> 06:32.920
+to fetch the router name and interfaces.
+
+134
+06:33.160 --> 06:36.170
+This is mandatory to configure that. Fill up the community.
+
+135
+06:36.170 --> 06:38.610
+You need to configure your routers to accept SNMP requests.
+
+136
+06:41.700 --> 06:45.230
+The second point is that, for each router sending flows,
+
+137
+06:45.230 --> 06:48.570
+you can use classification rules to add a group,
+
+138
+06:48.570 --> 06:50.280
+a role, a site, a region.
+
+139
+06:50.640 --> 06:52.830
+It is down with rules.
+
+140
+06:53.170 --> 06:54.340
+This is not mandatory,
+
+141
+06:54.340 --> 06:57.580
+but this is a good warmup for the next step,
+
+142
+06:57.590 --> 06:58.770
+to work on your regex skills
+
+143
+06:59.840 --> 07:02.850
+because it relies on it a lot.
+
+144
+07:03.100 --> 07:07.460
+As an example, at Free, we name our equipments
+
+07:07.470 --> 07:12.530
+th2-something, with the name of the site on first position.
+
+147
+07:12.720 --> 07:16.170
+The first rule says that from the exporter name,
+
+148
+07:16.280 --> 07:20.480
+we capture what is before the first dash and it will be the site name.
+
+149
+07:20.870 --> 07:22.240
+Then, if it ends with ".it",
+
+150
+07:22.900 --> 07:24.680
+the region is Italy.
+
+151
+07:24.690 --> 07:27.940
+If it starts with Washington or New York, the region is USA.
+
+152
+07:28.300 --> 07:32.510
+If it ends with ".fr", the region is France.
+
+153
+07:32.760 --> 07:35.480
+You can assemble more or less complex rules.
+
+07:35.890 --> 07:38.640
+Following the same idea, it is possible to classify interfaces.
+
+156
+07:38.650 --> 07:41.850
+It is not mandatory but it is quite important.
+
+157
+07:41.850 --> 07:43.500
+You really should do it.
+
+158
+07:43.690 --> 07:46.990
+For each interface,
+
+159
+07:46.990 --> 07:48.990
+we have a boundary which says
+
+160
+07:48.990 --> 07:52.150
+external, internal or unknown.
+
+161
+07:52.160 --> 07:55.480
+It is important to classify interfaces on this criteria.
+
+162
+07:55.950 --> 07:59.380
+You can also attach a connectivity type.
+
+163
+07:59.380 --> 08:00.610
+This could be transit, PNI, IX, etc.
+
+165
+08:03.660 --> 08:05.130
+A provider (who is on the remote side).
+
+166
+08:05.610 --> 08:08.910
+We use the same kind of rules.
+
+167
+08:08.910 --> 08:10.540
+Here is a more complex example.
+
+168
+08:10.540 --> 08:14.640
+We take the interface description. If it starts with transit, PNI, PPNI, ...
+
+08:15.750 --> 08:20.900
+this part will be the connectivity.
+
+171
+08:21.000 --> 08:24.080
+A "&&" is missing from the end because the rule is not over.
+
+172
+08:24.090 --> 08:27.480
+If it matched, we use the second word
+
+173
+08:28.140 --> 08:29.230
+that is the provider name.
+
+174
+08:30.180 --> 08:32.590
+For example, at Free, we use "Transit: Cogent"
+
+175
+08:33.669 --> 08:35.809
+and some other stuff. Here, we will capture "Cogent".
+
+08:36.520 --> 08:40.600
+If both rules matches, we also consider this is an external interface.
+
+178
+08:41.100 --> 08:43.650
+For everything else, we consider this is an internal interface.
+
+179
+08:46.930 --> 08:49.740
+That's the only thing to do for a basic deployment.
+
+180
+08:49.750 --> 08:53.370
+You can check if everything works on the web interface.
+
+181
+08:53.380 --> 08:54.840
+Check the documentation
+
+182
+08:54.840 --> 08:56.890
+for the various configuration settings.
+
+183
+08:56.890 --> 08:57.890
+There is also a troubleshooting section
+
+184
+08:58.970 --> 09:02.970
+which should help if you can't get your flows in the interface.
+
+185
+09:03.090 --> 09:04.800
+The metrics will help in this case.
+
+187
+09:07.630 --> 09:09.310
+The web interface.
+
+188
+09:10.000 --> 09:14.580
+You can draw several kind of graphs.
+
+189
+09:14.580 --> 09:17.770
+Do you want stacking areas?
+
+190
+09:17.780 --> 09:19.490
+Just lines?
+
+191
+09:19.590 --> 09:24.840
+On a grid?
+
+192
+09:24.840 --> 09:28.730
+(each graph in its own box)
+
+194
+09:29.880 --> 09:30.970
+Or maybe a "sankey" graph?
+
+196
+09:32.020 --> 09:34.450
+(if you don't know what this is, I have an example later)
+
+197
+09:34.820 --> 09:38.420
+You choose the time period to extract the data.
+
+198
+09:38.430 --> 09:40.480
+Data can be grouped using dimensions.
+
+09:40.480 --> 09:47.070
+You can group by AS, country, provider, etc.
+
+203
+09:47.280 --> 09:50.700
+You can filter the data.
+
+09:50.830 --> 09:54.930
+It uses an SQL-like language.
+
+206
+09:55.040 --> 09:59.290
+An editor with completion is here to help.
+
+207
+09:59.300 --> 10:02.460
+It may be a bit raw, but with the completion,
+
+208
+10:02.460 --> 10:04.310
+I think you should quickly get what you want.
+
+209
+10:05.750 --> 10:10.890
+Here are a few examples. Here, we have used the stacked areas.
+
+210
+10:11.170 --> 10:13.680
+Each color is a source AS.
+
+212
+10:15.640 --> 10:17.850
+The filter is...
+
+213
+10:17.860 --> 10:22.710
+the input interface should be classified as external and the provider is Cogent.
+
+214
+10:23.310 --> 10:24.950
+It shows what we get from Cogent,
+
+10:25.300 --> 10:28.730
+grouped by the AS number.
+
+217
+10:28.870 --> 10:31.650
+Here, we have enabled the "bidirectional" option.
+
+218
+10:31.840 --> 10:34.010
+You have the input and the output.
+
+219
+10:34.010 --> 10:36.080
+Akvorado automatically inverts the filter
+
+220
+10:36.080 --> 10:38.650
+to get the second part of the graph.
+
+223
+10:41.900 --> 10:44.000
+Here, this is the same plot with lines.
+
+224
+10:44.000 --> 10:47.080
+Stacking areas is handy
+
+225
+10:47.080 --> 10:49.770
+to see the total,
+
+226
+10:49.950 --> 10:53.570
+but this is difficult to compare the value of each area.
+
+227
+10:53.800 --> 10:56.000
+With lines, we can easily see
+
+228
+10:56.000 --> 10:58.750
+the orange line is always lower than the blue line
+
+229
+10:58.870 --> 11:01.410
+and this was not easy to see
+
+230
+11:01.580 --> 11:04.200
+when using stacked areas.
+
+231
+11:07.610 --> 11:09.840
+Another example, still with stacking areas.
+
+232
+11:09.840 --> 11:13.980
+We group by "Eternet type" (IPv4, IPv6)
+
+233
+11:13.990 --> 11:17.010
+and we use a more complex filter.
+
+234
+11:17.010 --> 11:22.280
+The source should be one of the Google AS,
+
+235
+11:22.480 --> 11:24.390
+and we get this result.
+
+236
+11:25.180 --> 11:27.080
+Other solutions are using Grafana.
+
+237
+11:27.710 --> 11:31.820
+Its remplating language is more limited.
+
+238
+11:32.380 --> 11:33.990
+You have place holders in your SQL requests
+
+239
+11:34.400 --> 11:36.670
+that get replaced by values in drop down menus.
+
+240
+11:36.900 --> 11:37.510
+
+
+241
+11:38.640 --> 11:40.950
+You may have to create several dashboards
+
+242
+11:40.960 --> 11:42.870
+depending on the kind of query you want to run.
+
+243
+11:42.870 --> 11:45.210
+Maybe dropdown menus are enough,
+
+244
+11:45.210 --> 11:49.280
+like when filtering per AS or per country,
+
+245
+11:49.290 --> 11:51.150
+but for some things,
+
+11:51.270 --> 11:55.490
+you will have to create several dashboards.
+
+251
+12:00.510 --> 12:04.160
+Here, we have a tool specifically created for network flows.
+
+253
+12:07.260 --> 12:10.980
+Here is the "sankey" graph.
+
+254
+12:10.980 --> 12:12.390
+You can see the flows going from one dimension to another.
+
+255
+12:12.390 --> 12:15.200
+Each column is a dimension.
+
+12:15.200 --> 12:19.360
+We have the source AS, the input provider,
+
+258
+12:19.560 --> 12:23.260
+the connectivity type and the source port.
+
+259
+12:23.400 --> 12:26.940
+Most of the traffic goes through Cogent,
+
+260
+12:27.270 --> 12:28.670
+which is a transit provider.
+
+12:30.430 --> 12:35.070
+two thirds of the traffic comes from port 443.
+
+264
+12:36.890 --> 12:40.030
+A small part of the traffic comes from an IX (DECIX).
+
+12:40.030 --> 12:44.120
+It is a convenient graph to see where your traffic goes.
+
+267
+12:46.430 --> 12:48.940
+About the AS names, I don't know if you have noticed,
+
+268
+12:49.480 --> 12:51.930
+but the AS names are quite clean.
+
+269
+12:51.940 --> 12:53.830
+It is often a problem we have.
+
+270
+12:56.370 --> 13:00.160
+PeeringDB is clean but does not have all the AS names.
+
+271
+13:00.470 --> 13:03.340
+The RIR databases have all of them,
+
+272
+13:03.350 --> 13:05.380
+but as it's difficult to update,
+
+13:05.380 --> 13:11.790
+there are AS with odd names. For example, Netflix is AS-SSI.
+
+275
+13:11.790 --> 13:14.280
+I have published a small project
+
+276
+13:14.290 --> 13:17.320
+mixing several data sources.
+
+277
+13:17.330 --> 13:20.690
+There are rules to clean up the names.
+
+278
+13:20.730 --> 13:22.320
+This is exported as a CSV file.
+
+279
+13:22.390 --> 13:24.530
+It's updated weekly.
+
+280
+13:24.530 --> 13:28.050
+Fetch it if you need it.
+
+281
+13:28.240 --> 13:29.570
+It also uses DB-IP
+
+282
+13:30.360 --> 13:32.870
+as a source instead of ARIN.
+
+283
+13:32.870 --> 13:36.410
+ARIN license does not allow me to fetch the data
+
+284
+13:36.410 --> 13:39.740
+I need to extract the AS names.
+
+13:41.990 --> 13:48.920
+Akvorado is split in 3 parts. It's written in Go.
+
+287
+13:49.210 --> 13:49.790
+There is the "inlet".
+
+288
+13:49.980 --> 13:53.050
+It receives the flows, adds more data,
+
+289
+13:53.050 --> 13:55.090
+serialize them and send the result to Kafka.
+
+290
+13:55.460 --> 13:58.270
+The console component serves the web UI
+
+291
+13:58.670 --> 14:00.710
+and an undocumented API.
+
+14:00.830 --> 14:06.680
+The orchestrator component configures the other components,
+
+294
+14:06.690 --> 14:08.430
+including the external ones,
+
+295
+14:08.440 --> 14:10.100
+like Kafka and ClickHouse.
+
+296
+14:10.830 --> 14:15.860
+It configures them, creates the tables, etc.
+
+297
+14:16.070 --> 14:18.660
+It's one of the reason it works out-of-the-box.
+
+299
+14:20.380 --> 14:24.950
+On the drawing, you can see how the flows are built
+
+300
+14:24.960 --> 14:28.340
+from the various bits received from
+
+301
+14:29.070 --> 14:29.790
+Netflow and IPFIX,
+
+14:30.770 --> 14:34.800
+and data extracted from SNMP.
+
+304
+14:36.480 --> 14:39.490
+The AS numbers can come from flows or GeoIP databases.
+
+305
+14:40.070 --> 14:42.800
+The country is from the GeoIP databases.
+
+307
+14:44.610 --> 14:46.180
+The classifiers add more information.
+
+14:46.190 --> 14:50.780
+This makes the final flow sent to ClickHouse.
+
+310
+14:53.610 --> 14:55.140
+Open source components.
+
+311
+14:55.380 --> 14:55.830
+We use GoFlow2 to collect network flows.
+
+312
+14:56.310 --> 14:59.280
+Sarama for Kafka.
+
+313
+14:59.790 --> 15:00.990
+For metrics, this is the Prometheus client in Go.
+
+314
+15:02.340 --> 15:03.740
+zerolog for logging.
+
+315
+15:05.290 --> 15:07.190
+cobra for the CLI.
+
+15:07.200 --> 15:11.140
+The expression language for classification is "expr".
+
+319
+15:14.040 --> 15:14.910
+Gin for the web framework.
+
+320
+15:16.310 --> 15:21.150
+Mapstructure and validator to parse and validate configuration files.
+
+321
+15:22.600 --> 15:26.500
+For the infrastructure side, there is a Kakfa broker in the middle.
+
+15:26.500 --> 15:32.390
+It's quite useful to distribute consummers and producers.
+
+324
+15:33.280 --> 15:36.530
+The inlet component can be distributed.
+
+325
+15:36.540 --> 15:38.750
+You can put everything on a single VM, but, if you want,
+
+326
+15:38.750 --> 15:42.130
+you can use several Netflow collectors
+
+327
+15:42.890 --> 15:45.200
+and they write into the same Kafka cluster.
+
+15:45.200 --> 15:51.250
+Also, if you want to stop ClickHouse, you can.
+
+330
+15:51.250 --> 15:55.860
+There is no data loss. Kafka acts as a buffer.
+
+331
+15:55.860 --> 15:57.770
+When ClickHouse starts again, it will resume from the last ingested flow.
+
+332
+15:57.770 --> 15:59.700
+That's why this is interesting to use Kafka.
+
+333
+15:59.700 --> 16:01.170
+And that's why it is a common component in many projects.
+
+334
+16:01.180 --> 16:03.910
+It's not hard to manage.
+
+16:05.190 --> 16:09.780
+ClickHouse is a columnar database.
+
+337
+16:10.370 --> 16:13.390
+Data are stored column by column
+
+338
+16:13.390 --> 16:15.100
+instead of line by line in a regular database.
+
+16:15.110 --> 16:21.130
+It allows one to extract huge chunks of data quickly.
+
+16:22.110 --> 16:26.870
+Compared to other columnar databases, it uses a SQL dialect which looks like regular SQL.
+
+343
+16:26.870 --> 16:29.720
+It is quite versatile and there are a lot of functions available.
+
+344
+16:29.990 --> 16:34.710
+It can be performant without putting much effort into it.
+
+16:35.590 --> 16:40.280
+At Free, we are still using the VM that was provided for testing.
+
+16:40.280 --> 16:44.650
+It handles the load without a sweat.
+
+16:44.940 --> 16:51.400
+ClickHouse stays fast. I can't do a demo,
+
+352
+16:51.630 --> 16:55.270
+but most requests are executed in less than a second
+
+353
+16:55.280 --> 16:56.910
+except for a few cases.
+
+16:58.510 --> 17:02.470
+The web frontend was the most painful part to write.
+
+356
+17:02.540 --> 17:05.619
+JavaScript has a lot of frameworks.
+
+357
+17:05.630 --> 17:06.930
+Here are the components we use in Akvorado.
+
+358
+17:08.230 --> 17:11.940
+One of the most important is the one handling the graphs.
+
+359
+17:12.160 --> 17:13.710
+It is Apache ECharts.
+
+360
+17:15.200 --> 17:19.109
+It is featureful, flexible, and quite bug-free.
+
+362
+17:21.470 --> 17:25.460
+Please, look at the demo on their website to check the available features.
+
+363
+17:25.460 --> 17:28.220
+If you want to write a tool with graphs to display,
+
+17:28.230 --> 17:33.580
+have a look at it. It is not trivial to use,
+
+366
+17:33.580 --> 17:37.490
+but it had all the features I needed.
+
+367
+17:41.020 --> 17:43.760
+A feature that is not available yet,
+
+368
+17:43.770 --> 17:45.740
+but as we have a lot of data in ClickHouse,
+
+369
+17:46.410 --> 17:51.520
+we can build a primitive anti-DDoS system.
+
+17:51.700 --> 17:55.840
+We can run SQL requests on the data in ClickHouse.
+
+372
+17:56.690 --> 17:59.010
+You run the request to detect a DDoS in a script
+
+373
+17:59.010 --> 18:01.450
+triggered every 10 seconds.
+
+374
+18:01.490 --> 18:04.730
+And from the result, you can build a FlowSpec rule.
+
+375
+18:05.290 --> 18:08.520
+It is injected in a BIRD instance
+
+376
+18:09.370 --> 18:12.750
+and routers connect to it to fetch the current FlowSpec rules.
+
+18:14.210 --> 18:18.180
+As an example, here is one of the requests we use.
+
+379
+18:18.180 --> 18:21.300
+It detects UDP amplification attacks.
+
+380
+18:23.870 --> 18:28.000
+It is a bit complex, but let's decipher it.
+
+381
+18:28.830 --> 18:35.030
+Data are grouped minute by minute.
+
+382
+18:35.040 --> 18:38.980
+We look at the 5 last minutes.
+
+383
+18:38.990 --> 18:41.930
+We group by destination IP address
+
+384
+18:42.120 --> 18:45.190
+(that's the IP we want to protect)
+
+385
+18:45.680 --> 18:48.270
+We group by protocol to filter on the UDP protocol.
+
+386
+18:48.270 --> 18:50.940
+We group by source port, because during an UDP amplification,
+
+18:51.850 --> 18:56.110
+the source port is known (it could be NTP for example).
+
+18:56.560 --> 19:05.170
+We compute the bandwidth in bytes per second.
+
+392
+19:05.770 --> 19:09.230
+A quantile for the packet size is computed.
+
+393
+19:09.720 --> 19:12.590
+It's one of the many features of ClickHouse.
+
+394
+19:12.590 --> 19:16.020
+It allows us to easily compute quantiles.
+
+395
+19:16.030 --> 19:18.310
+We count the flows, the number of unique source IP addresses,
+
+396
+19:18.320 --> 19:21.590
+the number of unique countries.
+
+397
+19:21.590 --> 19:23.550
+When there are more than 50 sources or more than 10 countries,
+
+398
+19:23.550 --> 19:26.530
+and when we have more than 200 Mbps,
+
+399
+19:26.680 --> 19:27.810
+and that the protocol is UDP,
+
+400
+19:28.460 --> 19:30.890
+it looks like an UDP amplification attack.
+
+19:31.070 --> 19:35.300
+We create a FlowSpec rule that looks like this.
+
+19:36.020 --> 19:40.240
+For the target IP, when the source port is 123,
+
+405
+19:40.240 --> 19:42.850
+and the packet length is 468, the protocol is UDP,
+
+19:43.520 --> 19:44.880
+we drop the packet.
+
+409
+19:45.900 --> 19:49.680
+We don't rate-limit because
+
+410
+19:50.060 --> 19:53.650
+legitimate flows will be flooded by the illegitimate ones and they will be dropped too.
+
+411
+19:55.270 --> 19:57.850
+Using FlowSpec is nice
+
+412
+19:58.390 --> 20:02.300
+we only restrict one source port,
+
+413
+20:03.450 --> 20:06.670
+but also a specific packet size.
+
+414
+20:06.880 --> 20:09.800
+Legitimate NTP packets are never 468 bytes.
+
+415
+20:09.800 --> 20:11.410
+It's always smaller.
+
+416
+20:11.700 --> 20:14.430
+The customer will be protected and won't notice a thing.
+
+417
+20:17.610 --> 20:20.340
+As for the planned features,
+
+418
+20:20.480 --> 20:22.440
+we are working on the BGP support
+
+419
+20:22.820 --> 20:27.730
+to get AS paths, communities, and origin AS,
+
+420
+20:27.740 --> 20:30.720
+notably when they are internals as we can't get them from GeoIP.les AS d'origine notamment quand c'est des AS internes qu'on ne peut pas obtenir par GeoIP.
+
+421
+20:32.500 --> 20:33.990
+It will be available soon.
+
+422
+20:34.520 --> 20:37.880
+We will also implement traffic forecasting.
+
+423
+20:37.880 --> 20:40.880
+And maybe anomaly detection as it gets together.
+
+424
+20:40.880 --> 20:43.280
+It should enable you to check
+
+425
+20:43.280 --> 20:47.050
+your capacity planning for a router.
+
+426
+20:48.640 --> 20:49.590
+VRF support is also planned.
+
+427
+20:49.940 --> 20:52.970
+We don't need it yet.
+
+428
+20:52.970 --> 20:53.870
+We only support one VRF
+
+429
+20:54.170 --> 20:56.670
+because we are only using Akvorado for our public traffic.
+
+20:57.420 --> 21:02.090
+Dashboards are also planned.
+
+432
+21:02.100 --> 21:05.430
+However, you can currently bookmark the URL.
+
+433
+21:05.430 --> 21:09.480
+The URL contains a hash of the request.
+
+434
+21:09.480 --> 21:12.630
+You can share them with a colleague
+
+435
+21:13.050 --> 21:16.140
+to show the result of a request you built.
+
+436
+21:16.200 --> 21:17.540
+Or save it somewhere.
+
+437
+21:20.780 --> 21:23.560
+Is there any question?
+
+21:29.410 --> 21:31.530
+No, I am surprised.
+
+444
+21:44.130 --> 21:46.630
+Hello Vincent. This is not really a question, just a comment.
+
+445
+21:46.630 --> 21:48.900
+I am impressed by the work you did.
+
+21:48.900 --> 21:51.200
+It's a great project.

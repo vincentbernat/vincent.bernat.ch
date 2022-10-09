@@ -1,0 +1,1430 @@
+WEBVTT
+
+0
+00:00.630 --> 00:03.580
+Bonjour. Je vais vous présenter un outil qui s'appelle
+
+1
+00:03.580 --> 00:06.160
+Akvorado et qui permet de collecter les flots
+
+2
+00:06.160 --> 00:07.830
+et aussi de les visualiser.
+
+3
+00:09.220 --> 00:12.720
+Il y a un certain nombre de solutions qui existent déjà pour faire la même chose.
+
+4
+00:12.950 --> 00:15.240
+Par exemple en solution commerciale, il y a Kentik
+
+5
+00:16.040 --> 00:19.980
+qui est assez simple à mettre en place avec plein de fonctionnalités.
+
+6
+00:20.100 --> 00:21.570
+C'est hébergé dans le cloud.
+
+7
+00:21.810 --> 00:24.770
+C'est payant et ce n'est pas du tout open source.
+
+8
+00:25.480 --> 00:27.010
+Une autre solution commerciale : Elastiflow.
+
+9
+00:27.510 --> 00:28.520
+Par le passé, c'était open source et ça ne l'est plus.
+
+10
+00:29.880 --> 00:32.490
+Cette fois-ci, vous hébergez vous-même.
+
+00:32.720 --> 00:39.760
+Il y a une version gratuite qui peut prendre 4000 flots/seconde.
+
+13
+00:41.080 --> 00:42.790
+Il faut payer si vous voulez aller au-delà.
+
+14
+00:44.260 --> 00:45.930
+Et enfin il y a des solutions
+
+15
+00:45.930 --> 00:49.260
+où vous faites vous-même avec des briques open source.
+
+00:50.470 --> 00:53.680
+pmacct avec RabbitMQ qui met les données dans un Elasticsearch
+
+18
+00:54.300 --> 00:57.230
+et vous visualisez le résultat avec Kibana.
+
+19
+00:57.390 --> 01:00.890
+Vous pouvez prendre GoFlow2 qui va mettre les données dans Kafka,
+
+20
+01:00.900 --> 01:02.670
+qui va les stocker ensuite dans ClickHouse
+
+21
+01:03.200 --> 01:04.060
+et vous pouvez utiliser Grafana
+
+22
+01:04.450 --> 01:08.540
+pour voir le résultat ou alors vflow, Kafka, Apache Pinot,
+
+23
+01:08.540 --> 01:09.970
+qui est une autre base de données par colonnes
+
+01:10.870 --> 01:13.830
+et Apache Superset pour la visualisation.
+
+26
+01:14.330 --> 01:17.740
+Alors c'est gratuit et c'est libre, c'est plutôt flexible.
+
+27
+01:17.750 --> 01:19.220
+Vous pouvez faire un peu ce que vous voulez du
+
+01:19.220 --> 01:22.330
+moment que vous avez les compétences. Vous devez l'héberger vous-même.
+
+30
+01:22.510 --> 01:25.460
+Il faut et faire des recherches.
+
+31
+01:25.460 --> 01:28.170
+Il faut assembler tous ça, choisir les composants, corriger les bugs,
+
+32
+01:28.170 --> 01:30.220
+comprendre comment ça fonctionne...
+
+33
+01:30.350 --> 01:31.910
+Il faut avoir un peu de temps pour faire tout ça.
+
+34
+01:33.370 --> 01:37.190
+Chez Free, on a développé notre propre outil
+
+35
+01:38.050 --> 01:42.390
+qui s'appelle Akvorado, qui veut dire "roue à aube" en espéranto.
+
+36
+01:43.320 --> 01:45.600
+Si vous tapez dans Google, vous êtes sûr de le trouver.
+
+37
+01:46.680 --> 01:49.260
+Alors c'est un collecteur Netflow/sFlow.
+
+38
+01:50.780 --> 01:52.700
+Ça enrichit les données avec de la GeoIP,
+
+39
+01:53.020 --> 01:58.530
+des règles de classification, des noms d'interface, ça transforme tout ça en Protobuf.
+
+40
+01:58.740 --> 02:01.160
+Ça l'envoie dans Kafka pour faire tampon.
+
+02:01.310 --> 02:06.230
+Ensuite, c'est stocké dans ClickHouse, comme base de données.
+
+43
+02:06.230 --> 02:10.259
+Il y a une interface web pour visualiser les résultats.
+
+44
+02:12.520 --> 02:16.290
+C'est gratuit et c'est libre. C'est pas mal performant.
+
+46
+02:17.470 --> 02:21.590
+Tout est intégré : c'est très facile à déployer.
+
+47
+02:21.600 --> 02:23.750
+C'est pas aussi flexible que des solutions
+
+48
+02:23.750 --> 02:26.630
+que vous feriez vous-même et où vous pouvez choisir séparément les composants.
+
+49
+02:26.630 --> 02:30.720
+On vous impose l'ensemble, mais ça permet de partir plus vite.
+
+50
+02:31.530 --> 02:32.820
+Je répète encore : il y a une interface web.
+
+51
+02:33.120 --> 02:36.300
+C'est un gros plus par rapport à d'autres solutions, où vous devez utiliser
+
+52
+02:36.700 --> 02:40.180
+Grafana ou Kibana pour faire ça. Vous devez l'héberger vous-même,
+
+53
+02:40.190 --> 02:43.420
+ce qui peut être un plus ou un inconvénient selon votre point de vue.
+
+54
+02:44.800 --> 02:46.790
+Alors c'est gratuit, c'est libre.
+
+55
+02:47.000 --> 02:48.380
+C'est publié sous licence AGPLv3.
+
+56
+02:48.850 --> 02:51.970
+On l'a développé en interne chez Free.
+
+02:52.110 --> 03:01.570
+C'est un outil interne chez nous. On ne compte pas le revendre ou faire des services autour.
+
+59
+03:01.750 --> 03:03.990
+Donc ça, ça devrait rester libre un certain temps.
+
+61
+03:12.830 --> 03:16.160
+Au niveau des performances, j'ai moi-même été assez surpris.
+
+62
+03:16.160 --> 03:19.370
+C'est performant parce que finalement,
+
+63
+03:19.370 --> 03:21.390
+on tourne toujours, chez nous, sur une seule VM
+
+03:21.740 --> 03:24.860
+avec 1 To de disque, 64 Go de mémoire et 24 vCPU.
+
+66
+03:26.490 --> 03:30.400
+Actuellement on a environ 30 000 flots par seconde, mais
+
+67
+03:30.400 --> 03:31.660
+vues les ressources utilisées,
+
+68
+03:31.660 --> 03:33.510
+on devrait pouvoir monter à 100 000 en restant sur
+
+69
+03:33.510 --> 03:36.470
+une seule machine et en gardant cinq années de données.
+
+70
+03:37.000 --> 03:41.310
+Quand les données vieillissent,
+
+71
+03:41.540 --> 03:44.970
+elles vont être agrégées sur une minute, cinq minutes
+
+72
+03:44.970 --> 03:47.760
+et une heure. On va aussi perdre les IP
+
+73
+03:47.770 --> 03:49.970
+et les ports. Les IP, c'est pas plus mal
+
+74
+03:49.970 --> 03:52.160
+de ne pas les garder trop longtemps.
+
+76
+03:54.560 --> 03:57.520
+Les expirations sont configurables.
+
+77
+03:57.970 --> 04:00.170
+Dans notre configuration, on devrait arriver à garder les données pendant cinq ans.
+
+04:00.180 --> 04:04.840
+Le projet à moins de six mois on verra bien si c'est vraiment le cas.
+
+81
+04:08.290 --> 04:10.570
+Un mode de déploiement possible,
+
+82
+04:10.570 --> 04:13.760
+c'est d'utiliser Docker. Vous pouvez prendre le projet,
+
+83
+04:13.760 --> 04:17.470
+faire un docker-compose et avoir directement quelque chose de fonctionnel.
+
+84
+04:17.480 --> 04:19.079
+Vous n'avez pas besoin de connaître comment fonctionne Kafka,
+
+85
+04:20.010 --> 04:21.820
+ClickHouse, même si ça peut aider par la suite.
+
+86
+04:22.150 --> 04:26.020
+Il y a une attention toute particulière qui a été portée sur les opérations.
+
+87
+04:26.020 --> 04:27.860
+Il y a beaucoup de logs, beaucoup de métriques.
+
+88
+04:27.870 --> 04:31.760
+On s'arrange pour ne pas casser la configuration des utilisateurs lors des mises à jour,
+
+89
+04:32.490 --> 04:34.390
+bien que ça ne marche pas toujours.
+
+90
+04:34.560 --> 04:37.010
+Les migrations dans ClickHouse sont automatisées.
+
+91
+04:37.440 --> 04:40.270
+Il y a une documentation à laquelle vous pouvez vous référer.
+
+93
+04:43.040 --> 04:45.300
+Un gros plus c'est l'interface web.
+
+94
+04:45.310 --> 04:47.440
+On en est assez content. Vous pouvez tester
+
+95
+04:47.450 --> 04:50.640
+directement sur demo.akvorado.net.
+
+96
+04:52.460 --> 04:53.750
+Voilà la page d'accueil
+
+97
+04:54.090 --> 04:55.090
+avec des petits widgets,
+
+98
+04:55.540 --> 04:59.320
+un mode sombre qui le distingue de la concurrence.
+
+100
+05:02.420 --> 05:06.070
+Un onglet "visualisation" qui est le nerf de la guerre.
+
+101
+05:06.070 --> 05:08.740
+Vous pouvez voir vos données.
+
+102
+05:08.970 --> 05:10.020
+Ça ressemble beaucoup à Kentik.
+
+103
+05:10.630 --> 05:11.740
+Je ne sais pas pourquoi.
+
+104
+05:13.250 --> 05:15.720
+La documentation est intégrée dans le produit.
+
+106
+05:18.540 --> 05:20.690
+Comme je vous avais dit pour démarrer, c'est vraiment facile.
+
+107
+05:20.690 --> 05:23.260
+Vous prenez l'archive sur GitHub, vous le décompresser dans un
+
+108
+05:23.260 --> 05:25.200
+répertoire qui s'appelle "akvorado",
+
+109
+05:25.210 --> 05:28.970
+vous faites "docker-compose up" et vous pointez votre navigateur sur le
+
+110
+05:28.970 --> 05:30.980
+port 8081 et vous obtenez
+
+111
+05:30.980 --> 05:32.470
+exactement comme le site de démo.
+
+112
+05:32.480 --> 05:35.270
+Sauf que vous n'avez pas encore les données.
+
+113
+05:35.720 --> 05:38.510
+Il faut attendre un peu pour générer des fausses données.
+
+114
+05:39.780 --> 05:42.430
+Bon, après si vous avez un peu plus de temps,
+
+115
+05:42.660 --> 05:46.280
+vous virez la partie qui génère des données aléatoires
+
+116
+05:46.290 --> 05:47.830
+dans la configuration d'Akvorado,
+
+117
+05:47.830 --> 05:51.580
+qui est une configuration en YAML, et aussi dans le "docker-compose" qui démarre des
+
+118
+05:51.580 --> 05:54.800
+services pour générer ces données. Ensuite, vous configurez tout le reste.
+
+119
+05:54.810 --> 05:55.680
+C'est assez facile.
+
+120
+05:57.880 --> 06:00.990
+En ce qui concerne la configuration des flots,
+
+121
+06:00.990 --> 06:04.210
+Akvorado accepte les flots de n'importe qui : c'est ouvert aux quatre vents.
+
+122
+06:04.210 --> 06:06.770
+Vous n'avez rien à configurer, vous envoyez
+
+123
+06:07.120 --> 06:09.300
+vos Netflow/IPFIX sur le port 2055
+
+06:09.460 --> 06:12.420
+et sFlow sur le port 6343.
+
+126
+06:14.250 --> 06:16.570
+Ensuite, il faut configurer un petit peu SNMP.
+
+127
+06:17.130 --> 06:18.840
+Alors c'est pas super moderne,
+
+128
+06:18.840 --> 06:21.080
+mais au moins, c'est supporté par beaucoup d'équipements.
+
+129
+06:21.470 --> 06:23.670
+C'est un petit peu inflexible pour le moment.
+
+130
+06:23.670 --> 06:26.350
+Si vous envoyez des flots depuis une IP donnée,
+
+06:27.080 --> 06:28.920
+Akvorado va utiliser la même IP pour faire des requêtes SNMP,
+
+133
+06:30.060 --> 06:32.920
+pour récupérer le nom du routeur et les interfaces.
+
+134
+06:33.160 --> 06:36.170
+C'est obligatoire de configurer ça. Il faut mettre la communauté.
+
+135
+06:36.170 --> 06:38.610
+Il faut s'assurer que vos équipements accepteront de répondre aux requêtes SNMP.
+
+136
+06:41.700 --> 06:45.230
+Le deuxième point, c'est que à chaque routeur qui envoient des flots,
+
+137
+06:45.230 --> 06:48.570
+on peut utiliser des règles de classification qui permettent de donner un groupe,
+
+138
+06:48.570 --> 06:50.280
+un rôle, un site, une région.
+
+139
+06:50.640 --> 06:52.830
+C'est fait à travers des règles.
+
+140
+06:53.170 --> 06:54.340
+Ce n'est pas obligatoire,
+
+141
+06:54.340 --> 06:57.580
+mais c'est un bon échauffement pour l'étape suivante,
+
+142
+06:57.590 --> 06:58.770
+pour réviser un petit peu vos expressions régulières
+
+143
+06:59.840 --> 07:02.850
+parce que ça repose beaucoup dessus.
+
+144
+07:03.100 --> 07:07.460
+Pour le petit exemple, chez Free, on appelle nos équipements
+
+07:07.470 --> 07:12.530
+th2-quelquechose avec le nom du site en première position.
+
+147
+07:12.720 --> 07:16.170
+La première règle dit qu'à partir du nom de l'exporteur,
+
+148
+07:16.280 --> 07:20.480
+on capture ce qui est avant le tiret et ce sera le nom du site.
+
+149
+07:20.870 --> 07:22.240
+Ensuite, si ça termine par ".it",
+
+150
+07:22.900 --> 07:24.680
+on dit que la région c'est l'Italie.
+
+151
+07:24.690 --> 07:27.940
+Si ça commence par Washington, New York, la région, c'est "USA".
+
+152
+07:28.300 --> 07:32.510
+Si ça finit par ".fr", la région, c'est la France.
+
+153
+07:32.760 --> 07:35.480
+Il faut faire un certain nombre de règles comme ça, plus ou moins complexes.
+
+07:35.890 --> 07:38.640
+Sur la même idée, on peut aussi classifier les interfaces.
+
+156
+07:38.650 --> 07:41.850
+C'est plus important. C'est pas totalement obligatoire,
+
+157
+07:41.850 --> 07:43.500
+mais c'est quand même fortement conseillé.
+
+158
+07:43.690 --> 07:46.990
+À une interface, on donne
+
+159
+07:46.990 --> 07:48.990
+une frontière qui indique si c'est
+
+160
+07:48.990 --> 07:52.150
+une interface externe, interne ou si on ne sait pas.
+
+161
+07:52.160 --> 07:55.480
+C'est important de classifier les interfaces sur ce critère.
+
+162
+07:55.950 --> 07:59.380
+On peut aussi attacher un type de connectivité.
+
+163
+07:59.380 --> 08:00.610
+L'idée, c'est de mettre transit, PNI, IX, etc.
+
+165
+08:03.660 --> 08:05.130
+Un fournisseur (qui vous avez en face).
+
+166
+08:05.610 --> 08:08.910
+On a un peu le même genre de règles.
+
+167
+08:08.910 --> 08:10.540
+Voici une règle un petit peu plus compliquée.
+
+168
+08:10.540 --> 08:14.640
+Elle dit qu'on prend la description de l'interface. Si ça commence par transit, PNI, PPNI...
+
+08:15.750 --> 08:20.900
+cette partie là, ce sera la connectivité.
+
+171
+08:21.000 --> 08:24.080
+Il manque "&&" à la fin parce que la règle continue.
+
+172
+08:24.090 --> 08:27.480
+Et si ça a bien marché, on va prendre le deuxième mot
+
+173
+08:28.140 --> 08:29.230
+qui sera le nom du fournisseur.
+
+174
+08:30.180 --> 08:32.590
+Par exemple, chez Free, on met "Transit: Cogent" et
+
+175
+08:33.669 --> 08:35.809
+d'autres bidules. Ici ça va capturer "Cogent".
+
+08:36.520 --> 08:40.600
+Si les deux règles ont fonctionné, on considère en plus que c'est une interface externe.
+
+178
+08:41.100 --> 08:43.650
+Et pour tout le reste, on considère que c'est une interface interne.
+
+179
+08:46.930 --> 08:49.740
+C'est à peu près tout ce qu'il y à faire
+
+180
+08:49.750 --> 08:53.370
+pour le déployer chez vous. Vous pouvez vérifier le fonctionnement sur l'interface web.
+
+181
+08:53.380 --> 08:54.840
+Vous pouvez regarder la documentation pour voir s'il y a
+
+182
+08:54.840 --> 08:56.890
+des éléments de configuration qui vous intéressent.
+
+183
+08:56.890 --> 08:57.890
+Notamment il y a une partie dépannage
+
+184
+08:58.970 --> 09:02.970
+qui permet de voir si jamais il n'y a rien qui arrive, qu'est ce qui pourrait bloquer,
+
+185
+09:03.090 --> 09:04.800
+en utilisant notamment les métriques.
+
+187
+09:07.630 --> 09:09.310
+L'interface web.
+
+188
+09:10.000 --> 09:14.580
+Elle permet de tracer différents graphiques. On choisit d'abord les types de graphique.
+
+189
+09:14.580 --> 09:17.770
+Est-ce qu'on veut des courbes qui s'empilent les unes par dessus les autres ?
+
+190
+09:17.780 --> 09:19.490
+Des courbes indépendantes ?
+
+191
+09:19.590 --> 09:24.840
+Présentées sous forme de grille ?
+
+192
+09:24.840 --> 09:28.730
+(chaque graphe a sa propre case dans une grille)
+
+194
+09:29.880 --> 09:30.970
+Ou des courbes de type "sankey" ?
+
+196
+09:32.020 --> 09:34.450
+(si vous ne savez pas ce que c'est, j'ai un exemple un peu plus loin)
+
+197
+09:34.820 --> 09:38.420
+On donne une période sur laquelle on veut extraire les données.
+
+198
+09:38.430 --> 09:40.480
+Les dimensions permettent de grouper les données.
+
+09:40.480 --> 09:47.070
+On peut grouper par AS, par pays, par fournisseur, et ainsi de suite.
+
+203
+09:47.280 --> 09:50.700
+Et enfin, on peut mettre des filtres.
+
+09:50.830 --> 09:54.930
+Ça utilise un langage très proche de SQL pour les exprimer.
+
+206
+09:55.040 --> 09:59.290
+Un petit éditeur avec de la complétion est là pour vous aider.
+
+207
+09:59.300 --> 10:02.460
+Au début, c'est un peu rustre, mais avec la complétion,
+
+208
+10:02.460 --> 10:04.310
+je pense qu'on s'en sort assez rapidement.
+
+209
+10:05.750 --> 10:10.890
+Quelques exemples. Ici, on a empilé les courbes.
+
+210
+10:11.170 --> 10:13.680
+Chaque couleur représente un AS source.
+
+212
+10:15.640 --> 10:17.850
+Le filtre, c'est...
+
+213
+10:17.860 --> 10:22.710
+l'interface d'entrée et a été classifiée en externe et le fournisseur est Cogent.
+
+214
+10:23.310 --> 10:24.950
+Donc ça nous montre pour Cogent,
+
+10:25.300 --> 10:28.730
+ce qui arrive, réparti par AS.
+
+217
+10:28.870 --> 10:31.650
+Ici, on a coché l'option "bidirectionnel".
+
+218
+10:31.840 --> 10:34.010
+On a ce qui entre et ce qui sort : automatiquement,
+
+219
+10:34.010 --> 10:36.080
+Akvorado va inverser la requête que vous donnez pour
+
+220
+10:36.080 --> 10:38.650
+pour faire la seconde partie du graphique.
+
+223
+10:41.900 --> 10:44.000
+Là, on a la même courbe en utilisant des lignes parce
+
+224
+10:44.000 --> 10:47.080
+qu'empiler les courbes,
+
+225
+10:47.080 --> 10:49.770
+ça vous permet très rapidement de voir le total,
+
+226
+10:49.950 --> 10:53.570
+mais c'est un peu dur de comparer chacune des courbes.
+
+227
+10:53.800 --> 10:56.000
+Tandis, que si on utilise des lignes, on voit bien par exemple,
+
+228
+10:56.000 --> 10:58.750
+que la courbe orange est toujours plus basse que la courbe bleue,
+
+229
+10:58.870 --> 11:01.410
+alors que ce n'était pas forcément évident
+
+230
+11:01.580 --> 11:04.200
+sur le graphique quand c'est empilé.
+
+231
+11:07.610 --> 11:09.840
+Un autre exemple, toujours en empilant. Cette fois-ci,
+
+232
+11:09.840 --> 11:13.980
+on va classifier par "Ethernet type" (IPv4, IPv6)
+
+233
+11:13.990 --> 11:17.010
+et on va mettre un filtre plus compliqué.
+
+234
+11:17.010 --> 11:22.280
+On va dire que la source, ça va être un des deux AS de Google,
+
+235
+11:22.480 --> 11:24.390
+et on obtient ce résultat.
+
+236
+11:25.180 --> 11:27.080
+D'autres solutions utilisent Grafana
+
+237
+11:27.710 --> 11:31.820
+dont le langage de templating
+
+238
+11:32.380 --> 11:33.990
+est beaucoup plus limité (c'est des place holders
+
+239
+11:34.400 --> 11:36.670
+que vous mettez dans des requêtes SQL
+
+240
+11:36.900 --> 11:37.510
+que vous donnez à Grafana).
+
+241
+11:38.640 --> 11:40.950
+Si vous voulez que vos utilisateurs [...],
+
+242
+11:40.960 --> 11:42.870
+vous avez besoin de créer éventuellement plusieurs
+
+243
+11:42.870 --> 11:45.210
+versions d'un dashboard, selon le type de requête que
+
+244
+11:45.210 --> 11:49.280
+vous allez faire. Si vous voulez permettre de filtrer par AS et par pays,
+
+245
+11:49.290 --> 11:51.150
+vous pouvez faire des menus déroulants,
+
+11:51.270 --> 11:55.490
+mais pour certaines choses, vous allez devoir créer d'autres graphiques.
+
+251
+12:00.510 --> 12:04.160
+Ici, c'est un outil qui est spécifiquement adaptés aux flots réseau.
+
+253
+12:07.260 --> 12:10.980
+Voici l'exemple avec les "sankey". C'est un graphique qui permet de voir par
+
+254
+12:10.980 --> 12:12.390
+où passent les flots selon les
+
+255
+12:12.390 --> 12:15.200
+différentes dimensions choisies. Chaque colonne,
+
+12:15.200 --> 12:19.360
+c'est une dimension. On a l'AS source, le fournisseur d'entrée,
+
+258
+12:19.560 --> 12:23.260
+le type de connectivité et le port source. On voit
+
+259
+12:23.400 --> 12:26.940
+que la plupart du trafic passe par Cogent
+
+260
+12:27.270 --> 12:28.670
+qui est un transitaire
+
+12:30.430 --> 12:35.070
+et il y a deux tiers du trafic qui est issu du port 443.
+
+264
+12:36.890 --> 12:40.030
+Un peu du trafic passe par un IX (le DECIX).
+
+12:40.030 --> 12:44.120
+C'est un type de graphique très pratique pour voir où passe votre trafic.
+
+267
+12:46.430 --> 12:48.940
+Et d'ailleurs, à propos des noms d'AS, je ne sais pas si vous avez vu,
+
+268
+12:49.480 --> 12:51.930
+mais je suis assez content : les noms d'AS sont assez propres.
+
+269
+12:51.940 --> 12:53.830
+C'est un problème assez compliqué parce que, par exemple
+
+270
+12:56.370 --> 13:00.160
+on a PeeringDB qui est assez propre mais il n'y a pas tous les AS.
+
+271
+13:00.470 --> 13:03.340
+À l'inverse, on a les bases des RIR où il y a tous les AS,
+
+272
+13:03.350 --> 13:05.380
+mais souvent on n'a plus le droit de les changer.
+
+13:05.380 --> 13:11.790
+Il y a des AS avec des noms bizarres. Par exemple Netflix s'appelle AS-SSI.
+
+275
+13:11.790 --> 13:14.280
+J'ai fait un projet annexe dans lequel
+
+276
+13:14.290 --> 13:17.320
+je mixe les différentes sources de données.
+
+277
+13:17.330 --> 13:20.690
+Il y a des règles pour nettoyer les noms.
+
+278
+13:20.730 --> 13:22.320
+C'est exporté sous forme de CSV.
+
+279
+13:22.390 --> 13:24.530
+C'est mis à jour toutes les semaines.
+
+280
+13:24.530 --> 13:28.050
+Vous pouvez aller récupérer vous même si vous en avez besoin.
+
+281
+13:28.240 --> 13:29.570
+Ça utilise aussi DB-IP
+
+282
+13:30.360 --> 13:32.870
+qui est une autre source que j'utilise à la place de l'ARIN,
+
+283
+13:32.870 --> 13:36.410
+parce que l'ARIN n'autorise pas à récupérer les données qui nous permettrait
+
+284
+13:36.410 --> 13:39.740
+d'avoir tous les AS parce que c'est interdit par leur licence d'utilisation.
+
+13:41.990 --> 13:48.920
+Akvorado est un programme en trois parties. C'est écrit en Go.
+
+287
+13:49.210 --> 13:49.790
+Il y a un "inlet"
+
+288
+13:49.980 --> 13:53.050
+qui va recevoir les flux, rajouter les données supplémentaires,
+
+289
+13:53.050 --> 13:55.090
+les transformer et les envoyer vers Kafka.
+
+290
+13:55.460 --> 13:58.270
+Il y a la console pour la web UI. Il y a une API
+
+291
+13:58.670 --> 14:00.710
+derrière, mais elle n'est pas documentée.
+
+14:00.830 --> 14:06.680
+Il y a un orchestrateur qui permet de configurer les différents composants,
+
+294
+14:06.690 --> 14:08.430
+notamment les composants externes,
+
+295
+14:08.440 --> 14:10.100
+tels que Kafka et ClickHouse.
+
+296
+14:10.830 --> 14:15.860
+Il va les configurer, il va créer les tables, etc.
+
+297
+14:16.070 --> 14:18.660
+C'est pour cette raison que ça fonctionne tout seul.
+
+299
+14:20.380 --> 14:24.950
+Sur le dessin, vous pouvez voir comment les flux récupérés
+
+300
+14:24.960 --> 14:28.340
+sont construits à partir des informations qu'on a de
+
+301
+14:29.070 --> 14:29.790
+Netflow et d'IPFIX,
+
+14:30.770 --> 14:34.800
+mais aussi des informations qui ont été extraites de SNMP.
+
+304
+14:36.480 --> 14:39.490
+Le numéro d'AS peut provenir des flux ou des bases GeoIP.
+
+305
+14:40.070 --> 14:42.800
+Le pays est issu des bases GeoIP.
+
+307
+14:44.610 --> 14:46.180
+Les classifieurs rajoutent d'autres informations.
+
+14:46.190 --> 14:50.780
+C'est tout ça qui constitue le flux final qui est stocké dans ClickHouse.
+
+310
+14:53.610 --> 14:55.140
+Les composants open source.
+
+311
+14:55.380 --> 14:55.830
+On utilise GoFlow2
+
+312
+14:56.310 --> 14:59.280
+pour collecter les flux, Sarama pour Kaka.
+
+313
+14:59.790 --> 15:00.990
+Pour les métriques, c'est le client Prometheus en Go.
+
+314
+15:02.340 --> 15:03.740
+zerolog pour le logging.
+
+315
+15:05.290 --> 15:07.190
+cobra pour la ligne de commande.
+
+15:07.200 --> 15:11.140
+Le langage d'expression pour la classification s'appelle "expr".
+
+319
+15:14.040 --> 15:14.910
+Gin en framework web.
+
+320
+15:16.310 --> 15:21.150
+Mapstructure et validator pour lire les fichiers de conf et les valider.
+
+321
+15:22.600 --> 15:26.500
+Pour l'infrastructure, je n'ai pas trop détaillé. Il y a un Kafka au milieu.
+
+15:26.500 --> 15:32.390
+C'est très utile pour distribuer les consommateurs et les producteurs.
+
+324
+15:33.280 --> 15:36.530
+Le composant qui injecte les flux peut être distribué.
+
+325
+15:36.540 --> 15:38.750
+Vous pouvez tout mettre sur une même VM, mais si vous avez besoin,
+
+326
+15:38.750 --> 15:42.130
+vous pouvez mettre plusieurs collecteurs Netflow
+
+327
+15:42.890 --> 15:45.200
+et ils écrivent tous dans le même cluster Kafka.
+
+15:45.200 --> 15:51.250
+Ça permet de distribuer. Et si vous voulez arrêter ClickHouse, vous pouvez l'arrêter.
+
+330
+15:51.250 --> 15:55.860
+Vous ne perdez pas de données. Kafka garde tout et quand ClickHouse
+
+331
+15:55.860 --> 15:57.770
+redémarre, il va continuer là où il en était.
+
+332
+15:57.770 --> 15:59.700
+C'est toujours intéressant de mettre un Kafka au milieu.
+
+333
+15:59.700 --> 16:01.170
+C'est pour ça qu'autant de projets de ce type
+
+334
+16:01.180 --> 16:03.910
+mettent un Kafka au milieu. C'est pas très compliqué à administrer.
+
+16:05.190 --> 16:09.780
+ClickHouse est une base de données sous forme de colonnes.
+
+337
+16:10.370 --> 16:13.390
+Les données sont stockées colonne par colonne plutôt que ligne par ligne comme
+
+338
+16:13.390 --> 16:15.100
+dans une base SQL classique.
+
+16:15.110 --> 16:21.130
+Ça permet de d'extraire des quantités de données très importantes, très rapidement.
+
+16:22.110 --> 16:26.870
+Par rapport à d'autres bases de données, il utilise du SQL qui ressemble à du SQL classique.
+
+343
+16:26.870 --> 16:29.720
+On peut aller très loin, il y a plein de fonctions qui sont disponibles.
+
+344
+16:29.990 --> 16:34.710
+C'est une base qui est extrêmement performante sans faire beaucoup d'efforts.
+
+16:35.590 --> 16:40.280
+Chez Free, on est toujours sur la VM qu'on m'a prêté
+
+16:40.280 --> 16:44.650
+pour faire un POC et on tourne dessus parce qu'elle tient très bien la charge.
+
+16:44.940 --> 16:51.400
+ClickHouse n'a pas de soucis : c'est très rapide. Je ne peux pas vous faire une démo,
+
+352
+16:51.630 --> 16:55.270
+mais la plupart des requêtes sont exécutées en moins d'une seconde,
+
+353
+16:55.280 --> 16:56.910
+sauf dans quelques cas particuliers.
+
+16:58.510 --> 17:02.470
+Il y a un frontend web qui a été plus casse pied à écrire.
+
+356
+17:02.540 --> 17:05.619
+En JavaScript, vous avez des milliers de frameworks.
+
+357
+17:05.630 --> 17:06.930
+Je vous en cite quelques-uns.
+
+358
+17:08.230 --> 17:11.940
+Un composant important est celui qui gère les graphiques.
+
+359
+17:12.160 --> 17:13.710
+C'est un composant qui s'appelle Apache ECharts.
+
+360
+17:15.200 --> 17:19.109
+Il est extrêmement complet, très flexible et peu buggué.
+
+362
+17:21.470 --> 17:25.460
+Je vous invite à aller voir la démo sur leur site pour vous donner une idée.
+
+363
+17:25.460 --> 17:28.220
+Si jamais vous déployez des outils qui affichent des graphiques,
+
+17:28.230 --> 17:33.580
+vous devriez regarder ça parce que c'est pas trivial à utiliser,
+
+366
+17:33.580 --> 17:37.490
+mais j'ai obtenu le tous les graphiques que je voulais.
+
+367
+17:41.020 --> 17:43.760
+Une fonctionnalité qui n'est pas encore intégrée,
+
+368
+17:43.770 --> 17:45.740
+mais étant donné qu'on a des données dans ClickHouse,
+
+369
+17:46.410 --> 17:51.520
+on peut faire assez facilement un anti-DDoS primitif.
+
+17:51.700 --> 17:55.840
+Comme on a toutes les données dans ClickHouse, on peut les requêter avec du SQL.
+
+372
+17:56.690 --> 17:59.010
+Vous faites tourner un script qui va faire la requête
+
+373
+17:59.010 --> 18:01.450
+toutes les dix secondes pour tenter de détecter les DDoS.
+
+374
+18:01.490 --> 18:04.730
+Et ensuite à partir de ça, vous pouvez construire une règle FlowSpec.
+
+375
+18:05.290 --> 18:08.520
+On l'injecte dans un BIRD sur lequel tous les routeurs
+
+376
+18:09.370 --> 18:12.750
+se connectent pour récupérer les règles FlowSpec.
+
+18:14.210 --> 18:18.180
+Voici par exemple une des requêtes qui sont faites dans ClickHouse.
+
+379
+18:18.180 --> 18:21.300
+Elle permet de détecter les attaques par amplification UDP.
+
+380
+18:23.870 --> 18:28.000
+Elle est complexe, mais prenons le temps de la lire.
+
+381
+18:28.830 --> 18:35.030
+On va grouper les données minute par minute.
+
+382
+18:35.040 --> 18:38.980
+On va prendre les cinq dernières minutes.
+
+383
+18:38.990 --> 18:41.930
+On va grouper par l'adresse destination qui est l'adresse IP
+
+384
+18:42.120 --> 18:45.190
+qui est attaquée (on essaie de protéger nos abonnés).
+
+385
+18:45.680 --> 18:48.270
+Le protocole parce qu'on veut filtrer sur UDP.
+
+386
+18:48.270 --> 18:50.940
+Le port source parce que c'est une amplification UDP,
+
+18:51.850 --> 18:56.110
+de type NTP, par exemple. Le port source est souvent fixe.
+
+18:56.560 --> 19:05.170
+On va calculer quelle quantité de données ça représente en termes d'octets par seconde.
+
+392
+19:05.770 --> 19:09.230
+Un quantile est calculé sur la taille du paquet.
+
+393
+19:09.720 --> 19:12.590
+C'est une des fonctionnalités très intéressantes de ClickHouse.
+
+394
+19:12.590 --> 19:16.020
+Il permet de calculer facilement des quantiles. On compte les flux,
+
+395
+19:16.030 --> 19:18.310
+on compte les adresses IP sources uniques,
+
+396
+19:18.320 --> 19:21.590
+le nombre de pays uniques. À partir de tout ça,
+
+397
+19:21.590 --> 19:23.550
+on dit s'il y a plus de cinquante sources ou plus de
+
+398
+19:23.550 --> 19:26.530
+dix pays et qu'en plus ça fait plus de 200 Mbps
+
+399
+19:26.680 --> 19:27.810
+et le protocole est UDP,
+
+400
+19:28.460 --> 19:30.890
+ça ressemble beaucoup à une attaque par amplification.
+
+19:31.070 --> 19:35.300
+On va créer une règle FlowSpec qui ressemble à ça.
+
+19:36.020 --> 19:40.240
+On dit que pour l'IP attaquée, quand le port source est 123,
+
+405
+19:40.240 --> 19:42.850
+la longueur du paquet est 468, le protocole est UDP,
+
+19:43.520 --> 19:44.880
+on va dropper le paquet.
+
+409
+19:45.900 --> 19:49.680
+En FlowSpec, on droppe. On pourrait rate-limiter, mais cela ne sert à rien parce que
+
+410
+19:50.060 --> 19:53.650
+les flux légitimes vont être noyés dans les flux illégitimes et ils seront aussi droppés.
+
+411
+19:55.270 --> 19:57.850
+L'intérêt d'utiliser FlowSpec,
+
+412
+19:58.390 --> 20:02.300
+c'est que non seulement, on ne va impacter qu'un seul port, mais en plus,
+
+413
+20:03.450 --> 20:06.670
+une taille de paquet spécifique et là dans le cas du NTP,
+
+414
+20:06.880 --> 20:09.800
+les paquets légitimes ne feront jamais 468 octets.
+
+415
+20:09.800 --> 20:11.410
+C'est plus petit que ça un paquet NTP.
+
+416
+20:11.700 --> 20:14.430
+L'abonné sera protégé, il n'aura rien remarqué.
+
+417
+20:17.610 --> 20:20.340
+Dans les futures fonctionnalités,
+
+418
+20:20.480 --> 20:22.440
+on est en train de travailler sur le support de BGP
+
+419
+20:22.820 --> 20:27.730
+pour obtenir les AS paths, les communautés et
+
+420
+20:27.740 --> 20:30.720
+les AS d'origine notamment quand c'est des AS internes qu'on ne peut pas obtenir par GeoIP.
+
+421
+20:32.500 --> 20:33.990
+Ça sera bientôt disponible.
+
+422
+20:34.520 --> 20:37.880
+On va aussi faire la prévision de trafic,
+
+423
+20:37.880 --> 20:40.880
+ce qui sera assez intéressant et peut-être la détection d'anomalies parce que
+
+424
+20:40.880 --> 20:43.280
+ça va ensemble. Ça permettra de voir
+
+425
+20:43.280 --> 20:47.050
+dans six mois où on en sera sur le trafic de telles routeur.
+
+426
+20:48.640 --> 20:49.590
+Il y a un support des VRF
+
+427
+20:49.940 --> 20:52.970
+qui arrivera peut-être. Nous, on n'a pas trop besoin: pour le moment,
+
+428
+20:52.970 --> 20:53.870
+on ne supporte qu'une seule VRF
+
+429
+20:54.170 --> 20:56.670
+puisqu'on utilise ça pour notre trafic public.
+
+20:57.420 --> 21:02.090
+Des dashboards pour éviter de devoir reconstruire toujours les mêmes requêtes.
+
+432
+21:02.100 --> 21:05.430
+Cependant, vous pouvez bookmarker les URL.
+
+433
+21:05.430 --> 21:09.480
+Dans l'URL, il y a un condensé de la requête
+
+434
+21:09.480 --> 21:12.630
+qui permet de les passer à un collègue
+
+435
+21:13.050 --> 21:16.140
+pour lui montrer le résultat d'une requête que vous avez construite,
+
+436
+21:16.200 --> 21:17.540
+ou la sauvegarder quelque part.
+
+437
+21:20.780 --> 21:23.560
+Si vous avez des questions...
+
+21:29.410 --> 21:31.530
+Non, je suis étonné.
+
+444
+21:44.130 --> 21:46.630
+Salut Vincent. Ce n'est pas vraiment une question, juste un commentaire.
+
+445
+21:46.630 --> 21:48.900
+Je veux dire que je suis impressionné du boulot que tu as fait,
+
+21:48.900 --> 21:51.200
+que c'est un super boulot, tout simplement.

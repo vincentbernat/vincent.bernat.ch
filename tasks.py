@@ -165,6 +165,7 @@ done <<EOF
 2022-clickhouse-meetup-akvorado.mkv \
                                  --video-widths 1280 428 \
                                  --video-bitrates 500 100
+2022-frnog36-akvorado.mp4        --video-bitrate-factor 0.5
 EOF
 """
 
