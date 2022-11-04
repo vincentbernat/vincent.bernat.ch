@@ -20,6 +20,7 @@ luffy.do(() => {
                 parent.style.visibility = 'hidden';
             }
 
+            luffy.load("isso.css")
             luffy.load("isso.js");
         };
     })();
