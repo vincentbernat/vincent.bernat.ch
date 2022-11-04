@@ -434,7 +434,7 @@ var requirejs, require, define;
     };
 }());
 
-define("components/almond/almond", function(){});
+define("../../node_modules/almond/almond", function(){});
 
 define('app/lib/ready',[],function() {
 
@@ -464,12 +464,119 @@ define('app/lib/ready',[],function() {
     return domready;
 
 });
-define('app/config',[],function() {
+define('app/utils',[],function() {
+    "use strict";
+
+    // return `cookie` string if set
+    var cookie = function(cookie) {
+        return (document.cookie.match('(^|; )' + cookie + '=([^;]*)') || 0)[2];
+    };
+
+    var pad = function(n, width, z) {
+        z = z || '0';
+        n = n + '';
+        return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+    };
+
+    var HTMLEntity = {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': '&quot;',
+        "'": '&#39;',
+        "/": '&#x2F;'
+    };
+
+    var escape = function(html) {
+        return String(html).replace(/[&<>"'\/]/g, function (s) {
+            return HTMLEntity[s];
+        });
+    };
+
+    var text = function(html) {
+        var _ = document.createElement("div");
+        _.innerHTML = html.replace(/<div><br><\/div>/gi, '<br>')
+                          .replace(/<div>/gi,'<br>')
+                          .replace(/<br>/gi, '\n')
+                          .replace(/&nbsp;/gi, ' ');
+        return _.textContent.trim();
+    };
+
+    var detext = function(text) {
+        text = escape(text);
+        return text.replace(/\n\n/gi, '<br><div><br></div>')
+                   .replace(/\n/gi, '<br>');
+    };
+
+    // Normalize a BCP47 language tag.
+    // Quoting https://tools.ietf.org/html/bcp47 :
+    //   An implementation can reproduce this format without accessing
+    //   the registry as follows.  All subtags, including extension
+    //   and private use subtags, use lowercase letters with two
+    //   exceptions: two-letter and four-letter subtags that neither
+    //   appear at the start of the tag nor occur after singletons.
+    //   Such two-letter subtags are all uppercase (as in the tags
+    //   "en-CA-x-ca" or "sgn-BE-FR") and four-letter subtags are
+    //   titlecase (as in the tag "az-Latn-x-latn").
+    // We also map underscores to dashes.
+    var normalize_bcp47 = function(tag) {
+        var subtags = tag.toLowerCase().split(/[_-]/);
+        var afterSingleton = false;
+        for (var i = 0; i < subtags.length; i++) {
+            if (subtags[i].length === 1) {
+                afterSingleton = true;
+            } else if (afterSingleton || i === 0) {
+                afterSingleton = false;
+            } else if (subtags[i].length === 2) {
+                subtags[i] = subtags[i].toUpperCase();
+            } else if (subtags[i].length === 4) {
+                subtags[i] = subtags[i].charAt(0).toUpperCase()
+                    + subtags[i].substr(1);
+            }
+        }
+        return subtags.join("-");
+    };
+
+    // Safari private browsing mode supports localStorage, but throws QUOTA_EXCEEDED_ERR
+    var localStorageImpl;
+    try {
+        localStorage.setItem("x", "y");
+        localStorage.removeItem("x");
+        localStorageImpl = localStorage;
+    } catch (ex) {
+        localStorageImpl = (function(storage) {
+            return {
+                setItem: function(key, val) {
+                    storage[key] = val;
+                },
+                getItem: function(key) {
+                    return typeof(storage[key]) !== 'undefined' ? storage[key] : null;
+                },
+                removeItem: function(key) {
+                    delete storage[key];
+                }
+            };
+        })({});
+    }
+
+    return {
+        cookie: cookie,
+        detext: detext,
+        localStorageImpl: localStorageImpl,
+        normalize_bcp47: normalize_bcp47,
+        pad: pad,
+        text: text
+    };
+});
+
+define('app/config',["app/utils"], function(utils) {
     "use strict";
 
     var config = {
         "css": true,
-        "lang": (navigator.language || navigator.userLanguage).split("-")[0],
+        "css-url": null,
+        "lang": "",
+        "default-lang": "en",
         "reply-to-self": false,
         "require-email": false,
         "require-author": false,
@@ -505,8 +612,46 @@ define('app/config',[],function() {
     // split avatar-fg on whitespace
     config["avatar-fg"] = config["avatar-fg"].split(" ");
 
-    return config;
+    // create an array of normalized language codes from:
+    //   - config["lang"], if it is nonempty
+    //   - the first of navigator.languages, navigator.language, and
+    //     navigator.userLanguage that exists and has a nonempty value
+    //   - config["default-lang"]
+    //   - "en" as an ultimate fallback
+    // i18n.js will use the first code in this array for which we have
+    // a translation.
+    var languages = [];
+    var found_navlang = false;
+    if (config["lang"]) {
+        languages.push(utils.normalize_bcp47(config["lang"]));
+    }
+    if (navigator.languages) {
+        for (i = 0; i < navigator.languages.length; i++) {
+            if (navigator.languages[i]) {
+                found_navlang = true;
+                languages.push(utils.normalize_bcp47(navigator.languages[i]));
+            }
+        }
+    }
+    if (!found_navlang && navigator.language) {
+        found_navlang = true;
+        languages.push(utils.normalize_bcp47(navigator.language));
+    }
+    if (!found_navlang && navigator.userLanguage) {
+        found_navlang = true;
+        languages.push(utils.normalize_bcp47(navigator.userLanguage));
+    }
+    if (config["default-lang"]) {
+        languages.push(utils.normalize_bcp47(config["default-lang"]));
+    }
+    languages.push("en");
 
+    config["langs"] = languages;
+    // code outside this file should look only at langs
+    delete config["lang"];
+    delete config["default-lang"];
+
+    return config;
 });
 
 define('app/i18n/en',{
@@ -582,7 +727,9 @@ define('app/i18n',["app/config", "app/i18n/en", "app/i18n/fr"],
     "use strict";
 
     var pluralforms = function(lang) {
-        switch (lang) {
+        // we currently only need to look at the primary language
+        // subtag.
+        switch (lang.split("-", 1)[0]) {
         case "en":
             return function(msgs, n) {
                 return msgs[n === 1 ? 0 : 1];
@@ -596,26 +743,43 @@ define('app/i18n',["app/config", "app/i18n/en", "app/i18n/fr"],
         }
     };
 
-    // useragent's prefered language (or manually overridden)
-    var lang = config.lang;
-
-    // fall back to English
-    if (! pluralforms(lang)) {
-        lang = "en";
-    }
-
     var catalogue = {
         en: en,
         fr: fr
     };
 
-    var plural = pluralforms(lang);
+    // for each entry in config.langs, see whether we have a catalogue
+    // entry and a pluralforms entry for it.  if we don't, try chopping
+    // off everything but the primary language subtag, before moving
+    // on to the next one.
+    var lang, plural, translations;
+    for (var i = 0; i < config.langs.length; i++) {
+        lang = config.langs[i];
+        plural = pluralforms(lang);
+        translations = catalogue[lang];
+        if (plural && translations)
+            break;
+        if (/-/.test(lang)) {
+            lang = lang.split("-", 1)[0];
+            plural = pluralforms(lang);
+            translations = catalogue[lang];
+            if (plural && translations)
+                break;
+        }
+    }
+
+    // absolute backstop; if we get here there's a bug in config.js
+    if (!plural || !translations) {
+        lang = "en";
+        plural = pluralforms(lang);
+        translations = catalogue[lang];
+    }
 
     var translate = function(msgid) {
         return config[msgid + '-text-' + lang] ||
-          catalogue[lang][msgid] ||
+          translations[msgid] ||
           en[msgid] ||
-          "???";
+          "[?" + msgid + "]";
     };
 
     var pluralize = function(msgid, n) {
@@ -629,7 +793,34 @@ define('app/i18n',["app/config", "app/i18n/en", "app/i18n/fr"],
         return msg ? msg.replace("{{ n }}", (+ n)) : msg;
     };
 
+    var ago = function(localTime, date) {
+
+        var secs = ((localTime.getTime() - date.getTime()) / 1000);
+
+        if (isNaN(secs) || secs < 0 ) {
+            secs = 0;
+        }
+
+        var mins = Math.floor(secs / 60), hours = Math.floor(mins / 60),
+            days = Math.floor(hours / 24);
+
+        return secs  <=  45 && translate("date-now")  ||
+               secs  <=  90 && pluralize("date-minute", 1) ||
+               mins  <=  45 && pluralize("date-minute", mins) ||
+               mins  <=  90 && pluralize("date-hour", 1) ||
+               hours <=  22 && pluralize("date-hour", hours) ||
+               hours <=  36 && pluralize("date-day", 1) ||
+               days  <=   5 && pluralize("date-day", days) ||
+               days  <=   8 && pluralize("date-week", 1) ||
+               days  <=  21 && pluralize("date-week", Math.floor(days / 7)) ||
+               days  <=  45 && pluralize("date-month", 1) ||
+               days  <= 345 && pluralize("date-month", Math.floor(days / 30)) ||
+               days  <= 547 && pluralize("date-year", 1) ||
+                               pluralize("date-year", Math.floor(days / 365.25));
+    };
+
     return {
+        ago: ago,
         lang: lang,
         translate: translate,
         pluralize: pluralize
@@ -1170,108 +1361,6 @@ define('app/dom',[],function() {
     };
 
     return DOM;
-});
-
-define('app/utils',["app/i18n"], function(i18n) {
-    "use strict";
-
-    // return `cookie` string if set
-    var cookie = function(cookie) {
-        return (document.cookie.match('(^|; )' + cookie + '=([^;]*)') || 0)[2];
-    };
-
-    var pad = function(n, width, z) {
-        z = z || '0';
-        n = n + '';
-        return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-    };
-
-    var ago = function(localTime, date) {
-
-        var secs = ((localTime.getTime() - date.getTime()) / 1000);
-
-        if (isNaN(secs) || secs < 0 ) {
-            secs = 0;
-        }
-
-        var mins = Math.floor(secs / 60), hours = Math.floor(mins / 60),
-            days = Math.floor(hours / 24);
-
-        return secs  <=  45 && i18n.translate("date-now")  ||
-               secs  <=  90 && i18n.pluralize("date-minute", 1) ||
-               mins  <=  45 && i18n.pluralize("date-minute", mins) ||
-               mins  <=  90 && i18n.pluralize("date-hour", 1) ||
-               hours <=  22 && i18n.pluralize("date-hour", hours) ||
-               hours <=  36 && i18n.pluralize("date-day", 1) ||
-               days  <=   5 && i18n.pluralize("date-day", days) ||
-               days  <=   8 && i18n.pluralize("date-week", 1) ||
-               days  <=  21 && i18n.pluralize("date-week", Math.floor(days / 7)) ||
-               days  <=  45 && i18n.pluralize("date-month", 1) ||
-               days  <= 345 && i18n.pluralize("date-month", Math.floor(days / 30)) ||
-               days  <= 547 && i18n.pluralize("date-year", 1) ||
-                               i18n.pluralize("date-year", Math.floor(days / 365.25));
-    };
-
-    var HTMLEntity = {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': '&quot;',
-        "'": '&#39;',
-        "/": '&#x2F;'
-    };
-
-    var escape = function(html) {
-        return String(html).replace(/[&<>"'\/]/g, function (s) {
-            return HTMLEntity[s];
-        });
-    };
-
-    var text = function(html) {
-        var _ = document.createElement("div");
-        _.innerHTML = html.replace(/<div><br><\/div>/gi, '<br>')
-                          .replace(/<div>/gi,'<br>')
-                          .replace(/<br>/gi, '\n')
-                          .replace(/&nbsp;/gi, ' ');
-        return _.textContent.trim();
-    };
-
-    var detext = function(text) {
-        text = escape(text);
-        return text.replace(/\n\n/gi, '<br><div><br></div>')
-                   .replace(/\n/gi, '<br>');
-    };
-
-    // Safari private browsing mode supports localStorage, but throws QUOTA_EXCEEDED_ERR
-    var localStorageImpl;
-    try {
-        localStorage.setItem("x", "y");
-        localStorage.removeItem("x");
-        localStorageImpl = localStorage;
-    } catch (ex) {
-        localStorageImpl = (function(storage) {
-            return {
-                setItem: function(key, val) {
-                    storage[key] = val;
-                },
-                getItem: function(key) {
-                    return typeof(storage[key]) !== 'undefined' ? storage[key] : null;
-                },
-                removeItem: function(key) {
-                    delete storage[key];
-                }
-            };
-        })({});
-    }
-
-    return {
-        cookie: cookie,
-        pad: pad,
-        ago: ago,
-        text: text,
-        detext: detext,
-        localStorageImpl: localStorageImpl
-    };
 });
 
 (function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define('libjs-jade-runtime',[],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.jade = f()}})(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
@@ -1959,7 +2048,7 @@ define('app/isso',["app/dom", "app/utils", "app/config", "app/api", "app/jade", 
 
         // update datetime every 60 seconds
         var refresh = function() {
-            $(".permalink > time", el).textContent = utils.ago(
+            $(".permalink > time", el).textContent = i18n.ago(
                 globals.offset.localTime(), new Date(parseInt(comment.created, 10) * 1000));
             setTimeout(refresh, 60*1000);
         };
@@ -2191,15 +2280,6 @@ define('app/isso',["app/dom", "app/utils", "app/config", "app/api", "app/jade", 
 
 define('text',{load: function(id){throw new Error("Dynamic load not allowed: " + id);}});
 
-define('text!app/../../css/isso.css',[],function () { return '#isso-thread * {\n    -webkit-box-sizing: border-box;\n    -moz-box-sizing: border-box;\n    box-sizing: border-box;\n}\n#isso-thread .isso-comment-header a {\n    text-decoration: none;\n}\n\n#isso-thread {\n    padding: 0;\n    margin: 0;\n}\n#isso-thread > h4 {\n    color: #555;\n    font-weight: bold;\n}\n#isso-thread > .isso-feedlink {\n    float: right;\n    padding-left: 1em;\n}\n#isso-thread > .isso-feedlink > a {\n    font-size: 0.8em;\n    vertical-align: bottom;\n}\n#isso-thread .textarea {\n    min-height: 58px;\n    outline: 0;\n}\n#isso-thread .textarea.placeholder {\n    color: #757575;\n}\n\n#isso-root .isso-comment {\n    max-width: 68em;\n    padding-top: 0.95em;\n    margin: 0.95em auto;\n}\n#isso-root .preview .isso-comment {\n    padding-top: 0;\n    margin: 0;\n}\n#isso-root .isso-comment:not(:first-of-type),\n.isso-follow-up .isso-comment {\n    border-top: 1px solid rgba(0, 0, 0, 0.1);\n}\n.isso-comment > div.avatar {\n    display: block;\n    float: left;\n    width: 7%;\n    margin: 3px 15px 0 0;\n}\n.isso-comment > div.avatar > svg {\n    max-width: 48px;\n    max-height: 48px;\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    border-radius: 3px;\n    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);\n}\n.isso-comment > div.text-wrapper {\n    display: block;\n}\n.isso-comment .isso-follow-up {\n    padding-left: calc(7% + 20px);\n}\n.isso-comment > div.text-wrapper > .isso-comment-header, .isso-comment > div.text-wrapper > .isso-comment-footer {\n    font-size: 0.95em;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header {\n    font-size: 0.85em;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header .spacer {\n    padding: 0 6px;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header .spacer,\n.isso-comment > div.text-wrapper > .isso-comment-header a.permalink,\n.isso-comment > div.text-wrapper > .isso-comment-header .note,\n.isso-comment > div.text-wrapper > .isso-comment-header a.parent {\n    color: gray !important;\n    font-weight: normal;\n    text-shadow: none !important;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header .spacer:hover,\n.isso-comment > div.text-wrapper > .isso-comment-header a.permalink:hover,\n.isso-comment > div.text-wrapper > .isso-comment-header .note:hover,\n.isso-comment > div.text-wrapper > .isso-comment-header a.parent:hover {\n    color: #606060 !important;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header .note {\n    float: right;\n}\n.isso-comment > div.text-wrapper > .isso-comment-header .author {\n    font-weight: bold;\n    color: #555;\n}\n.isso-comment > div.text-wrapper > .textarea-wrapper .textarea,\n.isso-comment > div.text-wrapper > .textarea-wrapper .preview {\n    margin-top: 0.2em;\n}\n.isso-comment > div.text-wrapper > div.text p {\n    margin-top: 0.2em;\n}\n.isso-comment > div.text-wrapper > div.text p:last-child {\n    margin-bottom: 0.2em;\n}\n.isso-comment > div.text-wrapper > div.text h1,\n.isso-comment > div.text-wrapper > div.text h2,\n.isso-comment > div.text-wrapper > div.text h3,\n.isso-comment > div.text-wrapper > div.text h4,\n.isso-comment > div.text-wrapper > div.text h5,\n.isso-comment > div.text-wrapper > div.text h6 {\n    font-size: 130%;\n    font-weight: bold;\n}\n.isso-comment > div.text-wrapper > div.textarea-wrapper .textarea,\n.isso-comment > div.text-wrapper > div.textarea-wrapper .preview {\n    width: 100%;\n    border: 1px solid #f0f0f0;\n    border-radius: 2px;\n    box-shadow: 0 0 2px #888;\n}\n.isso-comment > div.text-wrapper > .isso-comment-footer {\n    font-size: 0.80em;\n    color: gray !important;\n    clear: left;\n}\n.isso-feedlink,\n.isso-comment > div.text-wrapper > .isso-comment-footer a {\n    font-weight: bold;\n    text-decoration: none;\n}\n.isso-feedlink:hover,\n.isso-comment > div.text-wrapper > .isso-comment-footer a:hover {\n    color: #111111 !important;\n    text-shadow: #aaaaaa 0 0 1px !important;\n}\n.isso-comment > div.text-wrapper > .isso-comment-footer > a {\n    position: relative;\n    top: .2em;\n}\n.isso-comment > div.text-wrapper > .isso-comment-footer > a + a {\n    padding-left: 1em;\n}\n.isso-comment > div.text-wrapper > .isso-comment-footer .votes {\n    color: gray;\n}\n.isso-comment > div.text-wrapper > .isso-comment-footer .upvote svg,\n.isso-comment > div.text-wrapper > .isso-comment-footer .downvote svg {\n    position: relative;\n    top: .2em;\n}\n.isso-comment .isso-postbox {\n    margin-top: 0.8em;\n}\n.isso-comment.isso-no-votes span.votes {\n    display: none;\n}\n\n.isso-postbox {\n    max-width: 68em;\n    margin: 0 auto 2em;\n    clear: right;\n}\n.isso-postbox > .form-wrapper {\n    display: block;\n    padding: 0;\n}\n.isso-postbox > .form-wrapper > .auth-section,\n.isso-postbox > .form-wrapper > .auth-section .post-action {\n    display: block;\n}\n.isso-postbox > .form-wrapper .textarea,\n.isso-postbox > .form-wrapper .preview {\n    margin: 0 0 .3em;\n    padding: .4em .8em;\n    border-radius: 3px;\n    background-color: #fff;\n    border: 1px solid rgba(0, 0, 0, 0.2);\n    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);\n}\n.isso-postbox > .form-wrapper input[type=checkbox] {\n    vertical-align: middle;\n    position: relative;\n    bottom: 1px;\n    margin-left: 0;\n}\n.isso-postbox > .form-wrapper .notification-section {\n    font-size: 0.90em;\n    padding-top: .3em;\n}\n#isso-thread .textarea:focus,\n#isso-thread input:focus {\n    border-color: rgba(0, 0, 0, 0.8);\n}\n.isso-postbox > .form-wrapper > .auth-section .input-wrapper {\n    display: inline-block;\n    position: relative;\n    max-width: 25%;\n    margin: 0;\n}\n.isso-postbox > .form-wrapper > .auth-section .input-wrapper input {\n    padding: .3em 10px;\n    max-width: 100%;\n    background-color: #fff;\n    line-height: 1.4em;\n    border: 1px solid rgba(0, 0, 0, 0.2);\n}\n.isso-postbox > .form-wrapper > .auth-section .post-action {\n    display: inline-block;\n    float: right;\n    margin: 0 0 0 5px;\n}\n.isso-postbox > .form-wrapper > .auth-section .post-action > input {\n    padding: calc(.3em - 1px);\n    border: 1px solid #CCC;\n    background-color: #DDD;\n    cursor: pointer;\n    outline: 0;\n    line-height: 1.4em;\n}\n.isso-postbox > .form-wrapper > .auth-section .post-action > input:hover {\n    background-color: #CCC;\n}\n.isso-postbox > .form-wrapper > .auth-section .post-action > input:active {\n    background-color: #BBB;\n}\n.isso-postbox > .form-wrapper .preview,\n.isso-postbox > .form-wrapper input[name="edit"],\n.isso-postbox.preview-mode > .form-wrapper input[name="preview"],\n.isso-postbox.preview-mode > .form-wrapper .textarea {\n    display: none;\n}\n.isso-postbox.preview-mode > .form-wrapper .preview {\n    display: block;\n}\n.isso-postbox.preview-mode > .form-wrapper input[name="edit"] {\n    display: inline;\n}\n.isso-postbox > .form-wrapper .preview {\n    background-color: #f8f8f8;\n    background: repeating-linear-gradient(\n        -45deg,\n        #f8f8f8,\n        #f8f8f8 10px,\n        #fff 10px,\n        #fff 20px\n    );\n}\n.isso-postbox > .form-wrapper > .notification-section {\n    display: none;\n    padding-bottom: 10px;\n}\n@media screen and (max-width:600px) {\n    .isso-postbox > .form-wrapper > .auth-section .input-wrapper {\n        display: block;\n        max-width: 100%;\n        margin: 0 0 .3em;\n    }\n    .isso-postbox > .form-wrapper > .auth-section .input-wrapper input {\n        width: 100%;\n    }\n}\n';});
-
-define('app/text/css',["text!../../../css/isso.css"], function(isso) {
-    return {
-        inline: isso
-    };
-});
-
-
 define('text!app/text/arrow-down.svg',[],function () { return '<!-- Generator: IcoMoon.io --><svg width="16" height="16" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="gray">\n  <g>\n    <path d="M 24.773,13.701c-0.651,0.669-7.512,7.205-7.512,7.205C 16.912,21.262, 16.456,21.44, 16,21.44c-0.458,0-0.914-0.178-1.261-0.534 c0,0-6.861-6.536-7.514-7.205c-0.651-0.669-0.696-1.87,0-2.586c 0.698-0.714, 1.669-0.77, 2.522,0L 16,17.112l 6.251-5.995 c 0.854-0.77, 1.827-0.714, 2.522,0C 25.47,11.83, 25.427,13.034, 24.773,13.701z">\n    </path>\n  </g>\n</svg>\n';});
 
 
@@ -2217,7 +2297,7 @@ define('app/text/svg',["text!./arrow-down.svg", "text!./arrow-up.svg"], function
  * Distributed under the MIT license
  */
 
-require(["app/lib/ready", "app/config", "app/i18n", "app/api", "app/isso", "app/dom", "app/text/css", "app/text/svg", "app/jade"], function(domready, config, i18n, api, isso, $, css, svg, jade) {
+require(["app/lib/ready", "app/config", "app/i18n", "app/api", "app/isso", "app/dom", "app/text/svg", "app/jade"], function(domready, config, i18n, api, isso, $, svg, jade) {
 
     "use strict";
 
@@ -2234,10 +2314,11 @@ require(["app/lib/ready", "app/config", "app/i18n", "app/api", "app/isso", "app/
         heading = $.new("h4");
 
         if (config["css"] && $("style#isso-style") === null) {
-            var style = $.new("style");
+            var style = $.new("link");
             style.id = "isso-style";
+            style.rel ="stylesheet";
             style.type = "text/css";
-            style.textContent = css.inline;
+            style.href = config["css-url"] ? config["css-url"] : api.endpoint + "/css/isso.css";
             $("head").append(style);
         }
 
@@ -2252,17 +2333,37 @@ require(["app/lib/ready", "app/config", "app/i18n", "app/api", "app/isso", "app/
             feedLinkWrapper.appendChild(feedLink);
             isso_thread.append(feedLinkWrapper);
         }
+        // Note: Not appending the isso.Postbox here since it relies
+        // on the config object populated by elements fetched from the server,
+        // and the call to fetch those is in fetchComments()
         isso_thread.append(heading);
-        isso_thread.append(new isso.Postbox(null));
         isso_thread.append('<div id="isso-root"></div>');
     }
 
     function fetchComments() {
+
+        if (!$('#isso-root')) {
+            return;
+        }
+
         $('#isso-root').textContent = '';
         api.fetch(isso_thread.getAttribute("data-isso-id") || location.pathname,
             config["max-comments-top"],
             config["max-comments-nested"]).then(
             function (rv) {
+                for (var setting in rv.config) {
+                    if (setting in config && config[setting] != rv.config[setting]) {
+                        console.log("Isso: Client value '%s' for setting '%s' overridden by server value '%s'.\n" +
+                                    "Since Isso version 0.12.6, 'data-isso-%s' is only configured via the server " +
+                                    "to keep client and server in sync",
+                                    config[setting], setting, rv.config[setting], setting);
+                    }
+                    config[setting] = rv.config[setting]
+                }
+
+                // Finally, create Postbox with configs fetched from server
+                $('#isso-root').prepend(new isso.Postbox(null));
+
                 if (rv.total_replies === 0) {
                     heading.textContent = i18n.translate("no-comments");
                     return;
