@@ -232,7 +232,7 @@
             '';
           };
         };
-        devShell = pythonEnv.env.overrideAttrs (oldAttrs: {
+        devShells.default = pythonEnv.env.overrideAttrs (oldAttrs: {
           name = "www";
           buildInputs = [
             # Build
