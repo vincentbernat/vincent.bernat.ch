@@ -25,7 +25,7 @@ from fswrap import File, Folder
 from pyquery import PyQuery as pq
 from PIL import Image
 import langcodes
-from PyPDF2 import PdfFileReader
+from PyPDF2 import PdfReader
 
 
 class Thumb(object):
@@ -190,8 +190,8 @@ class ImageFixerPlugin(Plugin):
             return dict(size=(track['width'], track['height']), opaque=True)
         if image.source_file.kind in {'pdf'}:
             with open(image.path, 'rb') as f:
-                pdf = PdfFileReader(f)
-                box = pdf.getPage(0).mediaBox
+                pdf = PdfReader(f)
+                box = pdf.pages[0].mediabox
                 # PDF physical sizes may be skewed, notably for
                 # slides. Assume width will be around 1000.
                 ratio = Fraction(Fraction(box.getWidth()),
