@@ -6,10 +6,6 @@
       url = "github:nix-community/poetry2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    merriweather = {
-      url = "github:SorkinType/Merriweather";
-      flake = false;
-    };
   };
   outputs = { self, flake-utils, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
@@ -95,9 +91,9 @@
                     "$@"
                 }
                 mkdir $out
-                subset iosevka-custom-regular ${monospace}
-                subset merriweather ${regular} --layout-features+=ss01,onum,tnum
-                subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
+                subset iosevka-term-regular   ${monospace}
+                subset iosevka-etoile-regular ${regular}
+                subset iosevka-etoile-italic  ${regular}
               '';
               installPhase = "true";
             };
@@ -169,37 +165,15 @@
               '';
               installPhase = "true";
             };
-          build.merriweather = pkgs.stdenvNoCC.mkDerivation {
-            name = "custom-merriweather";
-            dontUnpack = true;
-            buildPhase = ''
-              fix() {
-                original=$1
-                target=$2
-                echo Fix $1 to $2
-                ${pythonEnv}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
-                  | tr -d '\000' \
-                  > $target.ttx
-                ${pkgs.xmlstarlet}/bin/xmlstarlet \
-                  ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
-                  > $target-fixed.ttx
-                ${pythonEnv}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
-              }
-              mkdir $out
-              fix Merriweather-Light merriweather
-              fix Merriweather-LightItalic merriweather-italic
-            '';
-            installPhase = "true";
-          };
           build.iosevka = pkgs.stdenvNoCC.mkDerivation {
             name = "custom-iosevka";
             dontUnpack = true;
             buildPhase =
               let
-                iosevka = pkgs.iosevka.override {
-                  set = "custom";
+                iosevka-term = pkgs.iosevka.override {
+                  set = "term";
                   privateBuildPlan = {
-                    family = "Iosevka Custom";
+                    family = "Iosevka Term Custom";
                     spacing = "term";
                     serifs = "sans";
                     no-ligation = true;
@@ -228,16 +202,59 @@
                       menu = 5;
                       css = "normal";
                     };
-                    metric-override = {
-                      cap = 790;
-                      ascender = 790;
-                      xHeight = 570;
+                  };
+                };
+                iosevka-etoile = pkgs.iosevka.override {
+                  set = "etoile";
+                  privateBuildPlan = {
+                    family = "Iosevka Etoile Custom";
+                    spacing = "quasi-proportional";
+                    serifs = "slab";
+                    no-ligation = true;
+                    no-cv-ss = true;
+                    variants = {
+                      /* Copy/paste from https://github.com/be5invis/Iosevka/blob/main/build-plans.toml */
+                      design = {
+                        at = "fourfold";
+                        capital-w = "straight-flat-top";
+                        f = "flat-hook-serifed";
+                        j = "flat-hook-serifed";
+                        t = "flat-hook";
+                        w = "straight-flat-top";
+                      };
+                      italic = {
+                        f = "flat-hook-tailed";
+                      };
+                    };
+                    slopes = {
+                      upright = {
+                        angle = 0;
+                        shape = "upright";
+                        menu = "upright";
+                        css = "normal";
+                      };
+                      italic = {
+                        angle = 9.4;
+                        shape = "italic";
+                        menu  = "italic";
+                        css   = "italic";
+                      };
+                    };
+                    weights.regular = {
+                      shape = 350;
+                      menu = 400;
+                      css = 400;
+                    };
+                    widths.normal = {
+                      shape = 540;
+                      menu = 5;
+                      css = "normal";
                     };
                   };
                 };
               in
               ''
-                for ttf in ${iosevka}/share/fonts/truetype/*.ttf; do
+                for ttf in ${iosevka-term}/share/fonts/truetype/*.ttf ${iosevka-etoile}/share/fonts/truetype/*.ttf; do
                   cp $ttf .
                   ${pkgs.woff2}/bin/woff2_compress *.ttf
                   rm *.ttf

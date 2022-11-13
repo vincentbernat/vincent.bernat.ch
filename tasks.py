@@ -231,11 +231,8 @@ def update_fonts(c):
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
         c.run("nix build .#build.iosevka")
-        c.run("install -m 0644 result/iosevka-custom-*.woff2 content/media/fonts/")
-        c.run("rm result")
-    with step("building Merriweather"):
-        c.run("nix build .#build.merriweather")
-        c.run("install -m 0644 result/*.woff2 content/media/fonts/")
+        c.run("install -m 0644 result/iosevka-term-*.woff2 content/media/fonts/")
+        c.run("install -m 0644 result/iosevka-etoile-*.woff2 content/media/fonts/")
         c.run("rm result")
 
 
