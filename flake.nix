@@ -123,7 +123,7 @@
                       name: 'preset-default',
                       params: {
                         overrides: {
-                          cleanupIDs: false,
+                          cleanupIds: false,
                         }
                       }
                     }
