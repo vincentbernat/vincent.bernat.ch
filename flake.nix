@@ -22,6 +22,11 @@
         pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = ./.;
           overrides = pkgs.poetry2nix.overrides.withDefaults (self: super:
+            {
+              langcodes = super.langcodes.overridePythonAttrs (old: {
+                propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [self.setuptools];
+              });
+            } //
             (l.listToAttrs (l.map
             # Many dependencies need setuptools...
               (x: {
