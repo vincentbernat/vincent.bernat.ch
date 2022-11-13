@@ -2,6 +2,10 @@
   inputs = {
     nixpkgs.url = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix?ref=refs/pull/787/merge";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     merriweather = {
       url = "github:SorkinType/Merriweather";
       flake = false;
@@ -10,14 +14,27 @@
   outputs = { self, flake-utils, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = inputs.nixpkgs.legacyPackages."${system}";
+        pkgs = import inputs.nixpkgs {
+          inherit system;
+          overlays = [ inputs.poetry2nix.overlay ];
+        };
+        l = pkgs.lib // builtins;
         pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = ./.;
-          overrides = pkgs.poetry2nix.overrides.withDefaults (self: super: {
-            pytest = super.pytest.overridePythonAttrs (
-              old: { doCheck = false; doInstallCheck = false; }
-            );
-          });
+          overrides = pkgs.poetry2nix.overrides.withDefaults (self: super:
+            (l.listToAttrs (l.map
+            # Many dependencies need setuptools...
+              (x: {
+                name = x;
+                value = super."${x}".overridePythonAttrs (old: {
+                  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [self.setuptools];
+                });
+              })
+              [
+                "hyde" "commando" "fswrap"
+                "pygments-haproxy" "pygments-ios" "pygments-junos"
+              ]))
+          );
         };
         nodeEnv = pkgs.mkYarnModules {
           pname = "www-yarn-modules";
