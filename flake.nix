@@ -226,12 +226,15 @@
                       menu = "upright";
                       css = "normal";
                     };
-                    weights = {
-                      regular = {
-                        shape = 350;
-                        menu = 400;
-                        css = 400;
-                      };
+                    weights.regular = {
+                      shape = 350;
+                      menu = 400;
+                      css = 400;
+                    };
+                    widths.normal = {
+                      shape = 500;
+                      menu = 5;
+                      css = "normal";
                     };
                     metric-override = {
                       cap = 790;
