@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import jinja2
+import re
 from babel.dates import format_date
 from distutils.version import LooseVersion
 
@@ -44,6 +45,13 @@ def media_listing(resources, directory):
                for r in resources]
     to_sort.sort(key=lambda x: x["version"])
     return [r["resource"] for r in to_sort]
+
+
+def mastodon_href(handle):
+    """Turn a mastodon handle into an href (very naive)."""
+    mo = re.match(r"@(.*)@(.*)", handle)
+    assert(mo)
+    return f"https://{mo.group(2)}/@{mo.group(1)}"
 
 
 @jinja2.contextfunction
