@@ -170,6 +170,11 @@
             dontUnpack = true;
             buildPhase =
               let
+                metric-override = {
+                  cap = 790;
+                  ascender = 790;
+                  xHeight = 570;
+                };
                 iosevka-term = pkgs.iosevka.override {
                   set = "term";
                   privateBuildPlan = {
@@ -193,7 +198,7 @@
                       css = "normal";
                     };
                     weights.regular = {
-                      shape = 350;
+                      shape = 400;
                       menu = 400;
                       css = 400;
                     };
@@ -202,6 +207,7 @@
                       menu = 5;
                       css = "normal";
                     };
+                    inherit metric-override;
                   };
                 };
                 iosevka-etoile = pkgs.iosevka.override {
@@ -220,6 +226,7 @@
                         f = "flat-hook-serifed";
                         j = "flat-hook-serifed";
                         t = "flat-hook";
+                        capital-t = "serifed"; # not part of original Iosevka Aile
                         w = "straight-flat-top";
                       };
                       italic = {
@@ -241,15 +248,16 @@
                       };
                     };
                     weights.regular = {
-                      shape = 350;
+                      shape = 400;
                       menu = 400;
                       css = 400;
                     };
                     widths.normal = {
-                      shape = 540;
+                      shape = 550;
                       menu = 5;
                       css = "normal";
                     };
+                    inherit metric-override;
                   };
                 };
               in
