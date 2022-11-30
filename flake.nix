@@ -59,7 +59,7 @@
               patches = (old.patches or [ ]) ++ [
                 (pkgs.fetchpatch {
                   url = "https://github.com/allinurl/goaccess/pull/2126.patch";
-                  sha256 = "sha256-Csb9ooM933m3bcx61LEx+VkmnfzajOMUnAhkcnDPgv4=";
+                  sha256 = "sha256-ywWy8AEMOqfeiFla7FBmo/podDmKHxptEs1Z2MDcOk0=";
                 })
               ];
             }));
