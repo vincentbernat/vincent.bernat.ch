@@ -1,0 +1,199 @@
+---
+title: "Delta de configuration incorrect sur Cisco IOS XR"
+description: |
+   La différence entre la configuration courante et la configuration cible
+   retournée par Cisco IOS XR est souvent incorrecte. Cet article montre
+   quelques exemples.
+uuid: 4b66e110-3d63-4a92-a96c-ee876d5635bc
+tags:
+  - network-automation
+---
+
+!!! "En bref" Ne faites jamais confiance à `show commit changes diff` sur Cisco IOS XR.
+
+[Cisco IOS XR][XR] est le système d'exploitation utilisé par les routeurs Cisco
+ASR, NCS et 8000. Par rapport à [Cisco IOS][IOS], il présente une
+**configuration cible** et une **configuration courante**. En mode
+configuration, vous pouvez modifier la première et émettre la commande `commit`
+pour l'appliquer[^limitations]. Il s'agit d'un concept commun à de nombreux NOS.
+
+[^limitations]: IOS XR a plusieurs limitations. La plus gênante est
+    l'impossibilité de modifier le numéro d'AS dans la directive `router bgp`.
+    Une telle limitation est très pénible pour les opérations et
+    l'automatisation.
+
+Avant d'activer la configuration candidate, vous pouvez vérifier les changements
+qui ont été accumulés jusqu'à présent avec la commande `show commit changes
+diff`[^clunky]. Son but est de montrer la différence entre la configuration
+courante (`show running-configuration`) et la configuration cible (`show
+configuration merge`). Est-ce si difficile ?
+
+[^clunky]: Cette commande aurait juste pu être `show commit`, car `show commit
+    changes diff` est la seule commande valide que vous pouvez exécuter à partir
+    de ce point. A partir de IOS XR 7.5.1, `show commit changes diff precise`
+    est également une commande valide. Cependant, je n'ai pas trouvé de
+    documentation à son sujet et elle semble fournir la même sortie que `show
+    commit changes diff`. C'est dire à quel point IOS XR peut être bancal.
+
+Désactivons une interface sur IOS XR 7.6.2 (publié en août 2022) :
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#int Hu0/1/0/1 shut
+    RP/0/RP0/CPU0:router(config)#show commit changes diff
+    Wed Nov 23 11:08:30.275 CET
+    Building configuration...
+    !! IOS XR Configuration 7.6.2
+    +  interface HundredGigE0/1/0/1
+    +   shutdown
+       !
+    end
+
+Le signe `+` précédant `interface HundredGigE0/1/0/1` semble indiquer que nous
+avons créé une interface. Peut-être avons-nous faire une erreur de frappe ? Non.
+Si vous regardez la configuration cible, tout est correct :
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#show configuration merge int Hu0/1/0/1
+    Wed Nov 23 11:08:43.360 CET
+    interface HundredGigE0/1/0/1
+     description PNI: (some description)
+     bundle id 4000 mode active
+     lldp
+      receive disable
+      transmit disable
+     !
+     shutdown
+     load-interval 30
+
+Voici un exemple plus problématique sur IOS XR 7.2.2 (publié en janvier 2021).
+Nous cherchons à déconfigurer trois interfaces :
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#no int GigabitEthernet 0/0/0/5
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/5 shut
+    RP/0/RP0/CPU0:router(config)#no int TenGigE 0/0/0/28
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/28 shut
+    RP/0/RP0/CPU0:router(config)#no int TenGigE 0/0/0/29
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/29 shut
+    RP/0/RP0/CPU0:router(config)#show commit changes diff
+    Mon Nov  7 15:07:22.990 CET
+    Building configuration...
+    !! IOS XR Configuration 7.2.2
+    -  interface GigabitEthernet0/0/0/5
+    -   shutdown
+       !
+    +  interface TenGigE0/0/0/5
+    +   shutdown
+       !
+       interface TenGigE0/0/0/28
+    -   description Trunk vers ahp2a-1.nra
+    -   bundle id 2 mode active
+       !
+    end
+
+Les deux premières commandes sont correctement représentées par les deux
+premiers morceaux du delta de configuration : nous retirons l'interface
+`GigabitEthernet0/0/0/5` et créons `TenGigE0/0/0/5`. Les deux commandes
+suivantes sont également correctement traduites. L'interface `TenGigE0/0/0/28`
+est déjà désactivée et seules les directives `description` et `bundle id` sont à
+retirer. Toutefois, la commande `diff` ne montre aucune modification pour
+`TenGigE0/0/0/29`. Le delta concernant cette interface devrait être identique à
+celui pour `TenGigE0/0/0/28`.
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#show run int TenGigE 0/0/0/29
+    Mon Nov  7 15:07:43.571 CET
+    interface TenGigE0/0/0/29
+     description Trunk to other router
+     bundle id 2 mode active
+     shutdown
+    !
+    RP/0/RP0/CPU0:router(config)#show configuration merge int TenGigE 0/0/0/29
+    Mon Nov  7 15:07:53.584 CET
+    interface TenGigE0/0/0/29
+     shutdown
+    !
+
+Comment peut-on obtenir un résultat correct pour `TenGigE0/0/0/28` mais
+incorrect pour `TenGigE0/0/0/29` alors qu'ils partagent la même configuration ?
+Comment peut-on faire confiance à la commande `diff` si elle oublie une partie
+de la configuration ?
+
+Si vous utilisez des outils d'automatisation, vérifiez s'ils construisent le
+delta à l'aide des sorties des commandes `show running-config` et `show
+configuration merge`. C'est le cas de [NAPALM][] mais pas de la [collection
+`cisco.iosxr`][cisco.iosxr] pour Ansible.
+
+Le problème n'est pas limité aux directives `interface`. Il est possible
+d'obtenir des résultats similaires à d'autres endroits. Par exemple, voici ce
+qui se produit quand on retire des voisins BGP avec IOS XR 7.2.2:
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#router bgp 65400
+    RP/0/RP0/CPU0:router(config-bgp)#vrf public
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.1
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.75
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.110
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.112
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.158
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#show commit changes diff
+    Tue Aug  2 13:58:02.536 CEST
+    Building configuration...
+    !! IOS XR Configuration 7.2.2
+       router bgp 65400
+        vrf public
+    -    neighbor 217.29.66.1
+    -     remote-as 16004
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: MIX-IT
+         !
+    -    neighbor 217.29.66.75
+    -     remote-as 49367
+    -     use neighbor-group MIX_IPV4_PUBLIC
+         !
+    -    neighbor 217.29.67.10
+    -     remote-as 19679
+         !
+    -    neighbor 217.29.67.15
+    -    neighbor 217.29.66.112
+    -     remote-as 8075
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: Microsoft
+    -     address-family ipv4 unicast
+    -      maximum-prefix 1500 95 restart 5
+          !
+         !
+    -    neighbor 217.29.66.158
+    -     remote-as 24482
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: SG.GS
+    -     address-family ipv4 unicast
+         !
+         !
+        !
+       !
+    end
+
+Le seul morceau correct est celui pour 217.29.66.112. Dans tous les autres cas,
+il manque certaines des lignes supprimées. Pour 217.29.67.15, il manque même
+toutes les lignes ! Quelle est la qualité du code qui fournit une telle
+différence ?
+
+Je pourrais continuer longtemps avec des exemples comme ceux-ci. Le TAC Cisco
+est disposé à ouvrir un rapport dans le DDTS, leur système de suivi des bogues,
+pour corriger des occurrences spécifiques de ce problème[^example]. Cependant, je ne
+comprends pas pourquoi l'équipe XR ne fournit pas simplement la différence entre
+`show run` et `show configuration merge`. La sortie serait toujours correcte ! 🙄
+
+[^example]: Regardez par exemple [CSCwa26251][] qui correspond à un problème que
+    j'ai remonté plus tôt cette année. Il est nécessaire d'avoir un contrat de
+    support avec Cisco pour voir son contenu.
+
+*[DDTS]: Distributed Defect Tracking System
+*[TAC]: Technical Assistance Center
+*[NOS]: Network Operating System
+[XR]: https://www.cisco.com/c/en/us/products/ios-nx-os-software/ios-xr-software/index.html
+[IOS]: https://en.wikipedia.org/wiki/Cisco_IOS "Cisco IOS article sur Wikipedia"
+[NAPALM]: https://github.com/napalm-automation/napalm "Network Automation and Programmability Abstraction Layer with Multivendor support"
+[cisco.iosxr]: https://galaxy.ansible.com/cisco/iosxr "Cisco IOSXR Collection sur Ansible Galaxy"
+[cscwa26251]: https://bst.cloudapps.cisco.com/bugsearch/bug/CSCwa26251 "CSCwa26251: show commit changes diff output provides incorrect output"
