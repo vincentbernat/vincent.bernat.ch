@@ -22,21 +22,16 @@
         pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
           projectDir = ./.;
           overrides = pkgs.poetry2nix.overrides.withDefaults (self: super:
-            {
-              langcodes = super.langcodes.overridePythonAttrs (old: {
-                propagatedBuildInputs = (old.propagatedBuildInputs or []) ++ [self.setuptools];
-              });
-            } //
             (l.listToAttrs (l.map
-            # Many dependencies need setuptools...
+            # Many dependencies do not declare explicitely their build tools
               (x: {
                 name = x;
                 value = super."${x}".overridePythonAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [self.setuptools];
+                  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [self.setuptools self.flit-core];
                 });
               })
               [
-                "hyde" "commando" "fswrap"
+                "hyde" "commando" "fswrap" "langcodes" "pypdf2"
                 "pygments-haproxy" "pygments-ios" "pygments-junos"
               ]))
           );
