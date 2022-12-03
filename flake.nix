@@ -23,16 +23,22 @@
           projectDir = ./.;
           overrides = pkgs.poetry2nix.overrides.withDefaults (self: super:
             (l.listToAttrs (l.map
-            # Many dependencies do not declare explicitely their build tools
+              # Many dependencies do not declare explicitely their build tools
               (x: {
                 name = x;
                 value = super."${x}".overridePythonAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or []) ++ [self.setuptools self.flit-core];
+                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ self.setuptools self.flit-core ];
                 });
               })
               [
-                "hyde" "commando" "fswrap" "langcodes" "pypdf2"
-                "pygments-haproxy" "pygments-ios" "pygments-junos"
+                "commando"
+                "fswrap"
+                "hyde"
+                "langcodes"
+                "pygments-haproxy"
+                "pygments-ios"
+                "pygments-junos"
+                "pypdf2"
               ]))
           );
         };
@@ -49,19 +55,21 @@
             type = "app";
             program = "${pkgs.linkchecker}/bin/linkchecker";
           };
-          goaccess = let
-            pkg = (pkgs.goaccess.overrideAttrs (old: {
-              patches = (old.patches or [ ]) ++ [
-                (pkgs.fetchpatch {
-                  url = "https://github.com/allinurl/goaccess/pull/2126.patch";
-                  sha256 = "sha256-ywWy8AEMOqfeiFla7FBmo/podDmKHxptEs1Z2MDcOk0=";
-                })
-              ];
-            }));
-          in {
-            type = "app";
-            program = "${pkg}/bin/goaccess";
-          };
+          goaccess =
+            let
+              pkg = (pkgs.goaccess.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  (pkgs.fetchpatch {
+                    url = "https://github.com/allinurl/goaccess/pull/2126.patch";
+                    sha256 = "sha256-ywWy8AEMOqfeiFla7FBmo/podDmKHxptEs1Z2MDcOk0=";
+                  })
+                ];
+              }));
+            in
+            {
+              type = "app";
+              program = "${pkg}/bin/goaccess";
+            };
           yarn = {
             type = "app";
             program = "${pkgs.yarn}/bin/yarn";
