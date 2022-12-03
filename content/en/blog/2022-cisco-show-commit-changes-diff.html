@@ -1,0 +1,196 @@
+---
+title: "Broken commit diff on Cisco IOS XR"
+description: |
+   The diff between the running and the candidate configurations produced by
+   Cisco IOS XR are often incorrect. This post provides a few examples.
+uuid: 4b66e110-3d63-4a92-a96c-ee876d5635bc
+tags:
+  - network-automation
+---
+
+!!! "TL;DR" Never trust `show commit changes diff` on Cisco IOS XR.
+
+[Cisco IOS XR][XR] is the operating system running for the Cisco ASR, NCS, and
+8000 routers. Compared to [Cisco IOS][IOS], it features a **candidate
+configuration** and a **running configuration**. In configuration mode, you can
+modify the first one and issue the `commit` command to apply it to the running
+configuration.[^limitations] This is a common concept for many NOS.
+
+[^limitations]: IOS XR has several limitations. The most inconvenient one is the
+    inability to change the AS number in the `router bgp` directive. Such a
+    limitation is a great pain for both operations and automation.
+
+Before committing the candidate configuration to the running configuration, you
+may want to check the changes that have accumulated until now. That's where the
+`show commit changes diff` command[^clunky] comes up. Its goal is to show the
+difference between the running configuration (`show running-configuration`) and
+the candidate configuration (`show configuration merge`). How hard can it be?
+
+[^clunky]: This command could have been just `show commit`, as `show commit
+    changes diff` is the only valid command you can execute from this point.
+    Starting from IOS XR 7.5.1, `show commit changes diff precise` is also a
+    valid command. However, I have failed to find any documentation about it and
+    it seems to provide the same output as `show commit changes diff`. That's
+    how clunky IOS XR can be.
+
+Let's put an interface down on IOS XR 7.6.2 (released in August 2022):
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#int Hu0/1/0/1 shut
+    RP/0/RP0/CPU0:router(config)#show commit changes diff
+    Wed Nov 23 11:08:30.275 CET
+    Building configuration...
+    !! IOS XR Configuration 7.6.2
+    +  interface HundredGigE0/1/0/1
+    +   shutdown
+       !
+    end
+
+The `+` sign before `interface HundredGigE0/1/0/1` makes it look like you did
+create a new interface. Maybe there was a typo? No, the diff is just broken. If
+you look at the candidate configuration, everything is like you expect:
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#show configuration merge int Hu0/1/0/1
+    Wed Nov 23 11:08:43.360 CET
+    interface HundredGigE0/1/0/1
+     description PNI: (some description)
+     bundle id 4000 mode active
+     lldp
+      receive disable
+      transmit disable
+     !
+     shutdown
+     load-interval 30
+
+Here is a more problematic example on IOS XR 7.2.2 (released in January 2021).
+We want to unconfigure three interfaces:
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#no int GigabitEthernet 0/0/0/5
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/5 shut
+    RP/0/RP0/CPU0:router(config)#no int TenGigE 0/0/0/28
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/28 shut
+    RP/0/RP0/CPU0:router(config)#no int TenGigE 0/0/0/29
+    RP/0/RP0/CPU0:router(config)#int TenGigE 0/0/0/29 shut
+    RP/0/RP0/CPU0:router(config)#show commit changes diff
+    Mon Nov  7 15:07:22.990 CET
+    Building configuration...
+    !! IOS XR Configuration 7.2.2
+    -  interface GigabitEthernet0/0/0/5
+    -   shutdown
+       !
+    +  interface TenGigE0/0/0/5
+    +   shutdown
+       !
+       interface TenGigE0/0/0/28
+    -   description Trunk vers ahp2a-1.nra
+    -   bundle id 2 mode active
+       !
+    end
+
+The two first commands are correctly represented by the first two chunks of the
+diff: we remove `GigabitEthernet0/0/0/5` and create `TenGigE0/0/0/5`. The two
+next commands are also correctly represented by the last chunk of the diff.
+`TenGigE0/0/0/28` was already shut down, so it is expected that only
+`description` and `bundle id` are removed. However, the `diff` command forgets
+about the modifications for `TenGigE0/0/0/29`. The diff should include a chunk
+similar to the last one.
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#show run int TenGigE 0/0/0/29
+    Mon Nov  7 15:07:43.571 CET
+    interface TenGigE0/0/0/29
+     description Trunk to other router
+     bundle id 2 mode active
+     shutdown
+    !
+    RP/0/RP0/CPU0:router(config)#show configuration merge int TenGigE 0/0/0/29
+    Mon Nov  7 15:07:53.584 CET
+    interface TenGigE0/0/0/29
+     shutdown
+    !
+
+How can the diff be correct for `TenGigE0/0/0/28` but incorrect for
+`TenGigE0/0/0/29` while they have the same configuration? How can you trust the
+`diff` command if it forgets part of the configuration?
+
+Do you remember the last time you ran an Ansible playbook and discovered the
+whole `router ospf` block disappeared without a warning? If you use automation
+tools, you should check how the diff is assembled. Automation tools should build
+it from the result of `show running-config` and `show configuration merge`. This
+is what [NAPALM][] does. This is not what [`cisco.iosxr`
+collection][cisco.iosxr] for Ansible does.
+
+The problem is not limited to the `interface` directives. You can get similar
+issues for other parts of the configuration. For example, here is what we get
+when removing inactive BGP neighbors on IOS XR 7.2.2:
+
+    ::console
+    RP/0/RP0/CPU0:router(config)#router bgp 65400
+    RP/0/RP0/CPU0:router(config-bgp)#vrf public
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.1
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.75
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.110
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.112
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#no neighbor 217.29.66.158
+    RP/0/RP0/CPU0:router(config-bgp-vrf)#show commit changes diff
+    Tue Aug  2 13:58:02.536 CEST
+    Building configuration...
+    !! IOS XR Configuration 7.2.2
+       router bgp 65400
+        vrf public
+    -    neighbor 217.29.66.1
+    -     remote-as 16004
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: MIX-IT
+         !
+    -    neighbor 217.29.66.75
+    -     remote-as 49367
+    -     use neighbor-group MIX_IPV4_PUBLIC
+         !
+    -    neighbor 217.29.67.10
+    -     remote-as 19679
+         !
+    -    neighbor 217.29.67.15
+    -    neighbor 217.29.66.112
+    -     remote-as 8075
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: Microsoft
+    -     address-family ipv4 unicast
+    -      maximum-prefix 1500 95 restart 5
+          !
+         !
+    -    neighbor 217.29.66.158
+    -     remote-as 24482
+    -     use neighbor-group MIX_IPV4_PUBLIC
+    -     description MIX: SG.GS
+    -     address-family ipv4 unicast
+         !
+         !
+        !
+       !
+    end
+
+The only correct chunk is for neighbor 217.29.66.112. All the others are missing
+some of the removed lines. 217.29.67.15 is even missing all of them. How bad is
+the code providing such a diff?
+
+I could go all day with examples such as these. Cisco TAC is happy to open a
+case in DDTS, their bug tracker, to fix specific occurrences of this
+bug.[^example] However, I fail to understand why the XR team is not just
+providing the diff between `show run` and `show configuration merge`. The output
+would always be correct! 🙄
+
+[^example]: See [CSCwa26251][] as an example of a fix for something I reported
+    earlier this year. You need a valid Cisco support contract to be able to see
+    its content.
+
+*[DDTS]: Distributed Defect Tracking System
+*[TAC]: Technical Assistance Center
+*[NOS]: Network Operating System
+[XR]: https://www.cisco.com/c/en/us/products/ios-nx-os-software/ios-xr-software/index.html
+[IOS]: https://en.wikipedia.org/wiki/Cisco_IOS "Cisco IOS article on Wikipedia"
+[NAPALM]: https://github.com/napalm-automation/napalm "Network Automation and Programmability Abstraction Layer with Multivendor support"
+[cisco.iosxr]: https://galaxy.ansible.com/cisco/iosxr "Cisco IOSXR Collection on Ansible Galaxy"
+[cscwa26251]: https://bst.cloudapps.cisco.com/bugsearch/bug/CSCwa26251 "CSCwa26251: show commit changes diff output provides incorrect output"
