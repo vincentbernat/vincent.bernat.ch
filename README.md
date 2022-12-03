@@ -17,6 +17,13 @@ part is in `layout/nginx.j2`).
 
 ## Various commands
 
+### Build
+
+```
+nix develop
+inv build
+```
+
 ### Poetry
 
 Check oudated dependencies:
@@ -51,4 +58,12 @@ Update nixpkgs:
 
 ```
 nix flake lock --update-input nixpkgs
+```
+
+### Git
+
+Easy rebase of a WIP progress + checkout:
+
+```
+git rebase latest article/something
 ```
