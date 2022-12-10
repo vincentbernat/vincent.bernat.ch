@@ -6,13 +6,26 @@
       url = "github:nix-community/poetry2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    npmlock2nix = {
+      url = "github:nix-community/npmlock2nix";
+      flake = false;
+    };
+    iosevka = {
+      url = "github:be5invis/Iosevka?ref=v16.6.0";
+      flake = false;
+    };
   };
   outputs = { self, flake-utils, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import inputs.nixpkgs {
           inherit system;
-          overlays = [ inputs.poetry2nix.overlay ];
+          overlays = [
+            inputs.poetry2nix.overlay
+            (final: prev: {
+              npmlock2nix = import inputs.npmlock2nix { pkgs = prev; };
+            })
+          ];
         };
         l = pkgs.lib // builtins;
         pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
@@ -175,7 +188,20 @@
                   ascender = 790;
                   xHeight = 570;
                 };
-                iosevka-term = pkgs.iosevka.override {
+                iosevka = pkgs.iosevka.overrideAttrs (old: rec {
+                  src = inputs.iosevka;
+                  configurePhase = l.concatStringsSep "" (l.match "(.*)\nln -s [^\n]*(.*)" old.configurePhase);
+                  postConfigure =
+                    let
+                      nodeIosevka = pkgs.npmlock2nix.v2.node_modules {
+                        inherit src;
+                      };
+                    in
+                    ''
+                      ln -s ${nodeIosevka}/node_modules .
+                    '';
+                });
+                iosevka-term = iosevka.override {
                   set = "term";
                   privateBuildPlan = {
                     family = "Iosevka Term Custom";
@@ -210,7 +236,7 @@
                     inherit metric-override;
                   };
                 };
-                iosevka-etoile = pkgs.iosevka.override {
+                iosevka-etoile = iosevka.override {
                   set = "etoile";
                   privateBuildPlan = {
                     family = "Iosevka Etoile Custom";
@@ -243,8 +269,8 @@
                       italic = {
                         angle = 9.4;
                         shape = "italic";
-                        menu  = "italic";
-                        css   = "italic";
+                        menu = "italic";
+                        css = "italic";
                       };
                     };
                     weights.regular = {
