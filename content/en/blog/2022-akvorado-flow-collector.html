@@ -1,0 +1,82 @@
+---
+title: "Akvorado: a flow collector, enricher, and visualizer"
+description: |
+   Akvorado collects flows using NetFlow, IPFIX, or sFlow. It enriches them
+   and exports them to ClickHouse. A web frontend is provided to run queries.
+uuid: e5198e93-6d45-4f0e-b05e-43a264c8d35a
+tags:
+  - network-monitoring
+attachments:
+  "https://github.com/akvorado/akvorado": GitHub repository
+---
+
+Earlier this year, [we][] released [Akvorado][], a flow collector, enricher, and
+visualizer. It receives network flows from your routers using either [NetFlow
+v9][], [IPFIX][], or [sFlow][]. Several pieces of information are added, like
+GeoIP and interface names. The flows are exported to [Apache Kafka][kafka], a
+distributed queue, then stored inside [ClickHouse][], a column-oriented
+database. A web frontend is provided to run queries. A [live version][demo] is
+available for you to play.
+
+![Akvorado web interface displays the result of a simple query using stacked
+areas]([[!!images/akvorado-visualize-tab@2x.png]] "Akvorado’s web frontend")
+
+Several alternatives exist:
+
+- [Kentik][], a popular cloud-based solution,
+- [ElastiFlow][], a self-hosted proprietary solution, or
+- your own assembly of open source solutions by picking a flow collector
+  ([pmacct][], [GoFlow2][], or [vFlow][]), a distributed queue[^queue] ([Apache
+  Kafka][kafka] or [RabbitMQ][]), a database ([ClickHouse][], [Elasticsearch][],
+  or [Apache Pinot][]), and a web frontend ([Grafana][], [Kibana][], or [Apache
+  Superset][]).
+
+[^queue]: While the collector could write directly to the database, the queue
+    buffers flows if the database is unavailable. It also enables you to process
+    flows with another piece of software (like an anti-DDoS system).
+
+*Akvorado* differentiates itself from these solutions because:
+
+- it is open source (licensed under the [AGPLv3 license][agpl]), and
+- it bundles flow collection, storage, and a web interface into a single
+  "product."
+
+The proposed deployment solution relies on [Docker Compose][] to set up
+*Akvorado*, *Zookeeper*, *Kafka*, and *ClickHouse*. I hope it should be enough
+for anyone to [get started quickly][]. *Akvorado* is performant enough to handle
+100 000 flows per second with 64 GB of RAM and 24 vCPU. With 2 TB of disk, you
+should expect to keep data for a few years.
+
+I spent some time writing a [fairly complete documentation][documentation]. It
+seems redundant to repeat its content in this blog post. There is also a section
+about its [internal design][] if you are interested in how it is built. I also
+did a [FRnOG presentation][] earlier this year, and a [ClickHouse meetup
+presentation][], which focuses more on how *ClickHouse* is used. I plan to write
+more detailed articles on specific aspects of *Akvorado*. Stay tuned! 📻
+
+[we]: https://www.free.fr
+[akvorado]: https://www.akvorado.net
+[netflow v9]: rfc://3954 "RFC 3954: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[ipfix]: rfc://7011 "RFC 7011: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[sflow]: rfc://3176 "RFC 3176: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[kafka]: https://kafka.apache.org/ "Apache Kafka"
+[clickhouse]: https://clickhouse.com/ "ClickHouse: OLAP DBMS"
+[demo]: https://demo.akvorado.net
+[kentik]: https://www.kentik.com/ "Kentik: the network observability platform"
+[elastiflow]: https://www.elastiflow.com/ "ElastiFlow: network performance and security analytics"
+[elasticsearch]: https://www.elastic.co/elasticsearch/ "Elasticsearch: search and analytics engine"
+[kibana]: https://www.elastic.co/kibana/ "Kibana: your window into the Elastic Stack"
+[agpl]: https://www.gnu.org/licenses/agpl-3.0.en.html "AGPLv3 license"
+[pmacct]: http://pmacct.net/
+[goflow2]: https://github.com/NetSampler/GoFlow2
+[vflow]: https://github.com/Edgio/vflow
+[rabbitmq]: https://www.rabbitmq.com/
+[apache pinot]: https://pinot.apache.org/
+[grafana]: https://grafana.com/
+[apache superset]: https://superset.apache.org/
+[docker compose]: https://docs.docker.com/compose/
+[get started quickly]: https://demo.akvorado.net/docs/intro#quick-start "Akvorado documentation: quick start"
+[internal design]: https://demo.akvorado.net/docs/internals "Akvorado documentation: internal design"
+[documentation]: https://demo.akvorado.net/docs "Akvorado documentation"
+[frnog presentation]: [[en/blog/2022-frnog36-akvorado.html]] "FRnOG #36: Akvorado"
+[clickhouse meetup presentation]: [[en/blog/2022-clickhouse-meetup-akvorado.html]] "ClickHouse SF Bay Area Meetup: Akvorado"
