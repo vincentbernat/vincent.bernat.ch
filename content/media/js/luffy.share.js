@@ -8,11 +8,11 @@ luffy.do(() => {
     return;
   }
 
-  el.addEventListener('click', event => {
+  el.addEventListener("click", (event) => {
     event.preventDefault();
     navigator.share({
-      text: document.title,     // title is usually ignored
-      url: document.querySelector('link[rel=canonical]').href
-    })
+      text: document.title, // title is usually ignored
+      url: document.querySelector("link[rel=canonical]").href,
+    });
   });
 });

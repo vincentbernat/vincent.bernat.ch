@@ -5,21 +5,21 @@ luffy.do(() => {
     return;
   }
 
-  const codeBlocks = document.querySelectorAll('.lf-main .codehilite');
+  const codeBlocks = document.querySelectorAll(".lf-main .codehilite");
   for (let i = 0; i < codeBlocks.length; i++) {
-    const copyIcon = document.createElement('span');
-    copyIcon.className = 'lf-copy';
+    const copyIcon = document.createElement("span");
+    copyIcon.className = "lf-copy";
     codeBlocks[i].appendChild(copyIcon);
   }
 
-  document.body.addEventListener('click', copy, true);
+  document.body.addEventListener("click", copy, true);
 
-  function copy({target}) {
+  function copy({ target }) {
     const t = target;
-    if (t.className === 'lf-copy') {
+    if (t.className === "lf-copy") {
       // Find the sibling pre element
       const el = t.parentNode.childNodes[0];
-      if (el.tagName === 'PRE') {
+      if (el.tagName === "PRE") {
         try {
           // Select text
           t.blur();
@@ -35,7 +35,7 @@ luffy.do(() => {
 
           // Copy
           if (document.queryCommandEnabled("copy")) {
-            document.execCommand('copy');
+            document.execCommand("copy");
           } else {
             throw "Cannot copy (maybe iOS)";
           }
@@ -45,14 +45,16 @@ luffy.do(() => {
           el.blur();
 
           // Inform user
-          t.className = 'msg-copy-ok lf-copy';
+          t.className = "msg-copy-ok lf-copy";
         } catch (err) {
           // Hint to use OS to copy
-          t.className = 'msg-copy-failed lf-copy';
+          t.className = "msg-copy-failed lf-copy";
         }
 
         // Remove the message after a timeout
-        setTimeout(() => { t.className = 'lf-copy'; }, 3000);
+        setTimeout(() => {
+          t.className = "lf-copy";
+        }, 3000);
       }
     }
   }
