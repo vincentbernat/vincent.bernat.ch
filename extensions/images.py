@@ -146,7 +146,13 @@ class ImageFixerPlugin(Plugin):
         """Get size for an image, and opacity: (w, h), o?."""
         if image.source_file.kind in {"png", "jpg"}:
             img = Image.open(image.path)
-            if "A" not in img.mode:
+            if "P" in img.mode and any(
+                idx == img.info.get("transparency", -1) for _, idx in img.getcolors()
+            ):
+                raise RuntimeError(
+                    "do not handle paletted PNG images with transparency"
+                )
+            if "A" not in img.mode or img.getextrema()[-1][0] == 255:
                 # Find a dominant color
                 reduced = img.copy()
                 reduced.thumbnail((150, 150))
