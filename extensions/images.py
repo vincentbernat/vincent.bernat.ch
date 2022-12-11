@@ -192,7 +192,7 @@ class ImageFixerPlugin(Plugin):
                     [
                         (int(w), int(h))
                         for w, h in re.findall(
-                            "RESOLUTION=(\d+)x(\d+)(?:$|,)", f.read()
+                            r"RESOLUTION=(\d+)x(\d+)(?:$|,)", f.read()
                         )
                     ]
                 )
@@ -225,7 +225,6 @@ class ImageFixerPlugin(Plugin):
                 width = 1000 // ratio.numerator * ratio.numerator
                 height = 1000 // ratio.numerator * ratio.denominator
                 return dict(size=(width, height), opaque=True)
-        self.logger.warn("[%s] has an img tag not linking to an image" % resource)
         return dict(size=(None, None), opaque=True)
 
     def _size(self, resource, src, width, height):

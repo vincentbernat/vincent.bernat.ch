@@ -8,6 +8,7 @@ in the "complete" step.
 
 from hyde.ext.plugins.structure import CombinePlugin as OrigCombinePlugin
 
+
 class CombinePlugin(OrigCombinePlugin):
     def text_resource_complete(self, resource, text):
         return super(CombinePlugin, self).begin_text_resource(resource, text)

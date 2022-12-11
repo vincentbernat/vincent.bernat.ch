@@ -5,12 +5,11 @@ import re
 
 
 class AdmonitionExtension(Extension):
-
     def extendMarkdown(self, md, md_globals):
         md.registerExtension(self)
-        md.parser.blockprocessors.add('shortadmonition',
-                                      AdmonitionProcessor(md.parser),
-                                      '_begin')
+        md.parser.blockprocessors.add(
+            "shortadmonition", AdmonitionProcessor(md.parser), "_begin"
+        )
 
 
 class AdmonitionProcessor(BlockProcessor):
@@ -24,17 +23,18 @@ class AdmonitionProcessor(BlockProcessor):
         m = self.RE.search(block)
 
         if m:
-            block = block[m.end():]  # removes the first line
+            block = block[m.end() :]  # removes the first line
 
         if m:
-            div = etree.SubElement(parent, 'div')
-            div.set('class', 'admonition')
+            div = etree.SubElement(parent, "div")
+            div.set("class", "admonition")
             title = m.group(1)
-            p = etree.SubElement(div, 'p')
+            p = etree.SubElement(div, "p")
             p.text = title
-            p.set('class', 'admonition-title')
+            p.set("class", "admonition-title")
 
         self.parser.parseChunk(div, block)
+
 
 def makeExtension(*args, **kwargs):
     return AdmonitionExtension(*args, **kwargs)

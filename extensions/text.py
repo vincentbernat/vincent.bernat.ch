@@ -9,21 +9,22 @@ from hyde.plugin import Plugin
 
 class FootnotesPlugin(Plugin):
     """Copy footnotes as asides."""
+
     def text_resource_complete(self, resource, text):
-        if resource.source_file.kind != 'html':
+        if resource.source_file.kind != "html":
             return
-        d = pq(text, parser='html')
+        d = pq(text, parser="html")
 
         # Rename footnote to endnote
-        for cls in ['footnote', 'footnote-ref', 'footnote-backref']:
+        for cls in ["footnote", "footnote-ref", "footnote-backref"]:
             els = d(f".{cls}")
             els.removeClass(cls)
-            els.addClass(cls.replace('foot', 'end'))
+            els.addClass(cls.replace("foot", "end"))
 
-        endnotes = d('.endnote ol')
+        endnotes = d(".endnote ol")
 
         # Pop out orphaned backlinks
-        backrefs = endnotes('.endnote-backref')
+        backrefs = endnotes(".endnote-backref")
         for backref in backrefs.items():
             parent = backref.parent()
             if len(parent.contents()) == 1:
@@ -33,21 +34,22 @@ class FootnotesPlugin(Plugin):
         # Create sidenotes
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]
-            fn = endnotes('li[id=fn-{}]'.format(name))
-            assert(fn)
+            fn = endnotes("li[id=fn-{}]".format(name))
+            assert fn
             parents = ref.parents()
-            for i in range(len(parents)-1):
-                if parents.eq(i).attr.id == 'lf-text':
-                    parent = parents.eq(i+1)
-            sidenote = pq('<aside>')
+            for i in range(len(parents) - 1):
+                if parents.eq(i).attr.id == "lf-text":
+                    parent = parents.eq(i + 1)
+            sidenote = pq("<aside>")
             sidenote.attr.role = "note"
             sidenote.attr.class_ = "lf-sidenote"
-            sidenote[0].set('hidden', None)
-            sidenote.html(u'<sup class="lf-refmark">{}</sup>{}'.format(
-                ref.text(), fn.html()))
+            sidenote[0].set("hidden", None)
+            sidenote.html(
+                '<sup class="lf-refmark">{}</sup>{}'.format(ref.text(), fn.html())
+            )
             sidenote("a.endnote-backref").remove()
             sidenote.insert_before(parent)
-        return u'<!DOCTYPE html>\n' + d.outer_html()
+        return "<!DOCTYPE html>\n" + d.outer_html()
 
 
 class LatexPlugin(Plugin):
@@ -61,32 +63,32 @@ process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(
   process.stdout.write('\\0');
 });
 """
-    RE = re.compile(r'(?<!\\)·(.+?)·', re.DOTALL)
+    RE = re.compile(r"(?<!\\)·(.+?)·", re.DOTALL)
     PR = None
 
     def katex_render(self, mo):
         formula = html.unescape(mo.group(1))
         if self.PR is None:
-            self.PR = subprocess.Popen(['node', '-e', self.JS],
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE)
+            self.PR = subprocess.Popen(
+                ["node", "-e", self.JS], stdin=subprocess.PIPE, stdout=subprocess.PIPE
+            )
         # Assume input is small enough
-        self.PR.stdin.write(formula.encode('utf-8'))
-        self.PR.stdin.write(b'\0')
+        self.PR.stdin.write(formula.encode("utf-8"))
+        self.PR.stdin.write(b"\0")
         self.PR.stdin.flush()
         # Get answer
         answer = b""
         while True:
             char = self.PR.stdout.read(1)
-            if char == b'':
-                raise RuntimeError('unexpected stream end')
-            if char == b'\0':
+            if char == b"":
+                raise RuntimeError("unexpected stream end")
+            if char == b"\0":
                 break
             answer += char
-        answer = answer.decode('utf-8')
+        answer = answer.decode("utf-8")
         return answer
 
     def text_resource_complete(self, resource, text):
-        if resource.source_file.kind != 'html':
+        if resource.source_file.kind != "html":
             return
         return self.RE.sub(self.katex_render, text)

@@ -9,6 +9,7 @@ from hyde.plugin import Plugin
 
 class CSSPrefixerPlugin(Plugin):
     """Run CSS prefixer"""
+
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind not in ("less", "css"):
             return
@@ -16,7 +17,11 @@ class CSSPrefixerPlugin(Plugin):
             minify = "false"
         else:
             minify = "true"
-        p = subprocess.Popen(['node', '-e', """
+        p = subprocess.Popen(
+            [
+                "node",
+                "-e",
+                """
 var autoprefixer = require('autoprefixer');
 var cssnano = require('cssnano');
 var postcss = require('postcss');
@@ -38,7 +43,12 @@ process.stdin.on('end', function() {
           process.stdout.write(result.css.toString());
         });
 });
-        """ % minify], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        stdout, _ = p.communicate(text.encode('utf-8'))
+        """
+                % minify,
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
+        stdout, _ = p.communicate(text.encode("utf-8"))
         assert p.returncode == 0
-        return stdout.decode('utf-8')
+        return stdout.decode("utf-8")

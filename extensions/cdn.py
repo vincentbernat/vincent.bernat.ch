@@ -18,10 +18,9 @@ def decorate_media_url(media_url):
         for block in site.config.cdn:
             if not path.startswith(block.path):
                 continue
-            return _encode_path(block.url,
-                                path[len(block.path):],
-                                safe)
+            return _encode_path(block.url, path[len(block.path) :], safe)
         return media_url(site, path, safe)
+
     return wrapper
 
 

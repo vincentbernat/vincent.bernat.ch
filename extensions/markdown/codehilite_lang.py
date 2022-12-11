@@ -11,16 +11,15 @@ from markdown.extensions import codehilite
 
 
 class CodeHiliteLangExtension(Extension):
-
     def extendMarkdown(self, md, md_globals):
         md.registerExtension(self)
 
         def new_codehilite_highlight(src, lexer, formatter):
-            lang = lexer.name.lower().replace(' ', '-')
+            lang = lexer.name.lower().replace(" ", "-")
             result = pygments_highlight(src, lexer, formatter)
             if isinstance(formatter, HtmlFormatter):
-                d = pq(result, parser='html')
-                d.add_class('language-{}'.format(lang))
+                d = pq(result, parser="html")
+                d.add_class("language-{}".format(lang))
                 result = d.outer_html()
             return result
 
