@@ -401,8 +401,8 @@ rm ../result
 
         # Compute hash on various files
         with step("cache busting and SRI"):
-            # First fonts and media, then JS and CSS
-            for directories in [("fonts",), ("js", "css")]:
+            # First fonts and images, then JS and CSS
+            for directories in [("fonts", "images"), ("js", "css")]:
                 directories = " ".join(f"media/{d}" for d in directories)
                 md5 = c.run(
                     f"find {directories} -type f -print0 | xargs -0 md5sum", hide=True
@@ -426,19 +426,29 @@ rm ../result
                 sed_html = []
                 sed_css = []
                 for f in md5:
+                    if f == "images/favicon.png":
+                        continue
                     root, ext = os.path.splitext(f)
                     newname = "%s.%s%s" % (root, md5[f], ext)
                     c.run("mv media/%s media/%s" % (f, newname))
                     # Fix CSS
                     sed_css.append(f"s+{f})+{newname})+g")
                     # Fix HTML
-                    sed_html.append(
-                        r"s,"
-                        rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
-                        rf"\1\2\3{media}{newname}\3 \1integrity=\3sha256-{sha256[f]}\3 "
-                        r"crossorigin=\3anonymous\3,"
-                        r"g"
-                    )
+                    if not f.startswith("images/"):
+                        sed_html.append(
+                            r"s,"
+                            rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
+                            rf"\1\2\3{media}{newname}\3 \1integrity=\3sha256-{sha256[f]}\3 "
+                            r"crossorigin=\3anonymous\3,"
+                            r"g"
+                        )
+                    else:
+                        sed_html.append(
+                            r"s,"
+                            rf"\([a-z-]*=\)\([\"']\){media}{f}\(\2\| \),"
+                            rf"\1\2{media}{newname}\3,"
+                            r"g"
+                        )
                 while sed_css:
                     c.run(
                         "find . -name '*.css' -type f -print0 | "
@@ -449,7 +459,7 @@ rm ../result
                     sed_css = sed_css[20:]
                 while sed_html:
                     c.run(
-                        "find . -name '*.html' -type f -print0 | "
+                        "(find . -name '*.html' -type f -print0 ; find . -name 'atom.xml' -print0) | "
                         "xargs -r0 -n10 -P5 sed -i {}".format(
                             " ".join(('-e "{}"'.format(x) for x in sed_html[:20]))
                         )
@@ -586,20 +596,18 @@ done"""
             )
             c.run("ssh {} sudo systemctl reload nginx".format(host))
 
-    for host in hosts:
-        with step(f"clean images on {host}"):
-            c.run(
-                "rsync --exclude=.git --copy-unsafe-links -rt "
-                "--delete-delay "
-                "--include='**/' "
-                "--include='*.avif' --include='*.webp' "
-                "--exclude='*' "
-                ".final/media/images "
-                "{}:/data/webserver/media.bernat.ch/".format(host)
-            )
     if clean:
         for host in hosts:
             with step(f"clean files on {host}"):
+                c.run(
+                    "rsync --exclude=.git --copy-unsafe-links -rt "
+                    "--delete-delay "
+                    "--include='**/' "
+                    "--include='*.avif' --include='*.webp' "
+                    "--exclude='*' "
+                    ".final/media/images "
+                    "{}:/data/webserver/media.bernat.ch/".format(host)
+                )
                 c.run(
                     "rsync --exclude=.git --copy-unsafe-links -rt "
                     "--delete-delay --exclude=videos/\\*/ "
