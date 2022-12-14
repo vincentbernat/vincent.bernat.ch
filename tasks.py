@@ -385,53 +385,6 @@ def build(c):
                 r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'"
             )
 
-        # Image optimization
-        with step("optimize images"):
-            c.run(
-                "cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages"
-            )
-            c.run("cp -r --no-preserve=mode ../result/* media/images/. && rm ../result")
-
-        # We want to prefer JPGs if their sizes are not too large.
-        # The idea is that:
-        #  - JPG decoding is fast
-        #  - JPG has progressive decoding
-        #
-        # We prefer smaller WebPs over AVIFs as all browsers
-        # supporting AVIF also support WebP.
-        with step("remove WebP/AVIF files not small enough"):
-            c.run(
-                "for f in media/images/**/*.{webp,avif}; do"
-                "  orig=$(stat --format %s ${f%.*});"
-                "  new=$(stat --format %s $f);"
-                "  (( $orig*0.90 > $new )) || rm $f;"
-                "done",
-                shell="/bin/zsh",
-            )
-            c.run(
-                "for f in media/images/**/*.avif; do"
-                "  [[ -f ${f%.*}.webp ]] || continue;"
-                "  orig=$(stat --format %s ${f%.*}.webp);"
-                "  new=$(stat --format %s $f);"
-                "  (( $orig > $new )) || rm $f;"
-                "done",
-                shell="/bin/zsh",
-            )
-            c.run(
-                r"""
-printf "     %10s %10s %10s\n" Original WebP AVIF
-printf " PNG %10s %10s %10s\n" \
-   $(find media/images -name '*.png' | wc -l) \
-   $(find media/images -name '*.png.webp' | wc -l) \
-   $(find media/images -name '*.png.avif' | wc -l)
-printf " JPG %10s %10s %10s\n" \
-   $(find media/images -name '*.jpg' | wc -l) \
-   $(find media/images -name '*.jpg.webp' | wc -l) \
-   $(find media/images -name '*.jpg.avif' | wc -l)
-            """,
-                hide="err",
-            )
-
         with step("subset fonts"):
             c.run(
                 """
@@ -492,6 +445,53 @@ rm ../result
                             " ".join(('-e "{}"'.format(x) for x in sed_html))
                         )
                     )
+
+        # Image optimization
+        with step("optimize images"):
+            c.run(
+                "cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages"
+            )
+            c.run("cp -r --no-preserve=mode ../result/* media/images/. && rm ../result")
+
+        # We want to prefer JPGs if their sizes are not too large.
+        # The idea is that:
+        #  - JPG decoding is fast
+        #  - JPG has progressive decoding
+        #
+        # We prefer smaller WebPs over AVIFs as all browsers
+        # supporting AVIF also support WebP.
+        with step("remove WebP/AVIF files not small enough"):
+            c.run(
+                "for f in media/images/**/*.{webp,avif}; do"
+                "  orig=$(stat --format %s ${f%.*});"
+                "  new=$(stat --format %s $f);"
+                "  (( $orig*0.90 > $new )) || rm $f;"
+                "done",
+                shell="/bin/zsh",
+            )
+            c.run(
+                "for f in media/images/**/*.avif; do"
+                "  [[ -f ${f%.*}.webp ]] || continue;"
+                "  orig=$(stat --format %s ${f%.*}.webp);"
+                "  new=$(stat --format %s $f);"
+                "  (( $orig > $new )) || rm $f;"
+                "done",
+                shell="/bin/zsh",
+            )
+            c.run(
+                r"""
+printf "     %10s %10s %10s\n" Original WebP AVIF
+printf " PNG %10s %10s %10s\n" \
+   $(find media/images -name '*.png' | wc -l) \
+   $(find media/images -name '*.png.webp' | wc -l) \
+   $(find media/images -name '*.png.avif' | wc -l)
+printf " JPG %10s %10s %10s\n" \
+   $(find media/images -name '*.jpg' | wc -l) \
+   $(find media/images -name '*.jpg.webp' | wc -l) \
+   $(find media/images -name '*.jpg.avif' | wc -l)
+            """,
+                hide="err",
+            )
 
         # Fix permissions
         c.run(r"find * -type f -print0 | xargs -r0 chmod a+r")
