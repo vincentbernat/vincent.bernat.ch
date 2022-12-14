@@ -465,20 +465,19 @@ rm ../result
                     # Remove deploy/media
                     f = f[len("media/") :]
                     newname = newname[len("media/") :]
-                    if ext in [".png", ".svg", ".ttf", ".woff", ".woff2"]:
+                    if root.startswith("media/fonts"):
                         # Fix CSS
                         sed_css.append("s+{})+{})+g".format(f, newname))
-                    if ext not in [".png", ".svg"]:
-                        # Fix HTML
-                        sed_html.append(
-                            (
-                                r"s,"
-                                r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
-                                r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
-                                r"crossorigin=\3anonymous\3,"
-                                r"g"
-                            ).format(media, f, media, newname, sha)
-                        )
+                    # Fix HTML
+                    sed_html.append(
+                        (
+                            r"s,"
+                            r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
+                            r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
+                            r"crossorigin=\3anonymous\3,"
+                            r"g"
+                        ).format(media, f, media, newname, sha)
+                    )
                 if sed_css:
                     c.run(
                         "find . -name '*.css' -type f -print0 | "
