@@ -461,7 +461,7 @@ rm ../result
                     # New name
                     root, ext = os.path.splitext(f)
                     newname = "%s.%s%s" % (root, md5, ext)
-                    c.run("cp %s %s" % (f, newname))
+                    c.run("mv %s %s" % (f, newname))
                     # Remove deploy/media
                     f = f[len("media/") :]
                     newname = newname[len("media/") :]
