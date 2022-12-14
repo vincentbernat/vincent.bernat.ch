@@ -10,6 +10,8 @@ import re
 import datetime
 import contextlib
 import urllib
+import binascii
+import base64
 import xml.etree.ElementTree as ET
 
 conf = "site-production.yaml"
@@ -398,53 +400,61 @@ rm ../result
             )
 
         # Compute hash on various files
-        with step("compute hash for static files"):
-            for p in ["media/fonts/*", "media/js/*.js", "media/css/*.css"]:
+        with step("cache busting and SRI"):
+            # First fonts and media, then JS and CSS
+            for directories in [("fonts",), ("js", "css")]:
+                directories = " ".join(f"media/{d}" for d in directories)
+                md5 = c.run(
+                    f"find {directories} -type f -print0 | xargs -0 md5sum", hide=True
+                ).stdout.strip()
+                md5 = {
+                    line.split("  ")[1][6:]: line.split("  ")[0][:14]
+                    for line in md5.split("\n")
+                }
+                sha256 = c.run(
+                    f"find {directories} -type f -print0 | xargs -0 sha256sum",
+                    hide=True,
+                ).stdout.strip()
+                sha256 = {
+                    line.split("  ")[1][6:]: line.split("  ")[0]
+                    for line in sha256.split("\n")
+                }
+                sha256 = {
+                    k: base64.b64encode(binascii.unhexlify(sha256[k])).decode("ascii")
+                    for k in sha256
+                }
                 sed_html = []
                 sed_css = []
-                files = c.run("echo %s" % p, hide=True).stdout.strip().split(" ")
-                for f in files:
-                    # Compute hash
-                    md5 = c.run("md5sum %s" % f, hide="out").stdout.split(" ")[0][:14]
-                    sha = c.run(
-                        "openssl dgst -sha256 -binary %s"
-                        "| openssl enc -base64 -A" % f,
-                        hide="out",
-                    ).stdout.strip()
-                    # New name
+                for f in md5:
                     root, ext = os.path.splitext(f)
-                    newname = "%s.%s%s" % (root, md5, ext)
-                    c.run("mv %s %s" % (f, newname))
-                    # Remove deploy/media
-                    f = f[len("media/") :]
-                    newname = newname[len("media/") :]
-                    if root.startswith("media/fonts"):
-                        # Fix CSS
-                        sed_css.append("s+{})+{})+g".format(f, newname))
+                    newname = "%s.%s%s" % (root, md5[f], ext)
+                    c.run("mv media/%s media/%s" % (f, newname))
+                    # Fix CSS
+                    sed_css.append(f"s+{f})+{newname})+g")
                     # Fix HTML
                     sed_html.append(
-                        (
-                            r"s,"
-                            r"\(data-\|\)\([a-z]*=\)\([\"']\){}{}\3,"
-                            r"\1\2\3{}{}\3 \1integrity=\3sha256-{}\3 "
-                            r"crossorigin=\3anonymous\3,"
-                            r"g"
-                        ).format(media, f, media, newname, sha)
+                        r"s,"
+                        rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
+                        rf"\1\2\3{media}{newname}\3 \1integrity=\3sha256-{sha256[f]}\3 "
+                        r"crossorigin=\3anonymous\3,"
+                        r"g"
                     )
-                if sed_css:
+                while sed_css:
                     c.run(
                         "find . -name '*.css' -type f -print0 | "
                         "xargs -r0 -n10 -P5 sed -i {}".format(
-                            " ".join(("-e '{}'".format(x) for x in sed_css))
+                            " ".join(("-e '{}'".format(x) for x in sed_css[:20]))
                         )
                     )
-                if sed_html:
+                    sed_css = sed_css[20:]
+                while sed_html:
                     c.run(
                         "find . -name '*.html' -type f -print0 | "
                         "xargs -r0 -n10 -P5 sed -i {}".format(
-                            " ".join(('-e "{}"'.format(x) for x in sed_html))
+                            " ".join(('-e "{}"'.format(x) for x in sed_html[:20]))
                         )
                     )
+                    sed_html = sed_html[20:]
 
         # Image optimization
         with step("optimize images"):
