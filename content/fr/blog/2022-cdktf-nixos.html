@@ -1,0 +1,813 @@
+---
+title: Gérer une infrastrcuture avec Terraform, CDKTF et NixOS
+description: |
+  Comment j'utilise CDKTF, Terraform, Nix et NixOS pour gérer mon infrastructure
+  personnelle.
+uuid: a8682289-f1ec-4f54-ac54-839d2dc46417
+attachments:
+  "https://github.com/vincentbernat/cdktf-take1": Dépôt pour CDKTF
+  "https://github.com/vincentbernat/nixops-take1": Dépôt pour NixOps
+tags:
+  - distribution-nixos
+---
+
+Il y a quelques années, j'ai réduit mon infrastructure personnelle au strict
+minimum. Jusqu'en 2018, elle représentait une douzaine de conteneurs tournant
+sur un seul serveur [Hetzner][][^hetzner]. J'ai migré mon courriel vers
+[Fastmail][] et mes zones DNS vers [Gandi][]. Il ne me restait plus que mon blog
+à héberger. À ce jour, ma petite infrastructure est composée de 4 machines
+virtuelles exécutant [NixOS][] sur *Hetzner Cloud* et [Vultr][], d'une poignée
+de zones DNS sur *Gandi* et [Route 53][], et de quelques distributions
+[Cloudfront][]. Elle est gérée par [CDK pour Terraform][CDK for Terraform]
+(CDKTF), tandis que les déploiements de *NixOS* sont gérés par [NixOps][].
+
+Dans cet article, je présente brièvement *Terraform*, *CDKTF* et l'écosystème
+*Nix*. J'explique également comment utiliser *Nix* pour accéder à ces outils
+dans votre shell afin de les utiliser rapidement.
+
+[^hetzner]: C'était un AMD Athlon 64 X2 5600+ avec 2 Go de RAM et 2 disques de
+    400 Go en RAID logiciel. Je payais quelque chose autour de 59 € par mois
+    pour cela. Si c'était une bonne affaire en 2008, en 2018, ce n'était plus
+    rentable. Il fonctionnait sous Debian Wheezy avec [Linux-VServer][] pour
+    l'isolation, tous deux dépassés en 2018.
+
+[TOC]
+
+# CDKTF : infrastructure en tant que code
+
+[Terraform][] est un outil d'« infrastructure en tant que code ». Vous pouvez
+définir votre infrastructure en déclarant des ressources avec le [langage
+HCL][HCL language]. Ce dernier possède quelques fonctionnalités supplémentaires,
+comme des boucles permettant de déclarer plusieurs ressources à partir d'une
+liste, des fonctions intégrées que vous pouvez appeler dans les expressions et
+l'expansion de variables dans les chaînes de caractères. *Terraform* s'appuie
+sur un large [ensemble de fournisseurs][large set of providers] pour gérer les
+ressources.
+
+## Gérer des serveurs
+
+Voici un court exemple utilisant le [fournisseur pour Hetzner Cloud][Hetzner
+Cloud provider] pour créer une machine virtuelle :
+
+```terraform
+variable "hcloud_token" {
+  sensitive = true
+}
+provider "hcloud" {
+  token = var.hcloud_token
+}
+
+resource "hcloud_server" "web03" {
+  name = "web03"
+  server_type = "cpx11"
+  image = "debian-11"
+  datacenter = "nbg1-dc3"
+}
+
+resource "hcloud_rdns" "rdns4-web03" {
+  server_id = hcloud_server.web03.id
+  ip_address = hcloud_server.web03.ipv4_address
+  dns_ptr = "web03.luffy.cx"
+}
+
+resource "hcloud_rdns" "rdns6-web03" {
+  server_id = hcloud_server.web03.id
+  ip_address = hcloud_server.web03.ipv6_address
+  dns_ptr = "web03.luffy.cx"
+}
+```
+
+L'expressivité de _HCL_ est assez limitée et je trouve qu'un langage généraliste
+est plus pratique pour décrire les ressources. C'est là qu'intervient _CDK pour
+Terraform_ : vous pouvez gérer votre infrastructure à l'aide de votre langage de
+programmation préféré, notamment TypeScript, Go et Python. Voici l'exemple
+précédent utilisant _CDKTF_ et TypeScript :
+
+```typescript
+import { App, TerraformStack, Fn } from "cdktf";
+import { HcloudProvider } from "./.gen/providers/hcloud/provider";
+import * as hcloud from "./.gen/providers/hcloud";
+
+class MyStack extends TerraformStack {
+  constructor(scope: Construct, name: string) {
+    super(scope, name);
+
+    const hcloudToken = new TerraformVariable(this, "hcloudToken", {
+      type: "string",
+      sensitive: true,
+    });
+    const hcloudProvider = new HcloudProvider(this, "hcloud", {
+      token: hcloudToken.value,
+    });
+    
+    const web03 = new hcloud.server.Server(this, "web03", {
+      name: "web03",
+      serverType: "cpx11",
+      image: "debian-11",
+      datacenter: "nbg1-dc3",
+      provider: hcloudProvider,
+    });
+    new hcloud.rdns.Rdns(this, "rdns4-web03", {
+      serverId: Fn.tonumber(web03.id),
+      ipAddress: web03.ipv4Address,
+      dnsPtr: "web03.luffy.cx",
+      provider: hcloudProvider,
+    });
+    new hcloud.rdns.Rdns(this, "rdns6-web03", {
+      serverId: Fn.tonumber(web03.id),
+      ipAddress: web03.ipv6Address,
+      dnsPtr: "web03.luffy.cx",
+      provider: hcloudProvider,
+    });
+  }
+}
+
+const app = new App();
+new MyStack(app, "cdktf-take1");
+app.synth();
+```
+
+La commande de `cdktf synth` génère un fichier de configuration pour
+_Terraform_, `terraform plan` prévisualise les changements et `terraform apply`
+les applique. Maintenant que vous disposez d'un langage généraliste, vous pouvez
+utiliser des fonctions.
+
+## Gérer des enregistrements DNS
+
+Si l'utilisation de _CDKTF_ pour 4 serveurs web peut sembler un peu exagérée, il
+en va tout autrement lorsqu'il s'agit de gérer quelques zones DNS. Avec
+[OctoDNS][], qui utilise JavaScript comme langage, j'ai pu définir la zone
+`bernat.ch` avec ce bout de code :
+
+```js
+D("bernat.ch", REG_NONE, DnsProvider(DNS_BIND, 0), DnsProvider(DNS_GANDI),
+  DefaultTTL('2h'),
+  FastMailMX('bernat.ch', {subdomains: ['vincent']}),
+  WebServers('@'),
+  WebServers('vincent');
+```
+
+Cela produit 38 enregistrements. Avec _CDKTF_, j'écris :
+
+```ts
+new Route53Zone(this, "bernat.ch", providers.aws)
+  .sign(dnsCMK)
+  .registrar(providers.gandiVB)
+  .www("@", servers)
+  .www("vincent", servers)
+  .www("media", servers)
+  .fastmailMX(["vincent"]);
+```
+
+Toute la magie est située dans les fonctions appelées. Vous pouvez regarder le
+fichier [dns.ts][] dans le dépôt [cdktf-take1][] pour comprendre comment cela
+fonctionne. Rapidement :
+
+- `Route53Zone()` crée une zone sur *Route 53*,
+- `sign()` signe la zone avec une clef maître,
+- `registrar()` inscrit la zone auprès du registre de domaines et configure DNSSEC,
+- `www()` crée les enregistrements `A` et `AAAA` pour les serveurs web,
+- `fastmailMX()` crée les enregistrements `MX` et d'autres enregistrements liés
+  pour configurer *Fastmail* en tant que fournisseur de courriel.
+
+Voici le contenu de la fonction `fastmailMX()`. Elle génère quelques
+enregistrements et retourne la zone en cours pour faciliter le chaînage :
+
+```ts
+fastmailMX(subdomains?: string[]) {
+  (subdomains ?? [])
+    .concat(["@", "*"])
+    .forEach((subdomain) =>
+      this.MX(subdomain, [
+        "10 in1-smtp.messagingengine.com.",
+        "20 in2-smtp.messagingengine.com.",
+      ])
+    );
+  this.TXT("@", "v=spf1 include:spf.messagingengine.com ~all");
+  ["mesmtp", "fm1", "fm2", "fm3"].forEach((dk) =>
+    this.CNAME(`${dk}._domainkey`, `${dk}.${this.name}.dkim.fmhosted.com.`)
+  );
+  this.TXT("_dmarc", "v=DMARC1; p=none; sp=none");
+  return this;
+}
+```
+
+Je vous encourage à parcourir le [dépôt][cdktf-take1] pour plus de détails !
+
+## À propos de Pulumi
+
+Ma première tentative autour de _Terraform_ a été d'utiliser [Pulumi][]. Vous
+pouvez trouver cette tentative sur [GitHub][pulumi-github]. C'est assez
+similaire à ce que je fais actuellement avec _CDKTF_. La principale différence
+est que j'utilise Python au lieu de TypeScript[^python] car ce dernier ne
+m'était pas familier à l'époque.
+
+[^python]: Je n'ai pas non plus utilisé Python car le support de *Poetry* dans
+    *Nix* était [cassé][broken] quand j'ai commencé à essayer d'utiliser
+    _CDKTF_.
+
+_Pulumi_ est antérieur à _CDKTF_ et il utilise une approche légèrement
+différente. _CDKTF_ génère une configuration pour _Terraform_ (au format JSON au
+lieu de HCL), laissant la planification, la gestion des états et le déploiement
+à ce dernier. Il est donc lié aux limites de ce qui peut être exprimé par
+_Terraform_, notamment lorsque vous devez transformer des données obtenues d'une
+ressource à une autre[^transform]. _Pulumi_ a besoin de fournisseurs spécifiques
+pour chaque ressource. De nombreux fournisseurs encapsulent des fournisseurs
+_Terraform_.
+
+[^transform]: *Pulumi* peut [appliquer des fonctions arbitraires][apply
+    arbitrary functions] à l'aide de `apply()`. Cela permet de transformer les
+    données qui ne sont pas connues lors de l'étape de planification.
+    *Terraform* a des [fonctions][tf functions] pour un usage similaire mais
+    elles sont plus limitées.
+
+Bien que _Pulumi_ offre une bonne expérience utilisateur, je suis passé à
+_CDKTF_ car écrire des fournisseurs pour _Pulumi_ est une corvée. _CDKTF_ ne
+nécessite pas de passer par cette étape. En dehors des grands acteurs (AWS,
+Azure et Google Cloud), l'existence, la qualité et la fraîcheur des fournisseurs
+_Pulumi_ sont inégales. La plupart des fournisseurs s'appuient sur un
+fournisseur _Terraform_ et il se peut qu'ils soient en retard de quelques
+versions, qu'il leur manque quelques ressources ou qu'ils présentent des bogues
+qui leur sont propres.
+
+Lorsqu'un fournisseur n'existe pas, vous pouvez en écrire un à l'aide de la
+bibliothèque [pulumi-terraform-bridge][]. Le projet Pulumi fournit un
+[modèle][boilerplate] à cet effet. J'ai eu une mauvaise expérience avec celui-ci
+lors de l'écriture de fournisseurs pour [Gandi][provider-gandi] et
+[Vultr][provider-vultr] : le `Makefile` [installe automatiquement
+Pulumi][pulumi-pr51] en utilisant `curl | sh` et [ne fonctionne pas avec
+`/bin/sh`][pulumi-pr52]. Il y a un manque d'intérêt pour les contributions
+communautaires[^maint] ou même pour [les fournisseurs pour les acteurs
+tiers][providers for smaller players].
+
+[^maint]: Les deux modifications mentionnées ne sont pas encore fusionnées. La
+    seconde est remplacée par la [PR #61][pulumi-pr61], soumise deux mois plus
+    tard, qui impose l'utilisation de `/bin/bash`. J'ai également soumis la
+    [PR #56][pulumi-pr56], qui a été fusionnée 4 mois plus tard et rapidement
+    annulée sans explication.
+
+# NixOS & NixOps
+
+[Nix][nix-lang] est un langage de programmation purement fonctionnel.
+[Nix][nix-tool] est aussi le nom du gestionnaire de paquets qui est construit
+au-dessus du langage _Nix_. Il permet aux utilisateurs d'installer des paquets
+de manière déclarative. [nixpkgs][] est un dépôt de paquets. Vous pouvez
+[installer _Nix_][nix-install] au-dessus d'une distribution Linux ordinaire. Si
+vous voulez plus de détails, une bonne ressource est le [site
+officiel][nix-web], notamment la [section « Apprendre »][learn section]. La
+courbe d'apprentissage est rude, mais la récompense est grande.
+
+## NixOS : distribution Linux déclarative
+
+[NixOS][] est une distribution Linux construite au-dessus du gestionnaire de
+paquets _Nix_. Voici un bout de configuration pour ajouter quelques paquets :
+
+```nix
+environment.systemPackages = with pkgs;
+  [
+    bat
+    htop
+    liboping
+    mg
+    mtr
+    ncdu
+    tmux
+  ];
+```
+
+Il est possible de modifier une dérivation[^derivation] existante pour utiliser une version
+différente, activer une fonctionnalité spécifique ou appliquer un correctif.
+Voici comment j'active et configure _Nginx_ pour désactiver le module `stream`,
+ajouter le module de [compression Brotli][Brotli compression module] et ajouter
+le module d'[anonymisation des adresses IP][IP address anonymizer module]. De
+plus, au lieu d'utiliser _OpenSSL 3_, je continue à utiliser _OpenSSL
+1.1_[^openssl].
+
+[^derivation]: Grosso modo, une dérivation est un synonyme pour paquet dans
+    l'écosystème *Nix*.
+
+```nix
+services.nginx = {
+  enable = true;
+
+  package = (pkgs.nginxStable.override {
+    withStream = false;
+    modules = with pkgs.nginxModules; [
+      brotli
+      ipscrub
+    ];
+    openssl = pkgs.openssl_1_1;
+  });
+```
+
+Si vous avez besoin d'ajouter certaines modifications, c'est également possible.
+À titre d'exemple, voici comment j'ai corrigé en avance les [failles de sécurité
+découvertes en 2019 dans *Nginx*][dos-nginx] en attendant que cela soit corrigé
+dans *NixOS*[^security] :
+
+```nix
+services.nginx.package = pkgs.nginxStable.overrideAttrs (old: {
+  patches = oldAttrs.patches ++ [
+    # HTTP/2: reject zero length headers with PROTOCOL_ERROR.
+    (pkgs.fetchpatch {
+      url = https://github.com/nginx/nginx/commit/dbdd[…].patch;
+      sha256 = "a48190[…]";
+    })
+    # HTTP/2: limited number of DATA frames.
+    (pkgs.fetchpatch {
+      url = https://github.com/nginx/nginx/commit/94c5[…].patch;
+      sha256 = "af591a[…]";
+    })
+    #  HTTP/2: limited number of PRIORITY frames.
+    (pkgs.fetchpatch {
+      url = https://github.com/nginx/nginx/commit/39bb[…].patch;
+      sha256 = "1ad8fe[…]";
+    })
+  ];
+});
+```
+
+[^openssl]: *OpenSSL 3* a de nombreux [problèmes de performance][performance regressions].
+
+[^security]: _NixOS_ peut être un peu lent à intégrer les correctifs car il est
+    nécessaire de reconstruire une partie du cache binaire. Dans ce cas précis,
+    cela a été rapide : la vulnérabilité et les correctifs ont été publiés le 13
+    août 2019 et disponibles dans NixOS le 15 août. À titre de comparaison,
+    Debian n'a publié la version corrigée que le 22 août, ce qui est
+    inhabituellement tardif.
+
+Si cela vous intéresse, jetez un coup d'œil à ma configuration relativement
+réduite : [`common.nix`][common.nix] contient la configuration à appliquer sur
+tous les serveurs (SSH, utilisateurs, paquets communs), [`web.nix`][web.nix]
+contient la configuration pour les serveurs web et [`isso.nix`][isso.nix]
+exécute [Isso][] dans un conteneur _systemd_.
+
+## NixOps : outil de déploiement pour NixOS
+
+Sur un seul nœud, la configuration de _NixOS_ se trouve dans le fichier
+`/etc/nixos/configuration.nix`. Après l'avoir modifiée, vous devez exécuter la
+commande `nixos-rebuild switch`. _Nix_ va chercher toutes les dépendances
+possibles dans le cache binaire et construit le reste. Il crée une nouvelle
+entrée dans le menu du chargeur de démarrage et active la nouvelle
+configuration.
+
+Pour gérer plusieurs nœuds, il existe plusieurs options, dont [NixOps][],
+[deploy-rs][], [Colmena][] et [morph][]. Je ne les connais pas toutes, mais de
+mon point de vue, les différences ne sont pas si importantes. Il est également
+possible de construire un tel outil soi-même car _Nix_ fournit les blocs de
+construction les plus importants : `nix build` et `nix copy`. _NixOps_ est l'un
+des premiers outils publiés mais je vous encourage à explorer les alternatives.
+
+La configuration de *NixOps* est écrite avec la langage *Nix*. Voici une
+configuration simplifiée pour déployer `znc01.luffy.cx`, `web01.luffy.cx` et
+`web02.luffy.cx`, à l'aide des fonctions `server` et `web` :
+
+```nix
+let
+  server = hardware: name: imports: {
+    deployment.targetHost = "${name}.luffy.cx";
+    networking.hostName = name;
+    networking.domain = "luffy.cx";
+    imports = [ (./hardware/. + "/${hardware}.nix") ] ++ imports;
+  };
+  web = hardware: idx: imports:
+    server hardware "web${lib.fixedWidthNumber 2 idx}" ([ ./web.nix ] ++ imports);
+in {
+  network.description = "Luffy infrastructure";
+  network.enableRollback = true;
+  defaults = import ./common.nix;
+  znc01 = server "exoscale" [ ./znc.nix ];
+  web01 = web "hetzner" 1 [ ./isso.nix ];
+  web02 = web "hetzner" 2 [];
+}
+```
+
+# Connecter le tout avec Nix
+
+L'écosystème _Nix_ est une solution unifiée aux différents problèmes liés à la
+gestion des logiciels et des configurations. Les [environnements de
+développement déclaratifs et reproductibles][declarative and reproducible
+developer environments] en constituent une caractéristique très intéressante.
+Cela ressemble aux environnements virtuels de Python, mais ils ne sont pas
+spécifiques à un langage.
+
+## Courte introduction aux Nix « flakes »
+
+J'utilise les « [flakes][] », une nouvelle fonctionnalité de _Nix_ qui améliore
+la reproductibilité en fixant toutes les dépendances et en isolant le processus
+de construction. Bien que cette fonctionnalité soit marquée comme
+expérimentale[^experimental], elle est de plus en plus populaire et vous pouvez
+trouver `flake.nix` et `flake.lock` à la racine de certains dépôts.
+
+[^experimental]: Comme les _flakes_ sont expérimentaux, de nombreuses
+    documentations ne les utilisent pas et c'est un aspect supplémentaire à
+    apprendre.
+
+A titre d'exemple, voici le contenu du `flake.nix` livré avec [Snimpy][], un
+outil SNMP interactif pour Python reposant sur [libsmi][], une bibliothèque C :
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
+  outputs = { self, ... }@inputs:
+    inputs.flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = inputs.nixpkgs.legacyPackages."${system}";
+      in
+      {
+        # nix build
+        packages.default = pkgs.python3Packages.buildPythonPackage {
+          name = "snimpy";
+          src = self;
+          preConfigure = ''echo "1.0.0-0-000000000000" > version.txt'';
+          checkPhase = "pytest";
+          checkInputs = with pkgs.python3Packages; [ pytest mock coverage ];
+          propagatedBuildInputs = with pkgs.python3Packages; [ cffi pysnmp ipython ];
+          buildInputs = [ pkgs.libsmi ];
+        };
+        # nix run + nix shell
+        apps.default = { 
+          type = "app";
+          program = "${self.packages."${system}".default}/bin/snimpy";
+        };
+        # nix develop
+        devShells.default = pkgs.mkShell {
+          name = "snimpy-dev";
+          buildInputs = [
+            self.packages."${system}".default.inputDerivation
+            pkgs.python3Packages.ipython
+          ];
+        };
+      });
+}
+```
+
+Si *Nix* est installé sur votre système :
+
+- `nix run github:vincentbernat/snimpy` exécute *Snimpy*,
+- `nix shell github:vincentbernat/snimpy` fournit un shell avec *Snimpy* prêt à être utilisé,
+- `nix build github:vincentbernat/snimpy` construit le paquet Python,
+- `nix develop .` fournit un shell pour développer autour de *Snimpy* depuis un
+  clône du dépôt[^checkout].
+
+[^checkout]: Comme dans les autres exemples, il est possible de remplacer `.`
+    par `github:vincentbernat/snimpy`. Cependant, obtenir les dépendances de
+    *Snimpy* sans son code source a peu d'intérêt.
+
+Pour plus d'informations sur les *flakes*, regardez le [tutoriel de
+Tweag][nix-flakes].
+
+## Nix et CDKTF
+
+A la racine du [dépôt que j'utilise pour CDKTF][cdktf-take1], il y a un fichier
+[`flake.nix`][cdktf-take1-flake.nix] pour configurer un shell avec _Terraform_
+et _CDKTF_ installés et avec les variables d'environnement nécessaires pour
+automatiser mon infrastructure.
+
+Terraform est déjà présent dans _nixpkgs_, mais je dois appliquer un patch sur
+le fournisseur _Gandi_. Ce n'est pas un problème avec Nix !
+
+```nix
+terraform = pkgs.terraform.withPlugins (p: [
+  p.aws
+  p.hcloud
+  p.vultr
+  (p.gandi.overrideAttrs
+    (old: {
+      src = pkgs.fetchFromGitHub {
+        owner = "vincentbernat";
+        repo = "terraform-provider-gandi";
+        rev = "feature/livedns-key";
+        hash = "sha256-V16BIjo5/rloQ1xTQrdd0snoq1OPuDh3fQNW7kiv/kQ=";
+      };
+    }))
+]);
+```
+
+*CDKTF* est écrit en TypeScript. J'ai un fichier
+[`package.json`][cdktf-take1-package.json] avec toutes les dépendances
+nécessaires, y compris celles pour utiliser TypeScript comme langage cible :
+
+```json
+{
+  "name": "cdktf-take1",
+  "version": "1.0.0",
+  "main": "main.js",
+  "types": "main.ts",
+  "private": true,
+  "dependencies": {
+    "@types/node": "^14.18.30",
+    "cdktf": "^0.13.3",
+    "cdktf-cli": "^0.13.3",
+    "constructs": "^10.1.151",
+    "eslint": "^8.27.0",
+    "prettier": "^2.7.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^3.9.10",
+    "typescript-language-server": "^2.1.0"
+  }
+}
+```
+
+J'utilise [Yarn][] pour obtenir un fichier [`yarn.lock`][cdktf-take1-yarn.lock]
+qui peut ensuite être utilisé directement pour construire la dérivation
+contenant toutes les dépendances :
+
+```nix
+nodeEnv = pkgs.mkYarnModules {
+  pname = "cdktf-take1-js-modules";
+  version = "1.0.0";
+  packageJSON = ./package.json;
+  yarnLock = ./yarn.lock;
+};
+```
+
+L'étape suivant est de générer les fournisseurs *CDKTF* à partir des
+fournisseurs _Terraform_ et de les inclure dans une dérivation :
+
+```nix
+cdktfProviders = pkgs.stdenvNoCC.mkDerivation {
+  name = "cdktf-providers";
+  nativeBuildInputs = [
+    pkgs.nodejs
+    terraform
+  ];
+  src = nix-filter {
+    root = ./.;
+    include = [ ./cdktf.json ./tsconfig.json ];
+  };
+  buildPhase = ''
+    export HOME=$(mktemp -d)
+    export CHECKPOINT_DISABLE=1
+    export DISABLE_VERSION_CHECK=1
+    export PATH=${nodeEnv}/node_modules/.bin:$PATH
+    ln -nsf ${nodeEnv}/node_modules node_modules
+
+    # Build all providers we have in terraform
+    for provider in $(cd ${terraform}/libexec/terraform-providers; echo */*/*/*); do
+      version=''${provider##*/}
+      provider=''${provider%/*}
+      echo "Build $provider@$version"
+      cdktf provider add --force-local $provider@$version | cat
+    done
+    echo "Compile TS → JS"
+    tsc
+  '';
+  installPhase = ''
+    mv .gen $out
+    ln -nsf ${nodeEnv}/node_modules $out/node_modules
+  '';
+};
+```
+
+Enfin, nous définissons l'environnement de développement :
+
+```nix
+devShells.default = pkgs.mkShell {
+  name = "cdktf-take1";
+  buildInputs = [
+    pkgs.nodejs
+    pkgs.yarn
+    terraform
+  ];
+  shellHook = ''
+    # No telemetry
+    export CHECKPOINT_DISABLE=1
+    # No autoinstall of plugins
+    export CDKTF_DISABLE_PLUGIN_CACHE_ENV=1
+    # Do not check version
+    export DISABLE_VERSION_CHECK=1
+    # Access to node modules
+    export PATH=$PWD/node_modules/.bin:$PATH
+    ln -nsf ${nodeEnv}/node_modules node_modules
+    ln -nsf ${cdktfProviders} .gen
+
+    # Credentials
+    for p in \
+      njf.nznmba.pbz/Nqzvavfgengbe \
+      urgmare.pbz/ivaprag@oreang.pu \
+      ihyge.pbz/ihyge@ivaprag.oreang.pu; do
+        eval $(pass show $(echo $p | tr 'A-Za-z' 'N-ZA-Mn-za-m') | grep '^export')
+    done
+    eval $(pass show personal/cdktf/secrets | grep '^export')
+    export TF_VAR_hcloudToken="$HCLOUD_TOKEN"
+    export TF_VAR_vultrApiKey="$VULTR_API_KEY"
+    unset VULTR_API_KEY HCLOUD_TOKEN
+  '';
+};
+```
+
+Les dérivations listées dans `buildInputs` sont disponibles dans le shell
+fourni. Le contenu de `shellHook` est exécuté lors du démarrage du shell. Il
+établit des liens symboliques pour rendre disponible l'environnement JavaScript
+construit à une étape précédente, ainsi que les fournisseurs _CDKTF_ générés. Il
+exporte également toutes les informations d'identification[^obfuscated].
+
+[^obfuscated]: J'utilise le gestionnaire de mots de passe [pass][]. Le nom des
+    mots de passe sont brouillés uniquement pour éviter les courriers
+    indésirables.
+
+J'utilise également [direnv][] avec un fichier [`.envrc`][cdktf-take1-envrc]
+pour passer automatiquement dans l'environnement de développement. Cela permet
+également à ce dernier d'être disponible depuis _Emacs_, notamment lors de
+l'utilisation de [lsp-mode][] pour obtenir les complétions. `nix develop .`
+permet aussi d'activer manuellement l'environnement.
+
+J'utilise les commandes suivantes pour déployer[^cdktf-cli] :
+
+```console
+$ cdktf synth
+$ cd cdktf.out/stacks/cdktf-take1
+$ terraform plan --out plan
+$ terraform apply plan
+$ terraform output -json > ~-automation/nixops-take1/cdktf.json
+```
+
+[^cdktf-cli]: La commande `cdktf` sait appeler les commandes `terraform`, mais
+    je préfère les utiliser directement car elles sont plus flexibles.
+
+La dernière commande produit un fichier JSON contenant les données nécessaires
+pour finir le déploiement avec _NixOps_.
+
+## NixOps
+
+Le [fichier JSON][cdktf-take1-cdktf.json] exporté par *Terraform* contient la
+liste des serveurs avec quelques attributs :
+
+```json
+{
+  "hardware": "hetzner",
+  "ipv4Address": "5.161.44.145",
+  "ipv6Address": "2a01:4ff:f0:b91::1",
+  "name": "web05.luffy.cx",
+  "tags": [
+    "web",
+    "continent:NA",
+    "continent:SA"
+  ]
+}
+```
+
+Dans le fichier [`network.nix`][nixops-take1-network.nix], cette liste est
+importée et transformée en un ensemble d'attributs décrivant les serveurs. Une
+version simplifiée ressemble à cela :
+
+```nix
+let
+  lib = inputs.nixpkgs.lib;
+  shortName = name: builtins.elemAt (lib.splitString "." name) 0;
+  domainName = name: lib.concatStringsSep "." (builtins.tail (lib.splitString "." name));
+  server = hardware: name: imports: {
+    networking = {
+      hostName = shortName name;
+      domain = domainName name;
+    };
+    deployment.targetHost = name;
+    imports = [ (./hardware/. + "/${hardware}.nix") ] ++ imports;
+  };
+  cdktf-servers-json = (lib.importJSON ./cdktf.json).servers.value;
+  cdktf-servers = map
+    (s:
+      let
+        tags-maybe-import = map (t: ./. + "/${t}.nix") s.tags;
+        tags-import = builtins.filter (t: builtins.pathExists t) tags-maybe-import;
+      in
+      {
+        name = shortName s.name;
+        value = server s.hardware s.name tags-import;
+      })
+    cdktf-servers-json;
+in
+{
+  // […]
+} // builtins.listToAttrs cdktf-servers
+```
+
+Pour `web05`, on obtient ceci :
+
+```nix
+web05 = {
+  networking = {
+    hostName = "web05";
+    domainName = "luffy.cx";
+  };
+  deployment.targetHost = "web05.luffy.cx";
+  imports = [ ./hardware/hetzner.nix ./web.nix ];
+};
+```
+
+Comme pour *CDKTF*, à la racine du [dépôt que j'utilise pour
+NixOps][nixops-take1], il y a un fichier [`flake.nix`][nixops-take1-flake.nix]
+pour fournir un shell avec *NixOps* configuré. Comme *NixOps* ne supporte pas
+les déploiements progessifs, j'utilise généralement ces commandes pour déployer
+sur un unique serveur[^disable] :
+
+```console
+$ nix flake update
+$ nixops deploy --include=web04
+$ ./tests web04.luffy.cx
+```
+
+[^disable]: Si le changement est risqué, je [désactive le serveur][disable the
+    server] avec _CDKTF_. Cela le retire des enregistrements DNS.
+
+Si les tests se déroulent sans soucis, je déploie les autres nœuds un par un
+avec la commande suivante :
+
+```console
+$ (set -e; for h in web{03..06}; do nixops deploy --include=$h; done)
+```
+
+La commande `nixops deploy` déploie tous les serveurs en parallèle et peut donc
+provoquer une panne si tous les serveurs *Nginx* sont indisponibles au même
+moment.
+
+---
+
+Cet article est en chantier depuis trois ans. Le contenu a été mis à jour et
+affiné au fur et à mesure de mes expérimentations. Il y a encore beaucoup à
+explorer[^todo], mais j'estime que le contenu est désormais suffisant pour être
+publié ! 🎄
+
+[^todo]: Je voudrais remplacer *NixOps* avec une alternative gérant les
+    déploiements progressifs et les tests. Je voudrais aussi passer à [Nomad][]
+    ou *Kubernetes* pour déployer les applications.
+
+*[HCL]: HashiCorp Configuration Language
+*[CDKTF]: Cloud Development Kit for Terraform
+[fastmail]: https://www.fastmail.com/
+[hetzner]: https://www.hetzner.com/ "Hetzner: dedicated servers, cloud, storage & hosting"
+[linux-vserver]: http://linux-vserver.org/Welcome_to_Linux-VServer.org "Linux-VServer"
+[gandi]: https://www.gandi.net/en "Gandi: Domain Names, Web Hosting, Mail"
+[nixos]: https://nixos.org/ "Nix: reproducible builds and deployments"
+[octodns]: https://github.com/octodns/octodns "OctoDNS: tools for managing DNS across multiple providers"
+[pulumi]: https://www.pulumi.com/ "Pulumi: universal infrastructure as code"
+[route 53]: https://aws.amazon.com/route53/ "Amazon AWS: Route 53"
+[cloudfront]: https://aws.amazon.com/cloudfront/ "Amazon AWS: CloudFront"
+[cdk for terraform]: https://developer.hashicorp.com/terraform/cdktf "Cloud Development Kit for Terraform"
+[nixops]: https://github.com/NixOS/nixops "NixOps:  tool for deploying to NixOS machines in a network or cloud"
+[pulumi-github]: https://github.com/vincentbernat/pulumi-take1
+[apply arbitrary functions]: https://www.pulumi.com/docs/intro/concepts/inputs-outputs/#apply
+[tf functions]: https://developer.hashicorp.com/terraform/language/functions
+[pulumi-terraform-bridge]: https://github.com/pulumi/pulumi-terraform-bridge
+[boilerplate]: https://github.com/pulumi/pulumi-tf-provider-boilerplate
+[provider-gandi]: https://github.com/vincentbernat/pulumi-gandi-old "Deprecated Pulumi provider for Gandi"
+[provider-vultr]: https://github.com/vincentbernat/pulumi-vultr "Pulumi provider for Vultr"
+[pulumi-pr51]: https://github.com/pulumi/pulumi-tf-provider-boilerplate/pull/51 "PR #51: Do not install pulumi automatically"
+[pulumi-pr52]: https://github.com/pulumi/pulumi-tf-provider-boilerplate/pull/52 "PR #52: Fix Makefile to work with a POSIX shell"
+[pulumi-pr61]: https://github.com/pulumi/pulumi-tf-provider-boilerplate/pull/61 "PR #61: Explicitly specify bash as shell in Makefile"
+[pulumi-pr56]: https://github.com/pulumi/pulumi-tf-provider-boilerplate/pull/56 "PR #56: Use go:embed instead of go generate for schema"
+[pulumi-pr66]: https://github.com/pulumi/pulumi-tf-provider-boilerplate/pull/66 "PR #66: Revert “Use go:embed instead of go generate for schema”"
+[providers for smaller players]: https://twitter.com/briggsl/status/1473009153983623176
+[nix-lang]: https://nixos.org/manual/nix/stable/language/index.html "Nix, the language"
+[nix-tool]: https://nixos.org/manual/nix/stable/introduction.html "Nix, the package manager"
+[nixpkgs]: https://github.com/NixOS/nixpkgs
+[ChatGPT]: https://chat.openai.com/chat
+[nix-install]: https://nixos.org/manual/nix/stable/installation/multi-user.html
+[nix-web]: https://nixos.org/
+[nix.dev]: https://nix.dev/
+[learn section]: https://nixos.org/learn.html
+[nix-flakes]: https://www.tweag.io/blog/2020-05-25-flakes/ "Nix Flakes, Part 1: An introduction and tutorial"
+[declarative and reproducible developer environments]: https://nixos.org/guides/declarative-and-reproducible-developer-environments.html
+[terraform]: https://www.terraform.io/
+[hcl language]: https://developer.hashicorp.com/terraform/language/modules
+[large set of providers]: https://registry.terraform.io/browse/providers
+[scaleway provider]: https://registry.terraform.io/providers/scaleway/scaleway/latest/docs
+[puppet language]: https://puppet.com/docs/puppet/7/puppet_language.html
+[hetzner cloud provider]: https://registry.terraform.io/providers/hetznercloud/hcloud/latest/docs
+[dns.ts]: https://github.com/vincentbernat/cdktf-take1/blob/main/luffy/dns.ts
+[cdktf-take1]: https://github.com/vincentbernat/cdktf-take1
+[brotli compression module]: https://github.com/google/ngx_brotli
+[ip address anonymizer module]: https://github.com/masonicboom/ipscrub
+[performance regressions]: https://github.com/openssl/openssl/issues/17627#issuecomment-1060123659
+[dos-nginx]: https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-002.md 
+[isso]: [[en/blog/2020-docker-nixos-isso.html]] "Running Isso on NixOS in a Docker container"
+[web.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/web.nix
+[common.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/common.nix
+[isso.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/isso.nix
+[deploy-rs]: https://github.com/serokell/deploy-rs "simple multi-profile Nix flake deploy tool"
+[morph]: https://github.com/DBCDK/morph/ "NixOS deployment tool"
+[colmena]: https://github.com/zhaofengli/colmena "Simple, stateless NixOS deployment tool"
+[akvorado]: [[en/blog/2022-akvorado-flow-collector.html]] "Akvorado: a flow collector, enricher, and visualizer"
+[snimpy]: [[en/blog/2013-snimpy.html]] "Snimpy: SNMP & Python"
+[cdktf-take1-flake.nix]: https://github.com/vincentbernat/cdktf-take1/blob/main/flake.nix
+[cdktf-take1-package.json]: https://github.com/vincentbernat/cdktf-take1/blob/main/package.json 
+[cdktf-take1-yarn.lock]: https://github.com/vincentbernat/cdktf-take1/blob/main/yarn.lock
+[cdktf-take1-envrc]: https://github.com/vincentbernat/cdktf-take1/blob/main/.envrc
+[yarn]: https://yarnpkg.com/ "Yarn package manager"
+[pass]: https://www.passwordstore.org/ "The standard Unix password manager"
+[direnv]: https://github.com/direnv/direnv/ "direnv: unclutter your .profile"
+[lsp-mode]: https://github.com/emacs-lsp/lsp-mode/ "Language Server Protocol Support for Emacs"
+[nixops-take1]: https://github.com/vincentbernat/nixops-take1
+[nixops-take1-flake.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/flake.nix
+[nixops-take1-network.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/network.nix
+[libsmi]: https://www.ibr.cs.tu-bs.de/projects/libsmi/ "libsmi: library to Access SMI MIB Information"
+[flakes]: https://nixos.wiki/wiki/Flakes "Flakes on NixOS wiki"
+[cdktf-take1-cdktf.json]: https://github.com/vincentbernat/nixops-take1/blob/master/cdktf.json
+[disable the server]: https://github.com/vincentbernat/cdktf-take1/commit/606e6fb657179408b163664dd74ff5ab38b28246
+[vultr]: https://www.vultr.com/ "Vultr.com: SSD VPS Servers, Cloud Servers and Cloud Hosting"
+[nomad]: https://www.nomadproject.io/ "Nomad: Orchestration Made Easy"
+[broken]: https://github.com/nix-community/poetry2nix/issues/750 "Issue #750: infinite recursion"
