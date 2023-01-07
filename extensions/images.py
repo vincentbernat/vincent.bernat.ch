@@ -220,7 +220,7 @@ class ImageFixerPlugin(Plugin):
                 box = pdf.pages[0].mediabox
                 # PDF physical sizes may be skewed, notably for
                 # slides. Assume width will be around 1000.
-                ratio = Fraction(Fraction(box.getWidth()), Fraction(box.getHeight()))
+                ratio = Fraction(Fraction(box.width), Fraction(box.height))
                 ratio = ratio.limit_denominator(100)
                 width = 1000 // ratio.numerator * ratio.numerator
                 height = 1000 // ratio.numerator * ratio.denominator
