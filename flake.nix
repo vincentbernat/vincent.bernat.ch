@@ -270,6 +270,10 @@
             openssl
             python3Packages.invoke
 
+            # Build support
+            yarn
+            poetry
+
             # Helper tools
             mp4v2 # video2hls
           ];
