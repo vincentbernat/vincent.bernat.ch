@@ -27,13 +27,13 @@
 </ul>
 {% endmacro %}
 
-{% macro tagfmt_plain(resource, tag, text) %}
+{% macro tagfmt_plain(resource, tag, text, disabled) %}
 {{ text[0]|upper }}{{ text[1:] }}
 {% endmacro %}
-{% macro tagfmt_link(resource, tag, text) %}
-{%- if tag != "outdated" %}<a href="{{ content_url(resource.meta.language + '/blog') }}#tag-{{ tag }}">{% endif -%}
+{% macro tagfmt_link(resource, tag, text, disabled) %}
+{%- if tag != "outdated" and not disabled %}<a href="{{ content_url(resource.meta.language + '/blog') }}#tag-{{ tag }}">{% endif -%}
 {{- text -}}
-{%- if tag != "outdated" %}</a>{% endif %}
+{%- if tag != "outdated" and not disabled %}</a>{% endif %}
 {% endmacro %}
 
 {# fmt is a function taking the subtag name as first argument and description as second argument. #}
@@ -45,7 +45,7 @@
     {%- set subtag = subtags[:loop.index]|join('-') -%}
     {{- fmt(resource, subtag,
             site.config.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e ~
-            site.config.tagger.tags[subtag].descr|e) -}}
+            site.config.tagger.tags[subtag].descr|e, not site.config.tagger.tags[subtag].order) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
 {%- endfilter -%}
@@ -55,8 +55,8 @@
 {% macro list_tags(lang) %}
 {% set ctx = resource %}
 {% set tags = [] %}
-{% for tag, resources in site.config.tagger.tags %}
-{% do tags.append((site.config.tagger.tags[tag].order or 0, tag)) %}
+{% for tag, resources in site.config.tagger.tags if site.config.tagger.tags[tag].order %}
+{% do tags.append((site.config.tagger.tags[tag].order, tag)) %}
 {% endfor %}
 <div class="toc lf-toc-tags"><ul>
 {% for tag in tags|sort if tag[1]|string != "outdated" %}
