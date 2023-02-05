@@ -10,6 +10,7 @@ import re
 import datetime
 import contextlib
 import urllib
+import urllib.request
 import binascii
 import base64
 import xml.etree.ElementTree as ET
@@ -87,8 +88,10 @@ def archive(c, lang="en", pause=2):
     ns = {"urlset": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     sitemap = f".final/{lang}/sitemap.xml"
     locs = ET.parse(sitemap).getroot().findall(".//urlset:loc", ns)
+    locs.reverse()
     for loc in locs:
         for url in loc.itertext():
+            print(f"Archive {url}...")
             request_url = f"https://web.archive.org/save/{url}"
             try:
                 with urllib.request.urlopen(request_url):
