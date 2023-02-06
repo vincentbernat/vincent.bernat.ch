@@ -118,7 +118,6 @@
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
               inherit (pkgs) libwebp libavif pngquant;
-              inherit (pkgs.nodePackages) svgo;
               svgoConfig = pkgs.writeText "svgo.config.js" ''
                 module.exports = {
                   plugins: [
@@ -126,7 +125,7 @@
                       name: 'preset-default',
                       params: {
                         overrides: {
-                          cleanupIds: false,
+                          cleanupIDs: false,
                           removeEmptyContainers: false,
                         }
                       }
@@ -147,7 +146,7 @@
                 for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
-                    | xargs -r0 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
+                    | xargs -r0 -P$(nproc) ${nodeEnv}/node_modules/.bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
                 # JPG→WebP
