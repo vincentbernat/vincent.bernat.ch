@@ -65,12 +65,7 @@ class GlyphsExtension(markdown.Extension):
             RegularGlyphsTreeprocessor(glyphs["regular"], "glyphs-regular.txt"),
             "_end",
         )
-        # Code blocks (before hilite, only code blocks are embedded in code)
-        md.treeprocessors.add(
-            "monospaceglyphs1",
-            MonospaceGlyphsTreeprocessor(glyphs["monospace"], "glyphs-monospace.txt"),
-            "<hilite",
-        )
+        # Code blocks are done in codehilite_lang
         # Inline code (after inline, only inline code is embedded in code)
         md.treeprocessors.add(
             "monospaceglyphs2",
