@@ -127,6 +127,7 @@
                       params: {
                         overrides: {
                           cleanupIds: false,
+                          removeEmptyContainers: false,
                         }
                       }
                     }
