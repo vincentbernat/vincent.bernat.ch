@@ -2,8 +2,9 @@
 """Extract glyphs used in code and regular blocks."""
 
 import sys
-import markdown
 import unicodedata
+import markdown
+from markdown.extensions import codehilite
 
 glyphs = {
     "monospace": set(
@@ -59,19 +60,28 @@ class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
 
 class GlyphsExtension(markdown.Extension):
     def extendMarkdown(self, md, md_globals):
+        md.registerExtension(self)
+
         # Regular glyphs (as late as possible)
         md.treeprocessors.add(
             "regularglyphs",
             RegularGlyphsTreeprocessor(glyphs["regular"], "glyphs-regular.txt"),
             "_end",
         )
-        # Code blocks are done in codehilite_lang
         # Inline code (after inline, only inline code is embedded in code)
         md.treeprocessors.add(
             "monospaceglyphs2",
             MonospaceGlyphsTreeprocessor(glyphs["monospace"], "glyphs-monospace.txt"),
             ">inline",
         )
+
+        previous = codehilite.highlight
+
+        def new(src, lexer, formatter):
+            glyphs["monospace"] |= set(glyph for glyph in src if ord(glyph) >= 0x20)
+            return previous(src, lexer, formatter)
+
+        codehilite.highlight = new
 
 
 def makeExtension(configs=None):
