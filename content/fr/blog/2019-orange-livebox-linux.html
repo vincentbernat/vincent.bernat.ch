@@ -20,6 +20,13 @@ Linux][instructions around a plain Linux box] sont souvent peu
 élégantes. J'expose ici ma propre variation. Je ne suis intéressé que
 par un accès IPv4/IPv6 : pas de téléphone, pas de télé.
 
+!!! "Mise à jour (02.2023)" Orange a [changé certaines options DHCP requises][].
+Les valeurs envoyées pour `rfc3118-authentication` et `dhcp6.auth` sont
+modifiées et il faut également envoyer `dhcp-client-identifier` et
+`dhcp6.client-id`. Cette page a été mise à jour en conséquence.
+
+[changé certaines options DHCP requises]: https://lafibre.info/remplacer-livebox/durcissement-du-controle-de-loption-9011-et-de-la-conformite-protocolaire/
+
 # Matériel
 
 Orange utilise [GPON][] pour son déploiement FTTH. Par conséquent, un
@@ -50,13 +57,12 @@ Livebox 4. Cependant, je n'ai pas pu me motiver pour le tester[^key].
 
 # Configuration IPv4
 
-Internet est disponible via le VLAN 832 et paramétré avec DHCPv4. La
-première étape consiste à configurer le client DHCP pour envoyer
-quelques informations supplémentaires, dont la chaîne
-d'authentification [RFC 3118][] : elle est construite à partir de
-l'identifiant de connexion alphanumérique préfixé par `fti/` et envoyé
-par courrier postal. Le fichier `/etc/dhcp/dhclient.conf` ressemble à
-ceci :
+Internet est disponible via le VLAN 832 et paramétré avec DHCPv4. La première
+étape consiste à configurer le client DHCP pour envoyer quelques informations
+supplémentaires, dont la chaîne d'authentification [RFC 3118][] : elle est
+construite à partir de l'identifiant de connexion alphanumérique préfixé par
+`fti/` et du mot de passe envoyés par courrier postal. Le fichier
+`/etc/dhcp/dhclient.conf` ressemble à ceci :
 
     option rfc3118-authentication code 90 = string;
     interface "internet" {
@@ -65,9 +71,10 @@ ceci :
       select-timeout 0;
       send vendor-class-identifier "sagem";
       send user-class "+FSVDSL_livebox.Internet.softathome.Livebox4";
-      # L'identifiant fti/xxxxxx est converti en hexadécimal avec :
-      #  echo -n 123456 | od -A n -t x1
-      send rfc3118-authentication 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
+      # Voir https://jsfiddle.net/kgersen/3mnsc6wy/ pour générer cette chaine.
+      send rfc3118-authentication 00:00:00:00:...;
+      # Indiquer l'adresse MAC de la Livebox
+      send dhcp-client-identifier 01:00:xx:xx:xx:xx:xx:xx;
       request subnet-mask, routers,
               domain-name-servers, domain-name,
               broadcast-address,
@@ -157,8 +164,9 @@ DHCPv6 de la configuration DHCPv4 :
       # […]
       send dhcp6.vendorclass 00:00:04:0e:00:05:73:61:67:65:6d;
       send dhcp6.userclass 00:2b:46:53:56:44:53:4c:5f:6c:69:76:65:62:6f:78:2e:49:6e:74:65:72:6e:65:74:2e:73:6f:66:74:61:74:68:6f:6d:65:2e:6c:69:76:65:62:6f:78:34;
-      send dhcp6.auth 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
-      also request dhcp6.auth, dhcp6.vendorclass, dhcp6.userclass;
+      send dhcp6.auth 00:00:00:00:...;
+      send dhcp6.client-id 00:03:00:01:xx:xx:xx:xx:xx:xx;
+      also request dhcp6.auth, dhcp6.vendor-opts;
     }
 
 Le script de configuration du pare-feu est modifié pour classifier les

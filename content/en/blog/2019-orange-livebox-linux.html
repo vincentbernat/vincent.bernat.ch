@@ -17,6 +17,13 @@ the box provided by Orange, the [instructions around a plain Linux
 box][] are kludgy. I am exposing here my own variation. I am only
 interested in getting IPv4/IPv6 access: no VoIP, no TV.
 
+!!! "Update (2023-02)" Orange has [updated the DHCP options required][]. The
+value sent for `rfc3118-authentication` and `dhcp6.auth` are modified. We also
+need to send `dhcp-client-identifier` and `dhcp6.client-id`. This page has been
+updated accordingly.
+
+[updated the DHCP options required]: https://lafibre.info/remplacer-livebox/durcissement-du-controle-de-loption-9011-et-de-la-conformite-protocolaire/
+
 # Hardware
 
 Orange is using [GPON][] for its FTTH deployment. Therefore, an ONT is
@@ -44,11 +51,11 @@ the motivation to test it.[^key]
 
 # IPv4 configuration
 
-Internet is provided over VLAN 832 and configured with DHCPv4. The
-first step is to setup the DHCP client to send some additional
-information, notably the [RFC 3118][] authentication string. It
-includes the alphanumeric connection identifier prefixed by `fti/` and
-provided by snail mail. `/etc/dhcp/dhclient.conf` looks like this:
+Internet is provided over VLAN 832 and configured with DHCPv4. The first step is
+to setup the DHCP client to send some additional information, notably the [RFC
+3118][] authentication string. It includes the alphanumeric connection
+identifier prefixed by `fti/` and the password provided by snail mail.
+`/etc/dhcp/dhclient.conf` looks like this:
 
     option rfc3118-authentication code 90 = string;
     interface "internet" {
@@ -57,9 +64,10 @@ provided by snail mail. `/etc/dhcp/dhclient.conf` looks like this:
       select-timeout 0;
       send vendor-class-identifier "sagem";
       send user-class "+FSVDSL_livebox.Internet.softathome.Livebox4";
-      # fti/xxxxxx identifier can be converted to hexadecimal with:
-      #  echo -n 123456 | od -A n -t x1
-      send rfc3118-authentication 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
+      # See https://jsfiddle.net/kgersen/3mnsc6wy/ to generate this string
+      send rfc3118-authentication 00:00:00:00:...;
+      # Use the MAC address of the Livebox
+      send dhcp-client-identifier 01:00:xx:xx:xx:xx:xx:xx;
       request subnet-mask, routers,
               domain-name-servers, domain-name,
               broadcast-address,
@@ -146,8 +154,9 @@ vendor class, user class and authentication string:
       # […]
       send dhcp6.vendorclass 00:00:04:0e:00:05:73:61:67:65:6d;
       send dhcp6.userclass 00:2b:46:53:56:44:53:4c:5f:6c:69:76:65:62:6f:78:2e:49:6e:74:65:72:6e:65:74:2e:73:6f:66:74:61:74:68:6f:6d:65:2e:6c:69:76:65:62:6f:78:34;
-      send dhcp6.auth 00:00:00:00:00:00:00:00:00:00:00:1a:09:00:00:05:58:01:03:41:01:0d:66:74:69:2f:xx:xx:xx:xx:xx:xx:xx;
-      also request dhcp6.auth, dhcp6.vendorclass, dhcp6.userclass;
+      send dhcp6.auth 00:00:00:00:...;
+      send dhcp6.client-id 00:03:00:01:xx:xx:xx:xx:xx:xx;
+      also request dhcp6.auth, dhcp6.vendor-opts;
     }
 
 The firewall script is amended to classify DHCPv6 and ICMPv6 packets
