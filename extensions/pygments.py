@@ -1,11 +1,11 @@
 from pygments.lexer import RegexLexer, bygroups, using
 from pygments.token import Text, Comment, Punctuation, Operator, Keyword
-from pygments.token import String, Name
+from pygments.token import Number, String, Name
 from pygments.lexers.go import GoLexer
 from pygments.lexers import LEXERS
 from hyde.plugin import Plugin
 
-__all__ = ["PigeonLexer", "LezerLexer"]
+__all__ = ["PigeonLexer", "LezerLexer", "WiresharkLexer"]
 
 # To easily test:
 """
@@ -89,5 +89,25 @@ class LezerLexer(RegexLexer):
             (r"[\{\}\(\)]", Punctuation),
             # Fallback
             (r".", Text),
+        ],
+    }
+
+
+class WiresharkLexer(RegexLexer):
+    name = "Wireshark"
+    aliases = ["wireshark"]
+
+    tokens = {
+        "root": [(r"^\S.+\n", Name.Class, "fields")],
+        "fields": [
+            # Labels
+            (r"^\s+([^:]+)(?=:)", String.Symbol),
+            # Numbers
+            (
+                r"(\()(\d+|0x[a-fA-F0-9]+)(\))",
+                bygroups(Punctuation, Number, Punctuation),
+            ),
+            # Remaining
+            (r".|\n", Text),
         ],
     }
