@@ -55,21 +55,10 @@
             type = "app";
             program = "${pkgs.linkchecker}/bin/linkchecker";
           };
-          goaccess =
-            let
-              pkg = (pkgs.goaccess.overrideAttrs (old: {
-                patches = (old.patches or [ ]) ++ [
-                  (pkgs.fetchpatch {
-                    url = "https://github.com/allinurl/goaccess/pull/2126.patch";
-                    sha256 = "sha256-ywWy8AEMOqfeiFla7FBmo/podDmKHxptEs1Z2MDcOk0=";
-                  })
-                ];
-              }));
-            in
-            {
-              type = "app";
-              program = "${pkg}/bin/goaccess";
-            };
+          goaccess = {
+            type = "app";
+            program = "${pkgs.goaccess}/bin/goaccess";
+          };
           yarn = {
             type = "app";
             program = "${pkgs.yarn}/bin/yarn";
