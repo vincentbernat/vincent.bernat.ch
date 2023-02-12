@@ -3,8 +3,8 @@
 
 """
 
+import functools
 from pygments.formatters.html import HtmlFormatter
-from pyquery import PyQuery as pq
 from markdown import Extension
 from markdown.extensions import codehilite
 
@@ -12,20 +12,22 @@ from markdown.extensions import codehilite
 class CodeHiliteLangExtension(Extension):
     def extendMarkdown(self, md, md_globals):
         md.registerExtension(self)
-
-        previous = codehilite.highlight
-
-        def new(src, lexer, formatter):
-            lang = lexer.name.lower().replace(" ", "-")
-            result = previous(src, lexer, formatter)
-            if isinstance(formatter, HtmlFormatter):
-                d = pq(result, parser="html")
-                d.add_class("language-{}".format(lang))
-                result = d.outer_html()
-            return result
-
-        codehilite.highlight = new
+        patch()
 
 
 def makeExtension(**kwargs):
     return CodeHiliteLangExtension(**kwargs)
+
+
+@functools.cache
+def patch():
+    previous = codehilite.highlight
+
+    def new(src, lexer, formatter):
+        lang = lexer.name.lower().replace(" ", "-")
+        result = previous(src, lexer, formatter)
+        if isinstance(formatter, HtmlFormatter):
+            result = result.replace('class="', 'class="language-{} '.format(lang), 1)
+        return result
+
+    codehilite.highlight = new

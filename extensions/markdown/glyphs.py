@@ -3,6 +3,7 @@
 
 import sys
 import unicodedata
+import functools
 import markdown
 from markdown.extensions import codehilite
 
@@ -38,9 +39,13 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
         for glyphs in self.extract(root):
             if glyphs is None:
                 continue
-            self.glyphs |= set(glyph for glyph in glyphs if ord(glyph) >= 0x20)
+            self.glyphs |= set(glyphs)
         with open(self.output, "wb") as f:
-            f.write("".join(sorted(self.glyphs)).encode("utf-8"))
+            f.write(
+                "".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)).encode(
+                    "utf-8"
+                )
+            )
 
 
 class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):
@@ -61,6 +66,7 @@ class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
 class GlyphsExtension(markdown.Extension):
     def extendMarkdown(self, md, md_globals):
         md.registerExtension(self)
+        patch()
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.add(
@@ -75,14 +81,17 @@ class GlyphsExtension(markdown.Extension):
             ">inline",
         )
 
-        previous = codehilite.highlight
-
-        def new(src, lexer, formatter):
-            glyphs["monospace"] |= set(glyph for glyph in src if ord(glyph) >= 0x20)
-            return previous(src, lexer, formatter)
-
-        codehilite.highlight = new
-
 
 def makeExtension(configs=None):
     return GlyphsExtension(configs)
+
+
+@functools.cache
+def patch():
+    previous = codehilite.highlight
+
+    def new(src, lexer, formatter):
+        glyphs["monospace"] |= set(src)
+        return previous(src, lexer, formatter)
+
+    codehilite.highlight = new
