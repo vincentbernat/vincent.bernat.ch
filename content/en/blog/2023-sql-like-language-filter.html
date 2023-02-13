@@ -1,0 +1,308 @@
+---
+title: "Building a SQL-like language to filter flows"
+description: |
+   Instead of using a query builder to let a user filter flows,
+   Akvorado uses a SQL-like language and a code editor with
+   syntax highlighting and completion.
+uuid: e6fa1b97-0fd9-485c-bda1-887df16005b9
+tags:
+  - programming-go
+  - web
+  - network-monitoring
+  - project-akvorado
+---
+
+[Akvorado][] collects network flows using [IPFIX][] or [sFlow][]. It stores them
+in a [ClickHouse][] database. A web console allows a user to query the data and
+plot some graphs. A nice aspect of this console is how we can filter flows with
+a SQL-like language:
+
+![Example of filter being typed by a user with completion enabled]([[!!images/akvorado-filter.mp4]]
+"Filter editor in Akvorado console")
+
+<!--
+InIfBoundary = external AND 
+ExporterRegion = "france" AND 
+InIfConnectivity = "transit" AND 
+SrcAS = AS15169 AND 
+DstAddr << 2a01:e0f:ffff::/48
+-->
+
+Often, web interfaces expose a [query][vue-query-builder]
+[builder][react-query-builder] to build such filters. I think combining a
+SQL-like language with an editor supporting **completion**, **syntax
+highlighting**, and **linting** is a better approach.[^lazy]
+
+[^lazy]: Moreover, building a query builder did not seem like a fun task for me.
+
+The language parser is built with [pigeon][] (_Go_) from a [parsing expression
+grammar][]—or PEG. The editor component is [CodeMirror][] (*TypeScript*).
+
+# Language parser
+
+PEG grammars are relatively recent[^recent] and are an alternative to
+context-free grammars. They are easier to write and they can generate better
+error messages. Python [switched from an LL(1)-based parser to a PEG-based
+parser][pep617] in Python 3.9.
+
+[^recent]: They were introduced in 2004 in “[Parsing Expression Grammars: A
+    Recognition-Based Syntactic Foundation][peg2004].” LR parsers were
+    introduced in [1965][knuth1965], LALR parsers in 1969, and LL parsers in the
+    1970s. [Yacc][], a popular parser generator, was written in 1975.
+
+[pigeon][] generates a parser for Go. A grammar is a set of rules. Each rule is
+an identifier, with an optional user-friendly label for error messages, an
+expression, and an action in Go to be executed on match. You can find the
+complete grammar in [`parser.peg`][parser.peg]. Here is a simplified rule:
+
+```pigeon
+ConditionIPExpr "condition on IP" ←
+  column:("ExporterAddress"i { return "ExporterAddress", nil }
+        / "SrcAddr"i { return "SrcAddr", nil }
+        / "DstAddr"i { return "DstAddr", nil }) _ 
+  operator:("=" / "!=") _ 
+  ip:IP {
+    return fmt.Sprintf("%s %s IPv6StringToNum(%s)",
+      toString(column), toString(operator), quote(ip)), nil
+  }
+```
+
+The rule identifier is `ConditionIPExpr`. It case-insensitively matches
+`ExporterAddress`, `SrcAddr`, or `DstAddr`. The action for each case returns the
+proper case for the column name. That's what is stored in the `column` variable.
+Then, it matches one of the possible operators. As there is no code block, it
+stores the matched string directly in the `operator` variable. Then, it tries to
+match the `IP` rule, which is defined elsewhere in the grammar. If it succeeds,
+it stores the result of the match in the `ip` variable and executes the final
+action. The action turns the column, operator, and IP into a proper expression
+for *ClickHouse*. For example, if we have `ExporterAddress = 203.0.113.15`, we
+get `ExporterAddress = IPv6StringToNum('203.0.113.15')`.
+
+The `IP` rule uses a rudimentary regular expression but checks if the matched
+address is correct in the action block, thanks to `netip.ParseAddr()`:
+
+```pigeon
+IP "IP address" ← [0-9A-Fa-f:.]+ {
+  ip, err := netip.ParseAddr(string(c.text))
+  if err != nil {
+    return "", errors.New("expecting an IP address")
+  }
+  return ip.String(), nil
+}
+```
+
+Our parser safely turns the filter into a `WHERE` clause accepted by
+*ClickHouse*:[^ast]
+
+```sql
+WHERE InIfBoundary = 'external' 
+AND ExporterRegion = 'france' 
+AND InIfConnectivity = 'transit' 
+AND SrcAS = 15169 
+AND DstAddr BETWEEN toIPv6('2a01:e0f:ffff::') 
+                AND toIPv6('2a01:e0f:ffff:ffff:ffff:ffff:ffff:ffff')
+```
+
+[^ast]: The parser returns a string. It does not generate and intermediate AST
+    is generated. This makes it simpler and it currently fits our needs.
+
+# Integration in CodeMirror
+
+[CodeMirror][] is a versatile code editor that can be easily integrated into
+JavaScript projects. In *Akvorado*, the [Vue.js][] component,
+[`InputFilter`][inputfilter.vue], uses _CodeMirror_ as its foundation and
+leverages features such as syntax highlighting, linting, and completion. The
+source code for these capabilities can be found in the
+[`codemirror/lang-filter/`][lang-filter] directory.
+
+## Syntax highlighting
+
+The PEG grammar for Go cannot be utilized directly[^pegjs] and the requirements
+for parsers for editors are distinct: they should be error-tolerant and operate
+incrementally, as code is typically updated character by character. _CodeMirror_
+offers a solution through its own parser generator, [Lezer][].
+
+We don't need this additional parser to fully understand the filter language.
+Only the basic structure is needed: column names, comparison and logic
+operators, quoted and unquoted values. The [grammar][] is therefore quite short
+and does not need to be updated often:
+
+```lezer
+@top Filter {
+  expression
+}
+
+expression {
+ Not expression |
+ "(" expression ")" |
+ "(" expression ")" And expression |
+ "(" expression ")" Or expression |
+ comparisonExpression And expression |
+ comparisonExpression Or expression |
+ comparisonExpression
+}
+comparisonExpression {
+ Column Operator Value
+}
+
+Value {
+  String | Literal | ValueLParen ListOfValues ValueRParen
+}
+ListOfValues {
+  ListOfValues ValueComma (String | Literal) |
+  String | Literal
+}
+
+// […]
+@tokens {
+  // […]
+  Column { std.asciiLetter (std.asciiLetter|std.digit)* }
+  Operator { $[a-zA-Z!=><]+ }
+
+  String {
+    '"' (![\\\n"] | "\\" _)* '"'? |
+    "'" (![\\\n'] | "\\" _)* "'"?
+  }
+  Literal { (std.digit | std.asciiLetter | $[.:/])+ }
+  // […]
+}
+```
+
+The expression `SrcAS = 12322 AND (DstAS = 1299 OR SrcAS = 29447)` is parsed to:
+
+```text
+Filter(Column, Operator, Value(Literal),
+  And, Column, Operator, Value(Literal),
+  Or, Column, Operator, Value(Literal))
+```
+
+The last step is to teach *CodeMirror* how to map each token to a highlighting
+tag:
+
+```ts
+export const FilterLanguage = LRLanguage.define({
+  parser: parser.configure({
+    props: [
+      styleTags({
+        Column: t.propertyName,
+        String: t.string,
+        Literal: t.literal,
+        LineComment: t.lineComment,
+        BlockComment: t.blockComment,
+        Or: t.logicOperator,
+        And: t.logicOperator,
+        Not: t.logicOperator,
+        Operator: t.compareOperator,
+        "( )": t.paren,
+      }),
+    ],
+  }),
+});
+```
+
+[^pegjs]: It could be manually translated to JavaScript with [PEG.js][].
+
+## Linting
+
+We offload linting to the original parser in Go. The
+`/api/v0/console/filter/validate` endpoint accepts a filter and returns a JSON
+structure with the errors that were found:
+
+```json
+{
+  "message": "at line 1, position 12: string literal not terminated",
+  "errors": [{
+    "line":    1,
+    "column":  12,
+    "offset":  11,
+    "message": "string literal not terminated",
+  }]
+}
+```
+
+The [linter source][] for *CodeMirror* queries the API and turns each error into
+a [diagnostic][].
+
+## Completion
+
+The completion system takes a hybrid approach. It splits the work between the
+frontend and the backend to offer useful suggestions for completing filters.
+
+The [frontend][] uses the parser built with *Lezer* to determine the context of
+the completion: do we complete a column name, an operator, or a value? It also
+extracts the column name if we are completing something else. It forwards the
+result to the backend through the `/api/v0/console/filter/complete` endpoint.
+Walking the syntax tree was not as easy as I thought, but [unit tests][] helped
+a lot.
+
+The [backend][] uses the parser generated by *pigeon* to complete a column name
+or a comparison operator. For values, the completions are either static or
+extracted from the *ClickHouse* database. A user can complete an AS number from
+an organization name thanks to the following snippet:
+
+```go
+results := []struct {
+  Label  string `ch:"label"`
+  Detail string `ch:"detail"`
+}{}
+columnName := "DstAS"
+sqlQuery := fmt.Sprintf(`
+ SELECT concat('AS', toString(%s)) AS label, dictGet('asns', 'name', %s) AS detail
+ FROM flows
+ WHERE TimeReceived > date_sub(minute, 1, now())
+ AND detail != ''
+ AND positionCaseInsensitive(detail, $1) >= 1
+ GROUP BY label, detail
+ ORDER BY COUNT(*) DESC
+ LIMIT 20
+`, columnName, columnName)
+if err := conn.Select(ctx, &results, sqlQuery, input.Prefix); err != nil {
+  c.r.Err(err).Msg("unable to query database")
+  break
+}
+for _, result := range results {
+  completions = append(completions, filterCompletion{
+    Label:  result.Label,
+    Detail: result.Detail,
+    Quoted: false,
+  })
+}
+```
+
+In my opinion, the completion system is a major factor in making the field
+editor an efficient way to select flows. While a query builder may have been
+more beginner-friendly, the completion system's ease of use and functionality
+make it more enjoyable to use once you become familiar.
+
+*[PEG]: Parsing Expression Grammar
+*[AST]: Abstract Syntax Tree
+*[LR]: left-to-right
+*[LL]: left-to-right, leftmost derivation
+*[LALR]: lookahead left-to-right
+*[AS]: Autonomous System
+
+[akvorado]: [[en/blog/2022-akvorado-flow-collector.html]] "Akvorado: a flow collector, enricher, and visualizer"
+[ipfix]: rfc://7011 "RFC 7011: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[sflow]: rfc://3176 "RFC 3176: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[clickhouse]: https://clickhouse.com/ "ClickHouse: OLAP DBMS"
+[vue-query-builder]: https://dabernathy89.github.io/vue-query-builder/ "Vue Query Builder"
+[react-query-builder]: https://react-querybuilder.js.org/ "React Query Builder"
+[parsing expression grammar]: https://en.wikipedia.org/wiki/Parsing_expression_grammar "Parsing expression grammar on Wikipedia"
+[pigeon]: https://github.com/mna/pigeon "Command pigeon generates parsers in Go from a PEG grammar"
+[codemirror]: https://codemirror.net/ "CodeMirror: Extensible Code Editor"
+[peg2004]: https://bford.info/pub/lang/peg.pdf
+[yacc]: https://en.wikipedia.org/wiki/Yacc "Yacc article on Wikipedia"
+[knuth1965]: https://web.archive.org/web/20120315152151/http://www.cs.dartmouth.edu/~mckeeman/cs48/mxcom/doc/knuth65.pdf "On the Translation of Languages from Left to Right"
+[pep617]: https://peps.python.org/pep-0617/ "PEP 617 – New PEG parser for CPython"
+[parser.peg]: https://github.com/akvorado/akvorado/blob/main/console/filter/parser.peg
+[vue.js]: https://vuejs.org/ "Vue.js: the Progressive JavaScript Framework"
+[inputfilter.vue]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/components/InputFilter.vue
+[lang-filter]: https://github.com/akvorado/akvorado/tree/main/console/frontend/src/codemirror/lang-filter
+[peg.js]: https://pegjs.org/ "PEG.js: Parser Generator for JavaScript"
+[lezer]: https://lezer.codemirror.net/ "The Lezer Parser System"
+[grammar]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/syntax.grammar
+[linter source]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/linter.ts
+[diagnostic]: https://codemirror.net/docs/ref/#lint.Diagnostic
+[frontend]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/complete.ts
+[backend]: https://github.com/akvorado/akvorado/blob/9eee46caded6fa6cc2dfb90d1941b2ef05d15e9f/console/filter.go#L76
+[unit tests]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/complete.test.ts

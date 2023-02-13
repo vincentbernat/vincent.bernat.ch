@@ -1,0 +1,322 @@
+---
+title: "Langage inspiré de SQL pour filtrer les flux"
+description: |
+   Au lieu d'utiliser un constructeur de requêtes pour permettre à l'utilisateur de
+   filtrer les flux, Akvorado utilise un langage de type SQL et un éditeur de code
+   avec coloratio syntaxique et complétion.
+uuid: e6fa1b97-0fd9-485c-bda1-887df16005b9
+tags:
+  - programming-go
+  - web
+  - network-monitoring
+  - project-akvorado
+---
+
+[Akvorado][] collecte les flux réseau à l'aide d'[IPFIX][] ou de [sFlow][]. Il
+les stocke dans une base de données [ClickHouse][]. Une console web permet à
+l'utilisateur de faire des requêtes sur les données pour obtenir des graphiques.
+Un aspect intéressant de cette console est la possibilité de filtrer les flux
+avec un langage inspiré de SQL :
+
+![Example of filter being typed by a user with completion enabled]([[!!images/akvorado-filter.mp4]]
+"Filter editor in Akvorado console")
+
+<!--
+InIfBoundary = external AND 
+ExporterRegion = "france" AND 
+InIfConnectivity = "transit" AND 
+SrcAS = AS15169 AND 
+DstAddr << 2a01:e0f:ffff::/48
+-->
+
+Souvent, les interfaces web exposent un [constructeur][vue-query-builder] [de
+requêtes][react-query-builder] pour concevoir de tels filtres. À la place, j'ai
+choisi de combiner un langage similaire à SQL avec un éditeur prenant en charge
+la **complétion**, la **coloration syntaxique** et la **vérification
+syntaxique**[^lazy].
+
+[^lazy]: De plus, créer un constructeur de requêtes me semblait une tâche assez
+    rébarbative.
+
+L'analyseur syntaxique du langage est construit avec [pigeon][] (_Go_) à partir
+d'une [grammaire d'expression d'analyse syntaxique][parsing expression grammar]
+(*parsing expression grammar* ou PEG). Le composant à la base de l'éditeur est
+[CodeMirror][] (*TypeScript*).
+
+# Analyseur syntaxique
+
+Les grammaires PEG sont relativement récentes[^recent] et sont une alternative
+aux grammaires contextuelles. Elles sont plus faciles à écrire et peuvent
+générer de meilleurs messages d'erreur. Par exemple, Python a [basculé d'un
+analyseur de type LL(1) à un analyseur basé sur une grammaire PEG][pep617]
+depuis Python 3.9.
+
+[^recent]: Elles ont été introduites en 2004 dans « [Parsing Expression
+    Grammars: A Recognition-Based Syntactic Foundation][peg2004] ». Les
+    analyseurs LR ont été introduits en [1965][knuth1965], les analyseurs LALR
+    en 1969 et les analyseurs LL dans les années 1970. [Yacc][], un générateur
+    d'analyseurs populaire, a été écrit en 1975.
+    
+[pigeon][] génère un analyseur pour Go. Une grammaire est un ensemble de règles.
+Chaque règle est un identifiant, avec optionnellement une étiquette utilisée pour les messages
+d'erreur, une expression et une action en Go à exécuter. Vous pouvez trouver la
+grammaire complète dans [`parser.peg`][parser.peg]. Voici une règle simplifiée :
+
+```pigeon
+ConditionIPExpr "condition on IP" ←
+  column:("ExporterAddress"i { return "ExporterAddress", nil }
+        / "SrcAddr"i { return "SrcAddr", nil }
+        / "DstAddr"i { return "DstAddr", nil }) _ 
+  operator:("=" / "!=") _ 
+  ip:IP {
+    return fmt.Sprintf("%s %s IPv6StringToNum(%s)",
+      toString(column), toString(operator), quote(ip)), nil
+  }
+```
+
+L'identifiant de la règle est `ConditionIPExpr`. Elle attend soit
+`ExporterAddress`, soit `SrcAddr`, soit `DstAddr`, sans distinction de la case.
+L'action pour chaque cas renvoie le nom de la colonne correspondante. C'est ce
+qui est stocké dans la variable `column`. Ensuite, elle attend un des deux
+opérateurs possibles. Comme il n'y a pas de bloc de code, l'opérateur est stocké
+dans la variable `operator`. Ensuite, elle attend une chaîne validée par la
+règle `IP` qui est définie ailleurs dans la grammaire. Si c'est le cas, elle
+stocke le résultat dans la variable `ip` et exécute l'action finale. L'action
+transforme la colonne, l'opérateur et l'adresse IP en une expression SQL pour
+_ClickHouse_. Par exemple, si nous avons `ExporterAddress = 203.0.113.15`, nous
+obtenons `ExporterAddress = IPv6StringToNum('203.0.113.15')`.
+
+La règle `IP` utilise une expression régulière rudimentaire mais vérifie si
+l'adresse correspondante est correcte dans le bloc d'action, grâce à
+`netip.ParseAddr()`:
+
+```pigeon
+IP "IP address" ← [0-9A-Fa-f:.]+ {
+  ip, err := netip.ParseAddr(string(c.text))
+  if err != nil {
+    return "", errors.New("expecting an IP address")
+  }
+  return ip.String(), nil
+}
+```
+
+Cet analyseur transforme de manière sécurisée un filtre en une clause `WHERE`
+acceptée par *ClickHouse*[^ast] :
+
+```sql
+WHERE InIfBoundary = 'external' 
+AND ExporterRegion = 'france' 
+AND InIfConnectivity = 'transit' 
+AND SrcAS = 15169 
+AND DstAddr BETWEEN toIPv6('2a01:e0f:ffff::') 
+                AND toIPv6('2a01:e0f:ffff:ffff:ffff:ffff:ffff:ffff')
+```
+
+[^ast]: L'analyseur retourne une chaîne. Il ne génère pas un arbre syntaxique
+    intermédiaire. Cela le rend plus simple et suffit à nos besoins.
+
+# Intégration dans CodeMirror
+
+[CodeMirror][] est un éditeur de code polyvalent qui peut être facilement
+intégré dans les projets JavaScript. Dans *Akvorado*, le composant
+[Vue.js][Vue.js] [`InputFilter`][inputfilter.vue] utilise _CodeMirror_ et tire
+parti de fonctionnalités telles que la coloration syntaxique, la vérification
+syntaxique et la complétion. Le code source de ces fonctionnalités se trouve
+dans le répertoire [`codemirror/lang-filter/`][lang-filter].
+
+## Coloration syntaxique
+
+La grammaire PEG pour Go ne peut pas être utilisé directement[^pegjs] et les
+exigences pour les analyseurs syntaxiques utilisés dans les éditeurs sont
+différentes : ils doivent être tolérants aux erreurs et fonctionner de manière
+incrémentielle, car le code est généralement mis à jour caractère par caractère.
+_CodeMirror_ propose une solution via son propre générateur d'analyseur, [Lezer][].
+
+Nous n'avons pas besoin que cet analyseur supplémentaire comprenne pleinement le
+langage des filtres. Seule la structure est nécessaire : les noms de colonnes, les
+opérateurs de comparaison et de logique, les valeurs entre guillemets ou non. La
+[grammaire][grammar] est donc assez courte et n'a pas besoin d'être mise à jour
+souvent :
+
+```lezer
+@top Filter {
+  expression
+}
+
+expression {
+ Not expression |
+ "(" expression ")" |
+ "(" expression ")" And expression |
+ "(" expression ")" Or expression |
+ comparisonExpression And expression |
+ comparisonExpression Or expression |
+ comparisonExpression
+}
+comparisonExpression {
+ Column Operator Value
+}
+
+Value {
+  String | Literal | ValueLParen ListOfValues ValueRParen
+}
+ListOfValues {
+  ListOfValues ValueComma (String | Literal) |
+  String | Literal
+}
+
+// […]
+@tokens {
+  // […]
+  Column { std.asciiLetter (std.asciiLetter|std.digit)* }
+  Operator { $[a-zA-Z!=><]+ }
+
+  String {
+    '"' (![\\\n"] | "\\" _)* '"'? |
+    "'" (![\\\n'] | "\\" _)* "'"?
+  }
+  Literal { (std.digit | std.asciiLetter | $[.:/])+ }
+  // […]
+}
+```
+
+L'expression `SrcAS = 12322 AND (DstAS = 1299 OR SrcAS = 29447)` est analysée ainsi :
+
+```text
+Filter(Column, Operator, Value(Literal),
+  And, Column, Operator, Value(Literal),
+  Or, Column, Operator, Value(Literal))
+```
+
+La dernière étape est d'indiquer à *CodeMirror* la correspondance entre chaque
+symbole et sa catégorie pour la coloration syntaxique :
+
+```ts
+export const FilterLanguage = LRLanguage.define({
+  parser: parser.configure({
+    props: [
+      styleTags({
+        Column: t.propertyName,
+        String: t.string,
+        Literal: t.literal,
+        LineComment: t.lineComment,
+        BlockComment: t.blockComment,
+        Or: t.logicOperator,
+        And: t.logicOperator,
+        Not: t.logicOperator,
+        Operator: t.compareOperator,
+        "( )": t.paren,
+      }),
+    ],
+  }),
+});
+```
+
+[^pegjs]: Elle pourrait être manuellement traduite en JavaScript avec [PEG.js][].
+
+## Vérification syntaxique
+
+La vérification syntaxique est déléguée à l'analyseur syntaxique en Go. Le point
+d'accès `/api/v0/console/filter/validate` accepte un filtre et retourne une
+structure JSON avec les éventuelles erreurs:
+
+```json
+{
+  "message": "at line 1, position 12: string literal not terminated",
+  "errors": [{
+    "line":    1,
+    "column":  12,
+    "offset":  11,
+    "message": "string literal not terminated",
+  }]
+}
+```
+
+Le [greffon][linter source] pour *CodeMirror* interroge cette API et transforme
+chaque erreur en un [diagnostic][].
+
+## Complétion
+
+Le système de complétion adopte une approche hybride. Il répartit le travail
+entre le frontend et le backend pour offrir ses suggestions.
+
+Le [frontend][] utilise l'analyseur construit avec *Lezer* pour déterminer le
+contexte de la complétion : s'agit-il compléter un nom de colonne, un opérateur
+ou une valeur ? Il extrait également le nom de la colonne si nous complétons
+autre chose. Il transfère le résultat au backend via le point de terminaison
+`/api/v0/console/filter/complete`. Parcourir l'arbre syntaxique n'a pas été
+aussi facile que je le pensais, mais les [tests unitaires][unit tests] ont
+beaucoup aidé.
+
+Le [backend][] utilise l'analyseur généré par *pigeon* pour compléter les noms
+de colonnes et les opérateurs de comparaison. Pour les valeurs, les complétions
+sont statiques out extraites de la base de données *ClickHouse*. Un utilisateur
+peut compléter un numéro AS à partir d'un nom d'organisation grâce au code
+suivant :
+
+```go
+results := []struct {
+  Label  string `ch:"label"`
+  Detail string `ch:"detail"`
+}{}
+columnName := "DstAS"
+sqlQuery := fmt.Sprintf(`
+ SELECT concat('AS', toString(%s)) AS label, dictGet('asns', 'name', %s) AS detail
+ FROM flows
+ WHERE TimeReceived > date_sub(minute, 1, now())
+ AND detail != ''
+ AND positionCaseInsensitive(detail, $1) >= 1
+ GROUP BY label, detail
+ ORDER BY COUNT(*) DESC
+ LIMIT 20
+`, columnName, columnName)
+if err := conn.Select(ctx, &results, sqlQuery, input.Prefix); err != nil {
+  c.r.Err(err).Msg("unable to query database")
+  break
+}
+for _, result := range results {
+  completions = append(completions, filterCompletion{
+    Label:  result.Label,
+    Detail: result.Detail,
+    Quoted: false,
+  })
+}
+```
+
+À mon avis, ce système de complétion est un élément important qui fait de
+l'éditeur un moyen efficace de sélectionner des flux. Alors qu'un constructeur
+de requêtes aurait pu être plus convivial pour les débutants, la facilité
+d'utilisation et les fonctionnalités du système de complétion le rendent plus
+agréable à utiliser une fois que l'utilisateur familiarisé.
+
+*[PEG]: Parsing Expression Grammar
+*[AST]: Abstract Syntax Tree
+*[LR]: left-to-right
+*[LL]: left-to-right, leftmost derivation
+*[LALR]: lookahead left-to-right
+*[AS]: Autonomous System
+
+[akvorado]: [[fr/blog/2022-akvorado-collecteur-flux.html]] "Akvorado : collecteur et visualisateur de flux réseau"
+[ipfix]: rfc://7011 "RFC 7011: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[sflow]: rfc://3176 "RFC 3176: Specification of the IP Flow Information Export (IPFIX) Protocol for the Exchange of Flow Information"
+[clickhouse]: https://clickhouse.com/ "ClickHouse: OLAP DBMS"
+[vue-query-builder]: https://dabernathy89.github.io/vue-query-builder/ "Vue Query Builder"
+[react-query-builder]: https://react-querybuilder.js.org/ "React Query Builder"
+[parsing expression grammar]: https://en.wikipedia.org/wiki/Parsing_expression_grammar "Parsing expression grammar on Wikipedia"
+[pigeon]: https://github.com/mna/pigeon "Command pigeon generates parsers in Go from a PEG grammar"
+[codemirror]: https://codemirror.net/ "CodeMirror: Extensible Code Editor"
+[peg2004]: https://bford.info/pub/lang/peg.pdf
+[yacc]: https://fr.wikipedia.org/wiki/Yacc_(logiciel) "Article sur Yacc sur Wikipedia"
+[knuth1965]: https://web.archive.org/web/20120315152151/http://www.cs.dartmouth.edu/~mckeeman/cs48/mxcom/doc/knuth65.pdf "On the Translation of Languages from Left to Right"
+[pep617]: https://peps.python.org/pep-0617/ "PEP 617 – New PEG parser for CPython"
+[parser.peg]: https://github.com/akvorado/akvorado/blob/main/console/filter/parser.peg
+[vue.js]: https://vuejs.org/ "Vue.js: the Progressive JavaScript Framework"
+[inputfilter.vue]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/components/InputFilter.vue
+[lang-filter]: https://github.com/akvorado/akvorado/tree/main/console/frontend/src/codemirror/lang-filter
+[peg.js]: https://pegjs.org/ "PEG.js: Parser Generator for JavaScript"
+[lezer]: https://lezer.codemirror.net/ "The Lezer Parser System"
+[grammar]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/syntax.grammar
+[linter source]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/linter.ts
+[diagnostic]: https://codemirror.net/docs/ref/#lint.Diagnostic
+[frontend]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/complete.ts
+[backend]: https://github.com/akvorado/akvorado/blob/9eee46caded6fa6cc2dfb90d1941b2ef05d15e9f/console/filter.go#L76
+[unit tests]: https://github.com/akvorado/akvorado/blob/main/console/frontend/src/codemirror/lang-filter/complete.test.ts
