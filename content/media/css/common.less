@@ -8,7 +8,7 @@
 @line-height:           1.5;
 
 /* Colors */
-@dark-mode: false;		/* default value */
+@dark-mode: false;      /* default value */
 @color-foreground:             if(@dark-mode = false, #000000, #d9dadc);
 @color-footer:                 if(@dark-mode = false, #222222, #121212);
 @color-theme:                  if(@dark-mode = false, #21519c, #00a3ff);
@@ -44,57 +44,61 @@
 
 /* Compute font-size and line-height to ensure proper vertical rhythm */
 .font-size (@factor: 1) {
-    font-size: @factor*1rem;
-    line-height: round((ceil((@factor/@line-height))*@line-height/@factor), 3);
+  font-size: @factor*1rem;
+  line-height: round(
+    (ceil((@factor / @line-height)) * @line-height / @factor),
+    3
+  );
 }
 
-/* Link-related stuff. When supported, we use a different color for
-   underlines. Otherwise, links get a regular color (as well as the
-   underline). */
+/* Link-related stuff. When supported, we use a different color for underlines.
+   Otherwise, links get a regular color (as well as the underline). */
 .disabled-link() {
-    /* Disabling pointer events ensure we don't get
-       hovered/actived/focused */
-    text-decoration: none;
-    pointer-events: none;
-    cursor: default;
+  /* Disabling pointer events ensure we don't get hovered/actived/focused */
+  text-decoration: none;
+  pointer-events: none;
+  cursor: default;
+  color: inherit;
+  &:visited {
     color: inherit;
-    &:visited {
-        color: inherit;
-    }
+  }
 }
 .underlined-link() {
-    /* That's for links in text. It is mostly used in ".lf-main #lf-text
-       a". It is assumed .not-underlined-link is also applied. */
-    color: inherit;
-    text-decoration: underline;
-    text-decoration-color: @color-link-notvisited;
-    &:hover, &:active {
-        color: @color-link-notvisited-active;
-        text-decoration-color: @color-link-notvisited-active;
-        &:visited {
-            color: @color-link-visited-active;
-            text-decoration-color: @color-link-visited-active;
-        }
-    }
-    & abbr[title] {
-        text-decoration: none;
-    }
+  /* That's for links in text. It is mostly used in ".lf-main #lf-text a". It is
+     assumed .not-underlined-link is also applied. */
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: @color-link-notvisited;
+  &:hover,
+  &:active {
+    color: @color-link-notvisited-active;
+    text-decoration-color: @color-link-notvisited-active;
     &:visited {
-        text-decoration-color: initial;
+      color: @color-link-visited-active;
+      text-decoration-color: @color-link-visited-active;
     }
+  }
+  & abbr[title] {
+    text-decoration: none;
+  }
+  &:visited {
+    text-decoration-color: initial;
+  }
 }
 .not-underlined-link() {
-    /* That's for navigational links. If we want to override the above
-       style in #lf-text, we need a bigger specificity. */
-    color: @color-link-notvisited;
-    text-decoration: none;
-    &:hover, &:active {
-        color: @color-link-notvisited-active;
+  /* That's for navigational links. If we want to override the above style in
+     #lf-text, we need a bigger specificity. */
+  color: @color-link-notvisited;
+  text-decoration: none;
+  &:hover,
+  &:active {
+    color: @color-link-notvisited-active;
+  }
+  &:visited {
+    color: @color-link-visited;
+    &:hover,
+    &:active {
+      color: @color-link-visited-active;
     }
-    &:visited {
-        color: @color-link-visited;
-        &:hover, &:active {
-            color: @color-link-visited-active;
-        }
-    }
+  }
 }
