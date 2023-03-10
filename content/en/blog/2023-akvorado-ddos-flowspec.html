@@ -338,10 +338,13 @@ route flow4 {
 };
 ```
 
-This is an important addition: legitimate DNS requests are smaller than this
-and therefore not filtered. With _ClickHouse_, you can get the 10<sup>th</sup> and
-90<sup>th</sup> percentiles of the packet sizes with `quantiles(0.1,
+This is an important addition: legitimate DNS requests are smaller than this and
+therefore not filtered.[^dns] With _ClickHouse_, you can get the 10<sup>th</sup>
+and 90<sup>th</sup> percentiles of the packet sizes with `quantiles(0.1,
 0.9)(Bytes/Packets)`.
+
+[^dns]: While most DNS clients should retry with TCP on failures, this is not
+    always the case: until [recently][], [musl libc][] did not implement this.
 
 The last issue we need to tackle is how to optimize the request: it may need
 several seconds to collect the data and it is likely to consume substantial
@@ -604,3 +607,5 @@ anti-DDoS system. 🛡️
 [rfc 8955]: rfc://8955 "Dissemination of Flow Specification Rules"
 [xrdocs-flowspec]: https://xrdocs.io/ncs5500/tutorials/bgp-flowspec-on-ncs5500/ "BGP Flowspec on NCS5500: A few tests on scale, rate and memory usage"
 [xrdocs-acls]: https://xrdocs.io/ncs5500/tutorials/bgp-flowspec-to-acl-script/ "BGP Flowspec to ACL Script"
+[recently]: https://git.musl-libc.org/cgit/musl/commit/?id=51d4669fb97782f6a66606da852b5afd49a08001
+[musl libc]: https://musl.libc.org/
