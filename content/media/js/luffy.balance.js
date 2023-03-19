@@ -84,7 +84,18 @@ luffy.do(() => {
   };
 
   const countLines = (element) => {
-    return Math.ceil(element.contentLength / element.width);
+    let lines = 1;
+    let currentLineLength = 0;
+    if (element.width <= element.contentLength) return lines;
+    for (let i = 0; i < element.wordsLengths.length; i++) {
+      const currentWordLength = element.wordsLengths[i];
+      if (currentLineLength + currentWordLength > element.width) {
+        lines++;
+        currentLineLength = 0;
+      }
+      currentLineLength += currentWordLength + element.space;
+    }
+    return lines;
   };
 
   const getDimensionsOfEveryElement = (elements) => {
@@ -181,19 +192,21 @@ luffy.do(() => {
           for (let i = 0; i < element.wordsLengths.length; i++) {
             const currentWordLength = element.wordsLengths[i];
             if (currentLineLength + currentWordLength > testLineLength) {
-              newHTML += "<br>" + element.words[i] + " ";
-              currentLineLength = 0;
+              newHTML += "<br>";
               totalLineBreaks++;
-            } else {
-              newHTML += element.words[i] + " ";
-              currentLineLength += currentWordLength + element.space;
+              currentLineLength = 0;
             }
+            newHTML += element.words[i] + " ";
+            currentLineLength += currentWordLength + element.space;
           }
-          if (totalLineBreaks <= element.lines) {
+          if (
+            totalLineBreaks <= element.lines ||
+            testLineLength >= element.width
+          ) {
             element.element.innerHTML = newHTML;
             break;
           }
-          testLineLength += 15;
+          testLineLength = Math.min(testLineLength + 15, element.width);
         }
       }
     });
