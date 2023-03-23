@@ -161,11 +161,15 @@ class ImageFixerPlugin(Plugin):
                 color_counts = sorted(paletted.getcolors(), reverse=True)
                 palette_index = color_counts[0][1]
                 dominant = palette[palette_index * 3 : palette_index * 3 + 3]
-                # Create LQIP
-                lqip = Image.new("P", (2, 2), tuple(dominant))
+                # Create an image with the exact same ratio using this
+                # color
+                gcd = math.gcd(*img.size)
+                lqip = Image.new(
+                    "P", (img.size[0] // gcd, img.size[1] // gcd), tuple(dominant)
+                )
                 output = io.BytesIO()
-                lqip.save(output, "BMP", optimize=True, bits=1)
-                lqip = "data:image/bmp;base64,{}".format(
+                lqip.save(output, "PNG", optimize=True, bits=1)
+                lqip = "data:image/png;base64,{}".format(
                     base64.b64encode(output.getvalue()).decode("ascii")
                 )
                 return dict(size=img.size, opaque=True, lqip=lqip)
@@ -294,6 +298,7 @@ class ImageFixerPlugin(Plugin):
             im.save(destination, "PNG", optimize=True)
 
     def text_resource_complete(self, resource, text):
+
         """
         When the resource is generated, search for img tag and fix them.
         """
@@ -485,7 +490,6 @@ class ImageFixerPlugin(Plugin):
                         try:
                             bg = "url({})".format(self.cache[src]["lqip"])
                             img.css("background-image", bg)
-                            img.css("background-size", "cover")
                         except KeyError:
                             pass
 
