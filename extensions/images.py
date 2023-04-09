@@ -298,7 +298,6 @@ class ImageFixerPlugin(Plugin):
             im.save(destination, "PNG", optimize=True)
 
     def text_resource_complete(self, resource, text):
-
         """
         When the resource is generated, search for img tag and fix them.
         """
