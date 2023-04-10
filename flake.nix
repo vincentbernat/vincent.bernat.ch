@@ -5,6 +5,7 @@
     poetry2nix = {
       url = "github:nix-community/poetry2nix";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
     };
     merriweather = {
       url = "github:SorkinType/Merriweather";
@@ -34,7 +35,6 @@
                 "commando"
                 "fswrap"
                 "hyde"
-                "langcodes"
                 "pygments-haproxy"
                 "pygments-ios"
                 "pygments-junos"
