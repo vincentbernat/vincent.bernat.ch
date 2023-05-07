@@ -325,7 +325,7 @@ Info:    {infostring}""".format(
                 url = input("URL? ")
                 c.run(
                     "git grep -Fl '{}'"
-                    r"| xargs -r sed -i 's,\([( ]\){},\1{},g'".format(
+                    r"| xargs -r sed -i 's|\([( ]\){}|\1{}|g'".format(
                         row["urlname"], row["urlname"], url
                     )
                 )
@@ -337,7 +337,7 @@ Info:    {infostring}""".format(
             elif ans == "R":
                 c.run(
                     "git grep -Fl '{}'"
-                    r"| xargs -r sed -i 's,\([( ]\){},\1{},g'".format(
+                    r"| xargs -r sed -i 's|\([( ]\){}|\1{}|g'".format(
                         row["urlname"], row["urlname"], redirected
                     )
                 )
@@ -351,7 +351,7 @@ Info:    {infostring}""".format(
                     elif ans == a.upper():
                         c.run(
                             "git grep -Fl '{}'"
-                            "| xargs -r sed -i 's, {}, {},g'".format(
+                            "| xargs -r sed -i 's| {}| {}|g'".format(
                                 row["urlname"], row["urlname"], archive[a]
                             )
                         )
