@@ -157,6 +157,12 @@
                                                 -d $out/$d --max=84 --all-progressive --strip-all
                 done
 
+                # PNG→AVIF
+                find . -type f -name '*.png' -print0 \
+                  | xargs -0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom -l \
+                                                                       --ignore-icc \
+                                                                  '{}' $out/'{}'.avif
+
                 # Optimize PNG
                 find . -type f -name '*.png' -print0 \
                     | xargs -0 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
@@ -166,6 +172,7 @@
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
                     | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+
               '';
               installPhase = "true";
             };
