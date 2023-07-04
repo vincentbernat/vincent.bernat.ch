@@ -45,13 +45,7 @@ location {{ content_url('/' + code + '/404.html') }} {
 location = / {
   access_log off;
   log_not_found off;
-  set $lang en;
-{% for code, lang in languages %}
-  if ($http_accept_language ~* ^{{ code }}) {
-    # Not safe, but it seems to work. May change depending on the outer directives.
-    set $lang {{ code }};
-  }
-{% endfor %}
+  set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
   add_header  Vary Accept-Language;
   add_header  "Strict-Transport-Security" "max-age=31557600; includeSubDomains; preload";
   http2_push  /$lang;
