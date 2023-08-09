@@ -105,7 +105,7 @@ For a proper integration with *systemd*, you need two files:
 
 We can use the following socket unit, `404.socket`:
 
-    ::ini
+    ::systemd
     [Socket]
     ListenStream = 8000
     BindIPv6Only = both
@@ -118,7 +118,7 @@ available options. `BindIPv6Only = both` is explicitly specified
 because the default value is distribution-dependent. As for the
 service unit, we can use the following one, `404.service`:
 
-    ::ini
+    ::systemd
     [Unit]
     Description = 404 micro-service
 
@@ -194,7 +194,7 @@ minutes. There is a very simple trick: **ask *systemd* to not kill any
 process on stop**. With `KillMode = none`, only the stop command is
 executed and all existing processes are left undisturbed:
 
-    ::ini hl_lines="6 7"
+    ::systemd hl_lines="6 7"
     [Unit]
     Description = slow 404 micro-service
 
@@ -327,7 +327,7 @@ mechanism. There is also a possible race-condition when we tell
 
 The `404.service` unit needs an update:
 
-    ::ini
+    ::systemd
     [Unit]
     Description = slow 404 micro-service
 
@@ -465,7 +465,7 @@ to return 403 error codes from the same service but on a different
 port. We add an additional socket unit definition, `403.socket`,
 linked to the same `404.service` job:
 
-    ::ini hl_lines="4"
+    ::systemd hl_lines="4"
     [Socket]
     ListenStream = 8001
     BindIPv6Only = both
