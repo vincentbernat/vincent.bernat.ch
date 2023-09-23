@@ -2,11 +2,6 @@
   inputs = {
     nixpkgs.url = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    poetry2nix = {
-      url = "github:nix-community/poetry2nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
-    };
     merriweather = {
       url = "github:SorkinType/Merriweather";
       flake = false;
@@ -17,7 +12,6 @@
       let
         pkgs = import inputs.nixpkgs {
           inherit system;
-          overlays = [ inputs.poetry2nix.overlay ];
         };
         l = pkgs.lib // builtins;
         pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
