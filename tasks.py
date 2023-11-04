@@ -17,7 +17,13 @@ import xml.etree.ElementTree as ET
 
 conf = "site-production.yaml"
 media = yaml.safe_load(open(conf))["media_url"]
-hosts = ["web03.luffy.cx", "web04.luffy.cx", "web05.luffy.cx", "web06.luffy.cx"]
+hosts = [
+    "web02.luffy.cx",
+    "web03.luffy.cx",
+    "web04.luffy.cx",
+    "web05.luffy.cx",
+    "web06.luffy.cx",
+]
 
 
 def confirm(question, default=False):
