@@ -1,0 +1,155 @@
+---
+title: "Authentification SSH non interactive par mot de passe"
+description: |
+   Plutôt que d'utiliser sshpass pour fournir de manière non interactive un mot
+   de passe, il est possible d'utiliser les fonctionnalités intégrées dans OpenSSH.
+uuid: cec3ba62-6254-439c-8edd-36fda6bbf558
+tags:
+  - programming-shell
+---
+
+SSH offre plusieurs formes d'authentification, telles que par **mot de passe**
+et par **clé publique**. Cette dernière est considérée comme plus sécurisée.
+Cependant, l'authentification par mot de passe reste répandue, notamment avec
+les équipements réseau[^pourquoi].
+
+[^pourquoi]: Tout d'abord, certains constructeurs rendent [difficile
+    l'association d'une clé SSH à un utilisateur][iosxr]. Ensuite, de nombreux
+    constructeurs ne prennent pas en charge l'authentification basée sur un
+    certificat, ce qui complique la mise en place à grande échelle. Enfin, les
+    interactions entre l'authentification par clé publique et des méthodes
+    d'autorisation plus fines telles que TACACS+ et Radius restent un domaine
+    inexploré.
+
+Une solution classique pour éviter de taper un mot de passe à chaque connexion
+est [sshpass][], ou sa variante plus correcte [passh][]. Voici une fonction pour
+*Zsh*, récupérant le mot de passe depuis [pass][], un gestionnaire de mots de
+passe[^security] :
+
+```sh
+pssh() {
+  passh -p <(pass show network/ssh/password | head -1) ssh "$@"
+}
+compdef pssh=ssh
+```
+
+[^security]: Le mot de passe en clair n'apparaît jamais sur la ligne de
+    commande, dans l'environnement ou sur le disque, rendant difficile sa
+    capture par un tiers non privilégié. Sur Linux, *Zsh* fournit le mot de
+    passe via un descripteur de fichier.
+
+Cette approche est un peu fragile car elle nécessite d'examiner la sortie de la
+commande `ssh` pour y chercher une invite de mot de passe. De plus, si aucun mot
+de passe n'est requis, le gestionnaire de mots de passe est tout de même
+invoqué. Depuis [OpenSSH 8.4][], nous pouvons à la place utiliser `SSH_ASKPASS`
+et `SSH_ASKPASS_REQUIRE` :
+
+```zsh
+ssh() {
+  set -o localoptions -o localtraps
+  local passname=network/ssh/password
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF
+#!$SHELL
+pass show $passname | head -1
+EOF
+  chmod u+x $helper
+  SSH_ASKPASS=$helper SSH_ASKPASS_REQUIRE=force command ssh "$@"
+}
+```
+
+Si le mot de passe est incorrect, nous pouvons afficher une invite de mot de
+passe à la seconde tentative :
+
+```zsh
+ssh() {
+  set -o localoptions -o localtraps
+  local passname=network/ssh/password
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF
+#!$SHELL
+if [ -k $helper ]; then
+  {
+    oldtty=\$(stty -g)
+    trap 'stty \$oldtty < /dev/tty 2> /dev/null' EXIT INT TERM HUP
+    stty -echo
+    print "\rpassword: "
+    read password
+    printf "\n"
+  } > /dev/tty < /dev/tty
+  printf "%s" "\$password"
+else
+  pass show $passname | head -1
+  chmod +t $helper
+fi
+EOF
+  chmod u+x $helper
+  SSH_ASKPASS=$helper SSH_ASKPASS_REQUIRE=force command ssh "$@"
+}
+```
+
+Une amélioration possible est d'utiliser une entrée de mot de passe différente
+en fonction de l'hôte distant[^zsh] :
+
+```zsh
+ssh() {
+  # Informations de connexion
+  local -A details
+  details=(${=${(M)${:-"${(@f)$(command ssh -G "$@" 2>/dev/null)}"}:#(host|hostname|user) *}})
+  local remote=${details[host]:-details[hostname]}
+  local login=${details[user]}@${remote}
+  
+  # Nom du mot de passe
+  local passname
+  case "$login" in
+    admin@*.example.net)  passname=company1/ssh/admin ;;
+    bernat@*.example.net) passname=company1/ssh/bernat ;;
+    backup@*.example.net) passname=company1/ssh/backup ;;
+  esac
+
+  # Sans nom de mot de passe, on se rabat sur ssh
+  [[ -z $passname ]] && {
+    # Just regular ssh...
+    command ssh "$@"
+    return $?
+  }
+  
+  # Invocation de SSH avec SSH_ASKPASS
+  # […]
+}
+```
+
+[^zsh]: Pour comprendre la magie noire derrière la quatrième ligne, vous pouvez
+    vous aider de `print -l` et de la page de manuel [zshexpn(1)][]. `details`
+    est un [tableau associatif][associative array] défini à partir d'un tableau
+    alternant clefs et valeurs.
+
+Il est également possible d'adapter `scp` pour qu'il utilise notre fonction
+`ssh` :
+
+```zsh
+scp() {
+  set -o localoptions -o localtraps
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF 
+#!$SHELL
+source ${(%):-%x}
+ssh "\$@"
+EOF
+  command scp -S $helper "$@"
+}
+```
+
+Le code complet est disponible dans mon [zshrc][].
+
+[iosxr]: [[fr/blog/2020-synchro-clefs-ssh-iosxr-ansible.html]] "Synchroniser les clefs SSH sur Cisco IOS-XR avec un module Ansible sur mesure"
+[sshpass]: https://sourceforge.net/projects/sshpass/ "sshpass: Non-interactive ssh password auth"
+[pass]: https://www.passwordstore.org/ "The standard UNIX password manager"
+[passh]: https://github.com/clarkwang/passh
+[openssh 8.4]: https://www.openssh.com/txt/release-8.4 "OpenSSH 8.4 release notes"
+[zshexpn(1)]: https://manpages.debian.org/bookworm/zsh-common/zshexpn.1.en.html "zshexpn(1) manual page"
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/master/rc/ssh.zsh
+[associative array]: https://scriptingosx.com/2019/11/associative-arrays-in-zsh/ "Associative arrays in zsh"

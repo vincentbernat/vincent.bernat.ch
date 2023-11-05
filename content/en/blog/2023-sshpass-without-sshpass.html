@@ -1,0 +1,148 @@
+---
+title: "Non-interactive SSH password authentication"
+description: |
+   Instead of using sshpass to non-interactively provide an SSH password,
+   here is a simpler approach by harnessing the built-in features
+   of OpenSSH for password authentication.
+uuid: cec3ba62-6254-439c-8edd-36fda6bbf558
+tags:
+  - programming-shell
+---
+
+SSH offers several forms of authentication, such as **passwords** and
+**public keys**. The latter are considered more secure. However, password
+authentication remains prevalent, particularly with network equipment.[^why]
+
+[^why]: First, some vendors make it [difficult to associate an SSH key with a
+    user][iosxr]. Then, many vendors do not support certificate-based
+    authentication, making it difficult to scale. Finally, interactions between
+    public-key authentication and finer-grained authorization methods like
+    TACACS+ and Radius are still uncharted territory.
+
+A classic solution to avoid typing a password for each connection is
+[sshpass][], or its more correct variant [passh][]. Here is a wrapper for *Zsh*,
+getting the password from [pass][], a simple password manager:[^security]
+
+```sh
+pssh() {
+  passh -p <(pass show network/ssh/password | head -1) ssh "$@"
+}
+compdef pssh=ssh
+```
+
+[^security]: The clear-text password never appears on the command line, in the
+    environment, or on the disk, making it difficult for a third party without
+    elevated privileges to capture it. On Linux, *Zsh* provides the password
+    through a file descriptor.
+
+This approach is a bit brittle as it requires to parse the output of the `ssh`
+command to look for a password prompt. Moreover, if no password is required, the
+password manager is still invoked. Since [OpenSSH 8.4][], we can use
+`SSH_ASKPASS` and `SSH_ASKPASS_REQUIRE` instead:
+
+```zsh
+ssh() {
+  set -o localoptions -o localtraps
+  local passname=network/ssh/password
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF
+#!$SHELL
+pass show $passname | head -1
+EOF
+  chmod u+x $helper
+  SSH_ASKPASS=$helper SSH_ASKPASS_REQUIRE=force command ssh "$@"
+}
+```
+
+If the password is incorrect, we can display a prompt on the second
+tentative:
+
+```zsh
+ssh() {
+  set -o localoptions -o localtraps
+  local passname=network/ssh/password
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF
+#!$SHELL
+if [ -k $helper ]; then
+  {
+    oldtty=\$(stty -g)
+    trap 'stty \$oldtty < /dev/tty 2> /dev/null' EXIT INT TERM HUP
+    stty -echo
+    print "\rpassword: "
+    read password
+    printf "\n"
+  } > /dev/tty < /dev/tty
+  printf "%s" "\$password"
+else
+  pass show $passname | head -1
+  chmod +t $helper
+fi
+EOF
+  chmod u+x $helper
+  SSH_ASKPASS=$helper SSH_ASKPASS_REQUIRE=force command ssh "$@"
+}
+```
+
+A possible improvement is to use a different password entry depending on the
+remote host:[^zsh]
+
+```zsh
+ssh() {
+  # Grab login information
+  local -A details
+  details=(${=${(M)${:-"${(@f)$(command ssh -G "$@" 2>/dev/null)}"}:#(host|hostname|user) *}})
+  local remote=${details[host]:-details[hostname]}
+  local login=${details[user]}@${remote}
+  
+  # Get password name
+  local passname
+  case "$login" in
+    admin@*.example.net)  passname=company1/ssh/admin ;;
+    bernat@*.example.net) passname=company1/ssh/bernat ;;
+    backup@*.example.net) passname=company1/ssh/backup ;;
+  esac
+
+  # No password name? Just use regular SSH
+  [[ -z $passname ]] && {
+    command ssh "$@"
+    return $?
+  }
+  
+  # Invoke SSH with the helper for SSH_ASKPASS
+  # […]
+}
+```
+
+[^zsh]: To decipher the fourth line, you may get help from `print -l` and the
+    [zshexpn(1)][] manual page. `details` is an [associative array][] defined
+    from an array alternating keys and values.
+
+It is also possible to make `scp` invoke our custom `ssh` function:
+
+```zsh
+scp() {
+  set -o localoptions -o localtraps
+  local helper=$(mktemp)
+  trap "command rm -f $helper" EXIT INT
+  > $helper <<EOF 
+#!$SHELL
+source ${(%):-%x}
+ssh "\$@"
+EOF
+  command scp -S $helper "$@"
+}
+```
+
+For the complete code, have a look at my [zshrc][].
+
+[iosxr]: [[en/blog/202-syncing-ssh-keys-iosxr-ansible.html]] "Syncing SSH keys on Cisco IOS-XR with a custom Ansible module"
+[sshpass]: https://sourceforge.net/projects/sshpass/ "sshpass: Non-interactive ssh password auth"
+[pass]: https://www.passwordstore.org/ "The standard UNIX password manager"
+[passh]: https://github.com/clarkwang/passh
+[openssh 8.4]: https://www.openssh.com/txt/release-8.4 "OpenSSH 8.4 release notes"
+[zshexpn(1)]: https://manpages.debian.org/bookworm/zsh-common/zshexpn.1.en.html "zshexpn(1) manual page"
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/master/rc/ssh.zsh
+[associative array]: https://scriptingosx.com/2019/11/associative-arrays-in-zsh/ "Associative arrays in zsh"
