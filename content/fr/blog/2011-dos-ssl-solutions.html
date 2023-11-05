@@ -235,9 +235,9 @@ le client. Voici à quoi ressemble une poignée de mains TLS :
 
 En envoyant le message _Client Key Exchange_, le client va
 **chiffrer**[^c] la version de TLS ainsi que 46 octets aléatoires avec la
-clef publique du serveur, contenue dans le message _Certificate_ qu'il
+clé publique du serveur, contenue dans le message _Certificate_ qu'il
 vient de recevoir. Le serveur va ensuite devoir **déchiffrer** ce
-message à l'aide de sa clef privée. Il s'agit là des deux opérations
+message à l'aide de sa clé privée. Il s'agit là des deux opérations
 les plus coûteuses d'une poignée de mains. Pour comprendre pourquoi le
 déchiffrement est plus coûteux que le chiffrement, il faut d'abord
 comprendre comme RSA fonctionne.
@@ -245,9 +245,9 @@ comprendre comme RSA fonctionne.
 [^c]: En français, le vocabulaire approprié est _chiffrement_ et
       _déchiffrement_. En anglais, il s'agit de _encrypt_ et
       _decrypt_. En français, _crypter_ ne veut rien dire. _Décrypter_
-      signifie décoder le message sans en détenir la clef secrète.
+      signifie décoder le message sans en détenir la clé secrète.
 
-Tout d'abord, un serveur a besoin d'une clef privée et d'une clef
+Tout d'abord, un serveur a besoin d'une clé privée et d'une clef
 publique. Voici les étapes principales pour générer celles-ci :
 
  1. Prendre au hasard deux [entiers premiers][prime] distincts ·p· et
@@ -261,11 +261,11 @@ publique. Voici les étapes principales pour générer celles-ci :
  5. Calculer ·d=e^{-1}\bmod\varphi(n)·. Il s'agit de l'_exposant de
     déchiffrement_.
 
-La **clef publique** est ·(n,e)· et la **clef privée** est
+La **clé publique** est ·(n,e)· et la **clef privée** est
 ·(n,d)·. Pour chiffrer un message, il faut d'abord le transformer en
 un entier ·m<n· (que l'on doit « bourrer »). Il est chiffré avec la
-clef publique pour obtenir le message ·c· et ne peut être en théorie
-déchiffré qu'avec la clef privée :
+clé publique pour obtenir le message ·c· et ne peut être en théorie
+déchiffré qu'avec la clé privée :
 
  - ·c=m^e\bmod n·  (chiffrement)
  - ·m=c^d\bmod n·  (déchiffrement)
@@ -290,7 +290,7 @@ empêchant cette solution :
    entier de 32 bits.
  - Si ·d· est trop petit (s'il a moins d'un quart des bits de ·n·), il
    est possible de le
-   [calculer de manière efficace à partir de la clef publique][wiener].
+   [calculer de manière efficace à partir de la clé publique][wiener].
 
 Ainsi, le mieux que l'on puisse faire est de choisir l'exposant public
 ·e'=4294967291· (plus grand nombre premier de 32 bits ; il ne contient
@@ -351,7 +351,7 @@ pour tester.
 
 Alors qu'Eric indique qu'il n'a pas besoin d'interpréter les réponses
 du serveur, j'ai été confronté au fait que la connexion est abandonnée
-si le client envoie la clef avant que le serveur n'ait répondu aux
+si le client envoie la clé avant que le serveur n'ait répondu aux
 premiers messages. Ainsi, j'interprète sommairement les réponses du
 serveur avant de continuer. De plus, Eric indique qu'un message
 _Client Key Exchange_ erroné suffit car le serveur devra le déchiffrer

@@ -5,7 +5,7 @@ tags:
   - network-tls
 ---
 
-Une fois la clef privée d'un site HTTPS quelconque compromise, un
+Une fois la clé privée d'un site HTTPS quelconque compromise, un
 attaquant est capable de monter une [attaque par interception][mitm]
 (_MITM_) afin de déchiffrer toutes les communications avec le site
 compromis. Si l'attaque est détectée, le certificat sera révoqué via
@@ -16,7 +16,7 @@ celles-ci et y trouver des informations sensibles.
 
 La propriété de _forward secrecy_[^trad] permet à une information
 chiffrée aujourd'hui de rester confidentielle en cas de compromission
-future de la clef privée d'un correspondant. C'est un mécanisme assez
+future de la clé privée d'un correspondant. C'est un mécanisme assez
 coûteux en calculs et de nombreux serveurs font donc l'impasse sur
 celui-ci. Google a récemment
 [annoncé le support du _forward secrecy_][announce] pour tous ses
@@ -53,19 +53,19 @@ suite pour protéger la connexion.
 ![Déroulement d'une poignée de mains TLS][s2]
 [s2]: [[!!images/benchs-ssl/ssl-handshake.svg]] "Poignée de mains TLS complète"
 
-Un premier secret de 48 octets est généré et chiffré par le client avec la clef publique du serveur. Il est envoyé durant la troisième étape de la poignée de mains, lors de l'envoi du message _Client Key Exchange_. Le _secret maître_ est calculé à partir de celui-ci et des valeurs aléatoires qui ont été transmisses dans les messages _Client Hello_ et _Server Hello_.
+Un premier secret de 48 octets est généré et chiffré par le client avec la clé publique du serveur. Il est envoyé durant la troisième étape de la poignée de mains, lors de l'envoi du message _Client Key Exchange_. Le _secret maître_ est calculé à partir de celui-ci et des valeurs aléatoires qui ont été transmisses dans les messages _Client Hello_ et _Server Hello_.
 
 Ce procédé est sûr à condition que seul le serveur puisse déchiffrer
-le premier secret (à l'aide de sa clef privée) envoyé par le
+le premier secret (à l'aide de sa clé privée) envoyé par le
 client. Supposons maintenant qu'un attaquant enregistre tous les
 échanges entre le serveur et ses nombreux clients pendant plusieurs
 mois. Deux ans plus tard, le serveur est décommissionné et jeté à la
 benne. L'attaquant en profite pour subtiliser le disque et y trouve la
-clef privée. Il est désormais capable de déchiffrer toutes les
+clé privée. Il est désormais capable de déchiffrer toutes les
 communications qu'il a pu intercepter. Cela lui permet de récupérer,
 par exemple, des mots de passe encore valides aujourd'hui.
 
-Le problème principal est que la clef privée est à la fois utilisée
+Le problème principal est que la clé privée est à la fois utilisée
 pour l'**authentification** du serveur et pour le **chiffrement** du
 secret partagé. Alors que l'authentification n'est réellement
 importante que pendant le laps de temps où la communication entre les
@@ -74,7 +74,7 @@ un secret pendant plusieurs années.
 
 # Algorithme de Diffie-Hellman
 
-Une solution consiste à n'utiliser la clef privée que pour
+Une solution consiste à n'utiliser la clé privée que pour
 l'authentification et négocier un secret partagé totalement
 indépendant de celle-ci. Il existe un protocole à cet effet :
 l'[algorithme de Diffie-Hellman][dh]. Il s'agit d'une méthode
@@ -91,7 +91,7 @@ les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
     p·. Après l'envoi du message _Certificate_, il envoie un message
     _Server Key Exchange_ (inclu lors de l'étape 3 mais non représenté
     dans la poignée de mains décrite précédemment) contenant, en clair
-    mais authentifié avec sa clef privée :
+    mais authentifié avec sa clé privée :
      - la valeur aléatoire issue du message _Client Hello_,
      - la valeur aléatoire issue du message _Server Hello_,
      - ·p·, ·g·,
@@ -103,7 +103,7 @@ les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
  4. Le serveur reçoit ·B· et calcule ·B^a\bmod p=g^{ab}\bmod p· qui
     est identique au premier secret calculé par le client.
 
-La clef privée n'a été utilisée qu'à des fins d'authentification. Un
+La clé privée n'a été utilisée qu'à des fins d'authentification. Un
 espion ne pourra connaître que ·p·, ·g·, ·g^a\bmod p· et ·g^b\bmod
 p·. Calculer ·g^{ab}\bmod p· à partir de ces valeurs est connu sous le
 nom du problème du [logarithme discret][discretelog]. Aucune solution
@@ -117,12 +117,12 @@ l'utilisent pour obtenir la propriété de _perfect forward
 secrecy_[^pfs].
 
 [^pfs]: La propriété de _perfect forward secrecy_ est une version
-        améliorée du _forward secrecy_ pour laquelle chaque clef est
-        indépendante l'une de l'autre et la compromission d'une clef
+        améliorée du _forward secrecy_ pour laquelle chaque clé est
+        indépendante l'une de l'autre et la compromission d'une clé
         ne peut être utilisée pour en compromettre une autre.
 
 Afin d'obtenir un bon niveau de sécurité, les paramètres utilisés
-doivent être de la même taille que la clef privée (la sécurité du
+doivent être de la même taille que la clé privée (la sécurité du
 logarithme discret est environ équivalente à celle fournie par la
 factorisation de deux grands nombres premiers). Les opérations
 d'exponentiation sur de tels grands nombres sont alors
@@ -130,14 +130,14 @@ particulièrement longues et impactent la performance de la poignée de
 mains comme on peut le voir sur le benchmark ci-dessous :
 
 ![Graphique de comparaison de la vitesse avec et sans Diffie-Hellman][s3]
-[s3]: [[!!images/benchs-ssl/dhe-impact.png]] "Performances de stud sur 6 cœurs, avec et sans Diffie-Hellman pour une clef de 1024 bits"
+[s3]: [[!!images/benchs-ssl/dhe-impact.png]] "Performances de stud sur 6 cœurs, avec et sans Diffie-Hellman pour une clé de 1024 bits"
 
 !!! "Mise à jour (05.2015)" L'[attaque « Logjam »][Logjam attack] a démontré que
 la sécurité de Diffie-Hellman est plus faible que prévue. Notamment,
 la réutilisation du même nombre premier par de nombreux serveurs
 permet de précalculer une attaque pour casser les connexions protégées
 par ce même nombre. Il est donc important que la taille du nombre
-premier choisi soit équivalente à la taille de la clef RSA (au moins
+premier choisi soit équivalente à la taille de la clé RSA (au moins
 2048 bits).
 
 [Logjam attack]: https://weakdh.org/ "Logjam: How Diffie-Hellman Fails in Practice"
@@ -153,7 +153,7 @@ point de départ. Les courbes elliptiques permettent d'obtenir un
 niveau de sécurité équivalent à RSA en utilisant des clefs plus
 petites. Par exemple, une courbe elliptique de 224 bits permet
 d'obtenir un
-[niveau de sécurité similaire à une clef RSA de 2048 bits][compare].
+[niveau de sécurité similaire à une clé RSA de 2048 bits][compare].
 
 ## Un peu de théorie
 
@@ -176,7 +176,7 @@ et P-521. L'échange de clefs est ensuite très similaire au cas
 classique :
 
  1. Le serveur choisit un entier aléatoire ·a· et calcule ·aG· qui
-    sera envoyé en clair, mais signé avec la clef privée du serveur,
+    sera envoyé en clair, mais signé avec la clé privée du serveur,
     dans un message _Server Key Exchange_.
  2. Le client vérifie la signature et choisit un nombre aléatoire
     ·b·. Il calcule et envoie ·bG· dans un message _Client Key
@@ -253,10 +253,10 @@ supplémentaires sur ce point précis.
 
 L'implémentation des [tickets de session TLS][tickets] peut être
 incompatible avec le _forward secrecy_ selon leur
-implémentation. Quand la clef protégeant les tickets est générée
-aléatoirement au démarrage du serveur, la même clef peut être utilisée
+implémentation. Quand la clé protégeant les tickets est générée
+aléatoirement au démarrage du serveur, la même clé peut être utilisée
 pendant des mois. Certaintes implémentations [^stud] optent pour une
-clef dérivée de la clef privée. Dans ce cas, le _forward secrecy_ est
+clé dérivée de la clef privée. Dans ce cas, le _forward secrecy_ est
 rendu totalement inefficace. Il est alors préférable de désactiver
 tickets.
 
