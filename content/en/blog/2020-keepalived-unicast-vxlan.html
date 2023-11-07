@@ -7,9 +7,14 @@ description: |
 uuid: 0409988d-965a-457d-8e46-87f95043332d
 tags:
  - network-vxlan
+ - outdated
 attachments:
  "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-unicast": "Git repository"
 ---
+
+!!! "Update (2022-11)" Since *Keepalived 2.21*, the hack described here is not
+needed anymore: the `interface` directive in `vrrp_instance` is not required
+anymore.
 
 [Keepalived][] is a Linux implementation of [VRRP][]. The usual role
 of VRRP is to **share a virtual IP** across a set of routers. For each
@@ -43,7 +48,6 @@ common to all nodes sharing the virtual IP. The `priority` keyword in
 more information about *Keepalived*, be sure to check the
 [documentation][].
 
-
 VRRP design is tied to Ethernet networks and requires a
 multicast-enabled network for communication between nodes. In some
 environments, notably public clouds, multicast is unavailable. In this
@@ -68,11 +72,10 @@ Another process, like a BGP daemon, should advertise the virtual IP
 address to the "network." If needed, *Keepalived* can trigger whatever
 action is needed for this by using `notify_*` scripts.
 
-Until version 2.21 (not released yet), the `interface` directive is
-mandatory and *Keepalived* will transmit and receive VRRP packets on
-this interface only. If peers are reachable through several
-interfaces, like on a [BGP on the host][] setup, you need a
-workaround. A simple one is to use a VXLAN interface:
+Until version 2.1.0, the `interface` directive is mandatory and *Keepalived*
+will transmit and receive VRRP packets on this interface only. If peers are
+reachable through several interfaces, like on a [BGP on the host][] setup, you
+need a workaround. A simple one is to use a VXLAN interface:
 
     ::console
     $ ip -6 link add keepalived6 type vxlan id 6 dstport 4789 local 2001:db8::10 nolearning
@@ -97,7 +100,7 @@ broadcasted to all peers**, notably VRRP packets. Have a look at
       }
     }
 
-Starting from *Keepalived* 2.21, `unicast_peer` can be used [without
+Starting from *Keepalived* 2.1.0, `unicast_peer` can be used [without
 the `interface` directive][commit]. I think using VXLAN is still a
 neat trick applicable to other situations where communication using
 broadcast or multicast is needed, while the underlying network provides

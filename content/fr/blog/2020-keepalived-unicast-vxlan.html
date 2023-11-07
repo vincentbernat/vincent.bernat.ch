@@ -7,9 +7,14 @@ description: |
 uuid: 0409988d-965a-457d-8e46-87f95043332d
 tags:
  - network-vxlan
+ - outdated
 attachments:
  "https://github.com/vincentbernat/network-lab/tree/master/lab-keepalived-unicast": dépôt Git
 ---
+
+!!! "Mise à jour (11.2023)" Depuis *Keepalived* 2.1.0, l'astuce décrite ici
+n'est plus nécessaire: la directive `interface` n'est plus obligatoire dans
+`vrrp_instance`.
 
 [Keepalived][] est une implémentation Linux de [VRRP][]. Le rôle
 habituel de VRRP est de **partager une adresse IP virtuelle** entre un
@@ -69,11 +74,10 @@ Un autre processus, comme un démon BGP, doit annoncer l'adresse IP
 virtuelle au « réseau ». Au besoin, *Keepalived* peut déclencher toute
 action nécessaire à cet effet en utilisant les scripts `notify_*`.
 
-Jusqu'à la version 2.21 (pas encore publiée), la directive `interface`
-est obligatoire et *Keepalived* transmettra et recevra des paquets
-VRRP sur cette interface uniquement. Si les autres nœuds sont
-joignables par plusieurs interfaces, comme avec [BGP sur le
-serveur][BGP on the host], il faut trouver une alternative. Une
+Jusqu'à la version 2.1.0, la directive `interface` est obligatoire et
+*Keepalived* transmettra et recevra des paquets VRRP sur cette interface
+uniquement. Si les autres nœuds sont joignables par plusieurs interfaces, comme
+avec [BGP sur le serveur][BGP on the host], il faut trouver une alternative. Une
 solution simple consiste à utiliser une interface VXLAN :
 
     ::console
@@ -100,7 +104,7 @@ Linux][] » pour plus de détails.
       }
     }
 
-À partir de la version 2.21 de *Keepalived*, `unicast_peer` peut être
+À partir de la version 2.1.0 de *Keepalived*, `unicast_peer` peut être
 utilisé [sans la directive `interface`][commit]. Je pense que
 l'utilisation de VXLAN reste néanmoins une astuce intéressante
 applicable à d'autres situations où la communication par diffusion ou
