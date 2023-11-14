@@ -108,7 +108,6 @@
                       name: 'preset-default',
                       params: {
                         overrides: {
-                          cleanupIds: false,
                           removeEmptyContainers: false,
                         }
                       }
