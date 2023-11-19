@@ -2,6 +2,11 @@
   inputs = {
     nixpkgs.url = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
+    poetry2nix = {
+      url = "github:nix-community/poetry2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
     merriweather = {
       url = "github:SorkinType/Merriweather";
       flake = false;
@@ -14,9 +19,10 @@
           inherit system;
         };
         l = pkgs.lib // builtins;
-        pythonEnv = pkgs.poetry2nix.mkPoetryEnv {
+        poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
+        pythonEnv = poetry2nix.mkPoetryEnv {
           projectDir = ./.;
-          overrides = pkgs.poetry2nix.overrides.withDefaults (self: super:
+          overrides = poetry2nix.overrides.withDefaults (self: super:
             (l.listToAttrs (l.map
               # Many dependencies do not declare explicitely their build tools
               (x: {
