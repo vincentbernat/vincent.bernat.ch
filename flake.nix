@@ -22,25 +22,29 @@
         poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
         pythonEnv = poetry2nix.mkPoetryEnv {
           projectDir = ./.;
-          overrides = poetry2nix.overrides.withDefaults (self: super:
-            (l.listToAttrs (l.map
-              # Many dependencies do not declare explicitely their build tools
-              (x: {
-                name = x;
-                value = super."${x}".overridePythonAttrs (old: {
-                  nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ self.setuptools self.flit-core ];
+          overrides = poetry2nix.overrides.withDefaults
+            (self: super:
+              (l.listToAttrs (l.map
+                # Many dependencies do not declare explicitely their build tools
+                (x: {
+                  name = x;
+                  value = super."${x}".overridePythonAttrs (old: {
+                    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ self.setuptools self.flit-core ];
+                  });
+                })
+                [
+                  "commando"
+                  "fswrap"
+                  "hyde"
+                  "pygments-haproxy"
+                  "pygments-ios"
+                  "pygments-junos"
+                ])) // {
+                pygments = super.pygments.overridePythonAttrs (old: {
+                  nativeBuildInputs = old.nativeBuildInputs ++ [ self.hatchling ];
                 });
-              })
-              [
-                "commando"
-                "fswrap"
-                "hyde"
-                "pygments-haproxy"
-                "pygments-ios"
-                "pygments-junos"
-                "pypdf2"
-              ]))
-          );
+              }
+            );
         };
         nodeEnv = pkgs.mkYarnModules {
           pname = "www-yarn-modules";
