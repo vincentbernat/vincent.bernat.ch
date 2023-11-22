@@ -29,13 +29,13 @@ inv build
 Check oudated dependencies:
 
 ```
-nix run .#poetry -- show --outdated
+poetry show --outdated
 ```
 
 Update a dependency:
 
 ```
-nix run .#poetry -- update --lock langcodes
+poetry update --lock langcodes
 ```
 
 ### Yarn
@@ -43,13 +43,13 @@ nix run .#poetry -- update --lock langcodes
 Check oudated dependencies:
 
 ```
-nix run .#yarn -- outdated
+yarn outdated
 ```
 
 Upgrade a dependency:
 
 ```
-nix run .#yarn -- upgrade-interactive --modules-folder ~/tmp/node_modules --ignore-scripts --latest
+yarn upgrade-interactive --modules-folder ~/tmp/node_modules --ignore-scripts --latest
 ```
 
 ### Nix
