@@ -631,7 +631,7 @@ def analytics(c):
     c.run(
         "for h in {};"
         "do ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
-        "   | grep -Fv atom.xml;"
+        "   | grep -aFv atom.xml;"
         "done"
         " | LANG=en_US.utf8 nix run .#goaccess -- "
         "       --ignore-crawlers "
