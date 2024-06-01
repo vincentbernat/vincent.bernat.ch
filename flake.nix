@@ -116,11 +116,6 @@
                   plugins: [
                     {
                       name: 'preset-default',
-                      params: {
-                        overrides: {
-                          removeEmptyContainers: false,
-                        }
-                      }
                     }
                   ]
                 };
