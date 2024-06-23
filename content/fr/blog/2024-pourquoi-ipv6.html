@@ -1,0 +1,157 @@
+---
+title: "Pourquoi les fournisseurs de contenu ont besoin d'IPv6"
+description: |
+   Les fournisseurs de contenu ont intérêt à activer IPv6 pour éviter la traduction des adresses IPv4.
+   Offrir IPv6 assure une meilleure qualité de service.
+uuid: 2d76488c-8453-4703-9915-ae40f30ad912
+tags:
+  - network
+---
+
+IPv4 est une ressource coûteuse. Cependant, de nombreux fournisseurs de contenu
+sont [encore uniquement en IPv4][still IPv4-only]. La raison la plus souvent
+avancée est qu'IPv4 est là pour rester et qu'IPv6 est une complexité
+supplémentaire[^complexity]. Cet état d'esprit peut sembler égoïste, mais il
+existe des raisons convaincantes pour un fournisseur de contenu d'activer IPv6,
+même lorsqu'il dispose de suffisamment d'adresses IPv4 disponibles pour ses
+besoins.
+
+[^complexity]: Une façon de limiter cette complexité est de construire des
+    services IPv6 et de fournir IPv4 uniquement via des *proxies* à la bordure
+    du réseau.
+
+!!! "Mise en garde" Cela fait un moment que cet article se trouve dans mes
+brouillons. Je l'avais commencé quand je travaillais chez
+[Shadow](https://shadow.tech), un fournisseur de contenu, alors que je travaille
+maintenant pour [Free](https://free.fr/), un fournisseur d'accès.
+
+# Pourquoi les FAI ont-ils besoin d'IPv6 ?
+
+Fournir une adresse IPv4 publique à chaque client est assez coûteux en raison du
+prix des IP sur le marché. Pour l'accès fixe, certains FAI grand public
+attribuent encore une adresse IPv4 par client[^fixed]. Les autres proposent par
+défaut une adresse IPv4 partagée entre plusieurs clients. Pour l'accès mobile,
+la plupart des FAI fournissent une adresse IPv4 partagée.
+
+[^fixed]: En France, les FAI à but non lucratif, tels que [FDN][] et
+    [Milkywan][], fournissent une IPv4 dédiée. C'est aussi le cas d'Orange, le
+    FAI historique. Free attribue également une adresse IPv4 dédiée pour les
+    clients connectés à l'infrastructure FTTH en ZTD en point-à-point.
+
+Il existe plusieurs méthodes pour partager une adresse IPv4[^nat] :
+
+NAT44
+: L'équipement du client reçoit une adresse IPv4 privée, qui est traduite en une
+  adresse publique par un équipement du FAI. Cet équipement doit maintenir un
+  état pour chaque traduction.
+
+464XLAT et DS-Lite
+: L'équipement du client traduit l'adresse IPv4 privée en une adresse IPv6 ou
+  encapsule le trafic IPv4 dans des paquets IPv6. L'équipement du FAI traduit
+  ensuite l'adresse IPv6 en une adresse IPv4 publique. Il doit toujours
+  maintenir un état pour la traduction NAT64.
+
+Lightweight IPv4 over IPv6, MAP-E et MAP-T
+: L'équipement du client encapsule IPv4 dans des paquets IPv6 ou effectue une
+  traduction NAT46 sans état. L'équipement du FAI utilise une table de liaison
+  ou une règle algorithmique pour associer les tunnels IPv6 vers des adresses et
+  des ports IPv4. Il n'a pas besoin de maintenir un état.
+
+[^nat]: J'utilise le terme NAT au lieu du terme plus correct NAPT. N'hésitez pas
+    à faire mentalement la substitution. Si vous êtes curieux, consultez [RFC
+    2663][]. Pour un aperçu des technologies de transition IPv6 énumérées ici,
+    jetez un coup d'œil à [RFC 9313][].
+
+![Solutions pour partager une adresse IPv4][i1]
+[i1]: [[!!images/rfc9313.svg]] "Solutions pour partager une adresse IPv4 entre plusieurs clients. Certaines imposent au FAI de garder un état, d'autres non."
+
+Toutes ces solutions nécessitent un dispositif de traduction dans le réseau du
+FAI. Ce dispositif représente un coût non négligeable en termes d'argent et de
+fiabilité. Comme [la moitié des 1000 sites web les plus importants prennent en
+charge IPv6][half of the top 1000 websites support ipv6] et que les plus grands
+acteurs peuvent servir la majeure partie de leur trafic en utilisant
+IPv6[^ipv6], les FAI ont une voie toute tracée pour réduire le coût des
+dispositifs de traduction : **fournir IPv6 par défaut à leurs clients**.
+
+[^ipv6]: Pour [AS 12322][free], Google, Netflix et Meta fournissent 85% de leur
+    trafic via IPv6. Aussi, plus de la moitié de notre trafic est fourni via
+    IPv6.
+
+# Pourquoi les fournisseurs de contenu ont-ils besoin d'IPv6 ?
+
+Les fournisseurs de contenu devraient exposer leurs services via IPv6
+principalement pour **éviter de passer par les dispositifs de traduction du
+FAI**. Cela n'aide pas les utilisateurs qui n'ont pas IPv6 ou les utilisateurs
+avec une adresse IPv4 dédiée, mais cela fournit un meilleur service pour tous
+les autres.
+
+Pourquoi le service serait-il mieux rendu via IPv6 que via IPv4 lorsqu'un
+dispositif de traduction est sur le chemin ? Il y a deux raisons
+principales[^ban] :
+
+1. Les dispositifs de traduction introduisent une latence supplémentaire en
+   raison de leur placement géographique à l'intérieur du réseau : il est plus
+   facile et moins coûteux d'installer ces dispositifs à quelques points du
+   réseau au lieu de les placer au plus près des utilisateurs.
+
+2. Les dispositifs de traduction sont un point de défaillance supplémentaire sur
+   le chemin entre l'utilisateur et le contenu. Ils peuvent être surchargés ou
+   mal fonctionner. De plus, comme ils ne sont pas utilisés pour les cinq [sites
+   web les plus visités][most visited websites], qui servent leur trafic via
+   IPv6, le FAI peut ne pas être incité à s'assurer qu'ils fonctionnent aussi
+   bien que l'IPv6 natif.
+
+[^ban]: Une raison supplémentaire est la lutte contre les abus : bloquer une
+    adresse IPv4 peut avoir un impact sur des utilisateurs qui partagent la même
+    IPv4 que les coupables.
+
+En regardant les [statistiques de Google][Google statistics], la moitié des
+utilisateurs atteignent leurs sites web via IPv6. De plus, leur latence est plus
+faible[^lower]. Aux États-Unis, [tous les fournisseurs mobiles nationaux ont
+activé IPv6][all the nationwide mobile providers have IPv6 enabled].
+
+[^lower]: IPv6 peut ne pas être la seule raison pour laquelle la latence est
+    plus faible : les utilisateurs avec IPv6 ont généralement une meilleure
+    connexion.
+
+Pour la France, nous pouvons nous référer au [rapport annuel de l'ARCEP][annual
+ARCEP report] : en 2022, 72% des utilisateurs fixes et 60% des utilisateurs
+mobiles avaient activé IPv6, avec des projections de 94% et 88% pour 2025. En
+utilisant cette projection, puisque tous les utilisateurs mobiles passent par un
+dispositif de traduction des adresses, les fournisseurs de contenu peuvent
+livrer un meilleur service à 88% d'entre eux en exposant leurs services via
+IPv6. En excluant Orange qui détient 40% des parts de marché sur l'accès fixe
+grand public, l'activation d'IPv6 devrait avoir un impact positif sur plus de
+55% des utilisateurs d'accès fixe.
+
+---
+
+En conclusion, les fournisseurs de contenu visant la meilleure expérience
+utilisateur devraient exposer leurs services via IPv6. En évitant les
+dispositifs de traduction, ils peuvent délivrer un contenu de manière plus
+rapide et fiable. C'est crucial pour les applications sensibles à la latence,
+comme la diffusion en direct, mais aussi pour les sites web sur des marchés
+concurrentiels, où même de légers retards peuvent entraîner un désengagement des
+utilisateurs.
+
+*[ISPs]: Internet Service Providers
+*[ISP]: Internet Service Provider
+*[FAI]: Fournisseur d'accès à Internet
+*[CGNAT]: Carrier-Grade NAT
+*[NAT]: Network Address Translation
+*[NAPT]: Network Address Port Translation
+*[NAPT]: Network Address and Port Translation
+*[ZTD]: Zone Très Dense
+*[FTTH]: Fiber To The Home
+
+[still ipv4-only]: https://whynoipv6.com/ "Introducing Shame as a Service"
+[free]: https://www.free.fr/freebox/
+[fdn]: https://www.fdn.fr/services/acces-internet/
+[milkywan]: https://milkywan.fr/services/ftth/
+[rfc 2663]: rfc://2663 "IP Network Address Translator (NAT) Terminology and Considerations"
+[rfc 9313]: rfc://9313 "Pros and Cons of IPv6 Transition Technologies for IPv4-as-a-Service (IPv4aaS)"
+[half of the top 1000 websites support ipv6]: https://pulse.internetsociety.org/blog/do-half-of-the-most-popular-websites-use-ipv6 "Do Half of the Most Popular Websites Use IPv6?"
+[google statistics]: https://www.google.com/intl/en/ipv6/statistics.html "IPv6 adoption"
+[annual arcep report]: https://www.arcep.fr/cartes-et-donnees/nos-publications-chiffrees/transition-ipv6/barometre-annuel-de-la-transition-vers-ipv6-en-france.html
+[all the nationwide mobile providers have ipv6 enabled]: https://hpc.mil/solution-areas/networking/ipv6-knowledge-base/frequently-asked-questions/available-ipv6-cell-phones-and-wireless-carriers "Available IPv6 Cell Phones and Wireless Carriers"
+[most visited websites]: https://www.semrush.com/website/top/ "Top websites"
