@@ -1,0 +1,186 @@
+---
+title: "Création de chemins d'AS infinis dans BGP"
+description: |
+   En combinant deux fonctionnalités à éviter, il est possible
+   de créer une boucle BGP qui génère un chemin d'AS sans limite.
+uuid: 684f47ec-70eb-4651-a964-da3fcac29f28
+tags:
+  - network-bgp
+attachments:
+  "https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-infinite-aspath": "Dépôt Git"
+---
+
+La combinaison des [confédérations BGP][rfc3065] et du [remplacement d'AS][AS
+override] peut potentiellement créer une boucle de routage BGP, résultant en un
+chemin d'AS qui grossit indéfiniment.
+
+La **confédération BGP** est une technique utilisée pour réduire le nombre de
+sessions iBGP et améliorer le passage à l'échelle dans les grands systèmes
+autonomes (AS). Elle divise un AS en sous-AS. La plupart des règles eBGP
+s'appliquent entre les sous-AS, sauf que le saut suivant, la MED et les
+préférences locales restent inchangés. La longueur du chemin d'AS ignore les
+contributions des sous-AS de la confédération. La confédération BGP est rarement
+utilisée et la [réflexion des routes BGP][rfc4456] lui est généralement
+préférée.
+
+Le **remplacement d'AS** est une fonctionnalité qui permet à un routeur de
+remplacer l'ASN d'un voisin dans le chemin d'AS des routes BGP sortantes par le
+sien. C'est utile lorsque deux systèmes autonomes distincts partagent le même
+ASN. Cependant, cela interfère avec le mécanisme de prévention des boucles de
+BGP et doit être utilisé avec prudence. Une alternative plus sûre est la
+directive `allowas-in`[^allowconfedas-in].
+
+[^allowconfedas-in]: Lors de l'utilisation des confédérations BGP avec Cisco IOS
+    XR, utilisez `allowconfedas-in` à la place. C'est disponible depuis [IOS XR
+    7.11][].
+
+Dans l'exemple ci-dessous, nous avons quatre routeurs dans une seule
+confédération, chacun dans son propre sous-AS. `R0` est à l'origine du préfixe
+`2001:db8::1/128`. `R1`, `R2`, et `R3` transmettent ce préfixe au routeur
+suivant dans la boucle.
+
+![Boucle de routage BGP impliquant 4 routeurs : R0 est à l'origine du préfixe,
+R1, R2 et R3 le font tourner en boucle en utilisant next-hop-self et
+as-override]([[!!images/bgp-loop.svg]] "Boucle de routage BGP utilisant une
+confédération")
+
+Les configurations des routeurs sont disponibles dans un [dépôt Git][git
+repository]. Ils tournent sous Cisco IOS XR. `R2` utilise la configuration BGP
+suivante :
+
+```cisco hl_lines="21 22 23"
+router bgp 64502
+ bgp confederation peers
+  64500
+  64501
+  64503
+ !
+ bgp confederation identifier 64496
+ bgp router-id 1.0.0.2
+ address-family ipv6 unicast
+ !
+ neighbor 2001:db8::2:0
+  remote-as 64501
+  description R1
+  address-family ipv6 unicast
+  !
+ !
+ neighbor 2001:db8::3:1
+  remote-as 64503
+  advertisement-interval 0
+  description R3
+  address-family ipv6 unicast
+   next-hop-self
+   as-override
+  !
+ !
+!
+```
+
+La session avec `R3` utilise à la fois les directives `as-override` et
+`next-hop-self`. Cette dernière est seulement nécessaire pour rendre le préfixe
+annoncé valide, car il n'y a pas d'IGP dans cet exemple[^igp].
+
+[^igp]: L'utilisation des confédérations BGP est déjà une mauvaise idée. Si en
+    plus vous n'utilisez pas le même IGP pour tous les sous-AS, vous vous
+    exposez à bien des problèmes ! Toutefois, le scénario exposé ici est aussi
+    possible avec un IGP.
+
+Voici la séquence d'événements menant à un chemin d'AS infini :
+
+1. `R0` envoie le préfixe à `R1` avec le chemin d'AS `(64500)`[^confed].
+
+1. `R1` le sélectionne comme meilleur chemin et le transmet à `R2` avec le
+   chemin d'AS `(64501 64500)`.
+
+1. `R2` le sélectionne comme meilleur chemin et le transmet à `R3` avec le
+   chemin d'AS `(64502 64501 64500)`.
+
+1. `R3` le sélectionne comme meilleur chemin. Il devrait le transmettre à `R1`
+   avec le chemin d'AS `(64503 64502 64501 64500)`, mais en raison du
+   remplacement d'AS, il substitue l'ASN de `R1` par le sien, le transmettant
+   avec le chemin d'AS `(64503 64502 64503 64500)`.
+
+1. `R1` accepte le préfixe, car son propre ASN n'est pas dans le chemin d'AS. Il
+   compare ce nouveau préfixe avec celui de `R0`. `(64500)` et `(64503 64502
+   64503 64500)` ont la même longueur car les sous-AS de la confédération ne
+   contribuent pas à la longueur du chemin d'AS. **Le premier critère pour
+   départager les deux routes est alors l'ID du routeur**. L'ID du routeur de
+   `R0` (`1.0.0.4`) est plus élevé que celui de `R3` (`1.0.0.3`). Le nouveau
+   préfixe devient le meilleur chemin et est transmis à `R2` avec le chemin d'AS
+   `(64501 64503 64501 64503 64500)`.
+
+1. `R2` reçoit le nouveau préfixe, remplaçant l'ancien. Il le sélectionne comme
+   meilleur chemin et le transmet à `R3` avec le chemin d'AS `(64502 64501 64502
+   64501 64502 64500)`.
+
+1. `R3` reçoit le nouveau préfixe, remplaçant l'ancien. Il le sélectionne comme
+   meilleur chemin et le transmet à `R0` avec le chemin d'AS `(64503 64502 64503
+   64502 64503 64502 64500)`.
+
+1. `R1` reçoit le nouveau préfixe, remplaçant l'ancien. Encore une fois, il est
+   en concurrence avec le préfixe de `R0`, et encore une fois le nouveau préfixe
+   gagne en raison de l'ID de routeur inférieur. Le préfixe est transmis à `R2`
+   avec le chemin d'AS `(64501 64503 64501 64503 64501 64503 64501 64500)`.
+
+[^confed]: Lorsqu'un segment de chemin d'AS est composé d'ASN d'une
+    confédération, il est représenté entre parenthèses.
+
+Quelques itérations plus tard, `R1` voit le préfixe en boucle comme suit[^pacing] :
+
+```console hl_lines="11"
+RP/0/RP0/CPU0:R1#show bgp ipv6 u 2001:db8::1/128 bestpath-compare
+BGP routing table entry for 2001:db8::1/128
+Last Modified: Jul 28 10:23:05.560 for 00:00:00
+Paths: (2 available, best #2)
+  Path #1: Received by speaker 0
+  Not advertised to any peer
+  (64500)
+    2001:db8::1:0 from 2001:db8::1:0 (1.0.0.4), if-handle 0x00000000
+      Origin IGP, metric 0, localpref 100, valid, confed-external
+      Received Path ID 0, Local Path ID 0, version 0
+      Higher router ID than best path (path #2)
+  Path #2: Received by speaker 0
+  Advertised IPv6 Unicast paths to peers (in unique update groups):
+    2001:db8::2:1
+  (64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64503 64502 64500)
+    2001:db8::4:0 from 2001:db8::4:0 (1.0.0.3), if-handle 0x00000000
+      Origin IGP, metric 0, localpref 100, valid, confed-external, best, group-best
+      Received Path ID 0, Local Path ID 1, version 37
+      best of AS 64503, Overall best
+```
+
+[^pacing]: Par défaut, IOS XR ralentit les mises à jour eBGP. Ceci est contrôlé
+    par la directive `advertisement-interval`. Sa valeur par défaut est de 30
+    secondes pour les sessions eBGP (y compris dans les confédérations). `R1` et
+    `R2` passent cette valeur à 0, tandis que `R3` la définit à 2 secondes. Cela
+    donne un peu de temps pour observer la croissance du chemin d'AS.
+
+Il n'y a pas de limite supérieure pour un chemin d'AS, mais les messages BGP ont
+des limites de taille (4096 octets selon [RFC 4271][rfc4271] ou 65535 octets
+selon [RFC 8654][rfc8654]). Passé un certain nombre d'itérations, les mises à
+jour BGP ne peuvent plus être générées. Sur Cisco IOS XR, le processus BGP
+plante bien avant d'atteindre cette limite. 😑
+
+---
+
+Les principales leçons de cette histoire sont de n'utiliser en aucune
+circonstance les confédérations BGP et d'être prudent avec les fonctionnalités
+qui affaiblissent la détection de boucles de routage BGP.
+
+*[BGP]: Border Gateway Protocol
+*[iBGP]: Internal BGP
+*[eBGP]: External BGP
+*[IGP]: Internal Gateway Protocol
+*[AS]: Autonomous System
+*[ASN]: Autonomous System Number
+*[ASNs]: Autonomous System Numbers
+*[MED]: Multi-Exit Discriminator
+
+[rfc3065]: rfc://3065 "RFC 3065: Autonomous System Confederations for BGP"
+[rfc4456]: rfc://4456 "RFC 4456: BGP Route Reflection: An Alternative to Full Mesh Internal BGP (IBGP)"
+[rfc4271]: rfc://4271 "RFC 4271: A Border Gateway Protocol 4 (BGP-4)"
+[rfc8654]: rfc://8654 "RFC 8654: Extended Message Support for BGP"
+[as override]: https://networklessons.com/bgp/mpls-layer-3-vpn-bgp-override "MPLS Layer 3 VPN BGP AS Override"
+[ios xr 7.11]: https://www.cisco.com/c/en/us/td/docs/iosxr/ncs5500/bgp/711x/configuration/guide/b-bgp-cg-ncs5500-711x/implementing-bgp.html#feat-3439-overview-bgp-allowas-in-9k
+[git repository]: https://github.com/vincentbernat/network-lab/tree/master/lab-bgp-infinite-aspath
