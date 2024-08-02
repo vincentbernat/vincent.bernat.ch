@@ -22,6 +22,7 @@
         poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
         pythonEnv = poetry2nix.mkPoetryEnv {
           projectDir = ./.;
+          python = pkgs.python311;
           overrides = poetry2nix.overrides.withDefaults
             (self: super:
               (l.listToAttrs (l.map
@@ -255,7 +256,7 @@
             git-annex
             nodejs
             openssl
-            python3Packages.invoke
+            python311Packages.invoke
 
             # Build support
             yarn
