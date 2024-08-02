@@ -259,7 +259,6 @@
             git-annex
             nodejs
             openssl
-            python311Packages.invoke
 
             # Build support
             yarn
