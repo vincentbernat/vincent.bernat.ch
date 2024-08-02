@@ -42,7 +42,10 @@
                   "pygments-junos"
                 ])) // {
                 pygments = super.pygments.overridePythonAttrs (old: {
-                  nativeBuildInputs = old.nativeBuildInputs ++ [ self.hatchling ];
+                  nativeBuildInputs = old.nativeBuildInputs or [ ] ++ [ self.hatchling ];
+                });
+                lxml = super.lxml.overridePythonAttrs (old: {
+                  buildInputs = old.buildInputs or [ ] ++ [ pkgs.zlib ];
                 });
               }
             );
