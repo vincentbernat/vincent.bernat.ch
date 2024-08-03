@@ -148,7 +148,8 @@
                 find . -type f -name '*.jpg' -print0 \
                   | xargs -0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
                                                                        --ignore-icc \
-                                                                       --min 20 --max 25 \
+                                                                       --min 0 --max 63 \
+                                                                       -a end-usage=q -a cq-level=21 -a tune=ssim \
                                                                   '{}' $out/'{}'.avif
 
                 # Optimize JPG
