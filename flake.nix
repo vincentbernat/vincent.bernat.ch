@@ -168,10 +168,6 @@
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
                     | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
-
-                # PNG→AVIF
-                find $out -type f -name '*.png' -print0 \
-                    | xargs -0 -P$(nproc) -i ${libavif}/bin/avifenc -s 0 --lossless '{}' '{}'.avif
               '';
               installPhase = "true";
             };
