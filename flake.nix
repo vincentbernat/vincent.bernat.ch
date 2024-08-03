@@ -137,16 +137,16 @@
                 for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
-                    | xargs -r0 -P$(nproc) ${nodeEnv}/node_modules/svgo/bin/svgo --config ${svgoConfig} -o $out/$d -i
+                    | xargs -r0n5 -P$(nproc) ${nodeEnv}/node_modules/svgo/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
                 # JPG→WebP
                 find . -type f -name '*.jpg' -print0 \
-                  | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -q 84 -af '{}' -o $out/'{}'.webp
+                  | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/cwebp -q 84 -af '{}' -o $out/'{}'.webp
 
                 # JPG→AVIF
                 find . -type f -name '*.jpg' -print0 \
-                  | xargs -0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
+                  | xargs -r0n5 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
                                                                        --ignore-icc \
                                                                        --min 0 --max 63 \
                                                                        -a end-usage=q -a cq-level=21 -a tune=ssim \
@@ -156,19 +156,19 @@
                 for d in $(find . -type d); do
                   find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
                     | sort -z \
-                    | xargs -r0n3 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
+                    | xargs -r0n5 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
                                                 -d $out/$d --max=84 --all-progressive --strip-all
                 done
 
                 # Optimize PNG
                 find . -type f -name '*.png' -print0 \
-                    | xargs -0 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
+                    | xargs -r0n5 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
                                                 --quiet -o $out/'{}' '{}' \
                     || [ $? -eq 123 ]
 
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
-                    | xargs -0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+                    | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
               '';
               installPhase = "true";
             };
