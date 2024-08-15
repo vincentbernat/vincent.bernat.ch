@@ -98,12 +98,11 @@
                   ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
                     --layout-features= \
                     --text-file=$glyphs \
-                    --no-hinting --desubroutinize \
                     --output-file=$out/$font.woff2 \
                     "$@"
                 }
                 mkdir $out
-                subset iosevka-custom-regular ${monospace}
+                subset iosevka-custom-regular ${monospace} --desubroutinize --no-hinting
                 subset merriweather ${regular} --layout-features+=ss01,onum,tnum
                 subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
               '';
