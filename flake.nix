@@ -205,8 +205,8 @@
                     family = "Iosevka Custom";
                     spacing = "term";
                     serifs = "sans";
-                    no-ligation = true;
-                    no-cv-ss = true;
+                    noLigation = true;
+                    noCvSs = true;
                     variants = {
                       inherits = "ss05";
                       design = {
@@ -231,7 +231,7 @@
                       menu = 5;
                       css = "normal";
                     };
-                    metric-override = {
+                    metricOverride = {
                       cap = 790;
                       ascender = 790;
                       xHeight = 570;
