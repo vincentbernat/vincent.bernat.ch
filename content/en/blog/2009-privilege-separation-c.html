@@ -1,0 +1,836 @@
+---
+title: "Privilege separation in C"
+description: |
+  Privilege separation is a technique that allows a program 
+  to limit the privileges allocated to most of its code.
+uuid: ae884841-ccd4-408c-b385-d1ebf452e6d9
+created: !!timestamp 2009-09-01 14:00:00
+tags:
+  - programming-c
+---
+
+!!! "Note" This article was published in *GNU/Linux Magazine n° 119* in 2009. It
+is reproduced here, translated to English and with very small changes.
+
+Privilege separation[^PROVOS] is a technique popularized by OpenSSH and notably
+used in the OpenBSD project, allowing the separation of a program into two
+communicating parts. One part handles operations requiring specific privileges
+like opening a network socket or opening a file. The other part runs without any
+special privileges in a chroot and must perform most of the operations necessary
+for the proper functioning of the program. This technique aims to minimize the
+number of lines of code requiring privileges and thus the number of lines to be
+carefully audited. Adding privilege separation to a program is not necessarily
+very complicated. We will see how to create a small sniffer using this
+technique.
+
+[^PROVOS]: Niels Provos, Markus Friedl, Peter Honeyman,
+    "[Preventing Privilege Escalation][]."
+
+[TOC]
+
+# A "light" tcpdump
+
+As an example, we will write a lightweight clone of tcpdump. It takes as a
+parameter the interface on which to listen. It will display on the standard
+output the packets it receives: source IP, destination IP, protocol, and
+possibly source and destination ports.
+
+We will also add a feature whose sole purpose will be to better illustrate our
+article: regularly, our sniffer will append some statistics to the end of a log
+file.
+
+## The code
+
+Here is a first version of our sniffer. This version must be launched as the
+root user in order to function.
+
+    ::c
+    #include <stdlib.h>
+    #include <stdio.h>
+    #include <unistd.h>
+    #include <string.h>
+    #include <sys/socket.h>
+    #include <arpa/inet.h>
+    #include <net/if.h>
+    #include <netinet/in.h>
+    #include <netinet/ip.h>
+    #include <netinet/udp.h>
+    #include <netinet/tcp.h>
+    #include <linux/if_ether.h>
+    #include <linux/if_packet.h>
+    #include <linux/filter.h>
+    #include <time.h>
+
+    #define MFS 1514
+
+    #define LOG "sniffer.log"
+
+    int
+    main(int argc, char **argv)
+    {
+        int s;   /* Raw socket */
+        char ifname[IFNAMSIZ]; /* Interface name */
+        struct sockaddr_ll sa; /* Bind options */
+        char packet[MFS + 1];  /* Received packet */
+        int n;   /* Received bytes */
+        int nb = 0;   /* Received packets since start */
+        struct iphdr ip;
+        struct udphdr udp;
+        struct tcphdr tcp;
+        FILE *log;
+
+        /* BPF filter:
+           tcpdump -ni eth0 -s0 -dd ether dst ff:ff:ff:ff:ff:ff */
+        struct sock_filter filter[] = {
+            { 0x20, 0, 0, 0x00000002 },
+            { 0x15, 0, 3, 0xffffffff },
+            { 0x28, 0, 0, 0x00000000 },
+            { 0x15, 0, 1, 0x0000ffff },
+            { 0x6, 0, 0, 0x00000000 },
+            { 0x6, 0, 0, 0x0000ffff },
+        };
+
+        struct sock_fprog prog = {
+            .filter = filter,
+            .len = 6
+        };
+
+        if (argc != 2) {
+            fprintf(stderr, "Usage: %s interfaceface\n", argv[0]);
+            exit(1);
+        }
+
+        /* Open the raw socket, ❶ */
+        if ((s = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
+            fprintf(stderr, "unable to open raw socket (%m)\n");
+            exit(1);
+        }
+
+        /* Bind it to the interface we want to listen to */
+        memset(&sa, 0, sizeof(sa));
+        sa.sll_family = AF_PACKET;
+        sa.sll_protocol = 0;
+        strncpy(ifname, argv[1], IFNAMSIZ);
+        ifname[IFNAMSIZ-1] = '\0';
+
+        if ((sa.sll_ifindex = if_nametoindex(ifname)) == 0) {
+            fprintf(stderr, "unknown interface %s\n", ifname);
+            exit(1);
+        }
+
+        if (bind(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+            fprintf(stderr, "unable to listen to %s (%m)\n", ifname);
+            exit(1);
+        }
+
+        /* Setup a filter, ❷ */
+        if (setsockopt(s, SOL_SOCKET, SO_ATTACH_FILTER,
+                       &prog, sizeof(prog)) < 0) {
+            fprintf(stderr, "unable to set filter (%m)\n");
+            exit(1);
+        }
+
+        while (1) {
+            /* Receive packet */
+            if ((n = recvfrom(s, packet, MFS, 0, NULL, NULL)) < 0) {
+                fprintf(stderr, "error while receiving (%m)\n");
+                exit(1);
+            }
+
+            if (n < 2*ETH_ALEN + 2 + sizeof(struct iphdr)) continue;
+
+            memcpy(&ip, packet + 2*ETH_ALEN + 2, sizeof(struct iphdr));
+            if (ip.version != 4)
+                continue;
+
+            /* Display some data, ❸ */
+            printf("%s > ", inet_ntoa(*(struct in_addr *)&ip.saddr));
+            printf("%s", inet_ntoa(*(struct in_addr *)&ip.daddr));
+
+            switch (ip.protocol) {
+            case IPPROTO_UDP:
+                memcpy(&udp, packet + 2*ETH_ALEN + 2 + ip.ihl*4,
+                       sizeof(struct udphdr));
+                printf(" : UDP [port %d > port %d]",
+                       ntohs(udp.source), ntohs(udp.dest));
+                break;
+
+            case IPPROTO_TCP:
+                memcpy(&tcp, packet + 2*ETH_ALEN + 2 + ip.ihl*4,
+                       sizeof(struct tcphdr));
+                printf(" : TCP [port %d > port %d]",
+                       ntohs(tcp.source), ntohs(tcp.dest));
+                break;
+
+            default:
+                printf(" : protocol %d", ip.protocol);
+                break;
+            }
+
+            printf("\n");
+
+            /* Log to some file, ❹ */
+            if (nb++ > 20) {
+                if ((log = fopen(LOG, "a+")) == NULL) {
+                    fprintf(stderr, "unable to open %s (%m)\n", LOG);
+                    exit(1);
+                }
+
+                fprintf(log, "%s: %ld: %d packets received\n",
+                        argv[0], time(NULL), nb);
+                fclose(log);
+                nb = 0;
+            }
+        }
+    }
+
+Let's see step by step how our sniffer works:
+
+In ❶, a level 2 *socket* (`AF_PACKET`) in raw mode (`SOCK_RAW`) is first opened.
+This type of socket allows receiving all packets arriving on a network
+interface, without alteration. Then, we associate our socket with the physical
+interface on which we want to retrieve the packets.
+
+In ❷, we then attach a filter to only bring up certain packets. This filter has
+only an educational purpose and avoids bringing up *broadcast* packets. It is a
+filter written in BPF. The comment indicates the `tcpdump` command used to
+obtain this filter.
+
+In ❸, For each received packet, we extract some relevant information to display
+to the user.
+
+Finally, every 20 packets, in ❹, we open a log file to indicate that, at such a
+moment, we received about twenty packets. This is also a purely educational
+feature that will complicate our task later on.
+
+To compile our program, we use the following command:
+
+    ::sh
+    cc -Wall -Werror -O0 -g -o sniffer1 sniffer1.c
+
+By executing it and providing the name of an interface as the first argument, we
+obtain the expected information. We can also verify that the file specified at
+the top of the code is indeed created with the date information and the number
+of packets received.
+
+    10.0.2.2 -> 87.248.120.129 : protocol 1
+    87.248.120.129 -> 10.0.2.2 : protocol 1
+    10.0.2.2 -> 10.0.2.1 : UDP [port 49118 -> port 53]
+    10.0.2.1 -> 10.0.2.2 : UDP [port 53 -> port 49118]
+    10.0.2.2 -> 87.248.120.129 : protocol 1
+    87.248.120.129 -> 10.0.2.2 : protocol 1
+    10.0.2.2 -> 10.0.2.1 : UDP [port 58886 -> port 53]
+    10.0.2.1 -> 10.0.2.2 : UDP [port 53 -> port 58886]
+
+In our example, we captured the result of the `ping` command.
+
+## Why add privilege separation?
+
+Let's imagine we add a bit more code to our sniffer to display more information,
+similar to `tcpdump`. All this code would run with root privileges. The past has
+shown that it's not uncommon to find, in this type of application,
+vulnerabilities leading at best to a crash of the application[^vuln] and at
+worst to remote code execution.
+
+[^vuln]: There is actually such a vulnerability in our sniffer,
+    can you find it?
+
+It would be interesting to minimize the impact of such a vulnerability by
+executing only the strict minimum with elevated privileges.
+
+Indeed, in the code above, very few things require privileges:
+
+- the [`socket()`][socket] function followed by the [`bind()`][bind] function, and
+- the [`fopen()`][fopen] function.
+
+All other calls can function without accessing the file system (so for example
+in an empty chroot) and without using any particular privileges (such as those
+of root), including for example the implementation of a filter.
+
+If we were able to execute the rest of the code in a chroot with a user without
+any privileges, an attacker who would take control of our sniffer using a
+specially crafted packet could not do much: they could not execute a shell, they
+could not read files, and they could not execute any privileged function. Even
+exploiting a kernel flaw would become difficult in this case.
+
+## Poor man's privilege separation
+
+There is a very simple way to achieve privilege separation: drop root rights
+very early, for example just after the call to [`bind()`][bind].
+
+We use the following code to drop all privileges. This code can be placed after
+the `bind()` call:
+
+    ::c
+    if ((user = getpwnam("nobody")) == NULL) {
+        fprintf(stderr, "no user `nobody'\n");
+        exit(1);
+    }
+    uid = user->pw_uid;
+
+    if ((group = getgrnam("nogroup")) == NULL) {
+        fprintf(stderr, "no group `nogroup'\n");
+        exit(1);
+    }
+    gid = group->gr_gid;
+
+    if (chroot("/var/empty") == -1) {
+        fprintf(stderr, "unable to chroot (%m)\n");
+        exit(1);
+    }
+
+    if (chdir("/") != 0) {
+        fprintf(stderr, "unable to chdir (%m)\n");
+        exit(1);
+    }
+
+    gidset[0] = gid;
+    if ((setresgid(gid, gid, gid) == -1) ||
+        (setgroups(1, gidset) == -1) ||
+        (setresuid(uid, uid, uid) == -1)) {
+        fprintf(stderr, "unable to drop privileges (%m)\n");
+        exit(1);
+    }
+
+Let's see exactly what this code does and why each line is useful. First, it's
+important to test the result of each call. Indeed, if we fail to change users,
+we remain root and it would then be easier to exit the chroot. Similarly, if we
+fail to set up the chroot, we access important information. It is therefore
+vital to properly test the result of each function!
+
+We first obtain the UID of the `nobody` user. We will indeed run the rest of the
+process under this user. This is an easy solution to avoid having to create a
+specific user, but it diminishes the protection we want to achieve. Indeed, this
+user has some privileges, notably that of potentially having other processes
+running under its name or files that belong to it. An attacker could then, even
+in the chroot, attach to another process of the same user, a process that might
+not be confined in a chroot, and thus gain additional rights. It is therefore
+important to create a user specific to your application, for example `_sniffer`
+in our case.
+
+Similarly, we retrieve the GID of the `nogroup` group. Again, in real life, you
+should create a group specific to your application, for example `_sniffer`.
+
+We confine ourselves in the `/var/empty` directory, which as its name suggests
+must be empty. Moreover, it must belong to root and have adequate permissions so
+that it's not possible to create files there. Placing oneself in a chroot
+requires root rights, which explains why we perform this operation before
+dropping root rights.
+
+We move to the root of our chroot. Indeed, without this call to
+[`chdir()`][chdir], our application would still be located in its startup
+directory.
+
+We then lose the rights related to the group and then to the user. In a single
+call, the [`setresgid()`][setresgid] and [`setresuid()`][setresuid] functions
+allow changing the real, effective, and saved user or group. Indeed, when a
+process is root, it can temporarily lose its privileges, for example with
+[`setuid()`][setuid], but also regain them later with `seteuid()`. It is
+therefore important to abandon any possibility of going back. Otherwise, an
+attacker will know how to make good use of it.
+
+To run this example, don't forget to create the `/var/empty` directory. After
+compilation, the new program works like the old one, but can no longer write the
+statistics to the intended file. Indeed, not only is the file not accessible
+from the chroot, but it belongs to root.
+
+A solution to circumvent this difficulty would be to open this file while we are
+root. It would then be possible to write to it without any particular rights.
+But that would be too easy: we absolutely want to open this file each time we
+want to write to it because, for example, a `logrotate` might have processed it.
+
+We are then in a classic situation where the simple loss of privileges does not
+solve our problem.
+
+# Privilege separation
+
+In order to occasionally write to a file, we need to split our application into
+two distinct processes. One process will run as root and the other in a chroot
+without any privileges. The two processes will communicate via a pair of
+sockets.
+
+## A first attempt
+
+Here, in pseudo-code, is how it would be possible to write our sniffer using two
+separate processes.
+
+    ::c
+    int pair[2];
+
+    /* Get a pair of socket */
+    socketpair(AF_LOCAL, SOCK_DGRAM, PF_UNSPEC, pair);
+
+    /* Create monitored process */
+    switch (fork()) {
+    case 0:
+        /* In the child, chroot and drop privileges */
+        chroot("/var/empty");
+        chdir("/");
+        setresgid("nogroup");
+        setgroups("nogroup");
+        setresuid("nobody");
+        close(pair[1]);
+        break;
+
+    default:
+        /* In the parent */
+        close(pair[0]);
+        while (1) {
+            recv_child(cmd);
+            switch (cmd.id) {
+            case OPENSOCKET:
+                s = socket();
+                bind(s, cmd.arg);
+                setsockopt(s, filter);
+                break;
+
+            case GETPACKET:
+                n = recvfrom(s, packet);
+                write_child(n, packet);
+                break;
+
+            case OPENLOGFILE:
+                log = fopen("/var/log/sniffer.log");
+                break;
+
+            case WRITETOLOGFILE:
+                fprintf(log, cmd.arg);
+                break;
+
+            case CLOSELOGFILE:
+                fclose(log);
+                break;
+
+            }
+
+            exit(0);
+        }
+    }
+
+    /* At this point, we don't have any privilege */
+    cmd = {
+        .id = OPENSOCKET,
+        .arg = ifname
+    };
+    write_parent(cmd);
+
+    while (1) {
+        cmd = {
+            .id = GETPACKET,
+            .arg = NULL
+        };
+        write_parent(cmd);
+
+        n = recv_parent(packet, MFS);
+        process_packet(packet, n);
+        if (nb++ > 20) {
+            cmd = {
+                .id = OPENLOGFILE,
+                .arg = NULL
+            };
+            write_parent(cmd);
+
+            cmd = {
+                .id = WRITETOLOGFILE,
+                .arg = "..."
+            };
+            write_parent(cmd);
+
+            cmd = {
+                .id = CLOSELOGFILE,
+                .arg = NULL
+            };
+            write_parent(cmd);
+        }
+    }
+
+First, we create a pair of sockets that we'll use as bidirectional pipes: what
+we write on one of the sockets is received on the other side and vice versa. We
+use Unix sockets (`AF_UNIX`), anonymous ([`socketpair()`][socketpair] can't do
+anything else) and datagram-oriented (`SOCK_DGRAM`). This last characteristic is
+very interesting because, unlike stream-oriented sockets, it preserves message
+boundaries (if we send 10 bytes, we read 10 bytes on the other side and not 7
+then 3) and, in the context of Unix sockets, they are reliable and do not
+reorder messages (which is not the case for IP sockets, as this corresponds to
+the UDP protocol). The two processes can therefore communicate through this
+means using a predetermined protocol in a relatively simple manner.
+
+Then, in the parent process, we retain root privileges and wait to receive
+orders from the child that we execute. These orders consist of:
+
+- opening the socket, associating it with the appropriate interface and setting
+  the filter,
+- opening the log file,
+- writing to the log file, and
+- closing the log file.
+
+An important point to note is that it is not possible from the child to choose
+the log file to open. It is crucial not to turn the parent into a simple proxy.
+If the child could choose the name of the log file, an attacker could, for
+example, ask to open `/etc/passwd` and create an account! It is critical to
+consider the child as hostile, as potentially controlled by the attacker, as in
+a client/server application!
+
+Also, the parent has a formidable weapon that a classic client/server
+application does not have: it can kill its child if it considers that it is not
+behaving correctly, thus putting an end to any attack. Certainly, in our case,
+the sniffer will then cease to function, but since it was controlled by an
+attacker anyway, it could no longer accomplish its task.
+
+In the child, we have replaced the calls requiring particular privileges with a
+message send to the parent process to execute the necessary actions. Moreover,
+we have also moved some non-privileged calls such as setting up a filter and
+reading a packet: only the parent has access to the socket and the child must
+therefore tell the parent what it wants to do.
+
+In our previous example, setting up a filter and reading a packet did not
+require any privileges. We have therefore regressed on this point: additional
+code is executed as root. However, we can again write our log file, but almost
+all of the necessary code is actually executed by root.
+
+One of the interests of privilege separation is to drastically reduce the code
+running as root, thus reducing the amount of code to carefully audit. In our
+example, there is too much code running as root (for such a simple example).
+Fortunately, there is a solution.
+
+## Passing file descriptors in sockets
+
+Unix sockets implement a feature essential to privilege separation. They indeed
+allow passing file descriptors, that is, duplicating a file descriptor in the
+receiving process's space (a kind of inter-process `dup()`). In our previous
+example, the child had to ask the parent to receive each packet for it. Now, we
+can adopt the following approach:
+
+- The child requests the opening of a socket.
+- The parent opens the socket, associates it with the interface and transmits
+  the socket to the child.
+- The child sets up the filter.
+- The child reads the packets directly from the socket!
+
+The parent has much less to do: it no longer needs to configure the filter, it
+no longer needs to read and transmit network packets. Similarly, it will only
+need to open the log file, it will no longer need to write to it. That's less
+code in the parent and fewer interactions to manage. This will simplify our code
+and reduce the risk of having a bug in the part that runs as root.
+
+In practice, how do we send and receive a file descriptor in a Unix socket? The
+solution is explained in the [`unix(7)`][unix] manual page: via the
+[`sendmsg()`][sendmsg] and [`recvmsg()`][recvmsg] calls, it is possible to
+transmit a file descriptor or the user's identity (reliably, it's the operating
+system that guarantees this transmission). The [`cmsg(3)`][cmsg] manual page
+contains an example of sending a set of file descriptors.
+
+To find a complete example, I advise you to look at the specialists in privilege
+separation. As an example, we can examine the source code of `syslogd` and
+discover a [file grouping the two functions we need][FDPASS].
+
+Here's a lightweight version that doesn't handle errors. For real projects, of
+course, you should use the complete version!
+
+
+    ::c
+    void
+    send_fd(int sock, int fd)
+    {
+        struct msghdr msg;
+        union {
+            struct cmsghdr hdr;
+            char buf[CMSG_SPACE(sizeof(int))];
+        } cmsgbuf;
+        struct cmsghdr *cmsg;
+        struct iovec vec;
+        int result;
+
+        memset(&msg, 0, sizeof(msg));
+        msg.msg_control = (caddr_t)&cmsgbuf.buf;
+        msg.msg_controllen = sizeof(cmsgbuf.buf);
+        cmsg = CMSG_FIRSTHDR(&msg);
+        cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_RIGHTS;
+        *(int *)CMSG_DATA(cmsg) = fd;
+        vec.iov_base = &result;
+        vec.iov_len = sizeof(int);
+        msg.msg_iov = &vec;
+        msg.msg_iovlen = 1;
+        sendmsg(sock, &msg, 0);
+    }
+
+    int
+    receive_fd(int sock)
+    {
+        struct msghdr msg;
+        union {
+            struct cmsghdr hdr;
+            char buf[CMSG_SPACE(sizeof(int))];
+        } cmsgbuf;
+        struct cmsghdr *cmsg;
+        struct iovec vec;
+        int result;
+        int fd;
+
+        memset(&msg, 0, sizeof(msg));
+        vec.iov_base = &result;
+        vec.iov_len = sizeof(int);
+        msg.msg_iov = &vec;
+        msg.msg_iovlen = 1;
+        msg.msg_control = &cmsgbuf.buf;
+        msg.msg_controllen = sizeof(cmsgbuf.buf);
+        recvmsg(sock, &msg, 0);
+        cmsg = CMSG_FIRSTHDR(&msg);
+        assert(cmsg->cmsg_type == SCM_RIGHTS);
+        fd = (*(int *)CMSG_DATA(cmsg));
+        return fd;
+    }
+
+## Second attempt
+
+With this new knowledge, we can now rewrite our sniffer using the ability to
+pass file descriptors through the socket.
+
+We must first agree on a very simple protocol to communicate between the parent
+and the child. The parent only needs to know how to do two things: open a socket
+and open the log file. The protocol is then very simple: the child sends the
+command to execute on an integer, followed by the name of the interface in the
+case of opening the socket, and it receives in return the file descriptor (the
+socket or that of the log file). Here is the code that will replace the calls to
+`socket()` and `bind()` as well as the one to `fopen()`:
+
+    ::c
+    int
+    priv_socket(char *name)
+    {
+        int cmd;
+        char ifname[IFNAMSIZ];
+
+        strncpy(ifname, name, IFNAMSIZ);
+        cmd = PRIV_SOCKET;
+        must_write(remote, &cmd, sizeof(int));
+        must_write(remote, ifname, IFNAMSIZ);
+        return receive_fd(remote);
+    }
+
+    FILE *
+    priv_fopen()
+    {
+        int cmd, fd;
+
+        cmd = PRIV_LOGFILE;
+        must_write(remote, &cmd, sizeof(int));
+        fd = receive_fd(remote);
+        if (fd == -1)
+            return NULL;
+        return fdopen(fd, "a");
+    }
+
+Let's note an important point concerning security. The [`fdopen()`][fdopen] call
+cannot reopen the file with a different mode, for example `"w"`. Indeed,
+`fdopen()` integrates the information from the file descriptor into a structure
+that other calls will subsequently manipulate. It will also check the
+consistency between the requested mode and the one associated with the file
+descriptor using [`fcntl()`][fcntl]. If we attempt to expand permissions, this
+call will fail. This verification has no impact on the security of the process.
+
+On the parent side, we first receive an integer (there is respect for message
+boundaries, it's easy), then, depending on its value, we perform the requested
+actions and send back the file descriptor:
+
+    ::c
+    void
+    priv_loop()
+    {
+        int cmd;
+        char ifname[IFNAMSIZ];
+        int s;
+        struct sockaddr_ll sa;
+        int alreadyopen = 0;
+
+        while (!may_read(remote, &cmd, sizeof(int))) {
+            switch (cmd) {
+            case PRIV_SOCKET:
+                if (alreadyopen)
+                    exit(1);
+                must_read(remote, ifname, IFNAMSIZ);
+                ifname[IFNAMSIZ-1] = '\0';
+                if ((s = socket(AF_PACKET, SOCK_RAW,
+                                htons(ETH_P_ALL))) < 0) {
+                    fprintf(stderr, "unable to open raw socket (%m)\n");
+                    exit(1);
+                }
+
+                memset(&sa, 0, sizeof(sa));
+                sa.sll_family = AF_PACKET;
+                sa.sll_protocol = 0;
+                ifname[IFNAMSIZ-1] = '\0';
+                if ((sa.sll_ifindex = if_nametoindex(ifname)) == 0) {
+                    fprintf(stderr, "unknown interface %s\n", ifname);
+                    exit(1);
+                }
+
+                if (bind(s, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+                    fprintf(stderr, "unable to listen to %s (%m)\n", ifname);
+                    exit(1);
+                }
+
+                alreadyopen = 1;
+                send_fd(remote, s);
+                close(s);
+                break;
+
+            case PRIV_LOGFILE:
+                if ((s = open(LOG, O_WRONLY | O_APPEND | O_CREAT, 0600)) < 0) {
+                    fprintf(stderr, "unable to open %s (%m)\n", LOG);
+                    exit(1);
+                }
+                send_fd(remote, s);
+                close(s);
+                break;
+
+            default:
+                fprintf(stderr, "unknown command\n");
+                exit(1);
+            }
+        }
+    }
+
+The functions `must_write()`, `must_read()`, and `may_read()` are wrappers
+around `write()` and `read()` that we do not reproduce here due to lack of
+space. You can retrieve them from the [`syslogd` source code][SYSLOGD].
+
+Finally, we replace the call to `socket()` with a call to `priv_socket()` and
+remove the call to `bind()`. We replace the call to `fopen()` with a call to
+`priv_fopen()`.
+
+There are a few minor details to sort out. If the parent or child dies
+(voluntarily or not), the remaining process must also die. It's sufficient to
+set up a few functions reacting to signals and to use [`atexit()`][atexit] in
+the parent to kill the child in case of the parent's death. This also allows the
+user to stop the sniffer by killing either the parent or the child.
+
+We then obtain an application functionally identical to our version without
+privilege separation, but running in two processes communicating with each
+other:
+
+    root     12174 S+   19:25   0:00 ./sniffer4 wifi
+    nobody   12175 S+   19:25   0:00 ./sniffer4 wifi
+
+If an attacker takes control of the child, they will only be able to write to
+the end of the log file and listen on the network interface. They will
+unfortunately also be able to send arbitrary packets on this interface.
+
+Note that it is unlikely that they can listen on another network interface, as
+the child can only request to listen on a single network interface. This is the
+purpose of our `alreadyopen` variable. This is an important component of
+privilege separation: managing a state at the parent level so as not to allow
+the child to execute certain commands multiple times. This makes the attacker's
+task more difficult.
+
+The code to be seriously audited is now confined to the `priv_loop()` function,
+as well as its dependencies. Bugs found outside this perimeter do not, a priori,
+allow immediate root access. Any parsing errors are still there, but no longer
+provide the attacker with as much power. Despite the possibility for the
+attacker to send arbitrary packets on the interface we're listening to, this
+latest version of the sniffer seems to constitute a good balance between the
+possibilities offered to an attacker who has compromised the unprivileged
+process and the quantity and complexity of the code running with elevated
+privileges.
+
+# The alternatives
+
+Adding privilege separation is not fundamentally very complicated. It requires
+correctly writing a certain number of lines of code and agreeing on an adequate
+protocol between the parent and the child, particularly with regard to possible
+error reporting. In our simplistic example, we stop the sniffer if the file we
+want to log to is in a directory that doesn't exist. It is sometimes desirable
+to be cleaner and to report this kind of error from the parent to the child.
+
+To overcome these difficulties, there are two avenues to explore.
+
+## privman
+
+[privman][PRIVMAN] is a library facilitating the addition of privilege
+separation in an application. It is indeed sufficient to call a function at the
+beginning of the program to create the monitor (the parent), then to replace the
+functions requiring particular privileges with the provided wrappers. These
+respect the same interface as the functions they replace.
+
+The example provided on the website is a good illustration of the ease provided
+by such a library.
+
+    ::c
+    #include <privman.h>
+    int main()
+    {
+        priv_init();
+        int fd = priv_open("/etc/shadow", O_RDONLY);
+        return 0;
+    }
+
+You then need to fill out a configuration file to indicate the operations
+authorized by the monitor. As mentioned earlier, it is essential that it does
+not turn into a simple proxy. The configuration file indicates, for example, the
+files that can be opened in read-only mode.
+
+Unfortunately, this library no longer seems to be maintained. I also don't know
+if it has been audited.
+
+## imsg
+
+The OpenBSD project uses privilege separation very heavily. As such, the
+developers have developed a set of methods to facilitate communication between
+processes, including the passing of file descriptors. New developments no longer
+use the functions borrowed in our example.
+
+Let's take for example the [`relayd`][RELAYD] daemon which is a load balancer.
+The file to look at is [`imsg.h`][imsg]. There we find a set of functions that
+can be used instead of the functions from [`syslogd`][SYSLOGD].
+
+These methods implement a protocol on top of Unix sockets and allow for easier
+management of communication between the parent and the child: we send sets of
+bytes, some of which can be associated with a file descriptor, and we receive
+sets of bytes, possibly associated with file descriptors. It is therefore
+possible, in a single message exchange, to obtain all the necessary information
+while managing error cases that may occur.
+
+!!! "Update (2023-02)" The article "[Privilege drop, privilege separation, and
+restricted-service operating mode in OpenBSD][sha256]" is a good read on
+privilege separation in OpenBSD.
+
+[sha256]: https://sha256.net/privsep.html
+
+# Conclusion
+
+While privilege separation is the norm for the OpenBSD project, it is still very
+often the exception in many other universes. Take your favorite GNU/Linux
+distribution, look at the list of processes running as root and find those that
+use privilege separation. For my part, I only spot OpenSSH (and possibly
+Postfix, even if it's not at all the same method).
+
+Privilege separation is, however, a considerable asset in securing an
+application. Let's hope it will be more and more used.
+
+*[BPF]: Berkeley Packet Filter
+
+[Preventing Privilege Escalation]: http://www.citi.umich.edu/u/provos/papers/privsep.pdf "Preventing Privilege Escalation"
+[FDPASS]: https://cvsweb.openbsd.org/cgi-bin/cvsweb/~checkout~/src/usr.sbin/syslogd/privsep_fdpass.c "privsep_fdpass.c from OpenBSD syslogd"
+[SYSLOGD]: https://cvsweb.openbsd.org/cgi-bin/cvsweb/~checkout~/src/usr.sbin/syslogd/privsep.c "privsep.c from OpenBSD syslogd"
+[PRIVMAN]: https://code.google.com/archive/p/privman/ "A library to make privilege separation easy"
+[RELAYD]: https://cvsweb.openbsd.org/cgi-bin/cvsweb/src/usr.sbin/relayd/ "relayd code source"
+[imsg]: https://cvsweb.openbsd.org/cgi-bin/cvsweb/~checkout~/src/lib/libutil/imsg.h "imsg.h from OpenBSD"
+[fork]: https://manpages.debian.org/stretch/manpages-dev/fork.2.en.html "Manual page for fork(2)"
+[socket]: https://manpages.debian.org/stretch/manpages-dev/socket.2.en.html "Manual page for socket(2)"
+[bind]: https://manpages.debian.org/stretch/manpages-dev/bind.2.en.html "Manual page for bind(2)"
+[fopen]: https://manpages.debian.org/stretch/manpages-dev/fopen.3.en.html "Manual page for fopen(3)"
+[chdir]: https://manpages.debian.org/stretch/manpages-dev/chdir.2.en.html "Manual page for chdir(2)"
+[setresuid]: https://manpages.debian.org/stretch/manpages-dev/setresuid.2.en.html "Manual page for setresuid(2)"
+[setresgid]: https://manpages.debian.org/stretch/manpages-dev/setresgid.2.en.html "Manual page for setresgid(2)"
+[setuid]: https://manpages.debian.org/stretch/manpages-dev/setuid.2.en.html "Manual page for setuid(2)"
+[socketpair]: https://manpages.debian.org/stretch/manpages-dev/socketpair.2.en.html "Manual page for socketpair(2)"
+[fork]: https://manpages.debian.org/stretch/manpages-dev/fork.2.en.html "Manual page for fork(2)"
+[unix]: https://manpages.debian.org/stretch/manpages/unix.7.en.html "Manual page for unix(7)"
+[sendmsg]: https://manpages.debian.org/stretch/manpages-dev/sendmsg.2.en.html "Manual page for sendmsg(2)"
+[recvmsg]: https://manpages.debian.org/stretch/manpages-dev/recvmsg.2.en.html "Manual page for recvmsg(2)"
+[cmsg]: https://manpages.debian.org/stretch/manpages-dev/cmsg.3.en.html "Manual page for cmsg(3)"
+[fdopen]: https://manpages.debian.org/stretch/manpages-dev/fdopen.3.en.html "Manual page for fdopen(3)"
+[fcntl]: https://manpages.debian.org/stretch/manpages-dev/fcntl.2.en.html "Manual page for fcntl(2)"
+[atexit]: https://manpages.debian.org/stretch/manpages-dev/atexit.3.en.html "Manual page for atexit(3)"
