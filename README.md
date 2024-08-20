@@ -67,3 +67,27 @@ Easy rebase of a WIP progress + checkout:
 ```
 git rebase latest article/something
 ```
+
+## Use of an LLM as an editor
+
+I write article in English, then translate it to French. This seems easier for
+me than the other direction. As I am not a native English speaker, I am using
+LLMs to edit the English content or to translate to French. Since French is my
+mother tongue, I edit the French result myself.
+
+### Translating
+
+Using Claude 3.5 Sonnet, I use the following prompt, then copy/paste Markdown
+content, with the exception of code blocks:
+
+> Translate to French, keep markdown markup, and enclose the result in a code
+> block.
+
+### Editing
+
+Using Claude 3.5 Sonnet, I use the following prompt, then copy/paste Markdown
+content, with the exception of code blocks:
+
+> Edit the following text, keep markdown markup, and enclode the result in a
+> code block. You can include light stylistic edit. The target is a technical
+> audience who may not be English-native speakers (CEFR B2 level).
