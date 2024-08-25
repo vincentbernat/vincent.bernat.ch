@@ -28,7 +28,4 @@ var luffy = luffy || {
   }
 };
 
-// Tell we can do JS
-document.getElementsByTagName("html")[0].classList.remove('nojs');
-
 window.luffy = luffy;
