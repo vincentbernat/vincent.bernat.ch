@@ -70,5 +70,6 @@ def include_file(ctx, name):
 def clean_rss(ctx, html):
     doc = pq(html)
     doc(".when-js").remove()
+    doc(".when-nojs").remove()
     doc("a").filter(lambda i, el: pq(el).text() == "#").remove()
     return doc.html()
