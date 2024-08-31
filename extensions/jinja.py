@@ -4,6 +4,7 @@ import jinja2
 import re
 from babel.dates import format_date
 from distutils.version import LooseVersion
+from pyquery import PyQuery as pq
 
 
 def human_date(dt, locale="en", format=None):
@@ -63,3 +64,11 @@ def include_file(ctx, name):
     target = os.path.join(str(ctx.parent["node"]), name)
     with open(target, "r") as f:
         return jinja2.Markup(f.read())
+
+
+@jinja2.contextfilter
+def clean_rss(ctx, html):
+    doc = pq(html)
+    doc(".when-js").remove()
+    doc("a").filter(lambda i, el: pq(el).text() == "#").remove()
+    return doc.html()
