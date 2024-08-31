@@ -80,8 +80,8 @@ mother tongue, I edit the French result myself.
 Using Claude 3.5 Sonnet, I use the following prompt, then copy/paste Markdown
 content, with the exception of code blocks:
 
-> Translate to French, keep markdown markup, and enclose the result in a code
-> block.
+> Translate to French the following text, keep markdown markup, and enclose the
+> result in a code block. For links, keep the original references.
 
 ### Editing
 
@@ -89,5 +89,7 @@ Using Claude 3.5 Sonnet, I use the following prompt, then copy/paste Markdown
 content, with the exception of code blocks:
 
 > Edit the following text, keep markdown markup, and enclode the result in a
-> code block. You can include light stylistic edit. The target is a technical
-> audience who may not be English-native speakers (CEFR B2 level).
+> code block. There is no need to add comments. You can include very light
+> stylistic edit but avoid using prnoun-verb contractions and keep a casual
+> tone. The target is a technical audience who may not be English-native
+> speakers (CEFR B2 level).

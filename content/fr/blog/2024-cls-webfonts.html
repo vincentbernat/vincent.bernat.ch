@@ -1,0 +1,225 @@
+---
+title: "Correction des décalages visuels causés par les polices web"
+description: |
+   La métrique « Cumulative Layout Shift » (CLS) mesure la stabilité visuelle
+   d'une page web vis-à-vis des changements de mise en page inattendus.
+   Des propriétés CSS offrent une solution à ces décalages causés
+   par les polices web.
+uuid: fb72224d-4a1c-4148-8f2a-16793aabfe91
+js:
+  - 2024-cls-webfonts.js
+css:
+  - 2024-cls-webfonts.css
+tags:
+  - web
+---
+
+En 2020, Google a introduit les [métriques Core Web Vitals][] pour mesurer
+certains aspects de l'expérience utilisateur sur le web. Ce blog a constamment
+obtenu de bons scores pour deux de ces métriques : [Largest Contentful Paint][]
+et [Interaction to Next Paint][]. Cependant, l'optimisation de la troisième
+métrique, [Cumulative Layout Shift][], qui mesure les changements de mise en
+page inattendus, a été plus difficile. Soyons honnêtes : optimiser pour cette
+métrique n'est pas vraiment utile pour un site comme celui-ci. Mais obtenir un
+meilleur score est toujours une bonne distraction. 💯
+
+Pour éviter le « flash de texte invisible » lors de l'utilisation de polices
+web, les développeurs sont encouragés à placer la propriété `font-display` sur
+`swap` dans les règles `@font-face`. Cette méthode permet aux navigateurs
+d'afficher initialement le texte en utilisant une police de substitution, puis
+de la remplacer par la police finale lorsqu'elle est chargée. Bien que cela
+améliore le score LCP, cela provoque des décalages de mise en page si les
+polices de substitution n'ont pas des métriques compatibles. Ces décalages
+affectent négativement le score CLS. CSS fournit des propriétés pour résoudre ce
+problème en adaptant les métriques des polices de substitution :
+[`size-adjust`][size-adjust], [`ascent-override`][ascent-override],
+[`descent-override`][descent-override] et
+[`line-gap-override`][line-gap-override].
+
+Deux articles complets expliquent chaque propriété et leurs méthodes de calcul
+en détail : [Creating Perfect Font Fallbacks in CSS][] et [Improved font
+fallbacks][].
+
+# Outil interactif
+
+Au lieu de calculer chaque propriété à partir des métriques moyennes des
+polices, j'ai créé un outil pour régler interactivement les métriques des
+polices de substitution.[^others]
+
+[^others]: Des outils similaires existent déjà, comme le [Fallback Font
+    Generator][], mais il lui manque quelques fonctionnalités, comme la
+    possibilité de fournir la police de secours ou d'avoir des décimales pour
+    les propriétés CSS. Et pas de code source.
+
+## Mode d'emploi
+
+1. Chargez votre police personnalisée.
+
+2. Sélectionnez une police de substitution.
+
+3. Ajustez la propriété `size-adjust` pour faire correspondre la largeur de
+   votre police personnalisée avec celle de la police de substitution. Avec une
+   police proportionnelle, il n'est souvent pas possible d'obtenir une correspondance
+   parfaite.
+
+4. Affinez la propriété `ascent-override`. Essayez d'aligner le point final du
+   dernier paragraphe tout en surveillant la ligne de base de la police. Pour un
+   ajustement plus précis, désactivez l'option « <label
+   for="lf1-support-line-height">Définir la hauteur de ligne</label> ».
+
+5. Modifiez la propriété `descent-override`. L'objectif est de faire
+   correspondre les deux boîtes. Vous devrez peut-être alterner entre cette
+   propriété et la précédente pour obtenir des résultats optimaux.
+
+6. Si nécessaire, ajustez la propriété `line-gap-override`. Cette étape n'est
+   généralement pas requise.
+
+Le processus doit être répété pour chaque police de substitution. Certaines
+plateformes peuvent ne pas inclure certaines polices. Notamment, Android n'a pas
+la plupart des polices présentes dans d'autres systèmes d'exploitation. Il
+remplace *Georgia* par *Noto Serif*, qui n'est pas compatible au niveau des
+métriques.
+
+## Outil
+
+Cet outil nécessite JavaScript.
+{.when-nojs}
+
+<div class="when-js p" id="lf1-support-controls">
+ <div>
+  <label for="lf1-support-font-custom-file">Fichier de police personnalisée</label>
+  <input type="file" id="lf1-support-font-custom-file" accept=".ttf,.otf,.woff,.woff2">
+ </div>
+ <div>
+  <label for="lf1-support-font-fallback-select">Police de substitution</label>
+  <select id="lf1-support-font-fallback-select">
+    <option value="-lf1-font-fallback-file">Police personnalisée</option>
+  </select>
+ </div>
+ <div>
+  <label for="lf1-support-font-fallback-name">Nom de police de substitution</label>
+  <input id="lf1-support-font-fallback-name">
+ </div>
+ <div>
+  <label for="lf1-support-font-fallback-file">Fichier de police de substitution</label>
+  <input type="file" id="lf1-support-font-fallback-file" accept=".ttf,.otf,.woff,.woff2">
+ </div>
+
+ <div>
+  <label for="lf1-support-line-height">Définir la hauteur de ligne</label>
+  <input type="checkbox" checked id="lf1-support-line-height">
+ </div>
+
+ <div>
+  <label for="lf1-support-sizeAdjust"><code>size-adjust</code></label>
+  <input type="range" id="lf1-support-sizeAdjust" min="0" max="200" value="100" step="0.1">
+  <span id="lf1-support-sizeAdjust-value">100%</span>
+ </div>
+
+ <div>
+  <label for="lf1-support-ascentOverride"><code>ascent-override</code></label>
+  <input type="range" id="lf1-support-ascentOverride" min="0" max="200" value="100" step="0.1">
+  <span id="lf1-support-ascentOverride-value">100%</span>
+ </div>
+
+ <div>
+  <label for="lf1-support-descentOverride"><code>descent-override</code></label>
+  <input type="range" id="lf1-support-descentOverride" min="0" max="200" value="100" step="0.1">
+  <span id="lf1-support-descentOverride-value">100%</span>
+ </div>
+
+ <div>
+  <label for="lf1-support-lineGapOverride"><code>line-gap-override</code></label>
+  <input type="range" id="lf1-support-lineGapOverride" min="0" max="200" value="0" step="0.1">
+  <span id="lf1-support-lineGapOverride-value">0%</span>
+ </div>
+</div>
+
+La confédération BGP est une technique utilisée pour réduire le nombre de
+sessions iBGP et améliorer le passage à l'échelle dans les grands systèmes
+autonomes (AS). Elle divise un AS en sous-AS. La plupart des règles eBGP
+s'appliquent entre les sous-AS, sauf que le saut suivant, la MED et les
+préférences locales restent inchangés. La longueur du chemin d'AS ignore les
+contributions des sous-AS de la confédération. La confédération BGP est rarement
+utilisée et la réflexion des routes BGP lui est généralement préférée.<br>Le
+remplacement d'AS est une fonctionnalité qui permet à un routeur de remplacer
+l'ASN d'un voisin dans le chemin d'AS des routes BGP sortantes par le sien.
+C'est utile lorsque deux systèmes autonomes distincts partagent le même ASN.
+Cependant, cela interfère avec le mécanisme de prévention des boucles de BGP et
+doit être utilisé avec prudence.
+{.when-js #lf1-support-container}
+
+## Résultats
+
+Pour la police utilisée pour le texte de ce blog, j'obtiens la définition CSS
+suivante :
+
+```css
+@font-face {
+  font-family: Merriweather;
+  font-style: normal;
+  font-weight: 400;
+  src: url("../fonts/merriweather.woff2") format("woff2");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Fallback for Merriweather";
+  src: local("Noto Serif"), local("Droid Serif");
+  size-adjust: 98.3%;
+  ascent-override: 99%;
+  descent-override: 27%;
+}
+@font-face {
+  font-family: "Fallback for Merriweather";
+  src: local("Georgia");
+  size-adjust: 106%;
+  ascent-override: 90.4%;
+  descent-override: 27.3%;
+}
+
+font-family: Merriweather, "Fallback for Merriweather", serif;
+```
+
+Après un mois, la métrique CLS s'est bien améliorée à 0 :
+
+![Scores Core Web Vitals pour vincent.bernat.ch montrant les 6 métriques dans le
+vert. Notamment, la métrique CLS à 0.]([[!!images/core-web-vitals.svg]] "Scores
+Core Web Vitals pour vincent.bernat.ch")
+
+# À propos des polices personnalisées
+
+L'utilisation de [polices systèmes][safe web fonts] ou d'un [ensemble de
+polices][modern font stack] est souvent plus simple. Cependant, je préfère les
+polices web personnalisées. [Merriweather][] et [Iosevka][], qui sont utilisées
+dans ce blog, améliorent l'expérience de lecture. Une approche alternative
+serait d'utiliser Georgia comme police principale. Malheureusement, la plupart
+des polices à chasse fixe par défaut sont laides.
+
+De plus, les paragraphes qui combinent des polices à chasse variable et fixe
+peuvent créer une perturbation visuelle. Cela se produit en raison des
+différences des métriques verticales ou des graisses. Pour résoudre ce problème,
+j'[ajuste les métriques d'Iosevka][adjust Iosevka's metrics] et sa graisse pour
+les aligner avec les caractéristiques de Merriweather.
+
+*[LCP]: Large Contentful Paint
+*[CLS]: Cumulative Layout Shift
+*[CSS]: Cascading Style Sheets
+
+[métriques core web vitals]: https://web.dev/articles/defining-core-web-vitals-thresholds "Defining the Core Web Vitals metrics thresholds"
+[largest contentful paint]: https://web.dev/articles/lcp "Largest Contentful Paint (LCP)"
+[interaction to next paint]: https://web.dev/articles/inp "Interaction to Next Paint (INP)"
+[cumulative layout shift]: https://web.dev/articles/cls "Cumulative Layout Shift (CLS)"
+[safe web fonts]: https://www.cssfontstack.com/ "CSS Font Stack"
+[merriweather]: https://ebensorkin.wordpress.com/ "Merriweather Font"
+[iosevka]: https://typeof.net/Iosevka/ "Iosevka Font"
+[size-adjust]: https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/size-adjust
+[ascent-override]: https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/ascent-override
+[descent-override]: https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/descent-override
+[line-gap-override]: https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/line-gap-override
+[improved font fallbacks]: https://developer.chrome.com/blog/font-fallbacks/
+[creating perfect font fallbacks in css]: https://www.aleksandrhovhannisyan.com/blog/perfect-font-fallbacks/
+[adjust iosevka's metrics]: https://github.com/vincentbernat/vincent.bernat.ch/blob/199addb942c68cbeb04c3c89a5fdee9da896785f/flake.nix#L233-L236 
+[modern font stack]: https://modernfontstacks.com/ "System font stack CSS organized by typeface classification for every modern OS"
+[fallback font generator]: https://screenspan.net/fallback "Reduce Cumulative Layout Shift (CLS) by adjusting web fonts and system font fallbacks using special @font-face descriptors"
+
+
