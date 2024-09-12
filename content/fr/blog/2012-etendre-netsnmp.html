@@ -1,5 +1,5 @@
 ---
-title: "Étendre les fonctionnalités de Net-SNMP"
+title: "Étendre les fonctionnalités de Net-⁠SNMP"
 uuid: 76e48e66-4726-11e1-a76f-0018f3034e06
 tags:
   - network-snmp
@@ -14,12 +14,12 @@ d'obtenir les courbes de trafic de divers équipements.  Bien que le
 « S » de SNMP signifie *simple*, la nébuleuse autour de ce protocole
 peut s'avérer assez complexe à mettre en œuvre. Il s'agit toutefois du
 standard le plus courant pour récupérer des métriques en environnement
-hétérogène. [Net-SNMP][netsnmp] est une suite d'applications SNMP
+hétérogène. [Net-⁠SNMP][netsnmp] est une suite d'applications SNMP
 incluant notamment un agent. Ce dernier permet d'exporter de
 nombreuses informations et peut être étendu par différents
 moyens. Voyons lesquels.
 
-!!! "En bref" À mon avis, étendre Net-SNMP passe par l'une de ces
+!!! "En bref" À mon avis, étendre Net-⁠SNMP passe par l'une de ces
 méthodes : directive `extend`, directive `pass_persist`, protocole
 AgentX.
 
@@ -63,7 +63,7 @@ Une MIB permet également de grouper plusieurs variables sous forme
 d'une table. Ainsi, `IF-MIB::ifDescr`, `IF-MIB::ifType`,
 `IF-MIB::ifSpeed` sont les colonnes de `IF-MIB::ifTable`. Chaque ligne
 est représentée par un index. Dans le cas de `IF-MIB::ifTable`, il
-s'agit simplement de l'index de l'interface. Net-SNMP fournit
+s'agit simplement de l'index de l'interface. Net-⁠SNMP fournit
 `snmptable` qui permet d'afficher de telles tables[^snmpconf] :
 
     ::console
@@ -88,7 +88,7 @@ En tant que protocole, SNMP ne connaît pas l'organisation des
 variables (tableau ou non). Une variable est décrite par un OID et un
 type, c'est tout.
 
-Parmi les outils inclus dans Net-SNMP et souvent usités, on peut citer
+Parmi les outils inclus dans Net-⁠SNMP et souvent usités, on peut citer
 `snmpget` pour récupérer la valeur d'une variable, `snmpwalk` pour
 parcourir les variables exposées (avec l'opération *GETNEXT*) et
 `snmptranslate` qui permet de traduire un nom en OID ou vice-versa.
@@ -109,7 +109,7 @@ parcourir les variables exposées (avec l'opération *GETNEXT*) et
     $ snmptranslate -On IF-MIB::ifDescr.3
     .1.3.6.1.2.1.2.2.1.2.3
 
-# Extensions pour Net-SNMP
+# Extensions pour Net-⁠SNMP
 
 `ethtool -S` permet d'obtenir différentes statistiques liées à une
 carte réseau, comme le nombre d'octets reçus ou le nombre de
@@ -146,7 +146,7 @@ récupérer dans un [dépôt Git][extend-netsnmp].
 
 ## Avec des commandes arbitraires
 
-La première solution pour étendre Net-SNMP est de faire usage de la
+La première solution pour étendre Net-⁠SNMP est de faire usage de la
 directive `extend`. Celle-ci permet d'exécuter des commandes
 arbitraires et de récupérer les résultats à travers
 `NET-SNMP-EXTEND-MIB`. À l'aide d'un
@@ -216,7 +216,7 @@ de tableau, cette solution est peu appropriée.
 
 ## Avec des scripts lancés par l'agent
 
-Net-SNMP est capable de déléguer un sous-arbre à un script défini par
+Net-⁠SNMP est capable de déléguer un sous-arbre à un script défini par
 la directive `pass_persist`. Un tel script va recevoir les requêtes à
 traiter sur son entrée standard à l'aide d'un protocole très
 simple. Celui-ci est décrit
@@ -275,7 +275,7 @@ La directive `pass_persist` permet d'implémenter une MIB avec des
 performances tout à fait honnêtes. Il faut toutefois garder en tête
 les limitations les plus importantes de cette approche :
 
- - À moins de disposer d'une version très récente de Net-SNMP, les
+ - À moins de disposer d'une version très récente de Net-⁠SNMP, les
    types 64 bits ne sont pas supportés et les types 32 bits
    équivalents seront substitués. Cela peut être gênant pour les
    compteurs qui augmentent rapidement.
@@ -309,7 +309,7 @@ rapport à la directive `pass_persist` :
 
 ### Perl et Python
 
-Net-SNMP fournit un module Perl, `Net-SNMP::agent`, pour écrire un
+Net-⁠SNMP fournit un module Perl, `Net-⁠SNMP::agent`, pour écrire un
 sous-agent avec le protocole AgentX. Il s'agit d'un module de plus bas
 niveau que celui que nous avons utilisé avec `pass_persist`. Voici
 quelques exemples de son utilisation :
@@ -319,7 +319,7 @@ quelques exemples de son utilisation :
    `pass_persist`. Mes compétences en Perl étant assez faibles, le
    code s'en ressent un peu.
  - Une [implémentation d'un sous-agent pour les serveurs Redis][redis-snmp].
- - Une [implémentation de la BRIDGE-MIB][bridge-snmp] fournie avec Net-SNMP.
+ - Une [implémentation de la BRIDGE-MIB][bridge-snmp] fournie avec Net-⁠SNMP.
 
 Il n'existe actuellement pas de module similaire pour Python mais il
 existe une [extension AgentX][python-agentx] utilisant `ctypes` et
@@ -333,7 +333,7 @@ Pour écrire un sous-agent en C, il faut choisir entre deux API :
 
  1. celle héritée d'UCD-SNMP qui est parfois appelée l'API
     « traditionelle » ;
- 2. l'API développée pour Net-SNMP 5.x.
+ 2. l'API développée pour Net-⁠SNMP 5.x.
 
 Les deux API permettent d'enregistrer des fonctions gérant chacune une
 ou plusieurs parties de l'arbre. Avec l'API traditionnelle, ces
@@ -349,7 +349,7 @@ tâches. D'autres attendent de l'auteur qu'il écrive un itérateur pour
 parcourir les objets. D'autres encore permettent d'ajouter un système
 de cache.
 
-Au-dessus de cette nouvelle API, Net-SNMP apporte un utilitaire,
+Au-dessus de cette nouvelle API, Net-⁠SNMP apporte un utilitaire,
 `mib2c`, convertissant une MIB en un squelette en C. Il suffit ensuite
 de compléter celui-ci avec le code nécessaire pour récupérer les
 objets à exporter. Le squelette est documenté et une commande permet
@@ -430,7 +430,7 @@ uniquement sur l'outil `mib2c`. À moins d'être capable d'utiliser la
 nouvelle API sans celui-ci, je pense qu'il est préférable de
 restreindre son usage aux deux cas suivants :
 
- - Écriture d'un module pour intégration dans Net-SNMP. Étant donné
+ - Écriture d'un module pour intégration dans Net-⁠SNMP. Étant donné
    que la plupart des modules existants sont écrits avec l'aide de
    `mib2c`, le style de code est compatible.
  - Écriture d'un sous-agent totalement autonome. Comme il n'y a pas de
@@ -538,7 +538,7 @@ support SNMP :
    [`check/­check_­snmp.c`][keepalived-snmp-check] et
    [`vrrp/­vrrp_­snmp.c`][keepalived-snmp-vrrp]. Keepalived utilise une
    boucle d'évènements dans laquelle il a fallu intégrer la boucle
-   d'évènements de Net-SNMP. Toutes les structures internes de
+   d'évènements de Net-⁠SNMP. Toutes les structures internes de
    Keepalived (configuration, état et statistiques) sont exportées en
    lecture seule. Des alertes sont générées pour certains évènements
    et il est possible de modifier quelques variables.
@@ -558,10 +558,10 @@ support SNMP :
 
 !!! "Mise à jour (03.2012)" Si votre projet est soumis à des contraintes fortes
 en temps de réponse, sachez que l'implémentation du protocole AgentX
-par Net-SNMP a certains points noirs. Jetez un œil
+par Net-⁠SNMP a certains points noirs. Jetez un œil
 [sur mon autre post sur le sujet][fixing].
 
-[fixing]: [[fr/blog/2012-snmp-async-agentx.html]] "Asynchronicité du protocole AgentX de Net-SNMP"
+[fixing]: [[fr/blog/2012-snmp-async-agentx.html]] "Asynchronicité du protocole AgentX de Net-⁠SNMP"
 
 ## Autres solutions
 
@@ -573,12 +573,12 @@ functionality* »:
  - `pass` est un peu plus simple que `pass_persist`. La commande est
    exécutée pour chaque requête. Il est assez simple de transformer
    une telle commande en un script de type `pass_persist` script. De
-   plus, Net-SNMP ne répondra à aucune requête tant que la commande
+   plus, Net-⁠SNMP ne répondra à aucune requête tant que la commande
    est en cours d'exécution.
  - `proxy` redirige les requêtes vers un autre agent SNMP. À moins
    d'avoir un agent qui ne peut pas être transformé en sous-agent
    (absence de code source), il est préférable d'utiliser AgentX. Si
-   le programme utilise l'API de Net-SNMP, la transformation en un
+   le programme utilise l'API de Net-⁠SNMP, la transformation en un
    sous-agent ne nécessite de rajouter qu'une seule ligne de code. Un
    sous-agent mettant en jeu un code plus réduit qu'un agent complet,
    il sera plus efficace et plus sûr.
@@ -589,7 +589,7 @@ functionality* »:
    sous-agent. Si un bug survient, seul le sous-agent sera affecté. Un
    sous-agent correspond mieux à la philosophie Unix : « écrire des
    programmes qui ne font qu'une chose mais qui la font
-   bien ». Toutefois, la [FAQ de Net-SNMP][faqwhich] indique :
+   bien ». Toutefois, la [FAQ de Net-⁠SNMP][faqwhich] indique :
 
 > Implémenter un module C à l'intérieur de l'agent principal
 > (directement ou via `dlmod`) est sans doute la manière la plus
@@ -615,8 +615,8 @@ functionality* »:
 [asn1]: https://fr.wikipedia.org/wiki/ASN.1                              "Syntaxe ASN.1 sur Wikipédia"
 [snmp]: https://fr.wikipedia.org/wiki/Simple_network_management_protocol "SNMP sur Wikipédia"
 
-[faqwhich]: http://www.net-snmp.org/docs/FAQ.html#What_is_the_purpose_of__dlmod__ "FAQ Net-SNMP sur dlmod"
-[netsnmp]: http://www.net-snmp.org/ "Net-SNMP, une suite d'applications pour SNMP"
+[faqwhich]: http://www.net-snmp.org/docs/FAQ.html#What_is_the_purpose_of__dlmod__ "FAQ Net-⁠SNMP sur dlmod"
+[netsnmp]: http://www.net-snmp.org/ "Net-⁠SNMP, une suite d'applications pour SNMP"
 [snmpd.conf]: https://manpages.debian.org/unstable/snmpd/snmpd.conf.5.en.html "Page de manuel de snmpd.conf"
 [snmpv1]: http://www.rane.com/note161.html "SNMP: Simple? Network Management Protocol"
 [passperl]: https://metacpan.org/dist/SNMP-Extension-PassPersist/view/lib/SNMP/Extension/PassPersist.pm "Extension SNMP::Extension::PassPersist pour Perl"
@@ -629,10 +629,10 @@ functionality* »:
 [asterisk-snmp]: https://github.com/asterisk/asterisk/blob/master/res/snmp/agent.c "Support SNMP pour Asterisk, agent.c"
 [python-agentx]: https://sourceforge.net/projects/python-agentx/ "Module AgentX pour Python"
 [python-agentx-example]: https://sourceforge.net/p/python-agentx/code/8/tree/example.py "Exemple pour le module Python agentx"
-[netsnmp-api]: http://www.net-snmp.org/dev/agent/group__handler.html "Documentation de l'API Net-SNMP 5.x"
-[subagent-manual]: http://openhpi.sourceforge.net/subagent-manual/ "Net-SNMP subagent development manual"
+[netsnmp-api]: http://www.net-snmp.org/dev/agent/group__handler.html "Documentation de l'API Net-⁠SNMP 5.x"
+[subagent-manual]: http://openhpi.sourceforge.net/subagent-manual/ "Net-⁠SNMP subagent development manual"
 
-[extend-netsnmp]: https://github.com/vincentbernat/extend-netsnmp/ "Divers exemples sur l'extension de Net-SNMP"
+[extend-netsnmp]: https://github.com/vincentbernat/extend-netsnmp/ "Divers exemples sur l'extension de Net-⁠SNMP"
 [ethtool-mib]: https://github.com/vincentbernat/extend-netsnmp/blob/master/ETHTOOL-MIB "ETHTOOL-MIB"
 [ethtool-mib2c]: https://github.com/vincentbernat/extend-netsnmp/tree/master/agentx-c-mib2c "Implémentation de ETHTOOL-MIB avec mib2c"
 [ethtool-agentx]: https://github.com/vincentbernat/ethtool-snmpd "Implémentation de ETHTOOL-MIB avec l'API UCD-SNMP"

@@ -1,5 +1,5 @@
 ---
-title: "De la non asynchronicité du protocole AgentX dans Net-SNMP"
+title: "De la non asynchronicité du protocole AgentX dans Net-⁠SNMP"
 uuid: caf3f98f-dd86-4d91-9dc8-51a8f81b1482
 tags:
   - network-snmp
@@ -9,10 +9,10 @@ Une des façons les plus commodes pour
 [ajouter un support SNMP est d'utiliser le protocole AgentX][extending-netsnmp] :
 une application se comporte comme un *sous-agent* et traitera les
 requêtes déléguées par un *agent maître* via ce
-protocole. L'implémentation la plus courante est celle de Net-SNMP.
+protocole. L'implémentation la plus courante est celle de Net-⁠SNMP.
 
 !!! "En bref" Une application exploitant l'implémentation AgentX de
-Net-SNMP de manière *asynchrone* peut se bloquer à de nombreuses
+Net-⁠SNMP de manière *asynchrone* peut se bloquer à de nombreuses
 occasions en raison principalement de l'indisponibilité temporaire de
 l'agent maître. Une contre-mesure assez efficace est d'utiliser comme
 agent maître un agent dédié à cette tâche et déléguer le traitement
@@ -20,7 +20,7 @@ des MIB à un sous-agent.
 
 # Test de disponibilité de l'agent maître
 
-Net-SNMP exploite un modèle de programmation évènementielle. Il
+Net-⁠SNMP exploite un modèle de programmation évènementielle. Il
 fournit également des fonctions synchrones classiques mais celles-ci
 sont construites à partir des versions asynchrones. Il exploite sa
 propre boucle d'évènements. Son implémentation d'AgentX semble alors
@@ -95,9 +95,9 @@ bloqué à ne rien faire pendant ce laps de temps. Par exemple,
 bon fonctionnement du cluster.
 
 Les fonctions préfixées par `agentx_` ne font pas partie de l'API de
-Net-SNMP et pourraient donc être corrigées.
+Net-⁠SNMP et pourraient donc être corrigées.
 [Plus facile à dire][runalarms1] [qu'à faire][runalarms2]. De plus, il
-existe d'autres points de blocage enfouis dans Net-SNMP. Ainsi, la
+existe d'autres points de blocage enfouis dans Net-⁠SNMP. Ainsi, la
 connexion de bas niveau (TCP ou socket Unix) avec l'agent maître
 utilise la fonction `connect()` de manière synchrone. Cet aspect a de
 nombreuses ramifications difficiles à évoluer.
@@ -120,7 +120,7 @@ Voici quelques contre-mesures (partielles) :
    traiter. J'ai écrit un
    [patch mettant en place une telle contre-mesure][noping]. L'ABI
    reste inchangée et il n'y a donc besoin que de recompiler les
-   bibliothèques de Net-SNMP.
+   bibliothèques de Net-⁠SNMP.
 
  - Utiliser des valeurs plus faibles pour le délai d'attente et le
    nombre d'essais. Par défaut, le délai d'attente est de 1 seconde et
@@ -238,10 +238,10 @@ tels que `DISMAN-PING-MIB`.
 *[VRRP]: Virtual Router Redundancy Protocol
 *[LVS]:  Linux Virtual Server
 
-[extending-netsnmp]: [[fr/blog/2012-etendre-netsnmp.html]]     "Étendre les fonctionnalités de Net-SNMP"
+[extending-netsnmp]: [[fr/blog/2012-etendre-netsnmp.html]]     "Étendre les fonctionnalités de Net-⁠SNMP"
 [keepalived]:        [[fr/blog/2011-keepalived-snmp-ipv6.html]] "Support SNMP pour Keepalived"
 
 [noping]: https://sourceforge.net/p/net-snmp/patches/1200/ "Patch évitant l'utilisation du ping AgentX"
-[runalarms1]: https://sourceforge.net/p/net-snmp/bugs/2331/ "run_alarms() peut bloquer un programme, système de suivi de Net-SNMP"
-[runalarms2]: https://groups.google.com/d/topic/mailing.unix.net-snmp-users/ORaX-1ORmJ0 "run_alarms() peut bloquer un programme, liste de diffusion Net-SNMP"
-[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() n'est pas asynchrone, système de suivi de Net-SNMP"
+[runalarms1]: https://sourceforge.net/p/net-snmp/bugs/2331/ "run_alarms() peut bloquer un programme, système de suivi de Net-⁠SNMP"
+[runalarms2]: https://groups.google.com/d/topic/mailing.unix.net-snmp-users/ORaX-1ORmJ0 "run_alarms() peut bloquer un programme, liste de diffusion Net-⁠SNMP"
+[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() n'est pas asynchrone, système de suivi de Net-⁠SNMP"

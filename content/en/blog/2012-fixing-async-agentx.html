@@ -1,5 +1,5 @@
 ---
-title: "Asynchronicity & Net-SNMP AgentX protocol"
+title: "Asynchronicity & Net-⁠SNMP AgentX protocol"
 uuid: caf3f98f-dd86-4d91-9dc8-51a8f81b1482
 tags:
   - network-snmp
@@ -9,9 +9,9 @@ One of the best way to
 [add SNMP support to an application is the use of AgentX protocol][extending-netsnmp]:
 an application can act as a *subagent* and handle requests from a
 *master agent* using AgentX protocol. The most widespread
-implementation for such a task is the one from Net-SNMP.
+implementation for such a task is the one from Net-⁠SNMP.
 
-!!! "TL;DR" An application asynchronously leveraging Net-SNMP AgentX
+!!! "TL;DR" An application asynchronously leveraging Net-⁠SNMP AgentX
 implementation has many opportunities to get stuck when the master
 agent becomes temporarily unavailable. A mostly efficient workaround
 is to dedicate a master agent for AgentX and delegate MIB handling to
@@ -19,16 +19,16 @@ a subagent.
 
 # Pinging the master agent
 
-Net-SNMP uses an event-based model. It also provides some synchronous
+Net-⁠SNMP uses an event-based model. It also provides some synchronous
 functions but they are built on top of the asynchronous ones. It is
-shipped with its own event loop. Therefore, Net-SNMP AgentX protocol
+shipped with its own event loop. Therefore, Net-⁠SNMP AgentX protocol
 implementation seems a fine choice to add SNMP support to an
 event-based program, for example in [Keepalived][keepalived], a VRRP
 daemon and a monitoring daemon for LVS clusters.
 
 Unfortunately, an AgentX subagent is expected to check, at a regular
 interval, if the master agent is alive . This is handled automatically
-with Net-SNMP implementation as long as you call `run_alarms()`
+with Net-⁠SNMP implementation as long as you call `run_alarms()`
 function which will call `agentx_check_session()`:
 
     ::c
@@ -93,7 +93,7 @@ doing nothing while this happens. For example, *keepalived* may be
 unable to send VRRP probes resulting in some serious havoc in your
 cluster.
 
-Functions prefixed by `agentx_` are not part of Net-SNMP API and could
+Functions prefixed by `agentx_` are not part of Net-⁠SNMP API and could
 therefore be rewritten to do their work asynchronously. Unfortunately,
 [talk is][runalarms1] [cheap][runalarms2]. Moreover, there exists
 other deep paths that will block a subagent. For example, the
@@ -117,7 +117,7 @@ Here are some (partial) workarounds:
    alive. For example, if it just sent us a new request, no need to
    ping it. I have written a
    [patch implementing such a workaround][noping]. The ABI is left
-   untouched, therefore, you only need to recompile Net-SNMP
+   untouched, therefore, you only need to recompile Net-⁠SNMP
    libraries.
 
  - Use a lower timeout and no retry. By default, the timeout for
@@ -156,7 +156,7 @@ Why is the master agent unresponsive? `snmpd` is also an event-based
 program and, trust me, there are a lot of places where it will become
 unresponsive. Here are two examples:
 
- - When using the `pass` or the `pass_persist` directive, Net-SNMP
+ - When using the `pass` or the `pass_persist` directive, Net-⁠SNMP
    will block until the delegated command outputs a complete line.
 
         ::c
@@ -228,10 +228,10 @@ and a last one for unsafe modules (like `DISMAN-PING-MIB`).
 *[VRRP]: Virtual Router Redundancy Protocol
 *[LVS]:  Linux Virtual Server
 
-[extending-netsnmp]: [[en/blog/2012-extending-netsnmp.html]]   "Recipes for extending Net-SNMP"
+[extending-netsnmp]: [[en/blog/2012-extending-netsnmp.html]]   "Recipes for extending Net-⁠SNMP"
 [keepalived]:        [[en/blog/2011-keepalived-snmp-ipv6.html]] "SNMP support for keepalived"
 
 [noping]: https://sourceforge.net/p/net-snmp/patches/1200/ "Patch avoiding use of AgentX ping"
-[runalarms1]: https://sourceforge.net/p/net-snmp/bugs/2331/ "run_alarms() can block a program, in Net-SNMP bug tracker"
-[runalarms2]: https://groups.google.com/d/topic/mailing.unix.net-snmp-users/ORaX-1ORmJ0 "run_alarms() can block a program, in Net-SNMP mailing list"
-[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() is not asynchronous, in Net-SNMP bug tracker"
+[runalarms1]: https://sourceforge.net/p/net-snmp/bugs/2331/ "run_alarms() can block a program, in Net-⁠SNMP bug tracker"
+[runalarms2]: https://groups.google.com/d/topic/mailing.unix.net-snmp-users/ORaX-1ORmJ0 "run_alarms() can block a program, in Net-⁠SNMP mailing list"
+[asyncsend]: http://sourceforge.net/tracker/?func=detail&aid=3446148&group_id=12694&atid=112694 "snmp_async_send() is not asynchronous, in Net-⁠SNMP bug tracker"
