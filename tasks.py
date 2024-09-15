@@ -628,12 +628,12 @@ done"""
 
 
 @task
-def analytics(c):
+def analytics(c, pattern=""):
     """Get some stats"""
     c.run(
         "for h in {};"
         "do ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
-        "   | grep -aFv atom.xml;"
+        f"   | grep -aFv atom.xml | grep -F '{pattern}';"
         "done"
         " | LANG=en_US.utf8 nix run .#goaccess -- "
         "       --ignore-crawlers "
