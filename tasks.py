@@ -280,8 +280,7 @@ def fixlinks(c):
             year = int(mo.group(1))
         archive = {
             "a": "https://archive.today/{}/{}".format(year, row["urlname"]),
-            "w": "http{}://web.archive.org/web/{}/{}".format(
-                not row["urlname"].startswith("http:") and "s" or "",
+            "w": "https://web.archive.org/web/{}/{}".format(
                 year,
                 row["urlname"],
             ),
