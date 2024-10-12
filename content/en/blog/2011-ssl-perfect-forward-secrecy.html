@@ -80,6 +80,7 @@ without any prior knowledge. Here is how it works in TLS:
      - ·g·, a [primitive root modulo ·p·][primroot]—for every integer
        ·a· [coprime][coprime] to ·p·, there exists an integer ·k· such
        that ·g^k\equiv a\pmod{p}·.
+
  2. The server picks a random integer ·a· and compute ·g^a \bmod
     p·. After sending its regular _Certificate_ message, it will also
     send a _Server Key Exchange_ message (not included in the
@@ -89,11 +90,13 @@ without any prior knowledge. Here is how it works in TLS:
      - random value from the _Server Hello_ message,
      - ·p·, ·g·,
      - ·g^a\bmod p=A·.
+
  3. The client checks that the signature is correct. It also picks a
     random integer ·b· and sends ·g^b \bmod p=B· in a _Client Key
     Exchange_ message. It will also compute ·A^b\bmod p=g^{ab}\bmod p·
     which is the _premaster secret_ from which the _master secret_ is
     derived.
+
  4. The server will receive ·B· and compute ·B^a\bmod p=g^{ab}\bmod p·
     which is the same _premaster secret_ known by the client.
 

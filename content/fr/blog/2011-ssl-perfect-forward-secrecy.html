@@ -87,6 +87,7 @@ les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
      - ·g·, une [racine primitive modulo ·p·][primroot] (pour chaque
        entier ·a· [premier avec ·p·][coprime], il existe un entier ·k·
        tel que ·g^k\equiv a\pmod{p}·).
+
  2. Le serveur choisit un nombre aléatoire ·a· et calcule ·g^a \bmod
     p·. Après l'envoi du message _Certificate_, il envoie un message
     _Server Key Exchange_ (inclu lors de l'étape 3 mais non représenté
@@ -96,10 +97,12 @@ les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
      - la valeur aléatoire issue du message _Server Hello_,
      - ·p·, ·g·,
      - ·g^a\bmod p=A·.
+
  3. Le client vérifie la signature et choisit un nombre aléatoire
     ·b·. Il envoie alors ·g^b \bmod p=B· dans un message _Client Key
     Exchange_. Il calcule ·A^b\bmod p=g^{ab}\bmod p· qui constitue le
     premier secret duquel est dérivé le _secret maître_.
+
  4. Le serveur reçoit ·B· et calcule ·B^a\bmod p=g^{ab}\bmod p· qui
     est identique au premier secret calculé par le client.
 
