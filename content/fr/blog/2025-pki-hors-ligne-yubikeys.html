@@ -1,0 +1,192 @@
+---
+title: "PKI hors ligne avec 3 YubiKeys et une carte ARM"
+description: |
+   Comment configurer un système PKI hors ligne avec 3 YubiKeys et une carte ARM64
+   Libre Computer Sweet Potato (avec des traces de Nix).
+uuid: 0796e4bc-e953-4e29-ae8f-683ba88ae34b
+attachments:
+  "https://github.com/vincentbernat/offline-pki": "Dépôt GitHub"
+tags:
+  - distribution-nixos
+  - programming-python
+---
+
+Une PKI hors ligne renforce la sécurité en isolant physiquement l'autorité de
+certification des menaces réseau. Une [YubiKey][] est une solution économique
+pour stocker un certificat racine. Vous avez également besoin d'un environnement
+isolé pour les opérations sur l'autorité de certification racine.
+
+![PKI s'appuyant sur un ensemble de 3 YubiKeys : 2 pour l'autorité de
+certification racine et 1 pour l'autorité de certification
+intermédiaire.]([[!!images/3-yubikeys@2x.jpg]] "PKI hors ligne sauvegardée par 3
+YubiKeys")
+
+Ce billet décrit un système PKI hors ligne utilisant les composants suivants :
+
+- 2 YubiKeys pour l'**autorité de certification racine** (avec une validité de
+  20 ans) ;
+- 1 YubiKey pour l'**autorité de certification intermédiaire** (avec une
+  validité de 5 ans) ;
+- 1 carte [Libre Computer Sweet Potato][] comme **nano-ordinateur isolé**.
+
+Si nécessaire, il est possible d'ajouter plus de YubiKeys comme sauvegarde de
+l'autorité de certification racine. Ce n'est pas utile pour l'autorité de
+certification intermédiaire car vous pouvez en générer une nouvelle si
+l'actuelle est détruite.
+
+# La partie logicielle
+
+[`offline-pki`][github] est une petite application Python pour gérer une PKI
+hors ligne. Elle s'appuie sur [yubikey-manager][] pour gérer les YubiKeys et sur
+[cryptography][] pour les opérations cryptographiques non exécutées par les
+YubiKeys. L'application a certains choix de conception opiniâtres. Notamment, la
+cryptographie est codée en dur pour utiliser la [courbe elliptique NIST
+P-384][].
+
+La première étape consiste à réinitialiser toutes vos YubiKeys :
+
+```console
+$ offline-pki yubikey reset
+This will reset the connected YubiKey. Are you sure? [y/N]: y
+New PIN code:
+Repeat for confirmation:
+New PUK code:
+Repeat for confirmation:
+New management key ('.' to generate a random one):
+WARNING[pki-yubikey] Using random management key: e8ffdce07a4e3bd5c0d803aa3948a9c36cfb86ed5a2d5cf533e97b088ae9e629
+INFO[pki-yubikey]  0: Yubico YubiKey OTP+FIDO+CCID 00 00
+INFO[pki-yubikey] SN: 23854514
+INFO[yubikit.management] Device config written
+INFO[yubikit.piv] PIV application data reset performed
+INFO[yubikit.piv] Management key set
+INFO[yubikit.piv] New PUK set
+INFO[yubikit.piv] New PIN set
+INFO[pki-yubikey] YubiKey reset successful!
+```
+
+Ensuite, générez l'autorité de certification racine et créez autant de copies
+que vous voulez :
+
+```console
+$ offline-pki certificate root
+Management key for Root X:
+Plug YubiKey "Root X"...
+INFO[pki-yubikey]  0: Yubico YubiKey CCID 00 00
+INFO[pki-yubikey] SN: 23854514
+INFO[yubikit.piv] Data written to object slot 0x5fc10a
+INFO[yubikit.piv] Certificate written to slot 9C (SIGNATURE), compression=True
+INFO[yubikit.piv] Private key imported in slot 9C (SIGNATURE) of type ECCP384
+Copy root certificate to another YubiKey? [y/N]: y
+Plug YubiKey "Root X"...
+INFO[pki-yubikey]  0: Yubico YubiKey CCID 00 00
+INFO[pki-yubikey] SN: 23854514
+INFO[yubikit.piv] Data written to object slot 0x5fc10a
+INFO[yubikit.piv] Certificate written to slot 9C (SIGNATURE), compression=True
+INFO[yubikit.piv] Private key imported in slot 9C (SIGNATURE) of type ECCP384
+Copy root certificate to another YubiKey? [y/N]: n
+```
+
+Vous pouvez examiner le résultat :
+
+```console
+$ offline-pki yubikey info
+INFO[pki-yubikey]  0: Yubico YubiKey CCID 00 00
+INFO[pki-yubikey] SN: 23854514
+INFO[pki-yubikey] Slot 9C (SIGNATURE):
+INFO[pki-yubikey]   Private key type: ECCP384
+INFO[pki-yubikey]   Public key:
+INFO[pki-yubikey]     Algorithm:  secp384r1
+INFO[pki-yubikey]     Issuer:     CN=Root CA
+INFO[pki-yubikey]     Subject:    CN=Root CA
+INFO[pki-yubikey]     Serial:     1
+INFO[pki-yubikey]     Not before: 2024-07-05T18:17:19+00:00
+INFO[pki-yubikey]     Not after:  2044-06-30T18:17:19+00:00
+INFO[pki-yubikey]     PEM:
+-----BEGIN CERTIFICATE-----
+MIIBcjCB+aADAgECAgEBMAoGCCqGSM49BAMDMBIxEDAOBgNVBAMMB1Jvb3QgQ0Ew
+HhcNMjQwNzA1MTgxNzE5WhcNNDQwNjMwMTgxNzE5WjASMRAwDgYDVQQDDAdSb290
+IENBMHYwEAYHKoZIzj0CAQYFK4EEACIDYgAERg3Vir6cpEtB8Vgo5cAyBTkku/4w
+kXvhWlYZysz7+YzTcxIInZV6mpw61o8W+XbxZV6H6+3YHsr/IeigkK04/HJPi6+i
+zU5WJHeBJMqjj2No54Nsx6ep4OtNBMa/7T9foyMwITAPBgNVHRMBAf8EBTADAQH/
+MA4GA1UdDwEB/wQEAwIBhjAKBggqhkjOPQQDAwNoADBlAjEAwYKy/L8leJyiZSnn
+xrY8xv8wkB9HL2TEAI6fC7gNc2bsISKFwMkyAwg+mKFKN2w7AjBRCtZKg4DZ2iUo
+6c0BTXC9a3/28V5aydZj6rvx0JqbF/Ln5+RQL6wFMLoPIvCIiCU=
+-----END CERTIFICATE-----
+```
+
+Ensuite, vous pouvez créer un certificat intermédiaire avec `offline-pki yubikey
+intermediate` et l'utiliser pour signer n'importe quelle CSR avec `offline-pki
+certificate sign`. Soyez prudent et inspectez la CSR avant de la signer, car
+seul le nom du sujet peut être remplacé. Consultez la [documentation][] pour
+plus de détails. Obtenez les options disponibles en utilisant l'option `--help`.
+
+# La partie matérielle
+
+Pour garantir que les opérations sur les autorités de certification racine et
+intermédiaire sont isolées du réseau, une solution économique consiste à
+utiliser une carte ARM64. Le [Libre Computer Sweet Potato][] est une
+alternative plus ouverte au célèbre Raspberry Pi.[^root]
+
+[^root]: La clé pour l'autorité de certification racine n'est pas générée par la
+    YubiKey. L'utilisation d'un ordinateur isolé est d'autant plus importante.
+    Mettez-le dans un coffre-fort avec les YubiKeys quand vous avez terminé !
+
+![Ordinateur monocarte Libre Computer Sweet Potato s'appuyant sur le SOC Amlogic
+S905X]([[!!images/sweet-potato@2x.jpg]] "SBC Libre Computer Sweet Potato,
+alimenté par le SOC AML-S905X")
+
+J'interagis avec lui via un [convertisseur USB vers série][usb to ttl uart converter] :
+
+```console
+$ tio /dev/ttyUSB0
+[16:40:44.546] tio v3.7
+[16:40:44.546] Press ctrl-t q to quit
+[16:40:44.555] Connected to /dev/ttyUSB0
+GXL:BL1:9ac50e:bb16dc;FEAT:ADFC318C:0;POC:1;RCY:0;SPI:0;0.0;CHK:0;
+TE: 36574
+
+BL2 Built : 15:21:18, Aug 28 2019. gxl g1bf2b53 - luan.yuan@droid15-sz
+
+set vcck to 1120 mv
+set vddee to 1000 mv
+Board ID = 4
+CPU clk: 1200MHz
+[…]
+```
+
+# L'assemblage Nix
+
+Pour coller tout ensemble, j'utilise *Nix* avec un [Flake][flake.nix] fournissant :
+
+- un paquet pour l'application `offline-pki`, avec la complétion pour le shell ;
+- un shell de développement, incluant une version éditable de l'application `offline-pki` ;
+- un module NixOS pour configurer la PKI, réinitialisant le système à chaque démarrage ;
+- une image QEMU pour les tests ;
+- une image de carte SD à utiliser sur le *Sweet Potato* ou une autre carte ARM64.
+
+```shell
+# Exécuter localement l'application
+nix run github:vincentbernat/offline-pki -- --help
+# Eécuter l'application dans une machine virtuelle QEMU
+nix run github:vincentbernat/offline-pki\#qemu
+# Construire l'image d'une carte SD pour Sweet Potato ou un Raspberry Pi
+nix build --system aarch64-linux github:vincentbernat/offline-pki\#sdcard.potato
+nix build --system aarch64-linux github:vincentbernat/offline-pki\#sdcard.generic
+# Obtenir un shell de développement avec l'application
+nix develop github:vincentbernat/offline-pki
+```
+
+*[PKI]: Public Key Infrastructure
+*[CA]: Certificate Authority
+*[CAs]: Certificate Authorities
+*[SBC]: Single Board Computer
+*[CSR]: Certificate Signing Request
+[yubikey]: https://www.yubico.com/products/yubikey-5-overview/ "Discover YubiKey 5"
+[libre computer sweet potato]: https://libre.computer/products/aml-s905x-cc-v2/ "Sweet Potato AML-S905X-CC-V2"
+[cryptography]: https://cryptography.io/en/latest/ "cryptography's documentation"
+[github]: https://github.com/vincentbernat/offline-pki "Offline PKI system"
+[yubikey-manager]: https://github.com/Yubico/yubikey-manager "Python library for configuring any YubiKey"
+[nist p-384 elliptic curve]: https://en.wikipedia.org/wiki/P-384 "P-384 on Wikipedia"
+[documentation]: https://github.com/vincentbernat/offline-pki?tab=readme-ov-file#operations
+[usb to ttl uart converter]: https://www.amazon.fr/dp/B07WX2DSVB "Convertisseur USB vers série TTL sur Amazon"
+[flake.nix]: https://github.com/vincentbernat/offline-pki/blob/main/flake.nix
