@@ -22,15 +22,15 @@
         poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
         pythonEnv = poetry2nix.mkPoetryEnv {
           projectDir = ./.;
-          python = pkgs.python311;
+          python = pkgs.python312;
           overrides = poetry2nix.overrides.withDefaults
-            (self: super:
+            (final: prev:
               (l.listToAttrs (l.map
                 # Many dependencies do not declare explicitely their build tools
                 (x: {
                   name = x;
-                  value = super."${x}".overridePythonAttrs (old: {
-                    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ self.setuptools self.flit-core self.hatchling ];
+                  value = prev."${x}".overridePythonAttrs (old: {
+                    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools final.flit-core final.hatchling ];
                   });
                 })
                 [
@@ -41,7 +41,39 @@
                   "pygments-ios"
                   "pygments-junos"
                   "typogrify"
-                ]))
+                ])) // {
+                markdown = prev.markdown.overridePythonAttrs (old: {
+                  patches = (old.patches or [ ]) ++ [
+                    (pkgs.writeText "Markdown-py312.patch" ''
+                      --- a/setup.py     2018-01-04 01:01:27.000000000 +0100
+                      +++ b/setup.py 2025-04-21 00:43:30.571001925 +0200
+                      @@ -2,17 +2,16 @@
+
+                       from setuptools import setup
+                       import os
+                      -import imp
+                      +import importlib.util
+
+
+                       def get_version():
+                           " Get version & version_info without importing markdown.__init__ "
+                           path = os.path.join(os.path.dirname(__file__), 'markdown')
+                      -    fp, pathname, desc = imp.find_module('__version__', [path])
+                      -    try:
+                      -        v = imp.load_module('__version__', fp, pathname, desc)
+                      -    finally:
+                      -        fp.close()
+                      +    version_path = os.path.join(path, '__version__.py')
+                      +    spec = importlib.util.spec_from_file_location('__version__', version_path)
+                      +    v = importlib.util.module_from_spec(spec)
+                      +    spec.loader.exec_module(v)
+
+                           dev_status_map = {
+                               'alpha': '3 - Alpha',
+                    '')
+                  ];
+                });
+              }
             );
         };
         nodeEnv = pkgs.mkYarnModules {
