@@ -18,12 +18,12 @@ can extend its functionality through [plugins][][^plugins] to add features like
 [^plugins]: This article uses the term "plugins," though Caddy documentation
     also refers to them as "modules" since they are implemented as Go modules.
 
-While *Caddy* is available in [Nixpkgs][], adding extra plugins is not
-simple.[^simple] The compilation process needs Internet access, which [Nix
-denies during build][] to ensure [reproducibility][]. When trying to build the
-following derivation using [xcaddy][], a tool for building Caddy with plugins,
-it fails with this error: `dial tcp: lookup proxy.golang.org on [::1]:53:
-connection refused`.
+While *Caddy* is available in [Nixpkgs][], adding extra plugins <del>is</del>
+<ins>was</ins> not simple.[^simple] The compilation process needs Internet
+access, which [Nix denies during build][] to ensure [reproducibility][]. When
+trying to build the following derivation using [xcaddy][], a tool for building
+Caddy with plugins, it fails with this error: `dial tcp: lookup proxy.golang.org
+on [::1]:53: connection refused`.
 
 [^simple]: This is a [feature request][] since quite some time. A [proposed
     solution][] has been rejected. The one described in this article is a bit
@@ -145,6 +145,10 @@ it relies on [this
 commit](https://github.com/nixOS/nixpkgs/commit/eed069a5bc40ba4d871de7700c7eb8d592e98cb6)
 to properly override the `vendorHash` attribute.
 
+!!! "Update (2025-05)" My [pull request][] for Nixpkgs was merged and since
+Nixpkgs 25.05, you don't need to specify the overlay anymore. Check the
+[complete example][25.05].
+
 [caddy]: https://caddyserver.com/ "Caddy Web Server"
 [plugins]: https://caddyserver.com/docs/modules/ "All registered Caddy plugins"
 [rate limiting]: https://github.com/mholt/caddy-ratelimit "HTTP rate limiting module for Caddy"
@@ -157,6 +161,7 @@ to properly override the `vendorHash` attribute.
 [flake]: https://zero-to-nix.com/concepts/flakes "Zero to Nix: flakes"
 [outputhash]: https://nix.dev/manual/nix/2.22/language/advanced-attributes.html#adv-attr-outputHash
 [github repository]: https://github.com/vincentbernat/caddy-nix/blob/main/examples/xcaddy-src/flake.nix
+[25.05]: https://github.com/vincentbernat/caddy-nix/blob/main/examples/nixpkgs-25.05/flake.nix
 [feature request]: https://github.com/NixOS/nixpkgs/issues/14671 "caddy: add all addons #14671"
 [proposed solution]: https://github.com/NixOS/nixpkgs/pull/317881 "caddy: add support for compiling with Caddy modules (plugins) #317881"
 [pull request]: https://github.com/NixOS/nixpkgs/pull/358586 "caddy: add suport for compiling Caddy with plugins #358586"
