@@ -184,7 +184,7 @@
                 for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
-                    | xargs -r0n5 -P$(nproc) ${nodeEnv}/node_modules/svgo/bin/svgo --config ${svgoConfig} -o $out/$d -i
+                    | xargs -r0n5 -P$(nproc) ${nodeEnv}/node_modules/svgo/bin/svgo.js --config ${svgoConfig} -o $out/$d -i
                 done
 
                 # JPG→WebP
