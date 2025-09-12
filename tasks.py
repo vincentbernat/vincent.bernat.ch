@@ -630,31 +630,32 @@ done"""
 def analytics(c, pattern=""):
     """Get some stats"""
     c.run(
-        "for h in {};"
-        "do ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\*"
-        f"   | grep -aFv atom.xml | grep -F '{pattern}';"
-        "done"
-        " | LANG=en_US.utf8 nix run .#goaccess -- "
-        "       --ignore-crawlers "
-        "       --unknowns-as-crawlers "
-        "       --http-protocol=no "
-        "       --no-term-resolver "
-        "       --no-ip-validation "
-        "       --no-query-string "
-        "       --output=goaccess.html "
-        "       --log-format=COMBINED "
-        "       --ignore-panel=KEYPHRASES "
-        "       --ignore-panel=REQUESTS_STATIC "
-        "       --ignore-panel=GEO_LOCATION "
-        "       --sort-panel=REQUESTS,BY_VISITORS,DESC "
-        "       --sort-panel=NOT_FOUND,BY_VISITORS,DESC "
-        "       --sort-panel=HOSTS,BY_VISITORS,DESC "
-        "       --sort-panel=OS,BY_VISITORS,DESC "
-        "       --sort-panel=BROWSERS,BY_VISITORS,DESC "
-        "       --sort-panel=REFERRERS,BY_VISITORS,DESC "
-        "       --sort-panel=REFERRING_SITES,BY_VISITORS,DESC "
-        "       --sort-panel=STATUS_CODES,BY_VISITORS,DESC "
-        "".format(" ".join(hosts)),
+        f"""
+for h in {" ".join(hosts)}; do
+    ssh -C $h zcat -f /var/log/nginx/vincent.bernat.ch.log\\* \
+      | grep -aFv atom.xml | grep -F '{pattern}';
+done \
+    | LANG=en_US.utf8 nix run .#goaccess -- \
+          --ignore-crawlers \
+          --unknowns-as-crawlers \
+          --http-protocol=no \
+          --no-term-resolver \
+          --no-ip-validation \
+          --no-query-string \
+          --output=goaccess.html \
+          --log-format=COMBINED \
+          --ignore-panel=KEYPHRASES \
+          --ignore-panel=REQUESTS_STATIC \
+          --ignore-panel=GEO_LOCATION \
+          --sort-panel=REQUESTS,BY_VISITORS,DESC \
+          --sort-panel=NOT_FOUND,BY_VISITORS,DESC \
+          --sort-panel=HOSTS,BY_VISITORS,DESC \
+          --sort-panel=OS,BY_VISITORS,DESC \
+          --sort-panel=BROWSERS,BY_VISITORS,DESC \
+          --sort-panel=REFERRERS,BY_VISITORS,DESC \
+          --sort-panel=REFERRING_SITES,BY_VISITORS,DESC \
+          --sort-panel=STATUS_CODES,BY_VISITORS,DESC \
+    """,
         hide=False,
     )
     c.run("xdg-open goaccess.html")
