@@ -1,11 +1,11 @@
-from pygments.lexer import RegexLexer, bygroups, using
-from pygments.token import Text, Comment, Punctuation, Operator, Keyword
+from pygments.lexer import RegexLexer, bygroups, using, include, words
+from pygments.token import Text, Comment, Punctuation, Operator, Keyword, Whitespace
 from pygments.token import Number, String, Name
 from pygments.lexers.go import GoLexer
 from pygments.lexers import LEXERS
 from hyde.plugin import Plugin
 
-__all__ = ["PigeonLexer", "LezerLexer", "WiresharkLexer"]
+__all__ = ["PigeonLexer", "LezerLexer", "WiresharkLexer", "HurlLexer"]
 
 # To easily test:
 """
@@ -109,5 +109,62 @@ class WiresharkLexer(RegexLexer):
             ),
             # Remaining
             (r".|\n", Text),
+        ],
+    }
+
+
+class HurlLexer(RegexLexer):
+    name = "Hurl"
+    aliases = ["hurl"]
+
+    http_methods = (
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "HEAD",
+        "OPTIONS",
+        "CONNECT",
+        "TRACE",
+    )
+    sections = ("Query", "Cookies", "Captures", "Asserts", "Options")
+    asserts = ("variable", "body", "header")
+
+    tokens = {
+        "root": [
+            # Comments
+            (r"#.*$", Comment.Single),
+            # HTTP request line
+            (
+                rf"^({"|".join(http_methods)})(\s+)(\S+)",
+                bygroups(Keyword.Reserved, Whitespace, String.Other),
+            ),
+            # HTTP version and status
+            (r"^(HTTP)(\s+)(\d+)", bygroups(Keyword, Whitespace, Number.Integer)),
+            # Section markers
+            (rf"^\[({"|".join(sections)})\]", Name.Namespace),
+            # Key/values
+            (
+                r"^([A-Za-z0-9\-_]+)(:)(\s*)(.*)",
+                bygroups(Name.Attribute, Punctuation, Whitespace, Text),
+            ),
+            # Asserts
+            (
+                rf'^({"|".join(asserts)})(\s+)("([^"]+)")',
+                bygroups(Keyword, Whitespace, String.Double),
+            ),
+            # Templates
+            (
+                r"(\{\{)(\s*)(\w+)(\s*)(\}\})",
+                bygroups(
+                    Punctuation, Whitespace, Name.Variable, Whitespace, Punctuation
+                ),
+            ),
+            # Remaining
+            (r"[><=!]+", Operator),
+            (r"\b\d+\b", Number.Integer),
+            (r"\s+", Whitespace),
+            (r".", Text),
         ],
     }

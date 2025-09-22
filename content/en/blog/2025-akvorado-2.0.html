@@ -1,0 +1,590 @@
+---
+title: "Akvorado release 2.0"
+description: |
+   Akvorado 2.0 is out! It introduces a major architectural change with a new outlet service,
+   as well as smaller changes detailed in this post.
+uuid: 5118af19-5785-47e7-ba88-e6da8b7867a3
+tags:
+  - project-akvorado
+  - network-monitoring
+attachments:
+  "https://github.com/akvorado/akvorado": GitHub repository
+  "https://demo.akvorado.net": demo website
+cover: akvorado-visualize-tab@2x.png
+---
+
+[Akvorado 2.0][] was released today! [Akvorado][] collects network flows with
+IPFIX and sFlow. It enriches flows and stores them in a ClickHouse database.
+Users can browse the data through a web console. This release introduces an
+important architectural change and other smaller improvements. Let's dive in! 🤿
+
+```console
+$ git diff --shortstat v1.11.5
+ 493 files changed, 25015 insertions(+), 21135 deletions(-)
+```
+
+[akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
+[akvorado 2.0]: https://github.com/akvorado/akvorado/releases/tag/v2.0.0
+
+# New "outlet" service
+
+The major change in Akvorado 2.0 is **splitting the inlet service** into two
+parts: the **inlet** and the **outlet**. Previously, the inlet handled all flow
+processing: receiving, decoding, and enrichment. Flows were then sent to Kafka
+for storage in ClickHouse:
+
+![Akvorado flow processing before the change: flows are received and processed
+by the inlet, sent to Kafka and stored in ClickHouse][i1]
+[i1]: [[!!images/akvorado/before-outlet.svg]] "Akvorado flow processing before the introduction of the outlet service"
+
+Network flows reach the inlet service using UDP, an unreliable protocol. The
+inlet must process them **fast enough to avoid losing packets**. To handle a
+high number of flows, the inlet spawns several sets of workers to receive flows,
+fetch metadata, and assemble enriched flows for Kafka. Many configuration
+options existed for scaling, which increased complexity for users. The code
+needed to **avoid blocking at any cost**, making the processing pipeline complex
+and sometimes unreliable, particularly the BMP receiver.[^bmp] Adding new
+features became difficult without making the problem worse.[^features]
+
+[^bmp]: Many attempts were made to make the BMP component both performant and
+    not blocking. See for example [PR #254][], [PR #255][], and [PR #278][].
+    Despite these efforts, this component remained problematic for most users.
+    See [issue #1461][] as an example.
+    
+[^features]: Some features have been pushed to ClickHouse to avoid the
+    processing cost in the inlet. See for example [PR #1059][].
+
+[PR #254]: https://github.com/akvorado/akvorado/pull/254 "inlet/bmp: avoid long lock times when flushing peers"
+[PR #255]: https://github.com/akvorado/akvorado/pull/255 "“Lockless” RIB design"
+[PR #278]: https://github.com/akvorado/akvorado/pull/278 "inlet/bmp: new lockless design"
+[PR #1059]: https://github.com/akvorado/akvorado/pull/1059 "Do geoip enrich in clickhouse instead of inlet"
+[issue #1461]: https://github.com/akvorado/akvorado/issues/1461 "BMP crash: cannot read BMP body"
+
+In Akvorado 2.0, the inlet receives flows and pushes them to Kafka without
+decoding them. The new outlet service handles the remaining tasks:
+
+![Akvorado flow processing after the change: flows are received by the inlet,
+sent to Kafka, processed by the outlet and inserted in ClickHouse][i2]
+[i2]: [[!!images/akvorado/after-outlet.svg]] "Akvorado flow processing after the introduction of the outlet service"
+
+This change goes beyond a simple split:[^size] the outlet now reads flows from
+Kafka and pushes them to ClickHouse, two tasks that Akvorado did not handle
+before. Flows are heavily **batched to increase efficiency** and reduce the load
+on ClickHouse using [ch-go][], a low-level Go client for ClickHouse. When
+batches are too small, asynchronous inserts are used ([e20645][]). The number of
+outlet **workers scales dynamically** ([e5a625][]) based on the target batch
+size and latency (50,000 flows and 5 seconds by default).
+
+[^size]: This is the [biggest commit][ac68c5]:
+
+        ::console
+        $ git show --shortstat ac68c5970e2c | tail -1
+        231 files changed, 6474 insertions(+), 3877 deletions(-)
+
+This new architecture also allows us to **simplify and optimize** the code. The
+outlet fetches metadata synchronously ([e20645][]). The BMP component becomes
+simpler by removing cooperative multitasking ([3b9486][]). Reusing the same
+`RawFlow` object to decode protobuf-encoded flows from Kafka reduces pressure on
+the garbage collector ([8b580f][]).
+
+The effect on Akvorado's overall performance was somewhat uncertain, but a
+[user reported][] **35% lower CPU usage** after migrating from the previous
+version, plus resolution of the long-standing BMP component issue. 🥳
+
+[ch-go]: https://github.com/ClickHouse/ch-go/ "Low-level Go Client for ClickHouse"
+[user reported]: https://github.com/akvorado/akvorado/issues/1908#issuecomment-3233143146
+[ac68c5]: https://github.com/akvorado/akvorado/commit/ac68c5970e2c "inlet: split inlet into new inlet and outlet"
+[e5a625]: https://github.com/akvorado/akvorado/commit/e5a625aecf9e "outlet: make the number of Kafka workers dynamic"
+[8b580f]: https://github.com/akvorado/akvorado/commit/8b580fd26bfc "outlet/core: reuse the same RawFlow object when decoding"
+[e20645]: https://github.com/akvorado/akvorado/commit/e20645c92e38 "outlet/metadata: synchronous fetching of metadata"
+[abb912]: https://github.com/akvorado/akvorado/commit/abb912550289 "outlet/clickhouse: use async insert when flow count is too low"
+[3b9486]: https://github.com/akvorado/akvorado/commit/3b9486b000c0 "outlet/routing: remove batching of peer removal"
+
+# Other changes
+
+This new version includes many miscellaneous changes, such as completion for
+source and destination ports ([f92d2e][]), and automatic restart of the
+orchestrator service ([0f72ff][]) when configuration changes to avoid a common
+pitfall for newcomers.
+
+Let's focus on some key areas for this release: [observability](#observability),
+[documentation](#documentation), [CI](#continuous-integration),
+[Docker](#docker), [Go](#go), and [JavaScript](#javascript).
+
+[f92d2e]: https://github.com/akvorado/akvorado/commit/f92d2ef9e2bd "console/filter: add autocomplete for src and dst ports"
+[0f72ff]: https://github.com/akvorado/akvorado/commit/0f72ffd6761b "cmd: automatic restart of orchestrator on configuration change"
+
+## Observability
+
+Akvorado exposes metrics to provide visibility into the processing pipeline and
+help troubleshoot issues. These are available through **Prometheus HTTP metrics
+endpoints**, such as [`/api/v0/inlet/metrics`][metrics]. With the introduction
+of the outlet, many metrics moved. Some were also renamed ([4c0b15][]) to match
+[Prometheus best practices][]. Kafka consumer lag was added as a new metric
+([e3a778][]).
+
+If you do not have your own observability stack, the Docker Compose setup
+shipped with Akvorado provides one. You can enable it by activating the profiles
+introduced for this purpose ([529a8f][]).
+
+The `prometheus` profile ships [Prometheus][] to **store metrics** and [Alloy][]
+to **collect them** ([2b3c46][], [f81299][], and [8eb7cd][]). Redis and Kafka
+metrics are collected through the exporter bundled with Alloy ([560113][]).
+Other metrics are exposed using Prometheus metrics endpoints and are
+automatically fetched by Alloy with the help of some Docker labels, similar to
+what is done to configure Traefik. [cAdvisor][] was also added ([83d855][]) to
+provide some container-related metrics.
+
+The `loki` profile ships [Loki][] to **store logs** ([45c684][]). While Alloy
+can collect and ship logs to Loki, its parsing abilities are limited: I could
+not find a way to preserve all metadata associated with structured logs produced
+by many applications, including Akvorado. [Vector][] replaces Alloy ([95e201][])
+and features a domain-specific language, VRL, to transform logs. Annoyingly,
+Vector currently [cannot retrieve Docker logs from before it was
+started][docker-logs].
+
+Finally, the `grafana` profile ships [Grafana][], but the shipped dashboards are
+broken. This is planned for a future version.
+
+[prometheus]: https://prometheus.io/ "Prometheus: Open source metrics and monitoring"
+[alloy]: https://grafana.com/docs/alloy/latest/ "Grafana Alloy documentation"
+[loki]: https://grafana.com/docs/loki/latest/ "Grafana Loki documentation"
+[vector]: https://vector.dev/ "Vector: lightweight, ultra-fast tool for building observability pipelines"
+[metrics]: https://demo.akvorado.net/api/v0/inlet/metrics
+[prometheus best practices]: https://prometheus.io/docs/practices/naming/
+[4c0b15]: https://github.com/akvorado/akvorado/commit/4c0b15e1cd4e "inlet/outlet: rename a few metrics"
+
+[2b3c46]: https://github.com/akvorado/akvorado/commit/2b3c46372985 "docker: switch from prometheus to alloy for scrapping metrics"
+[f81299]: https://github.com/akvorado/akvorado/commit/f81299ff2816 "docker: group services together in alloy configuration"
+[8eb7cd]: https://github.com/akvorado/akvorado/commit/8eb7cd63b1c0 "docker: make Alloy configuration use only Docker labels"
+[560113]: https://github.com/akvorado/akvorado/commit/560113e3af24 "docker: monitor Redis and Kafka using Alloy internal exporter"
+[45c684]: https://github.com/akvorado/akvorado/commit/45c684dc6737 "docker: add Loki to the observability stack"
+[95e201]: https://github.com/akvorado/akvorado/commit/95e2011d0c67 "docker: replace Alloy by Vector for parsing logs"
+[e3a778]: https://github.com/akvorado/akvorado/commit/e3a778552d6e "outlet/kafka: expose consumer lag as a prometheus metric"
+[378c1f]: https://github.com/akvorado/akvorado/commit/378c1f5e0a4d "docker: add logs for ClickHouse"
+[529a8f]: https://github.com/akvorado/akvorado/commit/529a8f69bebc "docker: use profiles to optionally enable Prometheus, Loki and Grafana"
+[83d855]: https://github.com/akvorado/akvorado/commit/83d8556d6ddb "docker: add cAdvisor for container monitoring"
+[docker-logs]: https://github.com/vectordotdev/vector/issues/7358 "Support checkpointing and reading old logs with docker_logs source"
+[cadvisor]: https://github.com/google/cadvisor/ "Analyzes resource usage and performance characteristics of running containers"
+[grafana]: https://grafana.com/docs/grafana/latest/ "Grafana documentation"
+
+## Documentation
+
+The Docker Compose setup provided by Akvorado makes it easy to get the web
+interface up and running quickly. However, Akvorado requires a few mandatory
+steps to be functional. It ships with [comprehensive documentation][], including
+a chapter about [troubleshooting problems][]. I hoped this documentation would
+reduce the support burden. It is difficult to know if it works. Happy users
+rarely report their success, while some users open discussions asking for help
+without reading much of the documentation.
+
+In this release, the **documentation was significantly improved**.
+
+```console
+$ git diff --shortstat v1.11.5 -- console/data/docs
+ 10 files changed, 1873 insertions(+), 1203 deletions(-)
+```
+
+The documentation was updated ([fc1028][]) to match Akvorado's new architecture.
+The troubleshooting section was rewritten ([17a272][]). Instructions on how to
+improve ClickHouse performance when upgrading from versions earlier than 1.10.0
+was added ([5f1e9a][]). An LLM proofread the entire content ([06e3f3][]).
+Developer-focused documentation was also improved ([548bbb][], [e41bae][], and
+[871fc5][]).
+
+From a usability perspective, table of content sections are now collapsable
+([c142e5][]). Admonitions help draw user attention to important points
+([8ac894][]).
+
+![Admonition in Akvorado documentation to ask a user not to open an issue or
+start a discussion before reading the documentation][i3]
+[i3]: [[!!images/akvorado/admonitions@2x.png]] "Example of use of admonitions in Akvorado's documentation"
+
+[comprehensive documentation]: https://demo.akvorado.net/docs
+[troubleshooting problems]: https://demo.akvorado.net/docs/troubleshooting
+[fc1028]: https://github.com/akvorado/akvorado/commit/fc1028bfcdc5 "doc: documentation update for inlet/outlet separation"
+[c142e5]: https://github.com/akvorado/akvorado/commit/c142e58110b3 "console/frontend: make TOC collapsable in documentation"
+[8ac894]: https://github.com/akvorado/akvorado/commit/8ac89407fd49 "console: add admonitions to documentation markdown"
+[17a272]: https://github.com/akvorado/akvorado/commit/17a272d0ba18 "docs: update troubleshooting documentation"
+[5f1e9a]: https://github.com/akvorado/akvorado/commit/5f1e9a49c7d5 "docs: document schema update for installations before 1.10.0"
+[06e3f3]: https://github.com/akvorado/akvorado/commit/06e3f334fdb3 "docs: proofread the whole documentation"
+[528b03]: https://github.com/akvorado/akvorado/commit/528b0399c138 "docs: explain dependency versioning"
+[548bbb]: https://github.com/akvorado/akvorado/commit/548bbbfca161 "docs: explain more how to develop on the frontend"
+[e41bae]: https://github.com/akvorado/akvorado/commit/e41bae008b68 "docs: make it a bit simpler to hack Akvorado"
+[871fc5]: https://github.com/akvorado/akvorado/commit/871fc5981498 "docs: make it even easier to hack on the console"
+
+## Continuous integration
+
+This release includes efforts to **speed up** continuous integration on GitHub.
+Coverage and race tests run in parallel ([6af216][] and [fa9e48][]). The Docker
+image builds during the tests but gets tagged only after they succeed
+([8b0dce][]).
+
+![GitHub workflow for CI with many jobs, some of them running in parallel, some
+not][i4]
+[i4]: [[!!images/akvorado/github-actions@2x.png]] "GitHub workflow to test and build Akvorado"
+
+End-to-end tests ([883e19][]) ensure the shipped Docker Compose setup works as
+expected. [Hurl][] runs tests on various HTTP endpoints, particularly to verify
+metrics ([42679b][] and [169fa9][]). For example:
+
+```hurl
+{% raw %}
+## Test inlet has received NetFlow flows
+GET http://127.0.0.1:8080/prometheus/api/v1/query
+[Query]
+query: sum(akvorado_inlet_flow_input_udp_packets_total{job="akvorado-inlet",listener=":2055"})
+HTTP 200
+[Captures]
+inlet_receivedflows: jsonpath "$.data.result[0].value[1]" toInt
+[Asserts]
+variable "inlet_receivedflows" > 10
+
+## Test inlet has sent them to Kafka
+GET http://127.0.0.1:8080/prometheus/api/v1/query
+[Query]
+query: sum(akvorado_inlet_kafka_sent_messages_total{job="akvorado-inlet"})
+HTTP 200
+[Captures]
+inlet_sentflows: jsonpath "$.data.result[0].value[1]" toInt
+[Asserts]
+variable "inlet_sentflows" >= {{ inlet_receivedflows }}
+{% endraw %}
+```
+
+[Hurl]: https://hurl.dev/
+[6af216]: https://github.com/akvorado/akvorado/commit/6af2163066aa "build: speed up CI by running coverage and race tests in parallel"
+[8b0dce]: https://github.com/akvorado/akvorado/commit/8b0dcee14f60 "build: build Docker image earlier but tag later"
+[883e19]: https://github.com/akvorado/akvorado/commit/883e19922eee "build: add end-to-end testing"
+[fa9e48]: https://github.com/akvorado/akvorado/commit/fa9e48d16a90 "build: run a third job for misc tests"
+[42679b]: https://github.com/akvorado/akvorado/commit/42679b1f2db3 "build: use hurl for end-to-end tests"
+[169fa9]: https://github.com/akvorado/akvorado/commit/169fa933af64 "build: add more e2e tests by testing Prometheus metrics"
+
+## Docker
+
+Akvorado ships with a comprehensive [Docker Compose][] setup to help users **get
+started quickly**. It ensures a consistent deployment, eliminating many
+configuration-related issues. It also serves as a living documentation of the
+complete architecture.
+
+This release brings some small enhancements around Docker:
+
+- an example to configure Traefik for TLS with [Let's Encrypt][] ([1a27bb][]),
+- HTTP compression ([bee9a5][]), and
+- support of IPv6 ([a74a41][]).
+
+Previously, many Docker images were pulled from the [Bitnami Containers
+library][]. However, VMWare acquired Bitnami in 2019 and Broadcom acquired
+VMWare in 2023. As a result, [Bitnami images were deprecated][] in less than a
+month. This was not really a surprise[^broadcom]. Previous versions of Akvorado
+had already started moving away from them. In this release, the Apache project's
+Kafka image replaces the Bitnami one ([1eb382][]). Thanks to the switch to KRaft
+mode, Zookeeper is no longer needed ([0a2ea1], [8a49ca], and [f65d20]).
+
+[^broadcom]: Broadcom is known for its user-hostile moves. Look at what happened
+    with VMWare.
+
+Akvorado's Docker images were previously compiled with Nix. However, building
+AArch64 images on x86-64 is slow because it relies on QEMU userland emulation.
+The updated `Dockerfile` uses [multi-stage][] and [multi-platform][] builds: one
+stage builds the JavaScript part on the host platform, one stage builds the Go
+part cross-compiled on the host platform, and the final stage assembles the
+image on top of a [slim distroless image][] ([268e95][] and [d526ca][]).
+
+```docker hl_lines="16"
+# This is a simplified version
+FROM --platform=$BUILDPLATFORM node:20-alpine AS build-js
+RUN apk add --no-cache make
+WORKDIR /build
+COPY console/frontend console/frontend
+COPY Makefile .
+RUN make console/data/frontend
+
+FROM --platform=$BUILDPLATFORM golang:alpine AS build-go
+RUN apk add --no-cache make curl zip
+WORKDIR /build
+COPY . .
+COPY --from=build-js /build/console/data/frontend console/data/frontend
+RUN go mod download
+RUN make all-indep
+ARG TARGETOS TARGETARCH TARGETVARIANT VERSION
+RUN make
+
+FROM gcr.io/distroless/static:latest
+COPY --from=build-go /build/bin/akvorado /usr/local/bin/akvorado
+ENTRYPOINT [ "/usr/local/bin/akvorado" ]
+```
+
+When building for multiple platforms with `--platform
+linux/amd64,linux/arm64,linux/arm/v7`, the build steps until the highlighted
+line execute only once for all platforms. This significantly speeds up the
+build. 🚅
+
+Akvorado now ships Docker images for these platforms: `linux/amd64`,
+`linux/amd64/v3`, `linux/arm64`, and `linux/arm/v7`. When requesting
+`ghcr.io/akvorado/akvorado`, Docker selects the best image for the current CPU.
+On x86-64, there are two choices. If your [CPU is recent enough][], Docker
+downloads `linux/amd64/v3`. This version contains additional optimizations and
+should run faster than the `linux/amd64` version. It would be interesting to
+ship an image for `linux/arm64/v8.2`, but Docker does not support the same
+mechanism for AArch64 yet ([792808][]).
+
+[0a2ea1]: https://github.com/akvorado/akvorado/commit/0a2ea1b1a189 "docker: remove zookeeper for ClickHouse cluster as well"
+[1eb382]: https://github.com/akvorado/akvorado/commit/1eb38226fc23 "docker: switch to Apache Kafka"
+[8a49ca]: https://github.com/akvorado/akvorado/commit/8a49ca40d31b "docker: remove Zookeeper from default setup"
+[f65d20]: https://github.com/akvorado/akvorado/commit/f65d20443622 "docker: remove use of Zookeeper for Kafka"
+
+[6a24e1]: https://github.com/akvorado/akvorado/commit/6a24e15a08d1 "docker: build a linux/amd64/v3 image"
+[2cbb39]: https://github.com/akvorado/akvorado/commit/2cbb39ec8a55 "build: generate more Go optimized versions"
+[268e95]: https://github.com/akvorado/akvorado/commit/268e95ee1891 "docker: switch away from Nix to build Docker images"
+[d526ca]: https://github.com/akvorado/akvorado/commit/d526ca451ce1 "build: add a platform independant step into Makefile"
+[792808]: https://github.com/akvorado/akvorado/commit/7928084fdef0 "build: add some pointers to understand architecture variants"
+[a74a41]: https://github.com/akvorado/akvorado/commit/a74a41a6a049 "docker: enable IPv6 networking, use a specific IPv4 subnet"
+[1a27bb]: https://github.com/akvorado/akvorado/commit/1a27bb1bc2a3 "docker: add examples to enable authentication and TLS"
+[bee9a5]: https://github.com/akvorado/akvorado/commit/bee9a5de6771 "docker: enable HTTP compression for Traefik"
+[bitnami containers library]: https://github.com/bitnami/containers/
+[bitnami images were deprecated]: https://github.com/bitnami/containers/issues/83267 "Upcoming changes to the Bitnami catalog (effective August 28th, 2025)"
+[slim distroless image]: https://github.com/GoogleContainerTools/distroless "Language focused docker images, minus the operating system"
+[multi-stage]: https://docs.docker.com/build/building/multi-stage/ "Multi-stage builds"
+[multi-platform]: https://docs.docker.com/build/building/multi-platform/ "Multi-platform builds"
+[cpu is recent enough]: https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels "X86-64: Microarchitecture levels"
+[let's encrypt]: https://letsencrypt.org/
+[docker compose]: https://docs.docker.com/compose/ "Docker Compose documentation"
+
+## Go
+
+This release includes many changes related to Go but not visible to the users.
+
+### Toolchain
+
+In the past, Akvorado supported the two latest Go versions, preventing immediate
+use of the latest enhancements. The goal was to allow users of stable
+distributions to use Go versions shipped with their distribution to compile
+Akvorado. However, this became frustrating when interesting features, like `go
+tool`, were released. Akvorado 2.0 requires **Go 1.25** ([77306d][]) but can be
+compiled with older toolchains by automatically downloading a newer one
+([94fb1c][]).[^debian] Users can still override `GOTOOLCHAIN` to revert this
+decision. The recommended toolchain updates weekly through CI to ensure we get
+the latest minor release ([5b11ec][]). This change also simplifies updates to
+newer versions: only `go.mod` needs updating.
+
+[^debian]: As a Debian developer, I dislike these mechanisms that circumvent
+    the distribution package manager. The final straw came when Go
+    1.25 spent one month in the [Debian NEW queue][], an arbitrary mechanism I
+    don't like at all.
+
+Thanks to this change, Akvorado now uses `wg.Go()` ([77306d][]) and I have
+started converting some unit tests to the new `test/synctest` package
+([bd787e][], [7016d8][], and [159085][]).
+
+[fe4252]: https://github.com/akvorado/akvorado/commit/fe42529bbcad "build: switch to Go 1.25"
+[94fb1c]: https://github.com/akvorado/akvorado/commit/94fb1c64837d "build: accept building with a not up-to-date toolchain"
+[5b11ec]: https://github.com/akvorado/akvorado/commit/5b11ecf29e4c "build: try updating Go toolchain weekly"
+[77306d]: https://github.com/akvorado/akvorado/commit/77306ddceee6 "build: bump go.mod to Go 1.25 to use wg.Go()"
+[bd787e]: https://github.com/akvorado/akvorado/commit/bd787e654f93 "common/daemon: experiment with the test/synctest package"
+[7016d8]: https://github.com/akvorado/akvorado/commit/7016d899690b "demoexporter/flows: switch to testing/synctest package for clock"
+[159085]: https://github.com/akvorado/akvorado/commit/159085a0d3ac "outlet/metadata: switch to testing/synctest package for clock"
+
+### Testing
+
+When **testing equality**, I use a helper function `Diff()` to display the
+differences when it fails:
+
+```go
+got := input.Keys()
+expected := []int{1, 2, 3}
+if diff := helpers.Diff(got, expected); diff != "" {
+    t.Fatalf("Keys() (-got, +want):\n%s", diff)
+}
+```
+
+This function uses [`kylelemons/godebug`][kylelemons/godebug]. This package is
+no longer maintained and has some shortcomings: for example, by default, it does
+not compare struct private fields, which may cause unexpectedly successful
+tests. I replaced it with [`google/go-cmp`][google/go-cmp], which is stricter
+and has better output ([e2f1df][]).
+
+[e2f1df]: https://github.com/akvorado/akvorado/commit/e2f1df9add0d "tests: replace godebug by go-cmp for structure diffs"
+
+### Another package for Kafka
+
+Another change is the switch from [Sarama][] to [franz-go][] to **interact with
+Kafka** ([756e4a][] and [2d26c5][]). The main motivation for this change is to
+get a better concurrency model. Sarama heavily relies on channels and it is
+difficult to understand the lifecycle of an object handed to this package.
+franz-go uses a more modern approach with callbacks[^channels] that is both more
+performant and easier to understand. It also ships with a package to spawn fake
+Kafka broker clusters, which is more convenient than the mocking functions
+provided by Sarama.
+
+[^channels]: In the early years of Go, channels were heavily promoted. Sarama
+    was designed during this period. A few years later, a more nuanced approach
+    emerged. See notably “[Go channels are bad and you should feel bad][].”
+
+[756e4a]: https://github.com/akvorado/akvorado/commit/756e4a8fbd7a "/kafka: switch to franz-go"
+[2d26c5]: https://github.com/akvorado/akvorado/commit/2d26c5b9cab1 "inlet/kafka: use kfake for functional tests with Kafka"
+[Go channels are bad and you should feel bad]: https://www.jtolio.com/2016/03/go-channels-are-bad-and-you-should-feel-bad/ "Go channels are bad and you should feel bad"
+
+### Improved routing table for BMP
+
+To store its routing table, the BMP component used
+[`kentik/patricia`][kentik/patricia], an implementation of a patricia tree
+focused on reducing garbage collection pressure.
+[`gaissmai/bart`][gaissmai/bart] is a more recent alternative using an
+adaptation of [Donald Kunth's ART algorithm][] that promises [better
+performance][] and delivers it: **90% faster lookups** and **27% faster
+insertions** ([92ee2e][] and [fdb65c][]).
+
+Unlike `kentik/patricia`, `gaissmai/bart` does not help efficiently store values
+attached to each prefix. I adapted the same approach as `kentik/patricia` to
+store route lists for each prefix: store a 32-bit index for each prefix, and use
+it to build a 64-bit index for looking up routes in a map. This leverages Go's
+efficient map structure.
+
+`gaissmai/bart` also supports a lockless routing table version, but this is not
+simple because we would need to extend this to the map storing the routes and to
+the interning mechanism. I also attempted to use Go's new `unique` package to
+replace the `intern` package included in Akvorado, but performance was
+worse.[^worse]
+
+[^worse]: This should be investigated further, but my theory is that the
+    `intern` package uses 32-bit integers, while `unique` uses 64-bit pointers.
+    See commit [74e5ac][].
+
+[74e5ac]: https://github.com/akvorado/akvorado/commit/74e5aca41b71 "outlet/routing: replace intern pool by unique.Hash"
+[92ee2e]: https://github.com/akvorado/akvorado/commit/92ee2e05b7c4 "outlet/routing: use gaissmai/bart instead of kentik/patricia"
+[fdb65c]: https://github.com/akvorado/akvorado/commit/fdb65c93a5fe "outlet/routing: store v4 routes into a v4 tree"
+
+### Miscellaneous
+
+Previous versions of Akvorado were using a [custom Protobuf encoder][] for
+performance and flexibility. With the introduction of the outlet service,
+Akvorado only needs a simple static schema, so this code was removed. However,
+it is possible to enhance performance with
+[`planetscale/vtprotobuf`][planetscale/vtprotobuf] ([e49a74][], and [8b580f][]).
+Moreover, the dependency on `protoc`, a C++ program, was somewhat annoying.
+Therefore, Akvorado now uses [buf][], written in Go, to convert a Protobuf
+schema into Go code ([f4c879][]).
+
+[e49a74]: https://github.com/akvorado/akvorado/commit/e49a744a6d98 "build: use vtprotobuf to speedup protobuf marshal/unmarshal"
+[f4c879]: https://github.com/akvorado/akvorado/commit/f4c879e525a5 "build: switch from protoc to buf to build protobuf"
+
+Another small optimization to **reduce the size of the Akvorado binary** by
+10 MB was to compress the static assets embedded in Akvorado in a ZIP file. It
+includes the ASN database, as well as the SVG images for the documentation. A
+small layer of code makes this change transparent ([b1d638][] and [e69b91][]).
+
+[b1d638]: https://github.com/akvorado/akvorado/commit/b1d6382585dd "common/embed: replace all go:embed use by an embedded archive"
+[e69b91]: https://github.com/akvorado/akvorado/commit/e69b919d1c78 "build: remove embedded drawio diagrams from embedded SVG"
+
+<!--
+More and more Go library are moving to from `net.IP` to `netip.Addr`. The flow
+generation in the demo exporter was one user and has been converted to
+`netip.Addr` ([6c4401][]). Another user was the GeoIP component of the
+orchestrator service. Upgrading `oschwald/maxminddb-golang` to the newest
+version ([0a1076][]) solved this issue. The new version also provides a new
+method to parse GeoIP files ([1ce6fb][]), which may improve performances.
+-->
+
+[6c4401]: https://github.com/akvorado/akvorado/commit/6c44019d131e "demoexporter/flows: move from net.IP to netip.Addr"
+[0a1076]: https://github.com/akvorado/akvorado/commit/0a10764cc99e "orchestrator: switch to github.com/oschwald/maxminddb-golang/v2"
+[1ce6fb]: https://github.com/akvorado/akvorado/commit/1ce6fb41637f "orchestrator: switch to UnmarshalMaxmindDB for geoip parsing"
+
+[debian new queue]: https://ftp-master.debian.org/new.html
+[sarama]: https://github.com/IBM/sarama
+[franz-go]: https://github.com/twmb/franz-go
+[kylelemons/godebug]: https://github.com/kylelemons/godebug
+[google/go-cmp]: https://github.com/google/go-cmp
+[custom protobuf encoder]: [[en/blog/2023-dynamic-protobuf-golang.html]] "Fast and dynamic encoding of Protocol Buffers in Go"
+[planetscale/vtprotobuf]: https://github.com/planetscale/vtprotobuf
+[buf]: https://buf.build/
+[kentik/patricia]: https://github.com/kentik/patricia
+[gaissmai/bart]: https://github.com/gaissmai/bart
+[donald kunth's art algorithm]: https://www.hariguchi.org/art/art.pdf "ART: Allotment Routing Table. A Fast Free Multibit Trie Based Routing Table"
+[better performance]: https://github.com/gaissmai/iprbench "Benchmarks for Golang IP routing table"
+
+## JavaScript
+
+Recently, two large **supply-chain attacks** hit the JavaScript ecosystem: [one
+affecting the popular packages `chalk` and `debug`][attack1] and [another
+impacting the popular package `@ctrl/tinycolor`][attack2]. These attacks also
+exist in other ecosystems, but JavaScript is a prime target due to heavy use of
+small third-party dependencies. The previous version of Akvorado relied on **653
+dependencies**.
+
+`npm-run-all` was removed ([3424e8][], 132 dependencies). `patch-package` was
+removed ([625805][] and [e85ff0][], 69 dependencies) by moving missing
+TypeScript definitions to `env.d.ts`. `eslint` was replaced with [oxlint][], a
+linter written in Rust ([97fd8c][], 125 dependencies, including the plugins).
+
+I switched from `npm` to [Pnpm][], an alternative package manager ([fce383][]).
+Pnpm does not run install scripts by default[^install] and prevents installing
+packages that are too recent. It is also significantly faster.[^fast] Node.js
+does not ship Pnpm but it ships [Corepack][], which allows us to use Pnpm
+without installing it. Pnpm can also list licenses used by each dependency,
+removing the need for `license-compliance` ([a35ca8][], 42 dependencies).
+
+For additional speed improvements, beyond switching to Pnpm and Oxlint, [Vite][]
+was replaced with its faster [Rolldown version][] ([463827][]).
+
+[^install]: This is also possible with `npm`. See commit [dab2f7][].
+[^fast]: An even faster alternative is [Bun][], but it is less available.
+
+After these changes, Akvorado “only” pulls 225 dependencies. 😱
+
+[rolldown version]: https://voidzero.dev/posts/announcing-rolldown-vite "Announcing Rolldown-Vite"
+[vite]: https://vite.dev/
+[corepack]: https://github.com/nodejs/corepack "Zero-runtime-dependency package acting as bridge between Node projects and their package managers"
+[bun]: https://bun.sh/ "Fast all-in-one JavaScript runtime"
+[pnpm]: https://pnpm.io/ "Fast, disk space efficient package manager"
+[oxlint]: https://oxc.rs/docs/guide/usage/linter
+[attack1]: https://www.aikido.dev/blog/npm-debug-and-chalk-packages-compromised "npm debug and chalk packages compromised"
+[attack2]: https://sigh.dev/posts/ctrl-tinycolor-post-mortem/ "@ctrl/tinycolor Supply Chain Attack Post-mortem"
+[3424e8]: https://github.com/akvorado/akvorado/commit/3424e8b8c9f2 "console/frontend: don't use npm-run-all"
+[625805]: https://github.com/akvorado/akvorado/commit/6258050251a3 "console/frontend: remove patch for sugar-date"
+[e85ff0]: https://github.com/akvorado/akvorado/commit/e85ff0ae31fa "console/frontend: remove patch for echarts"
+[463827]: https://github.com/akvorado/akvorado/commit/4638272b7b6d "console/frontend: switch to rolldown-vite"
+[97fd8c]: https://github.com/akvorado/akvorado/commit/97fd8ca2e479 "console/frontend: replace eslint by oxlint"
+[327a78]: https://github.com/akvorado/akvorado/commit/327a78cc1cfc "console/frontend: add packageManager for corepack"
+[dab2f7]: https://github.com/akvorado/akvorado/commit/dab2f7875171 "build: do not run install scripts with npm"
+[fce383]: https://github.com/akvorado/akvorado/commit/fce383dbf46b "build: switch to pnpm"
+[a35ca8]: https://github.com/akvorado/akvorado/commit/a35ca8bc07e0 "build: replace license-compliance with pnpm"
+
+# Next steps
+
+I would like to land three features in the next version of Akvorado:
+
+- Add Grafana dashboards to complete the observability stack. See [issue
+  #1906][] for details.
+
+- Integrate [OVH's Grafana plugin][] by providing a stable API for such
+  integrations. Akvorado's web console would still be useful for browsing
+  results, but if you want to build and share dashboards, you should switch to
+  Grafana. See [issue #1895][].
+
+- Move some work currently done in ClickHouse (custom dictionaries, GeoIP and IP
+  enrichment) back into the outlet service. This should give more flexibility
+  for adding features like the one requested in [issue #1030][].
+
+---
+
+I started working on splitting the inlet into two parts more than one year ago.
+I found more motivation in recent months, partly thanks to [Claude Code][],
+which I used as a [rubber duck][]. Almost none of the produced code was
+kept:[^exceptions] it is like an intern who does not learn. 🦆
+
+[^exceptions]: The exceptions are part of the code for the admonition blocks,
+    the code for collapsing the table of content, and part of the documentation.
+
+*[BMP]: BGP Monitoring Protocol
+*[IPFIX]: IP Flow Information Export
+*[VRL]: Vector Remap Language
+*[LLM]: Large Language Model
+*[CI]: Continuous integration
+
+[issue #1906]: https://github.com/akvorado/akvorado/issues/1906 "Ship some Grafana dashboards in docker compose setup"
+[issue #1030]: https://github.com/akvorado/akvorado/issues/1030 "RegExp for custom dimension"
+[issue #1895]: https://github.com/akvorado/akvorado/issues/1895 "Integration of OVH Grafana plugin"
+[ovh's grafana plugin]: https://github.com/ovh/grafana-akvorado
+[claude code]: https://docs.claude.com/en/docs/claude-code/overview "Claude Code overview"
+[rubber duck]: https://en.wikipedia.org/wiki/Rubber_duck "Rubber duck on Wikipedia"

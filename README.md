@@ -75,22 +75,26 @@ me than the other direction. As I am not a native English speaker, I am using
 LLMs to edit the English content or to translate to French. Since French is my
 mother tongue, I edit the French result myself.
 
-Using Claude 3.5 Sonnet, I use the following prompts, then copy/paste Markdown
+Using Claude 4.1 Opus, I use the following prompts, then copy/paste Markdown
 content, with the exception of code blocks.
 
 ### Translating
 
 > Translate to French the following text, keep markdown markup, and enclose the
-> result in a code block. For links, keep the original references.
+> result in a code block. For links, keep the original references. In French,
+> footnote marks should be placed before the punctuation.
 
-It should be possible to have a [more guided prompt][], but for now, this is enough for me.
+It should be possible to have a [more guided prompt][], but for now, this is
+enough for me: being a French native speaker, I can proofread the result myself.
 
 [more guided prompt]: https://www.gally.net/temp/20250201sampletranslationprompt.html
 
 ### Editing
 
 > Edit the following text, keep markdown markup, and enclose the result in a
-> code block. There is no need to add comments. You can include very light
-> stylistic edit but avoid using prnoun-verb contractions and keep a casual
-> tone. The target is a technical audience who may not be English-native
-> speakers (CEFR B2 level).
+> code block. There is no need to add comments. The target is a technical
+> audience who may not be English-native speakers (CEFR B2 level). You can
+> include light stylistic edit but avoid using pronoun-verb contractions and
+> keep a casual tone. You can also suppress a passive voice, remove superfluous
+> words, or break a long sentence into smaller ones. I am not an English-native
+> speaker myself, so you can also fix common mistakes done by people like me.
