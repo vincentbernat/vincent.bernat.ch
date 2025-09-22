@@ -181,6 +181,22 @@
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
               inherit (pkgs) libwebp libavif pngquant;
+              svgo = pkgs.svgo.overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  (pkgs.writeText "sax.patch" ''
+                    --- a/bin/svgo.js 2018-01-04 01:01:27.000000000 +0100
+                    +++ b/bin/svgo.js 2025-04-21 00:43:30.571001925 +0200
+                    @@ -1,5 +1,7 @@
+                     #!/usr/bin/env node
+
+                    +import sax from 'sax'; sax.MAX_BUFFER_LENGTH = Infinity;
+                    +
+                     import colors from 'picocolors';
+                     import { program } from 'commander';
+                     import makeProgram from '../lib/svgo/coa.js';
+                  '')
+                ];
+              });
               svgoConfig = pkgs.writeText "svgo.config.js" ''
                 module.exports = {
                   plugins: [
@@ -203,7 +219,7 @@
                 for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
-                    | xargs -r0n5 -P$(nproc) ${nodeEnv}/node_modules/svgo/bin/svgo.js --config ${svgoConfig} -o $out/$d -i
+                    | xargs -r0n5 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
                 # JPG→WebP
