@@ -24,18 +24,18 @@ nix develop
 inv build
 ```
 
-### Poetry
+### uv
 
 Check oudated dependencies:
 
 ```
-poetry show --outdated
+uv tree --outdated
 ```
 
 Update a dependency:
 
 ```
-poetry update --lock langcodes
+uv ???
 ```
 
 ### Yarn

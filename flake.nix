@@ -2,10 +2,20 @@
   inputs = {
     nixpkgs.url = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    poetry2nix = {
-      url = "github:nix-community/poetry2nix";
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
+    };
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     merriweather = {
       url = "github:SorkinType/Merriweather";
@@ -19,62 +29,79 @@
           inherit system;
         };
         l = pkgs.lib // builtins;
-        poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
-        pythonEnv = poetry2nix.mkPoetryEnv {
-          projectDir = ./.;
-          overrides = poetry2nix.overrides.withDefaults
-            (final: prev:
-              (l.listToAttrs (l.map
-                # Many dependencies do not declare explicitely their build tools
-                (x: {
-                  name = x;
-                  value = prev."${x}".overridePythonAttrs (old: {
-                    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ final.setuptools final.flit-core final.hatchling ];
-                  });
-                })
-                [
-                  "commando"
-                  "fswrap"
-                  "hyde"
-                  "pygments-haproxy"
-                  "pygments-ios"
-                  "pygments-junos"
-                  "typogrify"
-                ])) // {
-                markdown = prev.markdown.overridePythonAttrs (old: {
-                  patches = (old.patches or [ ]) ++ [
-                    (pkgs.writeText "Markdown-py312.patch" ''
-                      --- a/setup.py     2018-01-04 01:01:27.000000000 +0100
-                      +++ b/setup.py 2025-04-21 00:43:30.571001925 +0200
-                      @@ -2,17 +2,16 @@
 
-                       from setuptools import setup
-                       import os
-                      -import imp
-                      +import importlib.util
+        python = pkgs.python3;
+        pythonEnv =
+          let
+            pythonBase = pkgs.callPackage inputs.pyproject-nix.build.packages {
+              inherit python;
+            };
+            workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+            overlay = workspace.mkPyprojectOverlay {
+              sourcePreference = "wheel";
+            };
+            buildSystemOverrides =
+              let
+                overrides = {
+                  commando.setuptools = [ ];
+                  fswrap.setuptools = [ ];
+                  hyde.setuptools = [ ];
+                  pygments-haproxy.setuptools = [ ];
+                  pygments-ios.setuptools = [ ];
+                  pygments-junos.setuptools = [ ];
+                  typogrify.setuptools = [ ];
+                  markupsafe.setuptools = [ ];
+                };
+              in
+              final: prev: l.mapAttrs
+                (
+                  name: spec: prev.${name}.overrideAttrs (old: {
+                    nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem spec;
+                  })
+                )
+                overrides;
+            moreOverrides = final: prev: {
+              markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
+                patches = (old.patches or [ ]) ++ [
+                  (pkgs.writeText "Markdown-py312.patch" ''
+                    --- a/setup.py     2018-01-04 01:01:27.000000000 +0100
+                    +++ b/setup.py 2025-04-21 00:43:30.571001925 +0200
+                    @@ -2,17 +2,16 @@
+
+                     from setuptools import setup
+                     import os
+                    -import imp
+                    +import importlib.util
 
 
-                       def get_version():
-                           " Get version & version_info without importing markdown.__init__ "
-                           path = os.path.join(os.path.dirname(__file__), 'markdown')
-                      -    fp, pathname, desc = imp.find_module('__version__', [path])
-                      -    try:
-                      -        v = imp.load_module('__version__', fp, pathname, desc)
-                      -    finally:
-                      -        fp.close()
-                      +    version_path = os.path.join(path, '__version__.py')
-                      +    spec = importlib.util.spec_from_file_location('__version__', version_path)
-                      +    v = importlib.util.module_from_spec(spec)
-                      +    spec.loader.exec_module(v)
+                     def get_version():
+                         " Get version & version_info without importing markdown.__init__ "
+                         path = os.path.join(os.path.dirname(__file__), 'markdown')
+                    -    fp, pathname, desc = imp.find_module('__version__', [path])
+                    -    try:
+                    -        v = imp.load_module('__version__', fp, pathname, desc)
+                    -    finally:
+                    -        fp.close()
+                    +    version_path = os.path.join(path, '__version__.py')
+                    +    spec = importlib.util.spec_from_file_location('__version__', version_path)
+                    +    v = importlib.util.module_from_spec(spec)
+                    +    spec.loader.exec_module(v)
 
-                           dev_status_map = {
-                               'alpha': '3 - Alpha',
-                    '')
-                  ];
-                });
-              }
+                         dev_status_map = {
+                             'alpha': '3 - Alpha',
+                  '')
+                ];
+              });
+            };
+            pythonSet = pythonBase.overrideScope (
+              l.composeManyExtensions [
+                inputs.pyproject-build-systems.overlays.wheel
+                overlay
+                buildSystemOverrides
+              ]
             );
-        };
+          in
+          pythonSet.mkVirtualEnv "www-env" workspace.deps.default;
         nodeEnv = pkgs.mkYarnModules {
           pname = "www-yarn-modules";
           version = "1.0.0";
@@ -115,14 +142,6 @@
               type = "app";
               program = "${pkg}/bin/goaccess";
             };
-          yarn = {
-            type = "app";
-            program = "${pkgs.yarn}/bin/yarn";
-          };
-          poetry = {
-            type = "app";
-            program = "${pkgs.poetry}/bin/poetry";
-          };
         };
         packages = {
           build.subsetFonts =
@@ -299,25 +318,34 @@
             '';
           };
         };
-        devShells.default = pythonEnv.env.overrideAttrs (oldAttrs: {
-          name = "www";
-          buildInputs = with pkgs; [
-            # Build
-            git
-            git-annex
-            nodejs
-            openssl
+        devShells.default = pkgs.mkShell
+          {
+            name = "www";
+            env = {
+              UV_NO_SYNC = "1";
+              UV_PYTHON = "${pythonEnv}/bin/python";
+              UV_PYTHON_DOWNLOADS = "never";
+            };
+            packages = with pkgs; [
+              pythonEnv
 
-            # Build support
-            yarn
-            poetry
+              # Build
+              git
+              git-annex
+              nodejs
+              openssl
 
-            # Helper tools
-            mp4v2 # video2hls
-          ];
-          shellHook = ''
-            ln -nsf ${nodeEnv}/node_modules node_modules
-          '';
-        });
+              # Build support
+              yarn
+              uv
+
+              # Helper tools
+              mp4v2 # video2hls
+            ];
+            shellHook = ''
+              unset PYTHONPATH
+              ln -nsf ${nodeEnv}/node_modules node_modules
+            '';
+          };
       });
 }
