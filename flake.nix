@@ -360,7 +360,7 @@
             ];
             shellHook = ''
               unset PYTHONPATH
-              ln -nsf ${nodeEnv}/node_modules node_modules
+              ln -nsfT ${nodeEnv}/node_modules node_modules
             '';
           };
       });
