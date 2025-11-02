@@ -13,8 +13,11 @@ class ShortLinksExtension(Extension):
 
 
 class ShortLinksPreprocessor(Preprocessor):
-    SCHEMAS = {"rfc": "https://www.rfc-editor.org/rfc/rfc{}"}
-    RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://(\w+)", re.ASCII)
+    SCHEMAS = {
+        "rfc": "https://www.rfc-editor.org/rfc/rfc{}",
+        "man": "https://manpages.debian.org/{}.html",
+    }
+    RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://([\w.~;=:@+-]+)", re.ASCII)
 
     def run(self, lines):
         return [
