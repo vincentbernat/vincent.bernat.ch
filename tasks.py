@@ -269,8 +269,18 @@ def fixlinks(c):
     reader = csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
     seen = {}
     for row in reader:
-        if row["valid"] == "True" and "Redirected" not in row["infostring"]:
-            continue
+        if row["valid"] == "True":
+            if "Redirected" not in row["warningstring"]:
+                continue
+            exceptions = [
+                "https://manpages.debian.org",
+                "https://encrypted.google.com",
+                "https://youtu.be",
+                "https://blogtrottr.com",
+                row["urlname"],
+            ]
+            if any(row["url"].startswith(exc) for exc in exceptions):
+                continue
         year = datetime.datetime.now().year
         archive = {}
         mo = re.search(r"/blog/(\d+)-", row["parentname"])
@@ -288,11 +298,11 @@ def fixlinks(c):
         while True:
             print(
                 """
-URL:     {urlname}
-Source:  {parentname}
-Result:  {result}
-Warning: {warningstring}
-Info:    {infostring}""".format(
+URL:       {urlname}
+Source:    {parentname}
+Result:    {result}
+Warning:   {warningstring}
+Info:      {infostring}""".format(
                     **row
                 )
             )
@@ -312,14 +322,10 @@ Info:    {infostring}""".format(
                 print("({}) Replace by {}".format(a.upper(), archive[a]))
                 valid += a
                 valid += a.upper()
-            if "Redirected" in row["infostring"]:
-                mo = re.search(
-                    r".*Redirected to `(.*?)\'\.", row["infostring"], flags=re.DOTALL
-                )
-                if mo:
-                    redirected = mo.group(1)
-                    print("(R) Replace by {}".format(redirected))
-                    valid += "R"
+            if "Redirected" in row["warningstring"]:
+                redirected = row["url"]
+                print("(R) Replace by {}".format(redirected))
+                valid += "R"
             print()
             ans = input("Command? ")
             if ans not in valid:
