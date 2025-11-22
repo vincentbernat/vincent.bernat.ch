@@ -248,11 +248,10 @@ def update_fonts(c):
 
 
 @task
-def linkcheck(c, remote=True, verbose=False):
+def linkcheck(c, remote=True):
     """Check links"""
     result = c.run(
-        "nix run .#linkchecker -- -f ./linkcheckerrc {} {}".format(
-            verbose and "--verbose" or "",
+        "nix run .#linkchecker -- -f ./linkcheckerrc {}".format(
             remote and "https://vincent.bernat.ch/" or "http://localhost:8080/",
         ),
         warn=True,
