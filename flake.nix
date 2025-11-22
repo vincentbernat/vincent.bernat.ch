@@ -222,10 +222,6 @@
                     | xargs -r0n5 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
-                # JPG→WebP
-                find . -type f -name '*.jpg' -print0 \
-                  | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/cwebp -q 84 -af '{}' -o $out/'{}'.webp
-
                 # JPG→AVIF
                 find . -type f -name '*.jpg' -print0 \
                   | xargs -r0n5 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
