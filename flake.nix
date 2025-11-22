@@ -232,7 +232,6 @@
                                                                        --ignore-icc \
                                                                        --min 0 --max 63 \
                                                                        -a end-usage=q -a cq-level=21 -a tune=ssim \
-                                                                       --progressive \
                                                                   '{}' $out/'{}'.avif
 
                 # Optimize JPG
