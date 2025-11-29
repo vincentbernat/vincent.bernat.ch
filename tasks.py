@@ -269,16 +269,20 @@ def fixlinks(c):
     seen = {}
     for row in reader:
         if row["valid"] == "True":
-            if "Redirected" not in row["warningstring"]:
+            if "status: 30" not in row["warningstring"]:
+                continue
+            if "status: 302" in row["warningstring"]:
+                continue
+            if "status: 307" in row["warningstring"]:
                 continue
             exceptions = [
-                "https://manpages.debian.org",
                 "https://encrypted.google.com",
                 "https://youtu.be",
-                "https://blogtrottr.com",
-                row["urlname"],
+                "https://zsh.sourceforge.net",
             ]
-            if any(row["url"].startswith(exc) for exc in exceptions):
+            if any(row["urlname"].startswith(exc) for exc in exceptions):
+                continue
+            if row["url"].startswith(row["urlname"]):
                 continue
         year = datetime.datetime.now().year
         archive = {}
