@@ -180,7 +180,7 @@
             # Optimize SVG, JPG and PNG
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
-              inherit (pkgs) libwebp libavif pngquant;
+              inherit (pkgs) libwebp libavif pngquant lcms;
               svgo = pkgs.svgo.overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
                   (pkgs.writeText "sax.patch" ''
@@ -222,19 +222,23 @@
                     | xargs -r0n5 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
-                # JPG→AVIF
+                # Convert JPG to sRGB
                 find . -type f -name '*.jpg' -print0 \
+                  | xargs -r0n5 -P$(nproc) -i ${lcms}/bin/jpgicc -q100 '{}' $out/'{}'
+
+                # JPG→AVIF
+                find $out -type f -name '*.jpg' -print0 \
                   | xargs -r0n5 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
                                                                        --min 0 --max 63 \
                                                                        -a end-usage=q -a cq-level=21 -a tune=ssim \
-                                                                  '{}' $out/'{}'.avif
+                                                                  '{}' '{}'.avif
 
                 # Optimize JPG
-                for d in $(find . -type d); do
+                for d in $(find $out -type d); do
                   find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
                     | sort -z \
                     | xargs -r0n5 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
-                                                -d $out/$d --max=84 --all-progressive --strip-all --keep-icc
+                                                --max=84 --all-progressive --strip-all --keep-icc
                 done
 
                 # Optimize PNG
