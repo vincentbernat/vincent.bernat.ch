@@ -225,7 +225,6 @@
                 # JPG→AVIF
                 find . -type f -name '*.jpg' -print0 \
                   | xargs -r0n5 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
-                                                                       --ignore-icc \
                                                                        --min 0 --max 63 \
                                                                        -a end-usage=q -a cq-level=21 -a tune=ssim \
                                                                   '{}' $out/'{}'.avif
@@ -235,7 +234,7 @@
                   find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
                     | sort -z \
                     | xargs -r0n5 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
-                                                -d $out/$d --max=84 --all-progressive --strip-all
+                                                -d $out/$d --max=84 --all-progressive --strip-all --keep-icc
                 done
 
                 # Optimize PNG
