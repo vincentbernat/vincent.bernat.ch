@@ -32,10 +32,16 @@ Check oudated dependencies:
 uv tree --outdated
 ```
 
-Update a dependency:
+Update all dependencies:
 
 ```
-uv ???
+uv lock --upgrade
+```
+
+Update only one dependency:
+
+```
+uv lock --upgrade-package lxml
 ```
 
 ### Yarn
