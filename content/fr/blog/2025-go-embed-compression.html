@@ -1,0 +1,154 @@
+---
+title: "Compression des fichiers embarqués dans Go"
+description: |
+   Les fichiers embarqués dans un exécutable Go ne sont pas compressées, gaspillant de l'espace.
+   Il est possible de les compresser dans une archive ZIP tout en gardant la plupart du code inchangé.
+uuid: 1630236c-c1d2-445c-be23-e2651b61ce3c
+tags:
+  - programming-go
+attachments:
+  "https://github.com/akvorado/akvorado/blob/main/common/embed/fs.go": Code Go
+---
+
+La fonctionnalité [embed][] de Go permet d'intégrer des ressources statiques
+dans un exécutable, mais elle les stocke non compressées. Cela gaspille de
+l'espace : une interface web avec de la documentation peut faire gonfler un
+binaire de plusieurs mégaoctets. Une [proposition pour activer optionnellement
+la compression][] a été déclinée car il est difficile de gérer tous les cas
+d'usage. Une solution ? Mettre toutes les ressources dans une archive ZIP ! 🗜️
+
+[TOC]
+
+[embed]: https://gobyexample.com/embed-directive "Go by Example: Embed Directive"
+[proposition pour activer optionnellement la compression]: https://github.com/golang/go/issues/61322 "proposal: embed: add -embed=compress flag to go #61322"
+
+# Code
+
+La bibliothèque standard de Go inclut un [module pour lire et écrire des
+archives ZIP][]. Il contient une fonction qui transforme une archive ZIP en une
+structure [`io/fs.FS`][io/fs.FS]. Cette dernière peut remplacer
+[`embed.FS`][embed.FS] dans la plupart des cas[^missing].
+
+[^missing]: Elle autorise la lecture de plusieurs fichiers simultanément.
+    Cependant, elle n'implémente pas les méthodes `ReadDir()` et `ReadFile()`.
+
+```go
+package embed
+
+import (
+  "archive/zip"
+  "bytes"
+  _ "embed"
+  "fmt"
+  "io/fs"
+  "sync"
+)
+
+//go:embed data/embed.zip
+var embeddedZip []byte
+
+var dataOnce = sync.OnceValue(func() *zip.Reader {
+  r, err := zip.NewReader(bytes.NewReader(embeddedZip), int64(len(embeddedZip)))
+  if err != nil {
+    panic(fmt.Sprintf("cannot read embedded archive: %s", err))
+  }
+  return r
+})
+
+func Data() fs.FS {
+  return dataOnce()
+}
+```
+
+[module pour lire et écrire des archives zip]: https://pkg.go.dev/archive/zip "godoc: archive/zip"
+[io/fs.fs]: https://pkg.go.dev/io/fs#FS "godoc: io/fs.FS"
+[embed.fs]: https://pkg.go.dev/embed#FS "godoc: embed.FS"
+
+Pour construire l'archive `embed.zip`, nous pouvons utiliser une règle dans un
+`Makefile`. Les fichiers à y placer sont spécifiés comme des dépendances pour
+s'assurer que les changements sont détectés. La [variable automatique][] `$@`
+est la cible de la règle, tandis que `$^` est remplacée par la liste des
+dépendances, modifiées ou non.
+
+```make
+common/embed/data/embed.zip: console/data/frontend console/data/docs
+common/embed/data/embed.zip: orchestrator/clickhouse/data/protocols.csv
+common/embed/data/embed.zip: orchestrator/clickhouse/data/icmp.csv
+common/embed/data/embed.zip: orchestrator/clickhouse/data/asns.csv
+common/embed/data/embed.zip:
+	mkdir -p common/embed/data && zip --quiet --recurse-paths --filesync $@ $^
+```
+
+[variable automatique]: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html "GNU Make: Automatic Variables"
+
+# Gain d'espace
+
+[Akvorado][], un collecteur de flux écrit en Go, embarque plusieurs ressources statiques :
+
+- des fichiers CSV pour traduire les numéros de ports, les protocoles ou les numéros d'AS ;
+- du HTML, CSS, JS et des images pour l'interface web ;
+- la documentation.
+
+![Répartition de l'espace utilisé par chaque paquet avant et après l'introduction de
+embed.zip. Il est affiché comme une carte arborescente et nous pouvons voir de nombreux fichiers embarqués
+remplacés par un plus gros.][i4]
+[i4]: [[!!images/go-embed@2x.png]] "Répartition de l'espace utilisé par chaque composant avant (gauche) et après (droite) l'introduction de <code>embed.zip</code>."
+
+L'intégration de ces ressources dans une archive ZIP a réduit la taille de
+l'exécutable de plus de 4 Mio :
+
+```console
+$ unzip -p common/embed/data/embed.zip | wc -c | numfmt --to=iec
+7.3M
+$ ll common/embed/data/embed.zip
+-rw-r--r-- 1 bernat users 2.9M Dec  7 17:17 common/embed/data/embed.zip
+```
+
+[akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
+
+# Perte de performance
+
+Lire depuis une archive compressée n'est pas aussi rapide que lire un fichier à
+plat. Un [benchmark simple][] montre que c'est plus de 4 fois plus lent. De
+plus, la lecture de l'archive alloue de la mémoire.
+
+```text
+goos: linux
+goarch: amd64
+pkg: akvorado/common/embed
+cpu: AMD Ryzen 5 5600X 6-Core Processor
+BenchmarkData/compressed-12     2262   526553 ns/op   610 B/op   10 allocs/op
+BenchmarkData/uncompressed-12   9482   123175 ns/op     0 B/op    0 allocs/op
+```
+
+[benchmark simple]: https://github.com/akvorado/akvorado/blob/84bd9a64645667902cb57a5cf5a59749810928cc/common/embed/fs_test.go#L35-L51
+
+Bien qu'une archive ZIP ait un index pour trouver rapidement le fichier demandé,
+se déplacer à l'intérieur d'un fichier compressé n'est actuellement pas
+possible[^seek]. Par conséquent, les fichiers retournés depuis une archive
+compressée n'implémentent pas les interfaces `io.ReaderAt` ou `io.Seeker`,
+contrairement aux fichiers directement embarqués. Cela empêche certaines
+fonctionnalités du serveur HTTP, comme servir des fichiers partiels ou détecter
+le type MIME.
+
+---
+
+Pour Akvorado, c'est un compromis acceptable pour économiser quelques mébioctets
+d'un exécutable de presque 100 Mio. La semaine prochaine, je continuerai cette
+aventure futile en expliquant comment j'ai [empêché Go de désactiver
+l'élimination de code mort][] ! 🦥
+
+[^seek]: [SOZip][] est un profil qui permet de réaliser un accès aléatoire
+    rapide dans un fichier compressé. Cependant, le module `archive/zip` de Go
+    ne sait pas l'utiliser.
+
+[SOZip]: https://github.com/sozip/sozip-spec
+[empêché go de désactiver l'élimination de code mort]: https://github.com/akvorado/akvorado/pull/2112 "Don't disable DCE #2112"
+
+<!--
+![Flame graph when reading data from embed.zip compared to reading data directly][i5]
+[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "CPU flame graph comparing the time spent on CPU when reading data from embed.zip (left) versus reading data directly (right)."
+-->
+
+
+

@@ -1,0 +1,148 @@
+---
+title: "Compressing embedded files in Go"
+description: |
+   Static assets embedded in Go executable are not compressed, wasting some space.
+   It is possible to compress them into a ZIP archive while keeping most of the code unchanged.
+uuid: 1630236c-c1d2-445c-be23-e2651b61ce3c
+tags:
+  - programming-go
+attachments:
+  "https://github.com/akvorado/akvorado/blob/main/common/embed/fs.go": Go code
+---
+
+Go's [embed][] feature lets you bundle static assets into an executable, but it
+stores them uncompressed. This wastes space: a web interface with documentation
+can bloat your binary by dozens of megabytes. A [proposition to optionally
+enable compression][] was declined because it is difficult to handle all use
+cases. One solution? Put all the assets into a ZIP archive! 🗜️
+
+[TOC]
+
+[embed]: https://gobyexample.com/embed-directive "Go by Example: Embed Directive"
+[proposition to optionally enable compression]: https://github.com/golang/go/issues/61322 "proposal: embed: add -embed=compress flag to go #61322"
+
+# Code
+
+The Go standard library includes a [module to read and write ZIP archives][]. It
+contains a function that turns a ZIP archive into an [`io/fs.FS`][io/fs.FS]
+structure that can replace [`embed.FS`][embed.FS] in most contexts.[^missing]
+
+[^missing]: You can safely read multiple files concurrently. However, it does
+    not implement `ReadDir()` and `ReadFile()` methods.
+
+```go
+package embed
+
+import (
+  "archive/zip"
+  "bytes"
+  _ "embed"
+  "fmt"
+  "io/fs"
+  "sync"
+)
+
+//go:embed data/embed.zip
+var embeddedZip []byte
+
+var dataOnce = sync.OnceValue(func() *zip.Reader {
+  r, err := zip.NewReader(bytes.NewReader(embeddedZip), int64(len(embeddedZip)))
+  if err != nil {
+    panic(fmt.Sprintf("cannot read embedded archive: %s", err))
+  }
+  return r
+})
+
+func Data() fs.FS {
+  return dataOnce()
+}
+```
+
+[module to read and write zip archives]: https://pkg.go.dev/archive/zip "godoc: archive/zip"
+[io/fs.fs]: https://pkg.go.dev/io/fs#FS "godoc: io/fs.FS"
+[embed.fs]: https://pkg.go.dev/embed#FS "godoc: embed.FS"
+
+We can build the `embed.zip` archive with a rule in a `Makefile`. We specify the
+files to embed as dependencies to ensure changes are detected.
+
+```make
+common/embed/data/embed.zip: console/data/frontend console/data/docs
+common/embed/data/embed.zip: orchestrator/clickhouse/data/protocols.csv 
+common/embed/data/embed.zip: orchestrator/clickhouse/data/icmp.csv
+common/embed/data/embed.zip: orchestrator/clickhouse/data/asns.csv
+common/embed/data/embed.zip:
+	mkdir -p common/embed/data && zip --quiet --recurse-paths --filesync $@ $^
+```
+
+The [automatic variable][] `$@` is the rule target, while `$^` expands to all
+the dependencies, modified or not.
+
+[automatic variable]: https://www.gnu.org/software/make/manual/html_node/Automatic-Variables.html "GNU Make: Automatic Variables"
+
+# Space gain
+
+[Akvorado][], a flow collector written in Go, embeds several static assets:
+
+- CSV files to translate port numbers, protocols or AS numbers, and
+- HTML, CSS, JS, and image files for the web interface, and
+- the documentation.
+
+![Breakdown of space used by each package before and after introducing
+embed.zip. It is displayed as a treemap and we can see many embedded files
+replaced by a bigger one.][i4]
+[i4]: [[!!images/go-embed@2x.png]] "Breakdown of the space used by each component before (left) and after (right) the introduction of <code>embed.zip</code>."
+
+Embedding these assets into a ZIP archive reduced the size of the Akvorado
+executable by more than 4 MiB:
+
+```console
+$ unzip -p common/embed/data/embed.zip | wc -c | numfmt --to=iec
+7.3M
+$ ll common/embed/data/embed.zip
+-rw-r--r-- 1 bernat users 2.9M Dec  7 17:17 common/embed/data/embed.zip
+```
+
+[akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
+
+# Performance loss
+
+Reading from a compressed archive is not as fast as reading a flat file. A
+[simple benchmark][] shows it is more than 4× slower. It also allocates some
+memory.
+
+```text
+goos: linux
+goarch: amd64
+pkg: akvorado/common/embed
+cpu: AMD Ryzen 5 5600X 6-Core Processor
+BenchmarkData/compressed-12     2262   526553 ns/op   610 B/op   10 allocs/op
+BenchmarkData/uncompressed-12   9482   123175 ns/op     0 B/op    0 allocs/op
+```
+
+[simple benchmark]: https://github.com/akvorado/akvorado/blob/84bd9a64645667902cb57a5cf5a59749810928cc/common/embed/fs_test.go#L35-L51
+
+While a ZIP archive has an index to quickly find the requested file, seeking
+inside a compressed file is currently not possible.[^seek] Therefore, the files
+from a compressed archive do not implement the `io.ReaderAt` or `io.Seeker`
+interfaces, unlike directly embedded files. This prevents some features, like
+serving partial files or detecting MIME types when serving files over HTTP.
+
+---
+
+For Akvorado, this is an acceptable compromise to save a few mebibytes from an
+executable of almost 100 MiB. Next week, I will continue this futile adventure
+by explaining how I [prevented Go from disabling dead code elimination][]! 🦥
+
+[^seek]: [SOZip][] is a profile that enables fast random access in a compressed
+    file. However, Go's `archive/zip` module does not support it.
+
+[SOZip]: https://github.com/sozip/sozip-spec
+[prevented go from disabling dead code elimination]: https://github.com/akvorado/akvorado/pull/2112 "Don't disable DCE #2112"
+
+<!--
+![Flame graph when reading data from embed.zip compared to reading data directly][i5]
+[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "CPU flame graph comparing the time spent on CPU when reading data from embed.zip (left) versus reading data directly (right)."
+-->
+
+
+
