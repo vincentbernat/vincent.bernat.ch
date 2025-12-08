@@ -110,7 +110,7 @@ $ ll common/embed/data/embed.zip
 
 Lire depuis une archive compressée n'est pas aussi rapide que lire un fichier à
 plat. Un [benchmark simple][] montre que c'est plus de 4 fois plus lent. De
-plus, la lecture de l'archive alloue de la mémoire.
+plus, la lecture de l'archive alloue de la mémoire[^improvements].
 
 ```text
 goos: linux
@@ -122,6 +122,16 @@ BenchmarkData/uncompressed-12   9482   123175 ns/op     0 B/op    0 allocs/op
 ```
 
 [benchmark simple]: https://github.com/akvorado/akvorado/blob/84bd9a64645667902cb57a5cf5a59749810928cc/common/embed/fs_test.go#L35-L51
+
+[^improvements]: Il serait possible de conserver en mémoire les ressources
+    fréquemment consultées. Cela réduirait l'usage du CPU et échangerait la
+    mémoire cache contre de la mémoire résidente.
+
+Chaque accès à une ressource nécessite une étape de décompression, comme on peut
+le voir dans ce graphique :
+
+![Graphique en flammes lors de la lecture de données depuis embed.zip comparé à la lecture directe][i5]
+[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "Graphique en flammes du CPU comparant le temps passé sur le CPU lors de la lecture des données depuis embed.zip (à gauche) et lors de la lecture directe (à droite). Parce que Go exécute le benchmark pour les données non compressées 4 fois plus souvent, il utilise le même espace horizontal que le benchmark pour les données compressées."
 
 Bien qu'une archive ZIP ait un index pour trouver rapidement le fichier demandé,
 se déplacer à l'intérieur d'un fichier compressé n'est actuellement pas
@@ -144,11 +154,3 @@ l'élimination de code mort][] ! 🦥
 
 [SOZip]: https://github.com/sozip/sozip-spec
 [empêché go de désactiver l'élimination de code mort]: https://github.com/akvorado/akvorado/pull/2112 "Don't disable DCE #2112"
-
-<!--
-![Flame graph when reading data from embed.zip compared to reading data directly][i5]
-[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "CPU flame graph comparing the time spent on CPU when reading data from embed.zip (left) versus reading data directly (right)."
--->
-
-
-

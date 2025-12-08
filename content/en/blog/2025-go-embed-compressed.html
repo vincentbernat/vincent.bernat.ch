@@ -108,7 +108,7 @@ $ ll common/embed/data/embed.zip
 
 Reading from a compressed archive is not as fast as reading a flat file. A
 [simple benchmark][] shows it is more than 4× slower. It also allocates some
-memory.
+memory.[^improvements]
 
 ```text
 goos: linux
@@ -120,6 +120,15 @@ BenchmarkData/uncompressed-12   9482   123175 ns/op     0 B/op    0 allocs/op
 ```
 
 [simple benchmark]: https://github.com/akvorado/akvorado/blob/84bd9a64645667902cb57a5cf5a59749810928cc/common/embed/fs_test.go#L35-L51
+
+[^improvements]: You could keep frequently accessed assets in memory. This
+    reduces CPU usage and trades cached memory for resident memory.
+
+Each access to an asset requires a decompression step, as seen in this flame
+graph:
+
+![Flame graph when reading data from embed.zip compared to reading data directly][i5]
+[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "CPU flame graph comparing the time spent on CPU when reading data from embed.zip (left) versus reading data directly (right). Because the Go testing framework executes the benchmark for uncompressed data 4 times more often, it uses the same horizontal space as the benchmark for compressed data."
 
 While a ZIP archive has an index to quickly find the requested file, seeking
 inside a compressed file is currently not possible.[^seek] Therefore, the files
@@ -138,11 +147,3 @@ by explaining how I [prevented Go from disabling dead code elimination][]! 🦥
 
 [SOZip]: https://github.com/sozip/sozip-spec
 [prevented go from disabling dead code elimination]: https://github.com/akvorado/akvorado/pull/2112 "Don't disable DCE #2112"
-
-<!--
-![Flame graph when reading data from embed.zip compared to reading data directly][i5]
-[i5]: [[!!images/obj/go-embed-flamegraph.svg]] "CPU flame graph comparing the time spent on CPU when reading data from embed.zip (left) versus reading data directly (right)."
--->
-
-
-
