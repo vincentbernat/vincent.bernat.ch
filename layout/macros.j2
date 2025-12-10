@@ -58,10 +58,25 @@
 {% for tag, resources in site.config.tagger.tags if site.config.tagger.tags[tag].order %}
 {% do tags.append((site.config.tagger.tags[tag].order, tag)) %}
 {% endfor %}
+{% set top = [] %}
+{% set depth = [0] %}
 <div class="toc"><ul>
-{% for tag in tags|sort if tag[1]|string != "outdated" %}
-  <li><a href="#tag-{{tag[1]}}">{{ format_tag(resource, tag[1]|string, tagfmt_plain) }}</a></li>
-{% endfor %}
+{%- for tag in tags|sort if tag[1]|string != "outdated" %}
+{%- set tag = tag[1]|string -%}
+{%- if top and tag.startswith(top[-1]) and depth[-1] == 0 -%}
+<ul>
+{%- do depth.append(1) -%}
+{%- elif top and not tag.startswith(top[-1]) and depth[-1] == 1 -%}
+</ul>
+{%- do depth.append(0) -%}
+{%- endif -%}
+{%- if depth[-1] == 0 -%}
+{%- do top.append(tag) -%}
+<li><a href="#tag-{{tag}}">{{ format_tag(resource, tag, tagfmt_plain) }}</a>
+{%- else -%}
+<li><a href="#tag-{{tag}}">{{ format_tag(resource, tag, tagfmt_plain).split(" > ", 1)[1] }}</a>
+{%- endif -%}
+{%- endfor -%}
 </ul></div>
 <div class="lf-list-tags">
 {% for tag in tags|sort %}
