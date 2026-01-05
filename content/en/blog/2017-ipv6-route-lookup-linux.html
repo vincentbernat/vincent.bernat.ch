@@ -14,7 +14,7 @@ tags:
 !!! "TL;DR" With its implementation of IPv6 routing tables using radix trees,
 Linux offers subpar performance (450 ns for a full view — 40,000 routes)
 compared to IPv4 (50 ns for a full view — 500,000 routes) but fair memory usage
-(20 MiB for a full view).
+(20 MiB for a full view).
 
 In a previous article, we had a look at [IPv4 route lookup on Linux][]. Let's
 see how different IPv6 is.
@@ -326,23 +326,23 @@ booted with the `slab_nomerge` flag:
 [^percpu]: There is also per-CPU pointers allocated directly (4 bytes per entry
     per CPU on a 64-bit architecture). We ignore this detail.
 
-In the above example, the used memory is 76104×64+40090×384 bytes (about 20
-MiB). The number of `struct rt6_info` matches the number of routes while the
+In the above example, the used memory is 76104×64+40090×384 bytes (about
+20 MiB). The number of `struct rt6_info` matches the number of routes while the
 number of nodes is roughly twice the number of routes:
 
 ![Nodes][i0]
 [i0]: [[!!images/linux/ipv6-radix-nodes.svg]] "Number of nodes in the radix tree depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
 
 The memory usage is therefore quite predictable and reasonable, as even a small
-single-board computer can support several full views (20 MiB for each):
+single-board computer can support several full views (20 MiB for each):
 
 ![Memory usage][i1]
 [i1]: [[!!images/linux/ipv6-radix-memory.svg]] "Memory usage depending on the number of routes inserted. The x-axis scale is logarithmic. The blue line is a linear regression."
 
-The LPC-trie used for IPv4 is more efficient: when 512 MiB of memory is needed
-for IPv6 to store 1 million routes, only 128 MiB are needed for IPv4. The
-difference is mainly due to the size of `struct rt6_info` (336 bytes) compared
-to the size of IPv4's `struct fib_alias` (48 bytes): IPv4 puts most information
+The LPC-trie used for IPv4 is more efficient: when 512 MiB of memory is needed
+for IPv6 to store 1 million routes, only 128 MiB are needed for IPv4. The
+difference is mainly due to the size of `struct rt6_info` (336 bytes) compared
+to the size of IPv4's `struct fib_alias` (48 bytes): IPv4 puts most information
 about next-hops in `struct fib_info` structures that are shared with many
 entries.
 
@@ -353,7 +353,7 @@ The takeaways from this article are:
  - upgrade to Linux 4.2 or more recent to avoid excessive caching;
  - route lookups are noticeably slower compared to IPv4 (by an order of magnitude);
  - `CONFIG_IPV6_MULTIPLE_TABLES` option incurs a fixed penalty of 100 ns by lookup; and
- - memory usage is fair (20 MiB for 40,000 routes).
+ - memory usage is fair (20 MiB for 40,000 routes).
 
 Compared to IPv4, IPv6 in Linux doesn't foster the same interest, notably in
 term of optimizations. Hopefully, things are changing as its adoption and use

@@ -12,8 +12,8 @@ tags:
 ---
 
 !!! "TL;DR" With its implementation of IPv4 routing tables using
-LPC-tries, Linux offers good lookup performance (50 ns for a full
-view) and low memory usage (64 MiB for a full view).
+LPC-tries, Linux offers good lookup performance (50 ns for a full
+view) and low memory usage (64 MiB for a full view).
 
 During the lifetime of an IPv4 datagram inside the Linux kernel, one
 important step is the **route lookup for the destination address**
@@ -264,7 +264,7 @@ the `fib_lookup()` function:
 [i2]: [[!!images/linux/lpc-trie-maxdepth-v2.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic."
 
 [^bench]: The measurements are done in a virtual machine with one
-    vCPU. The host is an [Intel Core i5-4670K][] running at 3.7 GHz
+    vCPU. The host is an [Intel Core i5-4670K][] running at 3.7 GHz
     during the experiment (CPU governor was set to performance). The
     benchmark is single-threaded. It runs a warm-up phase, then
     executes about 100,000 timed iterations and keeps the
@@ -274,8 +274,8 @@ The lookup time is loosely tied to the maximum depth. When the routing
 table is densily populated, the maximum depth is low and the lookup
 times are fast.
 
-When forwarding at 10 Gbps, the time budget for a packet would be
-about 50 ns. Since this is also the time needed for the route lookup
+When forwarding at 10 Gbps, the time budget for a packet would be
+about 50 ns. Since this is also the time needed for the route lookup
 alone in some cases, we wouldn't be able to forward at line rate with
 only one core. Nonetheless, the results are pretty good and they are
 expected to scale linearly with the number of cores.
@@ -303,7 +303,7 @@ the shape of the routes is.
 ![Memory usage][i1]
 [i1]: [[!!images/linux/lpc-trie-memory-v2.svg]] "Memory usage of the LPC-trie depending on the number of routes inserted (linear). The x-axis cale is logarithmic. The blue line is a linear regression."
 
-The results are quite good. With only 256 MiB, about 2 million routes
+The results are quite good. With only 256 MiB, about 2 million routes
 can be stored!
 
 # Routing rules
@@ -457,7 +457,7 @@ The takeaways from this article are:
 
  - route lookup times hardly increase with the number of routes;
  - densily packed /32 routes lead to amazingly fast route lookups;
- - memory use is low (128 MiB per million routes); and
+ - memory use is low (128 MiB per million routes); and
  - no optimization is done on routing rules.
 
 For IPv6, have a look at “[IPv6 route lookup on Linux][].”
