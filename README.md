@@ -88,7 +88,9 @@ content, with the exception of code blocks.
 
 > Translate to French the following text, keep markdown markup, and enclose the
 > result in a code block. For links, keep the original references. In French,
-> footnote marks should be placed before the punctuation.
+> footnote marks should be placed before the punctuation. Avoid word-for-word
+> translationa and feel free to choose more idiomatic concepts. I prefer to
+> avoid "anglicismes".
 
 It should be possible to have a [more guided prompt][], but for now, this is
 enough for me: being a French native speaker, I can proofread the result myself.
