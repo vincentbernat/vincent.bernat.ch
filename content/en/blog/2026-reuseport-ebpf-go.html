@@ -450,13 +450,17 @@ of workers, not a single packet is lost![^s4]
     graceful_test.go:148: sentPackets     = 18014
 ```
 
-Unfortunately, gracefully shutting down a UDP socket is not trivial in Go.
+Unfortunately, gracefully shutting down a UDP socket is not trivial in Go.[^c]
 Previously, we were terminating workers by closing their sockets. However, if we
 close them too soon, the application loses packets that were assigned to them
 but not yet processed. Before stopping, a worker needs to call `conn.Read()`
 until there are no more packets. A solution is to set a deadline for
 `conn.Read()` and check if we should stop the Go routine when the deadline is
 exceeded:
+
+[^c]: In C, we would `poll()` both the socket and a pipe used to signal for
+    shutdown. When the second condition is triggered, we drain the socket by
+    executing a series of non-blocking `read()` until we get `EWOULDBLOCK`.
 
 ```go
 payload := make([]byte, 9000)

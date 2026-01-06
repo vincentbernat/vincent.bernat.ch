@@ -462,12 +462,17 @@ perdons aucun paquet[^s4] !
 ```
 
 Malheureusement, arrêter correctement une chaussette UDP n'est pas trivial en
-Go. Auparavant, nous terminions les routines en fermant leurs chaussettes.
+Go[^c]. Auparavant, nous terminions les routines en fermant leurs chaussettes.
 Cependant, si nous les fermons trop tôt, l'application perd les paquets qui leur
 ont été attribués mais qui n'ont pas encore été traités. Avant de s'arrêter, une
 routine doit appeler `conn.Read()` jusqu'à ce qu'il n'y ait plus de paquets. Une
 solution consiste à définir une échéance pour `conn.Read()` et vérifier si nous
 devons arrêter la routine Go lorsque l'échéance est écoulée :
+
+[^c]: Avec C, nous pouvons appeler `poll()` sur la chaussette et sur un tube
+    pour signaler l'arrêt de la routine. Une fois la seconde condition activée,
+    une série d'appels non bloquants à `read()` permet de vider la chaussette
+    des paquets restants, jusqu'à recevoir `EWOULDBLOCK`.
 
 ```go
 payload := make([]byte, 9000)
