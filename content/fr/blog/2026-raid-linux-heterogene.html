@@ -1,0 +1,318 @@
+---
+title: "RAID 5 avec des disques de capacités différentes sous Linux"
+description: |
+   Quelques notes sur le RAID logiciel Linux et LVM pour configurer du RAID 5 sur des
+   disques de tailles différentes.
+uuid: 4fe1d612-3fe4-444f-8621-d0eebdf0732c
+tags:
+  - linux
+---
+
+Les solutions RAID classiques gaspillent de l'espace lorsque les disques sont de
+tailles différentes. Le RAID logiciel Linux avec LVM exploite la capacité totale
+de chaque disque et permet d'étendre le stockage en remplaçant un ou deux
+disques à la fois.
+
+Nous partons de quatre disques de taille identique :
+
+```console
+$ lsblk -Mo NAME,TYPE,SIZE
+NAME TYPE  SIZE
+vda  disk  101M
+vdb  disk  101M
+vdc  disk  101M
+vdd  disk  101M
+```
+
+Nous créons une partition sur chacun d'eux :
+
+```console
+$ sgdisk --zap-all --new=0:0:0 -t 0:fd00 /dev/vda
+$ sgdisk --zap-all --new=0:0:0 -t 0:fd00 /dev/vdb
+$ sgdisk --zap-all --new=0:0:0 -t 0:fd00 /dev/vdc
+$ sgdisk --zap-all --new=0:0:0 -t 0:fd00 /dev/vdd
+$ lsblk -Mo NAME,TYPE,SIZE
+NAME   TYPE  SIZE
+vda    disk  101M
+└─vda1 part  100M
+vdb    disk  101M
+└─vdb1 part  100M
+vdc    disk  101M
+└─vdc1 part  100M
+vdd    disk  101M
+└─vdd1 part  100M
+```
+
+Nous assemblons les quatre partitions pour former un volume RAID 5[^bitmap] :
+
+```console
+$ mdadm --create /dev/md0 --level=raid5 --bitmap=internal --raid-devices=4 \
+>   /dev/vda1 /dev/vdb1 /dev/vdc1 /dev/vdd1
+$ lsblk -Mo NAME,TYPE,SIZE
+    NAME          TYPE    SIZE
+    vda           disk    101M
+┌┈▶ └─vda1        part    100M
+┆   vdb           disk    101M
+├┈▶ └─vdb1        part    100M
+┆   vdc           disk    101M
+├┈▶ └─vdc1        part    100M
+┆   vdd           disk    101M
+└┬▶ └─vdd1        part    100M
+ └┈┈md0           raid5 292.5M
+$ cat /proc/mdstat
+md0 : active raid5 vdd1[4] vdc1[2] vdb1[1] vda1[0]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+[^bitmap]: Les « write-intent bitmaps » accélèrent la reconstruction du volume
+    RAID après une coupure de courant en marquant les zones non synchronisées
+    comme modifiées. Elles ont un [impact sur les performances][impact on performance],
+    mais je ne l'ai pas mesuré moi-même.
+
+[impact on performance]: https://blog.liw.fi/posts/write-intent-bitmaps/ "Write intent bitmaps with Linux software RAID"
+
+Nous utilisons LVM pour créer des volumes logiques au-dessus du volume RAID.
+
+```console
+$ pvcreate /dev/md0
+  Physical volume "/dev/md0" successfully created.
+$ vgcreate data /dev/md0
+  Volume group "data" successfully created
+$ lvcreate -L 100m -n bits data
+  Logical volume "bits" created.
+$ lvcreate -L 100m -n pieces data
+  Logical volume "pieces" created.
+$ mkfs.ext4 -q /dev/data/bits
+$ mkfs.ext4 -q /dev/data/pieces
+$ lsblk -Mo NAME,TYPE,SIZE
+    NAME          TYPE    SIZE
+    vda           disk    101M
+┌┈▶ └─vda1        part    100M
+┆   vdb           disk    101M
+├┈▶ └─vdb1        part    100M
+┆   vdc           disk    101M
+├┈▶ └─vdc1        part    100M
+┆   vdd           disk    101M
+└┬▶ └─vdd1        part    100M
+ └┈┈md0           raid5 292.5M
+    ├─data-bits   lvm     100M
+    └─data-pieces lvm     100M
+$ vgs
+  VG   #PV #LV #SN Attr   VSize   VFree
+  data   1   2   0 wz--n- 288.00m 88.00m
+```
+
+Nous obtenons la configuration suivante :
+
+![Un volume RAID 5 construit à partir de quatre partitions provenant de quatre disques de capacité identique. Le volume RAID fait partie d'un groupe de volumes LVM avec deux volumes logiques.][i3]
+[i3]: [[!!images/raid-md0.svg]] "Configuration RAID 5 avec des disques de capacité identique"
+
+Nous remplaçons `/dev/vda` par un disque plus grand. Nous le réintégrons dans
+la grappe RAID 5 après avoir copié les partitions de `/dev/vdb` :
+
+```console
+$ cat /proc/mdstat
+md0 : active (auto-read-only) raid5 vdb1[1] vdd1[4] vdc1[2]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [_UUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ sgdisk --replicate=/dev/vda /dev/vdb
+$ sgdisk --randomize-guids /dev/vda
+$ mdadm --manage /dev/md0 --add /dev/vda1
+$ cat /proc/mdstat
+md0 : active raid5 vda1[5] vdb1[1] vdd1[4] vdc1[2]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+Nous n'utilisons pas la capacité supplémentaire : cette configuration ne
+survivrerait pas à la perte de `/dev/vda` car nous ne disposons d'aucune
+capacité de réserve. Nous devons remplacer un second disque, tel que
+`/dev/vdb` :
+
+```console
+$ cat /proc/mdstat
+md0 : active (auto-read-only) raid5 vda1[5] vdd1[4] vdc1[2]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [U_UU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ sgdisk --replicate=/dev/vdb /dev/vdc
+$ sgdisk --randomize-guids /dev/vdb
+$ mdadm --manage /dev/md0 --add /dev/vdb1
+$ cat /proc/mdstat
+md0 : active raid5 vdb1[6] vda1[5] vdd1[4] vdc1[2]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+Nous créons un nouveau volume RAID 1 en utilisant l'espace libre sur `/dev/vda`
+et `/dev/vdb` :
+
+```console
+$ sgdisk --new=0:0:0 -t 0:fd00 /dev/vda
+$ sgdisk --new=0:0:0 -t 0:fd00 /dev/vdb
+$ mdadm --create /dev/md1 --level=raid1 --bitmap=internal --raid-devices=2 \
+>   /dev/vda2 /dev/vdb2
+$ cat /proc/mdstat
+md1 : active raid1 vdb2[1] vda2[0]
+      101312 blocks super 1.2 [2/2] [UU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md0 : active raid5 vdb1[6] vda1[5] vdd1[4] vdc1[2]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+Nous ajoutons `/dev/md1` au groupe de volumes :
+
+```console
+$ pvcreate /dev/md1
+  Physical volume "/dev/md1" successfully created.
+$ vgextend data /dev/md1
+  Volume group "data" successfully extended
+$ vgs
+  VG   #PV #LV #SN Attr   VSize   VFree
+  data   2   2   0 wz--n- 384.00m 184.00m
+$  lsblk -Mo NAME,TYPE,SIZE
+       NAME          TYPE    SIZE
+       vda           disk    201M
+   ┌┈▶ ├─vda1        part    100M
+┌┈▶┆   └─vda2        part    100M
+┆  ┆   vdb           disk    201M
+┆  ├┈▶ ├─vdb1        part    100M
+└┬▶┆   └─vdb2        part    100M
+ └┈┆┈┈┈md1           raid1  98.9M
+   ┆   vdc           disk    101M
+   ├┈▶ └─vdc1        part    100M
+   ┆   vdd           disk    101M
+   └┬▶ └─vdd1        part    100M
+    └┈┈md0           raid5 292.5M
+       ├─data-bits   lvm     100M
+       └─data-pieces lvm     100M
+```
+
+Nous obtenons la configuration suivante[^lsblk] :
+
+![Un volume RAID 5 construit à partir de quatre partitions et un volume RAID 1 construit à partir de deux partitions. Les deux derniers disques sont plus petits. Les deux volumes RAID font partie d'un seul groupe de volumes LVM.][i2]
+[i2]: [[!!images/raid-md0-4-md1-2.svg]] "Configuration mélangeant du RAID 5 et du RAID 1"
+
+[^lsblk]: Dans la sortie de `lsblk`, `/dev/md1` semble inutilisé car les volumes
+    logiques n'utilisent pas encore d'espace sur ce volume physique. Si vous
+    créez davantage de volumes logiques ou que vous les étendez, `lsblk`
+    reflétera cette utilisation.
+
+Étendons encore notre capacité en remplaçant `/dev/vdc` :
+
+```console
+$ cat /proc/mdstat
+md1 : active (auto-read-only) raid1 vda2[0] vdb2[1]
+      101312 blocks super 1.2 [2/2] [UU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md0 : active (auto-read-only) raid5 vda1[5] vdd1[4] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [UU_U]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ sgdisk --replicate=/dev/vdc /dev/vdb
+$ sgdisk --randomize-guids /dev/vdc
+$ mdadm --manage /dev/md0 --add /dev/vdc1
+$ cat /proc/mdstat
+md1 : active (auto-read-only) raid1 vda2[0] vdb2[1]
+      101312 blocks super 1.2 [2/2] [UU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md0 : active raid5 vdc1[7] vda1[5] vdd1[4] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+Convertissons `/dev/md1` d'un RAID 1 vers un RAID 5 :
+
+```console
+$ mdadm --grow /dev/md1 --level=5 --raid-devices=3 --add /dev/vdc2
+mdadm: level of /dev/md1 changed to raid5
+mdadm: added /dev/vdc2
+$ cat /proc/mdstat
+md1 : active raid5 vdc2[2] vda2[0] vdb2[1]
+      202624 blocks super 1.2 level 5, 64k chunk, algorithm 2 [3/3] [UUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md0 : active raid5 vdc1[7] vda1[5] vdd1[4] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ pvresize /dev/md1
+$ vgs
+  VG   #PV #LV #SN Attr   VSize   VFree
+  data   2   2   0 wz--n- 482.00m 282.00m
+```
+
+Nous obtenons la disposition suivante :
+
+![Deux volumes RAID 5 construits à partir de quatre disques de tailles différentes. Le dernier disque est plus petit et ne contient qu'une seule partition, tandis que les autres ont deux partitions : une pour /dev/md0 et une pour /dev/md1. Les deux volumes RAID font partie d'un seul groupe de volumes LVM.][i1]
+[i1]: [[!!images/raid-md0-4-md1-3.svg]] "Configuration RAID 5 avec des disques de capacités mixtes en utilisant des partitions et LVM"
+
+Nous étendons encore davantage notre capacité en remplaçant `/dev/vdd` :
+
+```console
+$ cat /proc/mdstat
+md0 : active (auto-read-only) raid5 vda1[5] vdc1[7] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/3] [UUU_]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md1 : active (auto-read-only) raid5 vda2[0] vdc2[2] vdb2[1]
+      202624 blocks super 1.2 level 5, 64k chunk, algorithm 2 [3/3] [UUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ sgdisk --replicate=/dev/vdd /dev/vdc
+$ sgdisk --randomize-guids /dev/vdd
+$ mdadm --manage /dev/md0 --add /dev/vdd1
+$ cat /proc/mdstat
+md0 : active raid5 vdd1[4] vda1[5] vdc1[7] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md1 : active (auto-read-only) raid5 vda2[0] vdc2[2] vdb2[1]
+      202624 blocks super 1.2 level 5, 64k chunk, algorithm 2 [3/3] [UUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+```
+
+Agrandissons le second volume RAID 5 :
+
+```console
+$ mdadm --grow /dev/md1 --raid-devices=4 --add /dev/vdd2
+mdadm: added /dev/vdd2
+$ cat /proc/mdstat
+md0 : active raid5 vdd1[4] vda1[5] vdc1[7] vdb1[6]
+      299520 blocks super 1.2 level 5, 512k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+
+md1 : active raid5 vdd2[3] vda2[0] vdc2[2] vdb2[1]
+      303936 blocks super 1.2 level 5, 64k chunk, algorithm 2 [4/4] [UUUU]
+      bitmap: 0/1 pages [0KB], 65536KB chunk
+$ pvresize /dev/md1
+$ vgs
+  VG   #PV #LV #SN Attr   VSize   VFree
+  data   2   2   0 wz--n- 580.00m 380.00m
+$ lsblk -Mo NAME,TYPE,SIZE
+       NAME          TYPE    SIZE
+       vda           disk    201M
+   ┌┈▶ ├─vda1        part    100M
+┌┈▶┆   └─vda2        part    100M
+┆  ┆   vdb           disk    201M
+┆  ├┈▶ ├─vdb1        part    100M
+├┈▶┆   └─vdb2        part    100M
+┆  ┆   vdc           disk    201M
+┆  ├┈▶ ├─vdc1        part    100M
+├┈▶┆   └─vdc2        part    100M
+┆  ┆   vdd           disk    301M
+┆  └┬▶ ├─vdd1        part    100M
+└┬▶ ┆  └─vdd2        part    100M
+ ┆  └┈┈md0           raid5 292.5M
+ ┆     ├─data-bits   lvm     100M
+ ┆     └─data-pieces lvm     100M
+ └┈┈┈┈┈md1           raid5 296.8M
+```
+
+Ce processus peut se poursuivre indéfiniment en remplaçant chaque disque un par
+un en s'appuyant sur les mêmes étapes. ♾️
+
+<!-- We could mention BTRFS, but there is a bad story around RAID 5 and 6. https://carfax.org.uk/btrfs-usage/?c=1&slo=1&shi=100&p=1&dg=1&d=3000&d=2000&d=2000&d=3000 -->
+
+*[LVM]: Logical Volume Manager
