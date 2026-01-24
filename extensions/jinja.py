@@ -11,8 +11,32 @@ def human_date(dt, locale="en", format=None):
     """Convert an ISO 8601 date to a more readable version."""
     if format is None:
         return format_date(dt, "MMMM yyyy", locale=locale)
-    else:
-        return format_date(dt, format=format, locale=locale)
+    formatted = format_date(dt, format=format, locale=locale)
+    replacements = {}
+    if locale == "en":
+        replacements = {
+            1: "1st",
+            2: "2nd",
+            3: "3rd",
+            21: "21st",
+            22: "22nd",
+            23: "23rd",
+            31: "31st",
+        }
+    elif locale == "fr":
+        replacements = {
+            1: "1er",
+        }
+    mo = re.match(r"^(?P<before>.*?)\b(?P<day>\d{1,2})\b(?P<after>.*)$", formatted)
+    if mo:
+        day_num = int(mo.group("day"))
+        if day_num in replacements:
+            ordinal = replacements[day_num]
+            ordinal_mo = re.match(r"^(\d+)(.+)$", ordinal)
+            if ordinal_mo:
+                replacement = f"{ordinal_mo.group(1)}<sup>{ordinal_mo.group(2)}</sup>"
+                formatted = f"{mo.group("before")}{replacement}{mo.group("after")}"
+    return formatted
 
 
 def same_tag(resource, attribute, skip=0):
