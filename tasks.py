@@ -386,7 +386,7 @@ def build(c):
             "! git grep -Pw '((?i:"
             "obviously|basically|simply|clearly|everyone knows|turns out"
             "|explicitely|overriden|accross|totally|equipments"
-            ")|Thinkpad|Yubikey|Github)' \\*.html",
+            ")|Thinkpad|Yubikey|Github|Clickhouse)' \\*.html",
             hide="out",
         )
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
