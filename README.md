@@ -29,7 +29,7 @@ inv build
 Check oudated dependencies:
 
 ```
-uv tree --outdated
+uv lock --upgrade --dry-run
 ```
 
 Update all dependencies:
