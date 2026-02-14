@@ -27,6 +27,23 @@ const cssnano = require("cssnano");
 const postcss = require("postcss");
 const postcssCustomMedia = require("postcss-custom-media");
 const postcssMixins = require("@csstools/postcss-mixins");
+
+// light-dark() fallback: for each declaration using light-dark(a, b),
+// insert a fallback with just the light value.
+const lightDarkFallback = {
+    postcssPlugin: "light-dark-fallback",
+    Declaration(decl) {
+        if (!decl.value.includes("light-dark(")) return;
+        const fallback = decl.value.replace(
+            /light-dark\\(\\s*([^,]+?)\\s*,\\s*[^)]+?\\)/g,
+            "$1",
+        );
+        if (fallback !== decl.value) {
+            decl.cloneBefore({ value: fallback });
+        }
+    },
+};
+
 let input = "";
 
 process.stdin.setEncoding("utf8");
@@ -40,6 +57,7 @@ process.stdin.on("end", function () {
     postcss([
         postcssCustomMedia,
         postcssMixins,
+        lightDarkFallback,
         autoprefixer,
         cssnano({
             preset: [
