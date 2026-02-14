@@ -2,4 +2,5 @@
  (nix-mode . ((mode . apheleia)))
  (js2-mode . ((mode . apheleia)))
  (python-mode . ((mode . apheleia)))
+ (css-mode . ((css-indent-offset . 2)))
  (auto-mode-alist . (("\\.html\\'" . markdown-mode))))
