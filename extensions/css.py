@@ -26,6 +26,7 @@ const autoprefixer = require("autoprefixer");
 const cssnano = require("cssnano");
 const postcss = require("postcss");
 const postcssCustomMedia = require("postcss-custom-media");
+const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 
 // light-dark() fallback: for each declaration using light-dark(a, b),
@@ -59,6 +60,7 @@ process.stdin.on("end", function () {
         postcssMixins,
         lightDarkFallback,
         autoprefixer,
+        postcssNesting,
         cssnano({
             preset: [
                 "default",
