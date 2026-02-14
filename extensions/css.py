@@ -11,7 +11,7 @@ class CSSPrefixerPlugin(Plugin):
     """Run CSS prefixer"""
 
     def text_resource_complete(self, resource, text):
-        if resource.source_file.kind not in ("less", "css"):
+        if resource.source_file.kind != "css":
             return
         if self.site.config.mode == "development":
             minify = "false"
@@ -22,25 +22,38 @@ class CSSPrefixerPlugin(Plugin):
                 "node",
                 "-e",
                 """
-var autoprefixer = require('autoprefixer');
-var cssnano = require('cssnano');
-var postcss = require('postcss');
-var input = '';
+const autoprefixer = require("autoprefixer");
+const cssnano = require("cssnano");
+const postcss = require("postcss");
+const postcssCustomMedia = require("postcss-custom-media");
+const postcssMixins = require("@csstools/postcss-mixins");
+let input = "";
 
-process.stdin.setEncoding('utf8')
-process.stdin.on('readable', function() {
-  var chunk = process.stdin.read();
-  if (chunk) {
-    input += chunk;
-  }
+process.stdin.setEncoding("utf8");
+process.stdin.on("readable", function () {
+    const chunk = process.stdin.read();
+    if (chunk) {
+        input += chunk;
+    }
 });
-process.stdin.on('end', function() {
-  postcss([autoprefixer, cssnano({preset: ['default', {
-           reduceIdents: false, normalizeWhitespace: %s
-        }]})])
+process.stdin.on("end", function () {
+    postcss([
+        postcssCustomMedia,
+        postcssMixins,
+        autoprefixer,
+        cssnano({
+            preset: [
+                "default",
+                {
+                    reduceIdents: false,
+                    normalizeWhitespace: %s,
+                },
+            ],
+        }),
+    ])
         .process(input, { from: undefined })
-        .then(function(result) {
-          process.stdout.write(result.css.toString());
+        .then(function (result) {
+            process.stdout.write(result.css.toString());
         });
 });
         """

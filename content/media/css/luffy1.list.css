@@ -2,12 +2,12 @@
 uses_template: true
 ---
 
-@import "common";
+{{ include_file("common.css") }}
 
 #lf-text {
   > .lf-list-titles,
   > .lf-list-tags {
-    margin-top: @line-height*1em;
+    margin-top: calc(var(--lf-line-height) * 1em);
   }
   .lf-list-titles,
   .lf-list-tags {
@@ -15,7 +15,7 @@ uses_template: true
   }
 }
 .lf-title {
-  font-family: PrettyAmpersand, @font-serif;
+  font-family: PrettyAmpersand, var(--lf-font-serif);
 }
 .lf-list-titles {
   margin-top: 0;
@@ -23,7 +23,7 @@ uses_template: true
     hyphens: none;
     list-style-type: none;
     margin-left: 8em;
-    @media @small {
+    @media (--lf-small) {
       margin-left: 7em;
     }
     position: relative;
@@ -35,14 +35,12 @@ uses_template: true
     left: -11em;
     width: 10em;
     text-align: right;
-    color: #444;
-    @media screen and (prefers-color-scheme: dark) {
-      color: #bbb;
-    }
-    font-family: @font-monospace;
+    color: light-dark(#444, #bbb);
+    font-family: var(--lf-font-monospace);
     font-variant-numeric: lining-nums;
-    @media @small {
-      .font-size(0.875);
+    @media (--lf-small) {
+      --lf-font-factor: 0.875;
+      @apply --lf-font-size;
     }
   }
   .lf-outdated {
@@ -64,12 +62,13 @@ input#lf-more {
   & ~ label {
     display: inline-block;
     width: 7em;
-    @media @small {
-      .font-size(0.875);
+    @media (--lf-small) {
+      --lf-font-factor: 0.875;
+      @apply --lf-font-size;
     }
     text-align: right;
     color: #6f6f6f;
-    font-family: @font-monospace;
+    font-family: var(--lf-font-monospace);
     text-decoration: underline;
     cursor: pointer;
   }

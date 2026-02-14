@@ -1,33 +1,33 @@
 html {
-  font-size: @font-size;
-  @media @smaller {
-    font-size: @font-size-small;
+  font-size: var(--lf-font-size);
+  @media (--lf-smaller) {
+    font-size: var(--lf-font-size-small);
   }
 }
 
 body {
-  font: normal 100% @font-serif;
+  font: normal 100% var(--lf-font-serif);
   font-variant-numeric: oldstyle-nums;
   word-wrap: break-word;
   overflow-wrap: break-word;
   overflow-x: hidden;
   max-width: 100%; /* Needed because of "100vw" used below */
-  color: @color-foreground;
-  background-color: @color-background;
+  color: var(--lf-color-foreground);
+  background-color: var(--lf-color-background);
 }
 
 /* Horizontal alignment. */
 .lf-main {
-  margin-left: @left-margin;
-  width: @page-width;
+  margin-left: var(--lf-left-margin);
+  width: var(--lf-page-width);
 
-  @media @medium {
-    margin-left: @minimal-margin;
-    width: @page-width;
+  @media (--lf-medium) {
+    margin-left: var(--lf-minimal-margin);
+    width: var(--lf-page-width);
   }
-  @media @small {
-    margin-left: @minimal-margin;
-    margin-right: @minimal-margin;
+  @media (--lf-small) {
+    margin-left: var(--lf-minimal-margin);
+    margin-right: var(--lf-minimal-margin);
     width: auto;
   }
 }
@@ -42,10 +42,10 @@ body {
   margin-left: auto;
   margin-right: auto;
   overflow-x: auto;
-  @media @small {
+  @media (--lf-small) {
     width: 100vw;
-    margin-left: -@minimal-margin;
-    margin-right: -@minimal-margin;
+    margin-left: calc(-1 * var(--lf-minimal-margin));
+    margin-right: calc(-1 * var(--lf-minimal-margin));
   }
 }
 #lf-text {
@@ -55,35 +55,36 @@ body {
     max-width: 100%;
   }
   & > figure {
-    @media @medium {
+    @media (--lf-medium) {
       width: auto;
       width: 100vw;
-      margin-left: -@minimal-margin;
+      margin-left: calc(-1 * var(--lf-minimal-margin));
     }
-    @media @small {
-      margin-right: -@minimal-margin;
+    @media (--lf-small) {
+      margin-right: calc(-1 * var(--lf-minimal-margin));
     }
   }
 }
 
 .lf-main {
   display: block;
-  line-height: @line-height;
+  line-height: var(--lf-line-height);
   font-synthesis-style: none;
   header {
-    padding-top: (@line-height*2em + @menu-height);
-    margin-bottom: @line-height*2em;
-    font-family: @font-sansserif;
+    padding-top: calc(var(--lf-line-height) * 2em + var(--lf-menu-height));
+    margin-bottom: calc(var(--lf-line-height) * 2em);
+    font-family: var(--lf-font-sansserif);
     h1 {
-      color: @color-theme;
-      .font-size(2.625);
+      color: var(--lf-color-theme);
+      --lf-font-factor: 2.625;
+      @apply --lf-font-size;
       font-weight: bold;
       margin: 0;
     }
     h2 {
-      color: @color-low;
+      color: var(--lf-color-low);
       font-size: 1em;
-      line-height: @line-height;
+      line-height: var(--lf-line-height);
       margin-top: 0;
       margin-bottom: 0;
       text-align: right;
@@ -95,15 +96,15 @@ body {
   .p,
   p,
   dl {
-    margin-top: @line-height*1em;
+    margin-top: calc(var(--lf-line-height) * 1em);
   }
   p,
   li,
   dd {
     text-wrap: pretty;
     hyphens: auto;
-    hyphenate-limit-lines: 3;   // The Element of Typgraphic Style, 2.4.3
-    hyphenate-limit-chars: auto 2 3; // The Element of Typgraphic Style, 2.4.1
+    hyphenate-limit-lines: 3;   /* The Element of Typographic Style, 2.4.3 */
+    hyphenate-limit-chars: auto 2 3; /* The Element of Typographic Style, 2.4.1 */
   }
   em {
     font-style: italic;
@@ -112,14 +113,14 @@ body {
   strong {
     font-style: italic;
     font-weight: normal;
-    color: @color-accent;
+    color: var(--lf-color-accent);
     em {
       font-style: normal;
     }
   }
   del {
     text-decoration: line-through;
-    color: @color-low;
+    color: var(--lf-color-low);
   }
   ins {
     font-style: italic;
@@ -127,19 +128,12 @@ body {
   }
   abbr[title] {
     cursor: help;
-    text-decoration: underline dotted
-      if(
-        @dark-mode = false,
-        lighten(@color-link-notvisited, 20%),
-        darken(@color-link-notvisited, 20%)
-      );
+    text-decoration: underline dotted var(--lf-color-link-notvisited);
     @media (hover: none) {
       text-decoration: none;
     }
     @media print {
-      & when (@dark-mode = false) {
-        text-decoration: none;
-      }
+      text-decoration: none;
     }
   }
   a, h1, h2, h3, h4 {
@@ -149,13 +143,13 @@ body {
     }
   }
   hr {
-    color: if(@dark-mode = false, #222, #ddd);
+    color: var(--lf-color-rule);
     text-align: center;
     display: block;
     border: none;
     margin: 1em auto;
     line-height: 2em;
-    font-size: (@line-height*1em);
+    font-size: calc(var(--lf-line-height) * 1em);
     box-sizing: content-box;
     &::before {
       content: "···";
@@ -167,10 +161,10 @@ body {
   h2,
   h3,
   h4 {
-    margin-top: @line-height*2rem;
-    margin-bottom: @line-height*1rem;
-    color: @color-theme;
-    font-family: PrettyAmpersand, @font-sansserif;
+    margin-top: calc(var(--lf-line-height) * 2rem);
+    margin-bottom: calc(var(--lf-line-height) * 1rem);
+    color: var(--lf-color-theme);
+    font-family: PrettyAmpersand, var(--lf-font-sansserif);
     text-wrap: balance;
     code {
       font-family: inherit;
@@ -186,30 +180,33 @@ body {
     }
   }
   h1 {
-    .font-size(1.3*@line-height);
+    --lf-font-factor: calc(1.3 * var(--lf-line-height));
+    @apply --lf-font-size;
   }
   h2 {
-    .font-size(@line-height);
+    --lf-font-factor: var(--lf-line-height);
+    @apply --lf-font-size;
   }
   h3 {
-    .font-size(0.8*@line-height);
+    --lf-font-factor: calc(0.8 * var(--lf-line-height));
+    @apply --lf-font-size;
   }
   .admonition {
     position: relative;
     display: block;
     margin-left: 0;
-    margin-top: @line-height*1em;
-    @media @mediumer {
+    margin-top: calc(var(--lf-line-height) * 1em);
+    @media (--lf-mediumer) {
       display: flex;
-      margin-left: -@admonition-margin;
+      margin-left: calc(-1 * var(--lf-admonition-margin));
       &::before {
         content: "";
         position: absolute;
         top: 0;
         bottom: 0;
-        left: (@admonition-margin - (@left-margin - @admonition-margin)/2);
+        left: calc(var(--lf-admonition-margin) - (var(--lf-left-margin) - var(--lf-admonition-margin)) / 2);
         width: 1px;
-        background-color: @color-low;
+        background-color: var(--lf-color-low);
       }
     }
   }
@@ -226,9 +223,9 @@ body {
     & + p {
       margin-top: 0;
     }
-    @media @mediumer {
-      padding-right: (@left-margin - @admonition-margin);
-      flex: 0 0 @admonition-margin;
+    @media (--lf-mediumer) {
+      padding-right: calc(var(--lf-left-margin) - var(--lf-admonition-margin));
+      flex: 0 0 var(--lf-admonition-margin);
       align-self: center;
       text-align: right;
       hyphens: none;
@@ -240,13 +237,13 @@ body {
 
   .headerlink {
     padding-left: 0.3em;
-    color: @color-low !important;
+    color: var(--lf-color-low) !important;
     visibility: hidden;
     opacity: 0.5;
   }
   .lf-table {
-    margin-top: @line-height*1em;
-    margin-bottom: @line-height*1em;
+    margin-top: calc(var(--lf-line-height) * 1em);
+    margin-bottom: calc(var(--lf-line-height) * 1em);
   }
   table {
     border-spacing: 2px;
@@ -261,12 +258,8 @@ body {
       font-weight: normal;
       background: linear-gradient(
         to bottom,
-        if(@dark-mode = false, @color-theme, darken(@color-theme, 25%)),
-        if(
-          @dark-mode = false,
-          lighten(@color-theme, 5%),
-          darken(@color-theme, 30%)
-        )
+        var(--lf-color-table-header),
+        var(--lf-color-table-header-alt)
       );
       &:first-child {
         border-radius: 4px 0 0 0;
@@ -280,17 +273,9 @@ body {
         padding: 0.2em 0.5em;
       }
       tr {
-        background-color: if(
-          @dark-mode = false,
-          lighten(@color-theme, 78%),
-          lighten(@color-background, 10%)
-        );
+        background-color: var(--lf-color-table-row);
         &:nth-child(odd) {
-          background-color: if(
-            @dark-mode = false,
-            lighten(@color-theme, 58%),
-            lighten(@color-background, 2%)
-          );
+          background-color: var(--lf-color-table-row-alt);
         }
       }
     }
@@ -310,18 +295,18 @@ body {
     &::before {
       display: block;
       pointer-events: none;
-      font-size: (@line-height*2em);
+      font-size: calc(var(--lf-line-height) * 2em);
       width: 1em;
       overflow: hidden;
       content: "«";
-      color: @color-theme;
+      color: var(--lf-color-theme);
       font-family: Georgia, serif;
       position: absolute;
-      left: -(1em / @line-height);
-      top: -(1em / @line-height);
-      @media @medium {
-        font-size: (@line-height*1.5em);
-        top: -(1em / @line-height);
+      left: calc(-1em / var(--lf-line-height));
+      top: calc(-1em / var(--lf-line-height));
+      @media (--lf-medium) {
+        font-size: calc(var(--lf-line-height) * 1.5em);
+        top: calc(-1em / var(--lf-line-height));
       }
     }
     &:lang(en)::before {
@@ -349,7 +334,7 @@ body {
   }
   dt {
     font-style: italic;
-    color: @color-accent;
+    color: var(--lf-color-accent);
     display: inline;
     &::before {
       display: block;
@@ -367,14 +352,14 @@ body {
 
   sup,
   sub {
-    font-size: @font-size-endnoteref;
+    font-size: var(--lf-font-size-endnoteref);
     position: relative;
     line-height: 1;
   }
 
   .toc {
-    margin: (@line-height*1em) 0;
-    font-family: @font-sansserif;
+    margin: calc(var(--lf-line-height) * 1em) 0;
+    font-family: var(--lf-font-sansserif);
     text-wrap: balance;
     position: relative;
     &::before {
@@ -382,7 +367,7 @@ body {
       position: absolute;
       right: 100%;
       margin-right: 0.5em;
-      color: @color-low;
+      color: var(--lf-color-low);
     }
     ul, li {
       display: inline;
@@ -401,14 +386,14 @@ body {
       list-style-type: none;
       &::after {
         content: " · ";
-        color: @color-low;
+        color: var(--lf-color-low);
       }
       &:last-child::after, &:last-child > ul::after, &:has(ul)::after {
         content: "";
       }
       ul {
         &::before, &::after {
-          color: @color-low;
+          color: var(--lf-color-low);
         }
         &::before {
           content: " ⇢ ";
@@ -439,13 +424,13 @@ body {
       width: 100%;
       height: 100%;
       z-index: 2;
-      color: @color-low;
-      background-color: @color-background;
+      color: var(--lf-color-low);
+      background-color: var(--lf-color-background);
     }
   }
   figure {
     display: block;
-    margin-bottom: (@line-height*1em);
+    margin-bottom: calc(var(--lf-line-height) * 1em);
     .lf-media-outer {
       margin-bottom: 0;
     }
@@ -455,13 +440,15 @@ body {
       text-align: center;
       text-wrap: balance;
       font-style: italic;
-      .font-size(0.875);
+      --lf-font-factor: 0.875;
+      @apply --lf-font-size;
     }
   }
 
-  // Dimensions:
-  // .lf-media-outer > .lf-media-inner > .lf-media
-  // .lf-video-outer > .lf-video-inner > .lf-video
+  /* Dimensions:
+   * .lf-media-outer > .lf-media-inner > .lf-media
+   * .lf-video-outer > .lf-video-inner > .lf-video
+   */
   .lf-media {
     width: 100%;
     height: 100%;
@@ -470,7 +457,7 @@ body {
     top: 0;
     left: 0;
     object-fit: contain;
-    & when (@dark-mode = true) {
+    @media (prefers-color-scheme: dark) {
       filter: invert(100%) hue-rotate(180deg);
     }
     pointer-events: initial;
@@ -479,23 +466,23 @@ body {
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
-    & when (@dark-mode = false) {
+    @media (prefers-color-scheme: light) {
       filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, 0.3))
               drop-shadow(0px 0px 2px rgba(0, 0, 0, 0.3))
               drop-shadow(0px 0px 3px rgba(0, 0, 0, 0.3));
     }
-    & when (@dark-mode = true) {
+    @media (prefers-color-scheme: dark) {
       filter: drop-shadow(0px 0px 1px rgba(100, 100, 100, 0.7))
               drop-shadow(0px 0px 2px rgba(100, 100, 100, 0.7))
               drop-shadow(0px 0px 3px rgba(100, 100, 100, 0.7));
     }
   }
   object.lf-media.lf-opaque {
-    background-color: (#fff - @color-foreground);
+    background-color: var(--lf-color-foreground-inverted);
   }
   .lf-media-outer {
     margin-top: 1em;
-    margin-bottom: (@line-height*1em);
+    margin-bottom: calc(var(--lf-line-height) * 1em);
     padding: 0 0 1em;
     max-height: 100vh;
   }

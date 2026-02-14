@@ -36,10 +36,11 @@ article {
     ul,
     ol,
     & > .endnote-backref {
-      .font-size(0.875);
+      --lf-font-factor: 0.875;
+      @apply --lf-font-size;
     }
     p {
-      margin-top: (@line-height / 0.875em);
+      margin-top: calc(var(--lf-line-height) / 0.875 * 1em);
     }
   }
 
@@ -49,16 +50,16 @@ article {
     position: relative;
     float: right;
     clear: right;
-    margin-right: -@sidenote-width;
-    width: @sidenote-width;
-    padding: @line-height*1rem;
-    padding-left: @sidenote-margin;
+    margin-right: calc(-1 * var(--lf-sidenote-width));
+    width: var(--lf-sidenote-width);
+    padding: calc(var(--lf-line-height) * 1rem);
+    padding-left: var(--lf-sidenote-margin);
     .lf-refmark {
       position: absolute;
       left: 0;
-      top: (@line-height*1rem - @font-size-endnoteref);
-      font-size: @font-size-endnoteref;
-      width: (@sidenote-margin - 0.3rem);
+      top: calc(var(--lf-line-height) * 1rem - var(--lf-font-size-endnoteref));
+      font-size: var(--lf-font-size-endnoteref);
+      width: calc(var(--lf-sidenote-margin) - 0.3rem);
       text-align: right;
       & + p {
         margin-top: 0 !important;
@@ -68,7 +69,7 @@ article {
 }
 
 /* Footnotes require a minimal width */
-@media @larger {
+@media (--lf-larger) {
   .lf-main {
     .lf-sidenote {
       display: block;
@@ -77,7 +78,7 @@ article {
       display: none;
     }
     #lf-text a.endnote-ref {
-      .disabled-link();
+      @apply --lf-disabled-link;
       &::after {
         content: "→";
         position: initial;

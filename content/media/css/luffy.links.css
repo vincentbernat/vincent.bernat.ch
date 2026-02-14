@@ -1,7 +1,7 @@
 /* Styling of bottom links */
 #lf-bottomlinks {
-  font-family: PrettyAmpersand, @font-serif;
-  margin: 2em 0 (2em - @line-height*1em); /* Last link */
+  font-family: PrettyAmpersand, var(--lf-font-serif);
+  margin: 2em 0 calc(2em - var(--lf-line-height) * 1em);
   li {
     list-style-type: none;
     display: flex;
@@ -19,10 +19,14 @@
   }
 }
 
-/* Styling of "a" links. They are kept here to ensure we understand
-   specificity and ensure we don't repeat the definitions too much. */
+/* Styling of "a" links. They are kept here to ensure we understand specificity
+   and ensure we don't repeat the definitions too much. Note that nested rules
+   act like a :is and the specificity of the most specific one is the
+   specificity of the set. */
+.lf-main a {
+  @apply --lf-not-underlined-link;
+}
 .lf-main {
-  a,
   #lf-text .toc a,
   #lf-text #lf-also a,
   #lf-text .endnote-backref,
@@ -30,17 +34,17 @@
   #lf-text .headerlink,
   #lf-text .lf-tags a,
   #lf-text .lf-list-titles a {
-    .not-underlined-link();
+    @apply --lf-not-underlined-link;
   }
   #lf-text a {
     html.nojs &[href^="#video-seek-"] {
-      .disabled-link();
+      @apply --lf-disabled-link;
     }
   }
 }
 .lf-main #lf-text,
 .isso-comment .text {
   a {
-    .underlined-link();
+    @apply --lf-underlined-link;
   }
 }

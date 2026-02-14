@@ -1,0 +1,114 @@
+/* Compute font-size and line-height to ensure proper vertical rhythm */
+@mixin --lf-font-size() {
+  font-size: calc(var(--lf-font-factor) * 1rem);
+  line-height: round(
+    nearest,
+    calc(round(up, calc(var(--lf-font-factor) / 1.5), 1) * 1.5 / var(--lf-font-factor)),
+    0.001
+  );
+}
+
+/* Link-related stuff. When supported, we use a different color for underlines.
+   Otherwise, links get a regular color (as well as the underline). */
+@mixin --lf-disabled-link() {
+  /* Disabling pointer events ensure we don't get hovered/actived/focused */
+  text-decoration: none;
+  pointer-events: none;
+  cursor: default;
+  color: inherit;
+  &:visited {
+    color: inherit;
+  }
+}
+@mixin --lf-underlined-link() {
+  /* That's for links in text. It is mostly used in ".lf-main #lf-text a". It is
+     assumed .not-underlined-link is also applied. */
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--lf-color-link-notvisited);
+  &:hover,
+  &:active {
+    color: var(--lf-color-link-notvisited-active);
+    text-decoration-color: var(--lf-color-link-notvisited-active);
+    &:visited {
+      color: var(--lf-color-link-visited-active);
+      text-decoration-color: var(--lf-color-link-visited-active);
+    }
+  }
+  &:visited {
+    text-decoration-color: initial;
+  }
+}
+@mixin --lf-not-underlined-link() {
+  /* That's for navigational links. If we want to override the above style in
+     #lf-text, we need a bigger specificity. */
+  color: var(--lf-color-link-notvisited);
+  text-decoration: none;
+  @media (prefers-contrast: more) {
+    text-decoration: underline;
+  }
+  &:hover,
+  &:active {
+    color: var(--lf-color-link-notvisited-active);
+  }
+  &:visited {
+    color: var(--lf-color-link-visited);
+    &:hover,
+    &:active {
+      color: var(--lf-color-link-visited-active);
+    }
+  }
+}
+
+:root {
+  color-scheme: light dark;
+
+  /* Fonts */
+  --lf-font-serif: Merriweather, "Fallback for Merriweather", serif;
+  --lf-font-sansserif: Calibri, Gill Sans, Helvetica, sans-serif;
+  --lf-font-monospace: Iosevka, "Fallback for Iosevka", monospace;
+  --lf-font-size: 112.5%;
+  --lf-font-size-small: 100%;
+  --lf-font-size-endnoteref: 0.8em;
+  --lf-line-height: 1.5;
+
+  /* Colors */
+  --lf-color-foreground: light-dark(#000000, #d9dadc);
+  --lf-color-foreground-inverted: light-dark(#ffffff, #262523);
+  --lf-color-footer: light-dark(#222222, #121212);
+  --lf-color-theme: light-dark(#21519c, #00a3ff);
+  --lf-color-accent: light-dark(#b80f28, #ff677e);
+  --lf-color-low: light-dark(#404040, #b0b0b0);
+  --lf-color-background: light-dark(#fff9f0, #1d1f21);
+  --lf-color-code-background: light-dark(#fff3e1, #2b2e31);
+  --lf-color-kbd-background: light-dark(#ffefd7, #303337);
+  --lf-color-kbd-border: light-dark(#ffe5bd, #35383c);
+  --lf-color-link-notvisited: var(--lf-color-theme);
+  --lf-color-link-notvisited-active: light-dark(#4a82d9, #88b6ff);
+  --lf-color-link-visited: light-dark(#4f1872, #c876ff);
+  --lf-color-link-visited-active: light-dark(#892ac6, #f3acff);
+  --lf-color-table-header: light-dark(#21519c, #005180);
+  --lf-color-table-header-alt: light-dark(#255cb1, #004166);
+  --lf-color-table-row: light-dark(#ffffff, #35383c);
+  --lf-color-table-row-alt: light-dark(#eaf1fb, #222426);
+  --lf-color-listing-alt: light-dark(#eaf1fb, #35383c);
+  --lf-color-rule: light-dark(#222, #ddd);
+
+  /* Dimensions */
+  --lf-page-width: 45rem;
+  --lf-left-margin: 9rem;
+  --lf-admonition-margin: calc(var(--lf-left-margin) - 1.2rem);
+  --lf-minimal-margin: 1.6rem;
+  --lf-sidenote-width: 22rem;
+  --lf-sidenote-margin: 4rem;
+  --lf-menu-height: 2rem;
+}
+
+/* Media query breakpoints. Rely only on max-width and use "not"
+   because both min-width and max-width are inclusive. Print CSS
+   matches "small" */
+@custom-media --lf-larger  not all and (max-width: 88em);
+@custom-media --lf-medium  only screen and (max-width: 62em), print;
+@custom-media --lf-mediumer not all and (max-width: 62em);
+@custom-media --lf-small   only screen and (max-width: 54em), print;
+@custom-media --lf-smaller only screen and (max-width: 35em);
