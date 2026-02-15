@@ -104,8 +104,10 @@ enough for me: being a French native speaker, I can proofread the result myself.
 > audience who may not be English-native speakers (CEFR B2 level). You can
 > include light stylistic edit but avoid using pronoun-verb contractions and
 > keep a casual tone. You can also suppress a passive voice, remove superfluous
-> words, and break a long sentence into smaller ones. I am not an English-native
-> speaker myself, so you can also fix common mistakes done by people like me.
+> words, use more descriptive words, and break a long sentence into smaller
+> ones. Prefer the present tense. I am not an English-native speaker myself, so
+> you can also fix common mistakes done by people like me, notably simple past
+> vs past perfect.
 
 I am unsure this prompt is best. I don't like AI that are putting words in my
 mouth, hence the above prompt with minimal editing. However, I am not that good
