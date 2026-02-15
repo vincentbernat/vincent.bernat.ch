@@ -11,7 +11,15 @@ tags:
 Les solutions RAID classiques gaspillent de l'espace lorsque les disques sont de
 tailles différentes. Le RAID logiciel Linux avec LVM exploite la capacité totale
 de chaque disque et permet d'étendre le stockage en remplaçant un ou deux
-disques à la fois.
+disques à la fois.[^shr]
+
+[^shr]: C'est la même approche que celle utilisée par [Synology][] pour son
+    [Hybrid RAID][] et que la communauté [OpenMediaVault][] appelle
+    « Sliced Hybrid RAID ».
+
+[Synology]: https://www.synology.com "Synology"
+[Hybrid RAID]: https://kb.synology.com/en-us/DSM/tutorial/What_is_Synology_Hybrid_RAID_SHR "What Is Synology Hybrid RAID (SHR)?"
+[OpenMediaVault]: https://forum.openmediavault.org/index.php?thread/53652-howto-build-an-shr-sliced-hybrid-raid/ "HowTo build an SHR -- Sliced Hybrid Raid"
 
 Nous partons de quatre disques de taille identique :
 
@@ -68,9 +76,11 @@ md0 : active raid5 vdd1[4] vdc1[2] vdb1[1] vda1[0]
 [^bitmap]: Les « write-intent bitmaps » accélèrent la reconstruction du volume
     RAID après une coupure de courant en marquant les zones non synchronisées
     comme modifiées. Elles ont un [impact sur les performances][impact on performance],
-    mais je ne l'ai pas mesuré moi-même.
+    mais je ne l'ai pas mesuré moi-même. Une alternative est d'utiliser un
+    [journal de parité partiel][PPL] avec `--consistency-policy=ppl`.
 
 [impact on performance]: https://blog.liw.fi/posts/write-intent-bitmaps/ "Write intent bitmaps with Linux software RAID"
+[PPL]: https://docs.kernel.org/driver-api/md/raid5-ppl.html "Partial Parity Log"
 
 Nous utilisons LVM pour créer des volumes logiques au-dessus du volume RAID.
 

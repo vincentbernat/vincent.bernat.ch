@@ -10,7 +10,14 @@ tags:
 
 Standard RAID solutions waste space when disks have different sizes. Linux
 software RAID with LVM uses the full capacity of each disk and lets you grow
-storage by replacing one or two disks at a time.
+storage by replacing one or two disks at a time.[^shr]
+
+[^shr]: This is the same approach [Synology][] uses for its [Hybrid RAID][] and
+    what the [OpenMediaVault][] community calls a "Sliced Hybrid RAID."
+
+[Synology]: https://www.synology.com "Synology"
+[Hybrid RAID]: https://kb.synology.com/en-us/DSM/tutorial/What_is_Synology_Hybrid_RAID_SHR "What Is Synology Hybrid RAID (SHR)?"
+[OpenMediaVault]: https://forum.openmediavault.org/index.php?thread/53652-howto-build-an-shr-sliced-hybrid-raid/ "HowTo build an SHR -- Sliced Hybrid Raid"
 
 We start with four disks of equal size:
 
@@ -66,9 +73,11 @@ md0 : active raid5 vdd1[4] vdc1[2] vdb1[1] vda1[0]
 
 [^bitmap]: Write-intent bitmaps speed up recovery of the RAID array after a
     power failure by marking unsynchronized regions as dirty. They have an
-    [impact on performance][], but I did not measure it myself.
-    
+    [impact on performance][], but I did not measure it myself. An alternative
+    is to use a [partial parity log][PPL] with `--consistency-policy=ppl`.
+
 [impact on performance]: https://blog.liw.fi/posts/write-intent-bitmaps/ "Write intent bitmaps with Linux software RAID"
+[PPL]: https://docs.kernel.org/driver-api/md/raid5-ppl.html "Partial Parity Log"
 
 We use LVM to create logical volumes on top of the RAID 5 device.
 
