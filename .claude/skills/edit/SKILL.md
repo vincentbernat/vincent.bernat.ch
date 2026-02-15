@@ -37,6 +37,15 @@ to check which article the user is currently editing.
 - Prefer the present tense.
 - Fix common non-native mistakes, notably simple past vs. past perfect.
 
+The following words are forbidden because what is obvious for someone may not be
+for someone else!
+
+- obviously
+- basically
+- simply
+- clearly
+- everyone knows
+
 ## About the introduction
 
 The editing should follow these principles from [The Craft of Writing

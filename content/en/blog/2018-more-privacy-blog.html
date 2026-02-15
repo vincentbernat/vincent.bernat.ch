@@ -8,10 +8,10 @@ tags:
   - web
 ---
 
-When I [started this blog][new-site], I embraced some free services, like
-[Disqus][] or [Google Analytics][]. These services are quite invasive
-to users' privacy. Over the years, I have tried to correct this to
-reach a point where I do not rely on any "privacy-hostile" services.
+When I [started this blog][new-site], I embraced free services like [Disqus][]
+and [Google Analytics][]. These services are invasive to users' privacy. Over
+the years, I have worked to eliminate them and reach a point where I do not rely
+on any "privacy-hostile" service.
 
 [TOC]
 
@@ -20,122 +20,114 @@ reach a point where I do not rely on any "privacy-hostile" services.
  - **Before**: [Google Analytics][]
  - **After**: nothing
 
-*Google Analytics* is a ubiquitous solution to get a powerful
-analytics solution for free. It's also a great way to provide data
-about your visitors to Google—also for free. There are self-hosted
-solutions like [Matomo][], [GoatCounter][], or [Plausible][].
+*Google Analytics* is a ubiquitous way to get powerful analytics for free. It
+also feeds data about your visitors to Google—also for free. Self-hosted
+alternatives exist, like [Matomo][], [GoatCounter][], or [Plausible][].
 
-I opted for a simpler solution: no analytics. It also allows me to
-think that my blog attracts thousands of visitors every day.
+I opted for a simpler solution: no analytics at all. This also lets me believe
+that my blog attracts thousands of visitors every day.
 
-!!! "Update (2019-02)" As for server-side logs, IP addresses are
-anonymized using [ipscrub][], a module for *nginx*. However, non-HTML
-assets are served through *Amazon CloudFront*.[^cdn]
+!!! "Update (2019-02)" For server-side logs, IP addresses are anonymized using
+[ipscrub][], a module for *nginx*. However, non-HTML assets are served through
+*Amazon CloudFront*.[^cdn]
 
-[^cdn]: I don't have an issue with using a CDN like [CloudFront][]: it
-    is a paid service and Amazon is not in the business of tracking
-    users.
+[^cdn]: I have no issue with using a CDN like [CloudFront][]: it is a paid
+    service and Amazon is not in the business of tracking users.
 
 # Fonts
 
  - **Before**: [Google Fonts][]
  - **After**: self-hosted
 
-*Google Fonts* is a very popular font library and hosting service,
-which relies on the generic [Google Privacy Policy][]. The
-[google-webfonts-helper][] service makes it easy to self-host any font
-from *Google Fonts*. Moreover, with help from
-[`pyftsubset`][pyftsubset], I only include the characters used in this
-blog. The font files are lighter *and* more complete: no problem
-spelling "Antonín Dvořák."
+*Google Fonts* is a popular font library and hosting service that relies on the
+generic [Google Privacy Policy][]. The [google-webfonts-helper][] service makes
+it easy to self-host any font from *Google Fonts*. With help from
+[`pyftsubset`][pyftsubset], I only include the characters used in this blog. The
+font files are lighter *and* more complete: no problem spelling "Antonín
+Dvořák."
 
 # Videos
 
  - **Before**: [YouTube][]
  - **After**: self-hosted
 
-Some articles are supported by a video—like "[OPL2LPT: an AdLib sound
-card for the parallel port][]." In the past, I was using [YouTube][],
-mostly because it was the only free platform with an option to disable
-ads. Streaming on-demand videos is usually deemed quite difficult. For
-example, if you just use the `<video>` tag, you may push a too big
-video for people with a slow connection. However, it is not that hard:
-[hls.js][] enables us to deliver video sliced in segments available at
-different bitrates. Users with Java­Script disabled are still
+Some articles include a video—like "[OPL2LPT: an AdLib sound card for the
+parallel port][]." I previously used [YouTube][], mostly because it was the only
+free platform with an option to disable ads. Streaming on-demand videos is
+usually considered difficult. For example, if you just use the `<video>` tag,
+you may push a video too large for people with a slow connection. However, it is
+not that hard: [hls.js][] enables us to deliver video sliced in segments
+available at different bitrates. Users with Java­Script disabled are still
 delivered with a progressive version of medium quality.
 
-In "[Self-hosted videos with HLS][]," I explain this approach in more
-detail.
+In "[Self-hosted videos with HLS][]," I explain this approach in more detail.
 
 # Comments
 
  - **Before**: [Disqus][]
  - **After**: self-hosted, with [Isso][]
 
-*Disqus* is a popular comment solution for static websites. They were
-recently acquired by *Zeta Global*, a marketing company, and their
-business model is supported only by ads. On the technical
-side, *Disqus* also [loads several hundred kilobytes of
-resources][]. Therefore, many websites load *Disqus* on demand. That's
-what I did. This doesn't solve the privacy problem and I had the
-sentiment people were less eager to leave a comment if they had to
-execute an additional action.
+*Disqus* is a popular comment solution for static websites. *Zeta Global*, a
+marketing company, acquired them, and their business model relies solely on ads.
+On the technical side, *Disqus* also [loads several hundred kilobytes of
+resources][]. Many websites therefore load *Disqus* on demand. That is what I
+did. This does not solve the privacy problem and I felt people were less eager
+to leave a comment when they had to perform an additional action.
 
-!!! "Update (2019-01)" A year later, I can confirm the number of
-comments has significantly increased after removing this additional
-step. Between 2011 and 2015, the site harvested about 140 comments. In
-2016, *Disqus* was no longer loaded automatically and the number of
-comments was halved. In 2018, after switching to *Isso* and
-automatic loading, there were 158 comments.
+!!! "Update (2019-01)" A year later, comments increased significantly after
+removing this additional step. Between 2011 and 2015, the site collected about
+140 comments. In 2016, *Disqus* was no longer loaded automatically and the
+number of comments halved. In 2018, after switching to *Isso* and automatic
+loading, there were 158 comments.
 
-For some time, I thought about implementing my own comment system
-around Atom feeds. Each page would get its feed of comments. A piece
-of Java­Script would turn these feeds into HTML and comments could
-still be read without Java­Script, thanks to the default rendering
-provided by browsers. People could also subscribe to these feeds: no
-need for mail notifications! The feeds would be served as static files
-and updated on new comments by a small piece of server-side code.
-Again, this could work without JavaScript.
+For some time, I considered building my own comment system around Atom feeds.
+Each page would get its own feed of comments. A piece of Java­Script would turn
+these feeds into HTML, and comments could still be read without Java­Script,
+thanks to the default rendering browsers provide. People could also subscribe to
+these feeds: no need for mail notifications! The feeds would be served as static
+files and updated on new comments by a small piece of server-side code. This
+could also work without JavaScript.
 
-![Day Planner by Fowl Language Comics]([[!!images/day-planner@2x.jpg]] "<a href='https://www.fowllanguagecomics.com/comic/day-planner/'>Fowl Language Comics: Day Planner</a> or the real reason why I didn't code a new comment system.")
+![Day Planner by Fowl Language Comics]([[!!images/day-planner@2x.jpg]] "<a
+href='https://www.fowllanguagecomics.com/comic/day-planner/'>Fowl Language
+Comics: Day Planner</a> or the real reason why I didn't code a new comment
+system.")
 
-I still think this is a great idea. But I didn't feel like developing
-and maintaining a new comment system. There are several self-hosted
-alternatives, notably [Isso][] and [Commento][]. *Isso* is a bit more
-featureful, with notably an imperfect import from *Disqus*. Both are
-struggling with maintenance and are trying to become sustainable with
-a paid hosted version.[^hosted] *Commento* is more privacy-friendly as it doesn't
-use cookies at all. However, cookies from *Isso* are not essential and
-can be filtered with *nginx*:
+I still think this is a great idea. But I did not feel like developing and
+maintaining a new comment system. Several self-hosted alternatives exist,
+notably [Isso][] and [Commento][]. *Isso* is a bit more featureful, with notably
+an imperfect import from *Disqus*. Both struggle with maintenance and try to
+become sustainable with a paid hosted version.[^hosted] *Commento* is more
+privacy-friendly as it does not use cookies at all. However, cookies from *Isso*
+are not essential and can be filtered with *nginx*:
 
     proxy_hide_header Set-Cookie;
     proxy_hide_header X-Set-Cookie;
     proxy_ignore_headers Set-Cookie;
 
-[^hosted]: <del>For *Isso*, look at [comment.sh][].</del> For
-    *Commento*, look at [commento.io][].
+[^hosted]: <del>For *Isso*, look at [comment.sh][].</del> For *Commento*, look
+    at [commento.io][].
 
-<del>In *Isso*, there is currently [no mail notifications][pr50], but I
-have added an [Atom feed for each comment thread][pr419].</del>
+<del>In *Isso*, there is currently [no mail notifications][pr50], but I have
+added an [Atom feed for each comment thread][pr419].</del>
 
-!!! "Update (2019-01)" Mail notifications were recently added and I
-have just enabled them here. As absolutely nobody ever used the Atom
-feeds, I have removed them.
+!!! "Update (2019-01)" Mail notifications were recently added and I have just
+enabled them here. As absolutely nobody ever used the Atom feeds, I have removed
+them.
 
-Another option would have been to not provide comments anymore.
-However, I have some great contributions as comments and I also think
-they can work as some kind of peer review for blog articles: they are
-a weak guarantee that the content is not wrong.
+Another option would have been to drop comments entirely. However, I have
+received great contributions as comments and I also think they serve as a form
+of peer review for blog articles: they are a weak guarantee that the content is
+not wrong.
 
 # Search engine
 
  - **Before**: [Google Search][]
  - **After**: [DuckDuckGo][]
 
-A way to provide a search engine for a personal blog is to provide a
-form for a public search engine, like Google. That's what I did. I
-also slapped some Java­Script on top of that to make it look like not
-Google.
+One way to add a search engine to a personal blog is to embed a form for a
+public search engine, like Google. That is what I did. I also slapped some
+Java­Script on top of it to make it look like not Google.
 
 The solution here is easy: switch to [DuckDuckGo][], which lets you
 [customize][] a bit the search experience:
@@ -150,14 +142,13 @@ The solution here is easy: switch to [DuckDuckGo][], which lets you
       <input type="text" name="q" value="" autocomplete="off" aria-label="Search">
     </form>
 
-The Java­Script part is also removed as *DuckDuckGo* doesn't provide
-an API. As it is unlikely that more than three people will use the
-search engine in a year, this seems a good idea to not spend too much
-time on this non-essential feature.
+The Java­Script part is also removed as *DuckDuckGo* does not provide an API.
+Since fewer than three people likely use the search engine in a year, it seems
+wise not to spend too much time on this non-essential feature.
 
 !!! "Update (2023-07)" As an alternative, [Pagefind][] is a search engine
-tailored for static websites and relying on Java­Script. In my case, I don't
-think this is worth the time and I will stick with *DuckDuckGo*.
+tailored for static websites, relying on Java­Script. In my case, I do not think
+this is worth the effort and I will stick with *DuckDuckGo*.
 
 [Pagefind]: https://pagefind.app/
 
@@ -166,55 +157,54 @@ think this is worth the time and I will stick with *DuckDuckGo*.
  - **Before**: RSS feed
  - **After**: RSS feed <del>but also a [MailChimp][] newsletter</del>
 
-Nowadays, RSS feeds are far less popular they were before. I am still
-baffled as to why a technical audience wouldn't use RSS, but some
-readers prefer to receive updates by mail.
+Nowadays, RSS feeds are far less popular than they used to be. I am still
+baffled as to why a technical audience would not use RSS, but some readers
+prefer to receive updates by mail.
 
-[MailChimp][] is a common solution to send newsletters. It provides a
-simple integration with RSS feeds to trigger a mail each time new
-items are added to the feed. From a privacy point of view, *MailChimp*
-seems a good citizen: data collection is mainly limited to the amount
-needed to operate the service. Privacy-conscious users can still avoid
-this service and use the [RSS feed][rss].
+[MailChimp][] is a common solution for sending newsletters. It integrates with
+RSS feeds to trigger a mail each time new items appear in the feed. From a
+privacy standpoint, *MailChimp* seems like a good citizen: data collection is
+mainly limited to what is needed to operate the service. Privacy-conscious users
+can still avoid it and use the [RSS feed][rss].
 
-!!! "Update (2019-12)" I have removed the newsletter. There were not
-many subscribers (around 40) and I felt bad about advertising such a
-service. Instead, I have added links to RSS-to-email services.
+!!! "Update (2019-12)" I have removed the newsletter. There were not many
+subscribers (around 40) and I felt bad about advertising such a service.
+Instead, I have added links to RSS-to-email services.
 
 # Less Java­Script
 
  - **Before**: third-party Java­Script code
  - **After**: self-hosted Java­Script code
 
-Many privacy-conscious people are disabling Java­Script or using
-extensions like [uMatrix][] or [NoScript][]. Except for comments, I
-was using Java­Script only for non-essential stuff:
+Many privacy-conscious people disable Java­Script or use extensions like
+[uMatrix][] or [NoScript][]. Except for comments, I used Java­Script only for
+non-essential features:
 
- - rendering mathematical content—like in "[TLS computational DoS mitigation][];"
+ - rendering mathematical content—like in "[TLS computational DoS
+   mitigation][];"
  - moving footnotes as sidenotes when the screen is large enough;[^footnote]
  - enhancing videos to use *HLS*—see "[Self-hosted videos with HLS][];" and
  - enhancing photo galleries with a *lightbox*—see "[Debian on ThinkPad Edge 11][]."
 
-[^footnote]: You may have noticed I am a footnote sicko and use them
-    all the time for pointless stuff.
+[^footnote]: You may have noticed I am a footnote sicko and use them all the
+    time for pointless stuff.
 
-For mathematical formulae, I have switched from [MathJax][] to
-[KaTeX][]. The latter is faster and enables server-side rendering:
-the client-side Java­Script is not needed anymore.
+For mathematical formulae, I have switched from [MathJax][] to [KaTeX][]. The
+latter is faster and enables server-side rendering: the client-side Java­Script
+is not needed anymore.
 
-For sidenotes, I have turned the Java­Script code doing the
-transformation into Python code, with [pyquery][]. No more client-side
-Java­Script for this aspect either.
+For sidenotes, I have turned the Java­Script code doing the transformation into
+Python code, with [pyquery][]. No more client-side Java­Script for this aspect
+either.
 
-The remaining code is still here but is self-hosted.
+The remaining code is still present but self-hosted.
 
 # Memento: CSP
 
-The HTTP `Content-Security-Policy` header controls the resources that
-a user agent is allowed to load for a given page. It is a safeguard
-and a memento for the external resources a site will use. Mine is
-moderately complex and shows what to expect from a privacy point of
-view:
+The HTTP `Content-Security-Policy` header controls the resources a user agent
+can load for a given page. It serves as both a safeguard and a reminder of the
+external resources a site uses. Mine is moderately complex and shows what to
+expect from a privacy standpoint:
 
     Content-Security-Policy:
       {% from "nginx.j2" import csp with context %}{{ csp()|indent(6) }}
