@@ -29,18 +29,38 @@ const postcssCustomMedia = require("postcss-custom-media");
 const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 
-// light-dark() fallback: for each declaration using light-dark(a, b),
-// insert a fallback with just the light value.
+// light-dark() fallback: for each rule with declarations using
+// light-dark(a, b), insert a @supports fallback with the light value.
 const lightDarkFallback = {
     postcssPlugin: "light-dark-fallback",
-    Declaration(decl) {
-        if (!decl.value.includes("light-dark(")) return;
-        const fallback = decl.value.replace(
-            /light-dark\\(\\s*([^,]+?)\\s*,\\s*[^)]+?\\)/g,
-            "$1",
-        );
-        if (fallback !== decl.value) {
-            decl.cloneBefore({ value: fallback });
+    Rule(rule) {
+        const fallbackDecls = [];
+        rule.each((node) => {
+            if (node.type !== "decl") return;
+            if (!node.value.includes("light-dark(")) return;
+            const fallback = node.value.replace(
+                /light-dark\\(\\s*([^,]+?)\\s*,\\s*[^)]+?\\)/g,
+                "$1",
+            );
+            if (fallback !== node.value) {
+                fallbackDecls.push(node.clone({ value: fallback }));
+            }
+        });
+        if (fallbackDecls.length > 0) {
+            const supportsRule = postcss.atRule({
+                name: "supports",
+                params: "not (color: light-dark(red, red))",
+            });
+            const clonedRule = rule.clone();
+            clonedRule.removeAll();
+            clonedRule.append({
+                prop: 'color-scheme',
+                value: 'light',
+                raws: {before: '\\n  '},
+            });
+            fallbackDecls.forEach((d) => clonedRule.append(d));
+            supportsRule.append(clonedRule);
+            rule.parent.insertAfter(rule, supportsRule);
         }
     },
 };
