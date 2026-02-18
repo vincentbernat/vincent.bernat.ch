@@ -53,7 +53,11 @@ suite pour protéger la connexion.
 ![Déroulement d'une poignée de mains TLS][s2]
 [s2]: [[!!images/benchs-ssl/ssl-handshake.svg]] "Poignée de mains TLS complète"
 
-Un premier secret de 48 octets est généré et chiffré par le client avec la clé publique du serveur. Il est envoyé durant la troisième étape de la poignée de mains, lors de l'envoi du message _Client Key Exchange_. Le _secret maître_ est calculé à partir de celui-ci et des valeurs aléatoires qui ont été transmisses dans les messages _Client Hello_ et _Server Hello_.
+Un premier secret de 48 octets est généré et chiffré par le client avec la clé
+publique du serveur. Il est envoyé durant la troisième étape de la poignée de
+mains, lors de l'envoi du message _Client Key Exchange_. Le _secret maître_ est
+calculé à partir de celui-ci et des valeurs aléatoires qui ont été transmises
+dans les messages _Client Hello_ et _Server Hello_.
 
 Ce procédé est sûr à condition que seul le serveur puisse déchiffrer
 le premier secret (à l'aide de sa clé privée) envoyé par le
@@ -79,7 +83,7 @@ l'authentification et négocier un secret partagé totalement
 indépendant de celle-ci. Il existe un protocole à cet effet :
 l'[algorithme de Diffie-Hellman][dh]. Il s'agit d'une méthode
 d'échange de clefs ne nécessitant aucune connaissance préalable entre
-les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
+les deux parties. Voici comment cela fonctionne dans le cadre de TLS :
 
  1. Le serveur doit initialement disposer de (avec l'aide d'une commande
     comme `openssl dhparam` par exemple) :
@@ -90,7 +94,7 @@ les deux parties. Voici comme cela fonctionne dans le cadre de TLS :
 
  2. Le serveur choisit un nombre aléatoire ·a· et calcule ·g^a \bmod
     p·. Après l'envoi du message _Certificate_, il envoie un message
-    _Server Key Exchange_ (inclu lors de l'étape 3 mais non représenté
+    _Server Key Exchange_ (inclus lors de l'étape 3 mais non représenté
     dans la poignée de mains décrite précédemment) contenant, en clair
     mais authentifié avec sa clé privée :
      - la valeur aléatoire issue du message _Client Hello_,
@@ -258,7 +262,7 @@ L'implémentation des [tickets de session TLS][tickets] peut être
 incompatible avec le _forward secrecy_ selon leur
 implémentation. Quand la clé protégeant les tickets est générée
 aléatoirement au démarrage du serveur, la même clé peut être utilisée
-pendant des mois. Certaintes implémentations [^stud] optent pour une
+pendant des mois. Certaines implémentations [^stud] optent pour une
 clé dérivée de la clef privée. Dans ce cas, le _forward secrecy_ est
 rendu totalement inefficace. Il est alors préférable de désactiver
 tickets.

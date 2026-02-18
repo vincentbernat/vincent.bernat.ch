@@ -138,7 +138,7 @@ contenu du fichier `404.service` :
     ExecStart = /usr/bin/404
 
 *systemd* sait que les deux fichiers sont liés car ils partagent un
-même préfixe. Placez les dans `/etc/systemd/system` et exécutez
+même préfixe. Placez-les dans `/etc/systemd/system` et exécutez
 `systemctl daemon-reload` et `systemctl start 404.​socket`. Votre
 service est désormais prêt à accepter des connexions !
 
@@ -301,7 +301,7 @@ invité à le suivre. Quand il meurt, *systemd* lancera une nouvelle
 instance du service. Cette méthode nécessite quelques bricolages :
 *systemd* a besoin que le leurre soit son fils mais Go [ne peut pas
 facilement se mettre en arrière plan][cannot daemonize] seul. Par
-conséquent, nous utilisons un court script Python inclu dans la
+conséquent, nous utilisons un court script Python inclus dans la
 fonction `detachedSleep()`[^python] :
 
     ::go
@@ -414,11 +414,10 @@ les nouveaux processus par le biais d'une socket Unix.
     disputeront pas sur un verrou partagé pour accepter des
     connexions.
 
-J'espère que ce billet et le [précédent][previous post] montrent
-combien *systemd* est un compagnon appréciable pour un service en Go :
-*disponibilité*, *vivacité* et *activation par socket* sont quelques
-unes des fonctionnalités utiles pour construire une application plus
-fiable.
+J'espère que ce billet et le [précédent][previous post] montrent combien
+*systemd* est un compagnon appréciable pour un service en Go : *disponibilité*,
+*vivacité* et *activation par socket* sont quelques-unes des fonctionnalités
+utiles pour construire une application plus fiable.
 
 # Annexe: leurre écrit en Go
 
@@ -426,8 +425,7 @@ fiable.
 que, dans la version où *systemd* suit un leurre, le script Python
 peut être remplacé par une invocation de l'exécutable principal qui se
 base sur un changement d'environnement pour prendre le rôle du
-leurre. Voici le code remplaçant la fonction `detachedSleep()`
-function :
+leurre. Voici le code remplaçant la fonction `detachedSleep()` :
 
     ::go
     func init() {
@@ -557,7 +555,7 @@ pour récupérer une correspondance entre les noms et les sockets :
         wg.Wait()
     }
 
-Compilons le service et lançons le via `systemd-socket-activate`:
+Compilons le service et lançons-le via `systemd-socket-activate`:
 
     ::console
     $ go build 404.go

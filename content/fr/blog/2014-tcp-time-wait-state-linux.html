@@ -36,7 +36,7 @@ _Netfilter_[^netfilter].
 
 [^netfilter]: Notamment, les paramètres tels que
     `net.netfilter.nf_conntrack_tcp_timeout_time_wait` n'ont
-    absolument aucune infuence sur la gestion des connexions dans
+    absolument aucune influence sur la gestion des connexions dans
     l'état `TIME-WAIT`.
 
 [TOC]
@@ -205,7 +205,7 @@ Avec beaucoup de connexions à gérer, garder des entrées inactives
 pendant une minute occupe de la mémoire. Par exemple, si un serveur
 gère 10 000 connexions par seconde, il peut y avoir en permanence
 600 000 entrées `TIME-WAIT`. Quelle quantité de mémoire cela
-représente-t'il ? Pas tant que ça.
+représente-t-il ? Pas tant que ça.
 
 Tout d'abord, côté applicatif, une connexion en `TIME-WAIT` n'existe
 plus. Elle a été fermée. Dans le noyau, une connexion dans l'état
@@ -230,7 +230,7 @@ différents :
     `thash_entries`.
 
     Chaque élément de la liste des connexions dans l'état `TIME-WAIT`
-    est de type `struct tcp_timewait_sock`, tandis que les élements de
+    est de type `struct tcp_timewait_sock`, tandis que les éléments de
     l'autre liste sont de type `struct tcp_sock`[^tcptimewaitsock] :
 
         ::c
@@ -292,7 +292,7 @@ différents :
                     noyau Linux 2.6.14.
 
 [^deathrow]: Depuis [Linux 4.1][dr], la liste des connexions dans
-             l'état `TIME-WAIT` est stockée dans une table hachage
+             l'état `TIME-WAIT` est stockée dans une table de hachage
              classique afin d'augmenter les performances et le
              parallélisme.
 
@@ -335,7 +335,7 @@ présence des connexions dans l'état `TIME-WAIT` négligeable.
 
 ### CPU
 
-Coté CPU, la recherche d'un port local de libre est effectué par la
+Côté CPU, la recherche d'un port local de libre est effectué par la
 [fonction `inet_csk_get_port()`][inet_csk_get_port] qui emploie un
 verrou et utilise la table de hachage des ports locaux jusqu'à trouver
 un port libre. Un très grand nombre d'entrées dans cette table
@@ -355,7 +355,7 @@ l'état `TIME-WAIT`, il existe trois autres solutions :
 ## Socket lingering
 
 Lorsque `close()` est appelé, les octets restants dans le noyau seront
-envoyées en tâche de fond et la connexion terminera dans l'état
+envoyés en tâche de fond et la connexion terminera dans l'état
 `TIME-WAIT`. L'application récupère immédiatement la main avec la
 certitude que les données finiront par être livrées.
 
@@ -482,7 +482,7 @@ mémorisée :
     }
 
 Lorsque plusieurs hôtes partagent une même IP (courant avec du NAT),
-cette condition les empêchent de pouvoir se connecter car ils
+cette condition les empêche de pouvoir se connecter car ils
 n'utilisent pas la même horloge pour l'horodatage. Dans le doute, il
 est donc préférable de ne pas activer cette option car elle conduit à
 des problèmes **difficiles à détecter** et **difficiles à

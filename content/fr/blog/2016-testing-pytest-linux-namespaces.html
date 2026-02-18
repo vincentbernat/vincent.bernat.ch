@@ -11,7 +11,7 @@ Initié en 2008, [lldpd][] est une implémentation en C du standard
 [IEEE 802.1AB-2005][] (aussi connu comme LLDP). Bien qu'il soit
 accompagné de quelques tests unitaires, comme beaucoup d'autres
 applicatifs réseaux, la couverture de ceux-ci est assez restreinte :
-il sont plutôt difficiles à écrire en raison de l'aspect impératif du
+ils sont plutôt difficiles à écrire en raison de l'aspect impératif du
 code et du couplage fort avec le système. Une réécriture (itérative ou
 complète) aiderait à rendre le code plus simple à tester, mais cela
 nécessiterait un effort important et introduirait de nouveaux bugs
@@ -62,7 +62,7 @@ l'[article de Benjamin Peterson][Benjamin Peterson's article].
 
 Une *fixture* est un ensemble d'actions à effectuer afin de préparer
 le système à exécuter une série de tests. Avec les outils classiques,
-il n'est souvent possible de définir qu'une seule fixture pour une
+il n'est souvent possible de définir qu'une seule fixture pour un
 ensemble de tests :
 
     ::python
@@ -114,7 +114,7 @@ Avec *pytest*, il est possible de faire les choses différemment :
 
 La première fixture démarre une VM. La seconde va fournir une
 connexion SSH vers la VM fournie en argument. Les fixtures sont
-utilisées à travers un système d'**injection des dépendences** : la
+utilisées à travers un système d'**injection des dépendances** : la
 seule présence de leur nom dans la signature d'une fonction de test ou
 d'une autre fixture suffit à l'utiliser. Chaque fixture ne gère le
 cycle de vie que d'une seule entité. Peu importe si une autre fixture
@@ -169,7 +169,7 @@ intéressantes de *pytest* :
             assert out['lldp.eth0.lldp-med.device-type'] == expected
 
 Tout d'abord, ce test ne sera exécuté que si le support de LLDP-MED a
-été inclu dans `lldpd`. De plus, le test est paramétré : quatre tests
+été inclus dans `lldpd`. De plus, le test est paramétré : quatre tests
 distincts seront effectués, un pour chaque rôle que `lldpd` doit être
 capable d'assumer en tant que terminaison LLDP-MED.
 
@@ -179,10 +179,10 @@ décorateur `parametrize()` : `lldpd`, `lldpcli`, `namespaces` et
 
  - `lldpd` est une fabrique qui permet de lancer des instances de
    `lldpd`. Elle assure la configuration de l'espace de noms (mise en
-   place de la séparation de privilèges, unformisation de certains
+   place de la séparation de privilèges, uniformisation de certains
    fichiers, ...) puis appelle `lldpd` avec les paramètres
    additionnels fournis. Les messages émis par le démon sont
-   enregisrés dans le rapport en cas d'erreur. Le module se charge
+   enregistrés dans le rapport en cas d'erreur. Le module se charge
    aussi de fournir un objet `pytest.config.lldpd` qui contient les
    fonctionnalités supportées par `lldpd` afin de sauter les tests qui
    nécessitent une fonctionnalité non disponible. Le fichier
@@ -208,7 +208,7 @@ décorateur `parametrize()` : `lldpd`, `lldpcli`, `namespaces` et
 
  - `links` contient des fonctions pour gérer les interfaces réseau :
    création d'une paire d'interfaces Ethernet entre deux espaces de
-   noms, création de ponts, d'aggrégats et de VLAN, etc. Il se repose
+   noms, création de ponts, d'agrégats et de VLAN, etc. Il se repose
    sur le module [pyroute2][]. Le fichier
    [`fixtures/network.py`][network.py] contient davantage de détails.
 

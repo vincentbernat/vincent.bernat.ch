@@ -11,7 +11,7 @@ Dans un article récemment publié, Paul Vixie, un des auteurs et
 architecte de [BIND][bind], l'un des serveurs de noms les plus
 répandus, explique pourquoi
 [les serveurs DNS devraient utiliser anycast][paulvixie] afin
-d'obtenir des réponses plus rapide tout en augmentant la
+d'obtenir des réponses plus rapides tout en augmentant la
 fiabilité. L'argument principal développé contre l'unicast est
 l'existence de résolveurs qui ne sont pas assez malins pour choisir le
 meilleur serveur de noms à interroger, ce qui conduit certaines
@@ -23,7 +23,7 @@ et incompressible.
 # Unicast & anycast
 
 La plupart des adresses IP que l'on manipule sont des adresses
-*unicast*, c'est à dire des adresses qui désigne un unique
+*unicast*, c'est-à-dire des adresses qui désignent un unique
 destinataire. À chaque fois que vous envoyez un paquet vers une
 adresse de ce type, celui-ci sera routé vers un unique
 destinataire. Il existe aussi des adresses *multicast* (qui
@@ -46,7 +46,7 @@ peut être interrogé en utilisant l'IP `192.5.5.241` ou
 [document expliquant le principe derrière les DNS anycast][anycast]. Plusieurs
 nœuds à travers le monde annoncent le même réseau en utilisant
 BGP. Quand un routeur a besoin de faire suivre une requête sur l'IP anycast,
-il aura plusieurs choix possible dans sa table de routage. Il
+il aura plusieurs choix possibles dans sa table de routage. Il
 sélectionne habituellement le chemin le plus court.
 
 Certains nœuds peuvent choisir de limiter l'annonce du réseau anycast
@@ -58,7 +58,7 @@ appelle les nœuds locaux (par opposition aux nœuds globaux).
 Essayons de mettre en place un serveur DNS anycast dans un petit
 lab. Nous allons utiliser uniquement un réseau IPv6. Notre serveur DNS
 sera constitué de deux nœuds globaux, `G1` et `G2`, et d'un nœud
-local, `L1`. Nous allons construire pour l'occassion une sorte de mini-Internet:
+local, `L1`. Nous allons construire pour l'occasion une sorte de mini-Internet:
 
 ![Lab DNS anycast][1]
 [1]: [[!!images/anycast-lab.svg]] "Schéma du lab DNS anycast"
@@ -186,7 +186,7 @@ Nous n'exportons pas les réseaux d'interconnexion entre les routeurs pour
 garder des tables de routage faciles à lire. Cela signifie que les
 adresses de ces réseaux ne sont pas routables malgré l'utilisation
 d'IP publiques. Voici la table de routage telle que vue par `64610`
-(on utiliser `birdc6` pour se connecter à BIRD) :
+(on utilise `birdc6` pour se connecter à BIRD) :
 
     ::console
     # birdc show route
@@ -322,7 +322,7 @@ limitations liées à BIRD :
   une confédération BGP pour l'AS 64620. Celle-ci contiendra les AS
   64621 et 64622. De l'extérieur, cette confédération sera vue comme
   l'AS 64620. Les routes marquées comme non exportables seront tout de
-  même exportée dans la confédération. BIRD ne supporte pas les
+  même exportées dans la confédération. BIRD ne supporte pas les
   confédérations.
 
   2. BIRD sélectionne d'abord la meilleure route à l'export puis
@@ -363,10 +363,10 @@ du serveur.
 
 # Au-delà du DNS
 
-Il est possible d'utiliser anycast pour serveurs des requêtes
+Il est possible d'utiliser anycast pour servir des requêtes
 HTTP. C'est quelque chose de beaucoup moins commun car rien ne
 garantit que tous les paquets d'une connexion TCP seront acheminés
-vers le même serveur. Cela ne pose pas de problème avce le DNS car on
+vers le même serveur. Cela ne pose pas de problème avec le DNS car on
 envoie un paquet, on reçoit une réponse et c'est fini. Il existe au
 moins deux CDN faisant de l'anycast ([MaxCDN][maxcdn] et
 [CacheFly][cachefly]).

@@ -67,7 +67,7 @@ transformant en **démon**. Pour cela, il appelle deux fois [fork(2)][]
 au point que les BSD, et certaines autres bibliothèques C, fournissent
 une fonction [daemon(3)][] à cet effet. Un service se transforme en
 démon **uniquement quand il est prêt** (après avoir lu son fichier de
-configuration et mis en place une chausette d'écoute par
+configuration et mis en place une chaussette d'écoute par
 exemple). Cela permet à un système d'initialiser les services avec un
 simple script linéaire :
 
@@ -93,7 +93,7 @@ suivante :
     l'option `--wait-sync`.
 
 Avec *systemd*, ce type de service nécessite d'utiliser la directive
-`Type=fork`. Toutefois, Go ne permettant d'effectuer cette
+`Type=fork`. Toutefois, Go ne permettant pas d'effectuer cette
 manipulation, nous nous rabattons sur la directive `Type=notify`. Dans
 ce cas, *systemd* s'attend à ce que le service lui indique qu'il est
 prêt en envoyant un message particulier sur une *socket* Unix. Le
@@ -122,7 +122,7 @@ paquet [go-systemd][] s'occupe des détails pour nous :
 Il est important de placer la notification après `net.Listen()` (en
 ❶) : si celle-ci était placée plus tôt, un client obtiendrait une
 « connexion refusée » lors d'une tentative d'accès. Une fois que le
-service écoute, les connexions sont mise en queue par le noyau jusqu'à
+service écoute, les connexions sont mises en queue par le noyau jusqu'à
 ce que le service les accepte (en ❷).
 
 Si le service n'est pas démarré via *systemd*, la ligne ❶ n'a pas

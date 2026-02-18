@@ -15,7 +15,7 @@ tags:
 La mise en haute disponibilité des réseaux L2 peut se faire de
 plusieurs façons :
 
- - d'antique protocoles tels que le [Spanning Tree Protocol][] ;
+ - d'antiques protocoles tels que le [Spanning Tree Protocol][] ;
  - des protocoles propriétaires tels que le [chassis virtuel chez
    Juniper][Juniper's virtual chassis], le
    [vPC chez Cisco][Cisco's virtual port channel] ainsi que de [nombreuses][mclag1]
@@ -32,7 +32,7 @@ plusieurs façons :
     contrôle indépendants.
 
 Les réseaux L2 nécessitent très peu de configuration mais sont
-difficile à opérer de manière fiable dans des configurations hautement
+difficiles à opérer de manière fiable dans des configurations hautement
 disponibles : un incident risque souvent d'impacter l'ensemble du
 réseau[^incident]. Il est donc préférable de **limiter la portée de
 chaque réseau L2**. Par exemple, il est courant d'avoir un réseau L2
@@ -97,7 +97,7 @@ cinq machines virtuelles. Notez l'absence de tout pont réseau.
 
 La configuration complète décrite dans cet article est également
 disponible sur [GitHub][]. Un agent reste nécessaire pour mettre en
-place la configuration lors d'un changement. Pour se faire, ce dernier
+place la configuration lors d'un changement. Pour ce faire, ce dernier
 recevrait des notifications de la part du système de gestion des
 machines virtuelles.
 
@@ -163,7 +163,7 @@ nul besoin de la table `local-out` :
     20: from all lookup main
     40: from all lookup public
 
-Une fois cette configuration en place, le routage est activé et le
+Une fois cette configuration en place, le routage est activé et la
 taille maximale du cache des routes IPv6 est augmentée (la valeur par
 défaut est seulement 4096)[^ddos] :
 
@@ -172,7 +172,7 @@ défaut est seulement 4096)[^ddos] :
     sysctl -qw net.ipv6.conf.all.forwarding=1
     sysctl -qw net.ipv6.route.max_size=524288
 
-[^ddos]: Il ne faut pas augmenter cette value de manière trop brutale.
+[^ddos]: Il ne faut pas augmenter cette valeur de manière trop brutale.
     Il est possible pour un attaquant de remplir le cache assez
     facilement. La valeur proposée ici correspond à 256 Mio de
     mémoire. Voir « [Fonctionnement de la table de routage IPv6 sous
@@ -251,7 +251,7 @@ première possibilité naturelle est d'utiliser un réseau L3 de type
 [i3]: [[!!images/l3-routing-full-v2.svg]] "Fabrique L3 de type leaf-spine. Une session BGP est établie pour chacun des liens. Les routeurs spine doivent apprendre toutes les routes."
 
 Chaque hyperviseur établit une session eBGP vers chaque routeur de
-type *leaf*. Ceux-ci établissent une session eBGP avec chaque routeurs
+type *leaf*. Ceux-ci établissent une session eBGP avec chaque routeur
 de type *spine*. Cette solution peut s'avérer coûteuse car les
 routeurs de type *spine* doivent être capables de gérer l'intégralité
 des routes. Avec la génération actuelle de routeurs, cela implique une
@@ -269,7 +269,7 @@ le nord.
     plus d'un million de routes IPv4 (pour environ 20 000 $, avec des
     puces Broadcom Jericho), à travers l'utilisation d'une TCAM
     externe. Un [Juniper MX240][] peut gérer quant à lui plus de 2
-    millions de routes IPv4 (pour environ 30 000 $ pour un chassis
+    millions de routes IPv4 (pour environ 30 000 $ pour un châssis
     vide et deux cartes de routage, avec des puces Juniper Trio) avec
     une densité moindre.
 
@@ -307,7 +307,7 @@ fabrique L3. Dans ce cas, nul besoin de réflecteurs de routes. En
 utilisant *FRR* au lieu de *BIRD*, il est même possible de n'utiliser
 qu'une unique session eBGP IPv6 avec VPNv4 (public et privé), VPNv6
 (public) et EVPN (pour [VXLAN][], non présenté ici). Selon les
-équipements impliqués dans le réseau, vous pouvez configuré des
+équipements impliqués dans le réseau, vous pouvez configurer des
 sessions BGP sans IP. On peut alors se passer de définir un plan de
 numérotation et la configuration est alors encore réduite.
 
@@ -383,7 +383,7 @@ même réseau L2 afin qu'ils s'échangent leurs routes.
     connaître par avance les pairs. Pour améliorer la sécurité, il est
     possible d'utiliser le *Generalized TTL Security Mechanism* ([RFC
     5082][]). Pour *Junos*, la configuration présentée ici (avec `ttl
-    255`) est incomplère. Un [filtre de firewall est aussi
+    255`) est incomplète. Un [filtre de firewall est aussi
     nécessaire][firewall filter is also needed].
 
 Un autre point important est de réagir rapidement en cas
@@ -395,7 +395,7 @@ commutateurs sur les chemins. En ❹, nous activons BFD, un protocole
 qui permet de détecter en moins d'une seconde[^minimum] un problème
 entre deux pairs BGP ([RFC 5880][]).
 
-[^minimum]: Sur la série de commutateurs QFX5000, l'interval minimal
+[^minimum]: Sur la série de commutateurs QFX5000, l'intervalle minimal
     est [officiellement][officially] d'une seconde. C'est regrettable
     car cela rend BFD quasiment inutile.
 
@@ -521,7 +521,7 @@ noyau[^rt_tables] :
       kernel table 90; # Numéro de la table de routage dans le noyau
     }
 
-[^rt_tables]: Les tables de routage du noyau son numérotées. La
+[^rt_tables]: Les tables de routage du noyau sont numérotées. La
     commande `ip` peut utiliser les noms déclarés dans le fichier
     `/etc/iproute2/rt_tables`.
 
@@ -587,7 +587,7 @@ bonnes avec IPv6 :
  - 1.25 µs par recherche avec 1 million de routes IPv6.
 
 Ainsi, l'impact de laisser la gestion d'un très grand nombre de routes
-à Linux est très faible. Pour plus de détails, sur le sujet, voyez
+à Linux est très faible. Pour plus de détails sur le sujet, voyez
 « [Fonctionnement de la table de routage IPv4 sous Linux][IPv4 route
 lookup on Linux] » et « [Fonctionnement de la table de routage IPv6
 sous Linux][IPv6 route lookup on Linux] ».
@@ -601,7 +601,7 @@ qu'une réponse serait renvoyée sur la même interface. Cela interdit
 toute tentative d'usurpation de la part d'une machine virtuelle.
 
 Pour IPv4, il est possible d'activer cette fonctionnalité à travers un
-*sysctl*[^sysctl] ou à travers *Netfilter*. Pour IPv6, seula la
+*sysctl*[^sysctl] ou à travers *Netfilter*. Pour IPv6, seule la
 dernière option est disponible.
 
     ::sh
@@ -707,7 +707,7 @@ relativement triviale. Pour IPv6, si l'adresse assignée est de type
 
 La configuration présentée ici fonctionne avec *BIRD* 1.6.3 et Linux
 3.15 ou plus récent. Elle permet de s'affranchir des limitations
-inhérentes des réseaux L2 en terme de flexibilité ou de disponibilité
+inhérentes des réseaux L2 en termes de flexibilité ou de disponibilité
 tout en restant transparent du point de vue des machines virtuelles
 hébergées. En faisant reposer l'effort de routage sur Linux, la
 solution est également économique car le matériel existant peut être
@@ -722,7 +722,7 @@ Utilisation des VRF
   permettent d'associer des interfaces à des tables de routage. Nous
   pourrions donc définir trois VRF : `public`, `private` et
   `local-out`. Cela permettrait d'améliorer les performances en
-  retirant la nécessiter de parcourir plusieurs règles de routage
+  retirant la nécessité de parcourir plusieurs règles de routage
   (cependant, avant Linux 4.8, les performances sont dégradées en
   raison de la non-utilisation des fonctionnalités d'accélération,
   voir le [commit 7889681f4a6c][]). Pour plus d'informations, reportez
