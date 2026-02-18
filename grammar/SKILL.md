@@ -20,4 +20,6 @@ French (in content/fr/) or English (in content/en/).
 3. Apply the edits directly to the file.
 4. Summarize the changes.
 
-Do not modify code blocks.
+Do not modify code blocks. For French, we follow “Lexique des règles
+typographiques en usage à l'Imprimerie nationale.” For English, this is “The
+Chicago Manual of Style.”
