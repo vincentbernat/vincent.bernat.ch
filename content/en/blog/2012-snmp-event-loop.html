@@ -22,7 +22,7 @@ loop. This means you make a call to `select()`, `poll()`, `epoll()`,
 file descriptors and wait for any of them to become available in a
 specified time frame.
 
-Here is a typical use of `select()` (adapted from [Quagga][])
+Here is a typical use of `select()` (adapted from [Quagga][]):
 
     ::c
     readfd = m->readfd;
@@ -112,7 +112,7 @@ provided timeout must be considered or to 1
 otherwise. `snmp_select_info()` will set `snmpblock` to 0 _if and only
 if_ it alters the timeout.
 
-Here are a three examples of integration. They are for a subagent but
+Here are three examples of integration. They are for a subagent but
 the code for a manager is the same:
 
  - [Quagga](https://github.com/vincentbernat/quagga/blob/feature/agentx/lib/thread.c#L1027-L1158)
@@ -121,7 +121,7 @@ the code for a manager is the same:
 
 # Third-party event loop
 
-With a third party event loop, you don't have access to the `select()`
+With a third-party event loop, you do not have access to the `select()`
 system call anymore. Therefore, you cannot alter it with
 `snmp_select_info()`. Instead, at each iteration of the loop, a list
 of SNMP related file descriptors is kept up-to-date with the help of
@@ -230,7 +230,7 @@ of _Net-⁠SNMP_ in _Twisted_ needs to be done using a C extension or the
 [^ffi]: Nowadays, it should be done with [CFFI](https://cffi.readthedocs.io/en/latest/).
 
 _Twisted_ event loop is called a reactor. Like for _libevent_, events
-need to be registered. It is possible to register file descriptor-like
+need to be registered. It is possible to register file-descriptor-like
 objects using a class implementing a handful of methods. Here is the
 implementation of such a class (adapted from _PyNet-⁠SNMP_, a subproject
 of [Zenoss][] using the `ctypes` module):
@@ -314,13 +314,13 @@ There is no such problem with SNMPv2.
 
 ## Limitation of file descriptor sets
 
-`snmp_select_info()` and `snmp_read()` uses the `fd_set` type to
+`snmp_select_info()` and `snmp_read()` use the `fd_set` type to
 handle a set of file descriptors. This type should be manipulated with
 `FD_CLR()`, `FD_ISSET()`, `FD_SET()` and `FD_ZERO()`. They may be
 defined as functions but they usually are macros. Moreover, no file
 descriptor greater than `FD_SETSIZE` (which is usually set to 1024)
 can be handled with the `fd_set` type. This means that if you have a
-file descriptor greater than 1024, you won't be able to use
+file descriptor greater than 1024, you will not be able to use
 `snmp_select_info()` with it.
 
 Starting from _Net-⁠SNMP_ 5.5, you can use `snmp_select_info2()` and
@@ -330,13 +330,13 @@ use the `netsnmp_large_fd_set`.
 If you want to keep compatibility with _Net-⁠SNMP_ 5.4, here is another
 twist. The `fd_set` type is usually a fixed-size array of long
 integers. `FD_CLR()`, `FD_ISSET()` and `FD_SET()` are
-size-independant. The size only matters for `FD_ZERO()` which is not
+size-independent. The size only matters for `FD_ZERO()` which is not
 used by either `snmp_select_info()` or `snmp_read()`. You can
 therefore allocate a larger `fd_set`. A common way is to compile your
 program with `-D__FD_SETSIZE=4096`. You can still use `FD_ZERO()`
-yourself. However, this is not portable (GNU C Library only). Another
+yourself. However, this is not portable (GNU C library only). Another
 way is to allocate your own array of long integers and cast it to
-`fd_set`. You'll have to redefine `FD_ZERO()`:
+`fd_set`. You will have to redefine `FD_ZERO()`:
 
     ::c
     typedef struct {

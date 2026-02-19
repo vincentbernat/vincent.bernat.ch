@@ -13,8 +13,8 @@ tags:
 
 The [`cisco.iosxr` collection][collection] from [Ansible Galaxy][]
 provides an [`iosxr_user` module][iosxr_user] to manage local users,
-along with their SSH keys. However, the module is quite slow, do not
-display a diff for changed SSH keys, never signal change when a key is
+along with their SSH keys. However, the module is quite slow, does not
+display a diff for changed SSH keys, never signals a change when a key is
 modified, and does not delete obsolete keys. Let's write a custom
 Ansible module managing only the SSH keys while fixing these issues.
 
@@ -55,7 +55,7 @@ user:
 # Code
 
 The [module][] has the following signature and it installs the
-specified key for each user and remove keys from retired users—the
+specified key for each user and removes keys from retired users—the
 ones we do not specify.
 
     ::yaml
@@ -176,7 +176,7 @@ to public SSH keys in the OpenSSH format:
     {'cedric': 'ssh-rsa AAAAB3NzaC1yc2[…]',
      'vincent': 'ssh-rsa AAAAB3NzaC1yc2[…]'}
 
-We need to convert these keys in the same hexadecimal representation
+We need to convert these keys to the same hexadecimal representation
 used by Cisco above. The `ssh-keygen` command and some glue can do the
 conversion:[^pkcs8]
 
@@ -255,7 +255,7 @@ running with `--diff`, correctly signals a change, is faster,
 [^faster] and deletes unwanted SSH keys. However, it is unable to
 create users and cannot configure passwords or multiple SSH keys.
 
-[^faster]: The main factors for being faster are:
+[^faster]: The main factors for it being faster are:
 
       - not creating users, and
       - not reuploading existing SSH keys.

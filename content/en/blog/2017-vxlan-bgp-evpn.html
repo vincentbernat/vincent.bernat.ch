@@ -13,14 +13,14 @@ tags:
 
 **VXLAN** is an **overlay network** to encapsulate Ethernet traffic
 over an existing (highly available and scalable, possibly the
-Internet) IP network while accomodating a very large number of
+Internet) IP network while accommodating a very large number of
 tenants. It is defined in [RFC 7348][]. For an uncut introduction on
 its use with Linux, have a look at my "[VXLAN & Linux][]" post.
 
 ![VXLAN deployment][i1]
 [i1]: [[!!images/vxlan/vxlan-deployment-v2.svg]] "VXLAN deployment example with hypervisors acting as VTEPs"
 
-In the above example, we have **hypervisors** hosting a **virtual
+In the above example, we have **hypervisors** hosting **virtual
 machines** from different **tenants**. Each virtual machine is given
 access to a tenant-specific **virtual Ethernet segment**. Users are
 expecting classic Ethernet segments: no MAC restrictions,[^bridge]
@@ -44,13 +44,13 @@ second point, this is source-address learning.
 # Introduction to BGP EVPN
 
 BGP EVPN ([RFC 7432][] and [RFC 8365][] for its application to VXLAN)
-is a standard control protocol to efficiently solves these two aspects
+is a standard control protocol to efficiently solve these two aspects
 without relying on multicast nor source-address learning.
 
 BGP EVPN relies on BGP ([RFC 4271][]) and its MP-BGP extensions
 ([RFC 4760][]). **BGP** is the routing protocol powering the
 Internet. It is highly scalable and interoperable. It is also
-extensible and one of its extension is **MP-BGP**. This extension can
+extensible and one of its extensions is **MP-BGP**. This extension can
 carry reachability information (NLRI) for multiple protocols (IPv4,
 IPv6, L3VPN and in our case EVPN). **EVPN** is a special family to
 advertise MAC addresses and the remote devices they are attached
@@ -116,7 +116,7 @@ reflectors. There are many solutions. I will present three of them:
  - using *GoBGP*, an implementation of BGP in Go; and
  - using *Juniper Junos*.
 
-For reliability purpose, it's possible (and easy) to use one
+For reliability purposes, it is possible (and easy) to use one
 implementation for some route reflectors and another implementation
 for the other ones.
 
@@ -149,12 +149,12 @@ reflector has `203.0.113.254` configured as a loopback IP.
     !
 
 A peer group `fabric` is defined and we leverage the dynamic neighbor
-feature of *FRR*: we don't have to explicitily define each
+feature of *FRR*: we do not have to explicitly define each
 neighbor. Any client from `203.0.113.0/24` and presenting itself as
 part of AS 65000 can connect. All sent EVPN routes will be accepted
 and reflected to the other clients.
 
-You don't need to run *Zebra*, the route engine talking with the
+You do not need to run *Zebra*, the route engine talking with the
 kernel. Instead, start `bgpd` with the `--no_kernel` flag.
 
 !!! "Update (2018-04)" If you need to support several implementations
@@ -191,12 +191,12 @@ with a command-line client). Here is a configuration similar to the
           peer-group: rr-client
           prefix: 203.0.113.0/24
 
-[^go]: I am unenthusiastic about projects whose the sole purpose is to
+[^go]: I am unenthusiastic about projects whose sole purpose is to
     rewrite something in Go. However, while being quite young, *GoBGP*
     is quite valuable on its own (good architecture, good
     performance).
 
-*GoBGP* won't try to interact with the kernel which is fine as a route
+*GoBGP* will not try to interact with the kernel which is fine as a route
 reflector.
 
 ## Using Juniper Junos
@@ -358,7 +358,7 @@ The important points are:
  - the bridge device was correctly detected.
 
 *FRR* should also be able to retrieve information about the local
-MAC addresses :
+MAC addresses:
 
     ::console
     # show evpn mac vni 100
@@ -523,11 +523,11 @@ VTEP for VNI 100:[^vni100]
          Communities: target:65000:268435556 encapsulation:vxlan(0x8)
     […]
 
-[^vni100]: The value 100 used in the route distinguishier
+[^vni100]: The value 100 used in the route distinguisher
     (`203.0.113.2:100`) is not the one used to encode the VNI. The VNI
     is encoded in the route target (`65000:268435556`), in the 24
-    least signifiant bits (`268435556 & 0xffffff` equals `100`). As
-    long as VNIs are unique, we don't have to understand these
+    least significant bits (`268435556 & 0xffffff` equals `100`). As
+    long as VNIs are unique, we do not have to understand these
     details.
 
 Here is a type 2 route announcing the location of the
@@ -632,7 +632,7 @@ and the two last ones are the translation of the type 2 routes.
 
 # Interoperability
 
-One of the strength of BGP EVPN is the interoperability with other
+One of the strengths of BGP EVPN is the interoperability with other
 network vendors. To demonstrate it works as expected, we will
 configure a [Juniper vMX][] 16.1R1.7 to act as a VTEP.
 

@@ -79,7 +79,7 @@ forwarding requests to only healthy backends, and scalability, by spreading
 requests fairly between them. Working in the highest layers of the [OSI
 model][], it can also offer additional services, like TLS-termination, HTTP
 routing, header rewriting, rate-limiting of unauthenticated users, and so on.
-Being stateful, it can leverage complex load-balancing algorithm. Being the
+Being stateful, it can leverage complex load-balancing algorithms. Being the
 first point of contact with backend servers, it should ease maintenances and
 minimize impact during daily changes.
 
@@ -150,8 +150,8 @@ illustrates two key concepts for operability:
 
  2. The load-balancer itself should provide a healthcheck endpoint
     (`/healthcheck`) for the upper tier. It will return a 503 error if either
-    there is no backend servers available or if put down the `enabler` backend
-    through the agent check. The same mechanism as for regular backends can be
+    there are no backend servers available or if the `enabler` backend is put
+    down through the agent check. The same mechanism as for regular backends can be
     used to signal the unavailability of this load-balancer.
 
 [^agentcheck]: If you feel this solution is fragile, feel free to develop your
@@ -192,7 +192,7 @@ stateless and asymmetric. Backend servers are not represented.")
 
 [^flow]: A flow is usually determined by the source and destination IP and the
     L4 protocol. Alternatively, the source and destination port can also be
-    used. The router hashes these information to choose the destination. For
+    used. The router hashes this information to choose the destination. For
     Linux, you may find more information on this topic in "[Celebrating ECMP in
     Linux][]."
 
@@ -268,7 +268,7 @@ unavailable, the second one may route the same flows differently:
 
 ![Stability of ECMP routing 2/2]([[!!images/multitier-lb-ecmp-failure2.svg]] "A
 router becomes unavailable and the remaining router load-balances its flows
-differently. One of them is routed to a different load-balancer, which do not
+differently. One of them is routed to a different load-balancer, which does not
 have the appropriate entry in its connection table.")
 
 If you think this is not an acceptable outcome, notably if you need to handle
@@ -313,7 +313,7 @@ out an unhealthy component. *IPVS* is configured to use the *Maglev* scheduler,
 a [consistent hashing algorithm from Google][maglev]. Among its family, this is
 a great algorithm because it spreads connections fairly, minimizes disruptions
 during changes and is quite fast at building its lookup table. Finally, to
-improve performance, we let the last tier—the L7 load-balancers—sends back
+improve performance, we let the last tier—the L7 load-balancers—send back
 answers directly to the clients without involving the second tier—the L4
 load-balancers. This is referred to as *direct server return* (DSR) or *direct
 routing* (DR).
@@ -437,7 +437,7 @@ each load-balancer takes the same decision, as long as they see the same set of
 L7 load-balancers:
 
 ![L4 load-balancing instability 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
-"Loosing an L4 load-balancer has no impact on existing flows. Each arrow is an
+"Losing an L4 load-balancer has no impact on existing flows. Each arrow is an
 example of flow. The dots are flow endpoints bound to the associated
 load-balancer. If they had moved to another load-balancer, connection
 would have been lost.")
@@ -450,7 +450,7 @@ flows terminating at this load-balancer are impacted. Other existing connections
 will be forwarded correctly:
 
 ![L4 load-balancing instability 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
-"Loosing an L7 load-balancer only impacts the flows bound to it.")
+"Losing an L7 load-balancer only impacts the flows bound to it.")
 
 We need to have simultaneous changes on both levels to get a noticeable impact.
 For example, when adding both an L4 load-balancer and an L7 load-balancer, only

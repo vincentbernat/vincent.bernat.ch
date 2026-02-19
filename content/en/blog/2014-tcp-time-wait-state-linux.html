@@ -153,7 +153,7 @@ If the `TIME-WAIT` sockets are on the client side, such a situation is
 easy to detect. The call to `connect()` will return `EADDRNOTAVAIL`
 and the application will log some error message about that. On the
 server side, this is more complex as there is no log and no counter to
-rely on. In doubt, you should just try to come with something sensible
+rely on. In doubt, you should just try to come up with something sensible
 to list the number of used quadruplets:
 
     ::console
@@ -169,7 +169,7 @@ to list the number of used quadruplets:
       10536 10.24.2.30 10.33.1.73
 
 The solution is **more quadruplets**.[^outgoing] This can be done in
-several ways (in the order of difficulty to setup):
+several ways (in order of difficulty to set up):
 
  - use **more client ports** by setting `net.ipv4.ip_local_port_range` to
    a wider range;
@@ -194,14 +194,14 @@ several ways (in the order of difficulty to setup):
 [^others]: This last solution may seem a bit dumb since you could just
            use more ports but some servers are not able to be
            configured this way. The before last solution can also be
-           quite cumbersome to setup, depending on the load-balancing
+           quite cumbersome to set up, depending on the load-balancing
            software, but uses less IP than the last solution.
 
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
 [11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
 
 The last solution is to tweak `net.ipv4.tcp_tw_reuse` and
-`net.ipv4.tcp_tw_recycle`. Don't do that yet, we will cover these
+`net.ipv4.tcp_tw_recycle`. Do not do that yet, we will cover these
 settings later.
 
 ### Memory
@@ -381,7 +381,7 @@ _socket lingering_. There are two flavors:
     will be immediately destroyed. No `TIME-WAIT` state in this
     case.
 
- 2. With the second flavor, any data is remaining in the socket send
+ 2. With the second flavor, if any data is remaining in the socket send
     buffer, the process will sleep when calling `close()` until either
     all the data is sent and acknowledged by the peer or the
     configured linger timer expires. It is possible for a process to
@@ -389,7 +389,7 @@ _socket lingering_. There are two flavors:
     same process happens in the background. It permits the remaining
     data to be sent during a configured timeout but if the data is
     successfully sent, the normal close sequence is run and you get a
-    `TIME-WAIT` state. And on the other case, you'll get the
+    `TIME-WAIT` state. And in the other case, you will get the
     connection close with a _RST_ and the remaining data is discarded.
 
 In both cases, **disabling socket lingering is not a one-size-fits-all
@@ -399,7 +399,7 @@ view. There are good reasons to not disable it unconditionally.
 
 ## `net.ipv4.tcp_tw_reuse`
 
-The `TIME-WAIT` state prevents delayed segments to be accepted in an
+The `TIME-WAIT` state prevents delayed segments from being accepted in an
 unrelated connection. However, in certain conditions, it is possible
 to assume a new connection's segment cannot be misinterpreted with an
 old connection's segment.
@@ -418,7 +418,7 @@ recorded for the previous connection: an outgoing connection in the
 `TIME-WAIT` state can be reused after just one second.
 
 How is it safe? The first purpose of the `TIME-WAIT` state was to
-avoid duplicate segments to be accepted in an unrelated
+avoid duplicate segments being accepted in an unrelated
 connection. Thanks to the use of timestamps, such duplicate segments
 will come with an outdated timestamp and therefore be discarded.
 
@@ -426,9 +426,9 @@ The second purpose was to ensure the remote end is not in the
 `LAST-ACK` state because of the loss of the last _ACK_. The remote end
 will retransmit the _FIN_ segment until:
 
- 1. it gives up (and tear down the connection), or
- 2. it receives the _ACK_ it is waiting (and tear down the connection), or
- 3. it receives a _RST_ (and tear down the connection).
+ 1. it gives up (and tears down the connection), or
+ 2. it receives the _ACK_ it is waiting for (and tears down the connection), or
+ 3. it receives a _RST_ (and tears down the connection).
 
 If the _FIN_ segments are received on time, the local end socket will
 still be in the `TIME-WAIT` state and the expected _ACK_ segments will
@@ -498,7 +498,7 @@ timestamp, unless the `TIME-WAIT` state would have expired:
 When the remote host is a **NAT device**, the condition on timestamps
 will forbid all the hosts except one behind the NAT device to connect
 during one minute because they do not share the same timestamp clock.
-In doubt, this is far better to disable this option since it leads to
+In doubt, it is far better to disable this option since it leads to
 **difficult to detect** and **difficult to diagnose** problems.
 
 !!! "Update (2017-09)" Starting from Linux 4.10 (commit
@@ -527,8 +527,8 @@ On the **client side**, enabling `net.ipv4.tcp_tw_reuse` is another
 almost-safe solution. Enabling `net.ipv4.tcp_tw_recycle` in addition
 to `net.ipv4.tcp_tw_reuse` is mostly useless.
 
-Moreover, when designing protocols, **don't let clients close
-first**. Clients won't have to deal with the `TIME-WAIT` state pushing
+Moreover, when designing protocols, **do not let clients close
+first**. Clients will not have to deal with the `TIME-WAIT` state pushing
 the responsibility to servers which are better suited to handle this.
 
 And a final quote by [W. Richard Stevens][], in [Unix Network Programming][]:

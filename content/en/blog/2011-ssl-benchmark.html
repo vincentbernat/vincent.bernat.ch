@@ -17,14 +17,14 @@ additional benchmarks in the [second round][next].
 
 !!! "Update (2015-02)" While the content of this article is still
 technically sound, ensure you understand it was written by the end of
-2011 and therefore doesn't take into account many important aspects,
+2011 and therefore does not take into account many important aspects,
 like the fall of RC4 as an appropriate cipher.
 
 !!! "Update (2016-01)" *stud* is now unmaintained. It has been forked
 by the Varnish team and is now called
 [hitch](https://github.com/varnish/hitch). However, I would rather
 consider [HAProxy](https://www.haproxy.org). It now features TLS
-support, supplied by one of the major contributor of *stud*.
+support, supplied by one of the major contributors of *stud*.
 
 [TOC]
 
@@ -51,7 +51,7 @@ This is a very informative post containing tips on how to enhance TLS
 performance by reducing latency. However, unlike Gmail, you may still
 be worried by TLS raw performances. Maybe each of your frontends is
 able to serve 2000 requests per second and CPU overhead for TLS is
-therefore significative. Maybe you want to terminate TLS in your load
+therefore significant. Maybe you want to terminate TLS in your load
 balancer—even if you know [this is not the best way to
 scale][nginxcaching].
 
@@ -68,7 +68,7 @@ model. [stud][] is a recent attempt to write a simple TLS
 terminator which is efficient and scalable. It uses the
 one-process-per-core model. [nginx][] is a web server and it
 can be used as reverse proxy and therefore act as TLS terminator. It
-is known to be one of the most efficient web server, hence the choice
+is known to be one of the most efficient web servers, hence the choice
 here. It also features built-in basic load balancing. Since *stud* <del>and
 *stunnel*</del>[^0] do not have this feature, we use them with
 [HAProxy][haproxy], a high performance load-balancer that usually
@@ -133,12 +133,12 @@ limits have been raised over 100,000.
 A [Spirent Avalanche 2900][avalanche] appliance is used to run the
 benchmarks.
 
-We are interested in raw TLS performances in term of handshakes per
+We are interested in raw TLS performances in terms of handshakes per
 second. Because we want to observe the effects of session reuse, the
-scenario runs by most tests lets clients doing four successive
-requests and reusing the TLS session for three of them. There is no
+scenario run by most tests lets clients do four successive
+requests, reusing the TLS session for three of them. There is no
 HTTP keepalive. There is no compression. The size of the HTTP answer
-from the server is 1024 bytes. These choices are done because our
+from the server is 1024 bytes. These choices are made because our
 primary target is the number of TLS handshakes per second.
 
 It should also be noted that HAProxy alone is able to handle 22,000
@@ -158,7 +158,7 @@ The most important plot is the top one. The blue line is the attempted
 number of transactions per second (TPS) while the green one is the
 successful number of TPS. When the two lines start to diverge, this
 means we reach some kind of maximum: the number of unsuccessful TPS
-also starts to raise (the red line).
+also starts to rise (the red line).
 
 There are several noticeable points: the maximum TPS (788 TPS), the
 maximum TPS with an average response time less than 100 ms (766 TPS),
@@ -192,8 +192,8 @@ response time is less than 100 ms. *stud* achieves a performance of
 
 ## Number of cores
 
-With multiple cores, we can affect several of them to do TLS hard
-work. To get better performance, we pin each processes to a dedicated
+With multiple cores, we can assign several of them to do TLS hard
+work. To get better performance, we pin each process to a dedicated
 CPU. Here is the repartition used during the tests:
 
 <i></i>       | 1 core  | 2 cores | 4 cores | 6 cores
@@ -207,7 +207,7 @@ CPU 2, Core 6 | -       | -       | TLS     | TLS
 CPU 2, Core 7 | -       | -       | TLS     | TLS
 CPU 2, Core 8 | system  | system  | system  | system + haproxy
 
-Remember, we have two CPU, 4 cores on each CPU. Cores on the same CPU
+Remember, we have two CPUs, 4 cores on each CPU. Cores on the same CPU
 share the same L2 cache (on this model). Therefore, the arrangement
 inside a CPU is not really important. When possible, we try to keep
 things together on the same CPU. The TLS processes always get
@@ -233,8 +233,8 @@ properly. *stunnel* is not able to take advantage of the cores and its
 performance is worse than with a single core. I think this may be
 due to its threaded model and the fact that the userland for this
 32-bit system is a bit old. *nginx* is able to achieve the same TPS
-than *stud* but is disqualified because of the increased latency. We
-won't use *stunnel* in the remaining tests.
+as *stud* but is disqualified because of the increased latency. We
+will not use *stunnel* in the remaining tests.
 
 ## 32-bit vs 64-bit
 
@@ -263,14 +263,14 @@ hit. TPS are divided by 5.
 
 The last thing to check is the influence of TLS session reuse. Since
 we are on a local network, we see only one of the positive effects of
-session reuse: better TPS because of reduced CPU usages. If there was
+session reuse: better TPS because of reduced CPU usage. If there was
 a latency penalty, we should also have seen better
 TPS thanks to the removed round-trip.
 
 ![stud: session reuse][s6]
 [s6]: [[!!images/benchs-ssl/session-reuse.png]] "Influence of session reuse"
 
-This plot also explains why *stud* performance fall after the
+This plot also explains why *stud* performance falls after the
 maximum: because of the failed transactions, the session cache is not
 as efficient. This phenomenon does not exist when session reuse is not
 enabled.
@@ -280,7 +280,7 @@ enabled.
 Here is a summary of the maximum TPS reached during the benchmark
 (with an average response time below 100ms). Our control use case is
 the following: 64-bit, 6 cores, AES128, SHA1, 1024-bit key, 4 requests
-into the same TLS session.
+in the same TLS session.
 
 Context                     | nginx 1.0.5 | stunnel 4.41  | stud 0.1 ([patched][studsslreuse])
 --------------------------- | ----------- | ------------- | ----------------------------------

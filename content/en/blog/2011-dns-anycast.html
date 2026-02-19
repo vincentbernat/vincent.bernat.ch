@@ -9,11 +9,11 @@ tags:
 
 In a recently published article, Paul Vixie, past author and
 architect of [BIND][bind], one of the most popular internet domain
-server, [explains why DNS servers should use anycast][paulvixie] for
+servers, [explains why DNS servers should use anycast][paulvixie] for
 increased reliability and faster answers. The main argument against
 unicast is that some resolvers may not be smart enough to select the
 best server to query and therefore, they may select a server on the
-other side of the planet. Since, you cannot go faster than light,
+other side of the planet. Since you cannot go faster than light,
 you get a penalty of about 100 milliseconds in this case.
 
 [TOC]
@@ -21,7 +21,7 @@ you get a penalty of about 100 milliseconds in this case.
 # Unicast & anycast
 
 Most addresses that you handle are *unicast* addresses, i.e. the
-address of a single receiver. Any time you send a packet to an
+address of a single receiver. Any time you send a packet to a
 unicast address, it will be forwarded to this single receiver. Another
 common network addressing system is *multicast* (which happens to
 include *broadcast*). When you send a packet to a multicast address,
@@ -43,14 +43,14 @@ the 13 Internet [root name servers][rootservers]. This server is
 queried by using `192.5.5.241` IPv4 anycast address or
 `2001:500:2f::f` IPv6 anycast address. ISC has published a
 [document explaining how anycast works][anycast]. Several nodes around
-the globe announces the same subnet using BGP. When one router running
+the globe announce the same subnet using BGP. When one router running
 BGP has to forward a query to the anycast address, it will have several
 choices in its routing table. It will usually select the shortest path and
 route the query to the corresponding router.
 
 Some nodes may choose to restrict the announcement about the subnet
 containing the anycast address. They are called local nodes (by
-opposition to other global nodes). This allows them to serve query
+opposition to other global nodes). This allows them to serve queries
 only from their clients and use cheaper connectivity and hardware.
 
 # Lab
@@ -77,8 +77,8 @@ first need to grab the lab:
 
 You will need to install the dependencies needed by the script on your
 host system. The script was tested on Debian unstable. If some of the
-dependencies do not exist in your distribution, if they don't behave
-as in Debian or if you don't want to install them on your host system,
+dependencies do not exist in your distribution, if they do not behave
+as in Debian or if you do not want to install them on your host system,
 you can use `debootstrap` to create a working system:
 
     ::console
@@ -117,7 +117,7 @@ AS 64600 is some kind of Tier-1 transit network (like
 [Level 3 Communications][level3]). It has three points of presence:
 Paris, New York and Tokyo. AS 64650 is a European regional transit
 network, AS 64640 is an East Asian regional transit network and AS
-64610, 64620 and 64630 are North American regional transit network which are
+64610, 64620 and 64630 are North American regional transit networks which are
 peering each other. Other leaf AS are local ISP.
 
 This is not really what Internet looks like but shaping our lab like a
@@ -128,7 +128,7 @@ containing only the list of peers. Since `Paris`, `Tokyo` and
 `NewYork` are in the same AS, they will use iBGP. They are fully
 meshed for this purpose but this does not provide redundancy because
 iBGP routes are not redistributed inside iBGP. A more complex setup
-would be needed to provide redundancy inside AS 64600. We don't use an
+would be needed to provide redundancy inside AS 64600. We do not use an
 IGP inside leaf AS as we should: for the sake of simplicity, we
 redistribute directly connected routes into BGP.
 
@@ -275,7 +275,7 @@ server:
 
 If we try from `C3`, we may be redirected to `L1` while we are not a
 customer of AS 64620. A common way to handle this is to let `64621`
-tag the route with a special community that will let know `64620` that
+tag the route with a special community that will let `64620` know that
 the route should not be exported.
 
     ::junos
@@ -295,7 +295,7 @@ the route should not be exported.
 The community used is known as the `no-export` community. BIRD knows
 how to handle it. However, we hit here some limitations of BIRD:
 
-  1. The correct way to let `64622` knows about this route is to build
+  1. The correct way to let `64622` know about this route is to build
   a BGP confederation for AS 64620 and let AS 64622 and AS 64621 be
   part of it. This means these three AS will be seen as AS 64200
   from outside of the confederation. Moreover, the `no-export`
@@ -342,7 +342,7 @@ Anycast can be used to serve HTTP requests too. This is less commonly
 used because your connection may be rerouted to another node while it
 is still running. This is not a problem with DNS because there is no
 connection (you send a query, you receive an answer). There are at
-least two CDN ([MaxCDN][maxcdn] and [CacheFly][cachefly]) which uses
+least two CDN ([MaxCDN][maxcdn] and [CacheFly][cachefly]) which use
 anycast to ensure low roundtrip time and very high reliability.
 
 Setting up an HTTP server with an anycast address is no different than

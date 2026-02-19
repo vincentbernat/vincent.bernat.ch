@@ -7,7 +7,7 @@ tags:
   - network-bgp
 ---
 
-When it comes to provide redundant services, several options are
+When it comes to providing redundant services, several options are
 available:
 
  - The service can be hosted behind a set of **load-balancers**. They
@@ -34,7 +34,7 @@ A common setup is a combination of these solutions: web servers are
 behind a couple of load-balancers achieving both redundancy and
 load-balancing. The load-balancers use VRRP to ensure redundancy. The
 whole setup is replicated to another datacenter and round-robin DNS
-is used to ensure both redundancy and load-balacing of the datacenters.
+is used to ensure both redundancy and load-balancing of the datacenters.
 
 There is a fourth option which is similar to VRRP but relies on
 dynamic routing and therefore is not limited to nodes in the same
@@ -95,7 +95,7 @@ daemon. Its configuration is pretty basic. Here is a fragment:
 
 First, in ❶, we declare the routes that we want to export to our
 peers. We don't try to summarize them from the IGP. We just
-unconditonnaly export the networks that we own. Then, in ❷, _R1_ is
+unconditionally export the networks that we own. Then, in ❷, _R1_ is
 defined as a neighbor and we export the static route we declared
 previously. We import any route that _R1_ is willing to send us. In ❸,
 we share everything we know with our pal, _ER3_, using internal
@@ -236,7 +236,7 @@ The configuration of _ExaBGP_ is quite simple:
     }
 
 A script checks if the service (an _nginx_ web server) is up and
-running and advertise the appropriate IP addresses to the two declared
+running and advertises the appropriate IP addresses to the two declared
 route servers. If we run the script manually, we can see the
 advertised routes:
 
@@ -258,8 +258,8 @@ advertised routes:
     announce route 2001:db8:30::2/128 next-hop self med 1001
     announce route 2001:db8:30::1/128 next-hop self med 1002
 
-When the service becomes unresponsive, the healthcheck script detect
-the situation and retry several times before acknowledging that the
+When the service becomes unresponsive, the healthcheck script detects
+the situation and retries several times before acknowledging that the
 service is dead. Then, the IP addresses are advertised with higher
 metrics and the service will be routed to another node (the one
 advertising `2001:db8:30::3/128` with metric 101).
@@ -385,7 +385,7 @@ we also limit the number of routes that a server can advertise.
 With ❹, we reduce the hold time from 240 to 6. It means that after 6
 seconds, the peer is considered dead. This is quite important to be
 able to recover quickly from a dead machine. The minimal value
-is 3. We could have use a similar setting with the session with the
+is 3. We could have used a similar setting with the session with the
 routers.
 
 ### Quagga configuration
@@ -510,7 +510,7 @@ Let's check that everything works as expected. Here is the view from _RS5_:
     Total number of prefixes 3
 
 For example, traffic to `2001:db8:30::2` should be routed through
-`2001:db8:7::12` (which is _W2_). Other IP are affected to _W1_ and
+`2001:db8:7::12` (which is _W2_). Other IPs are assigned to _W1_ and
 _W3_.
 
 _RS4_ should see the same thing:[^output]
@@ -530,7 +530,7 @@ _RS4_ should see the same thing:[^output]
 
 [^output]: The output of `birdc6` shows both the next-hop as
            advertised in BGP and the resolved next-hop if the route
-           have to be exported into another protocol. I have
+           has to be exported into another protocol. I have
            simplified the output to avoid confusion.
 
 Let's have a look at _DR6_:

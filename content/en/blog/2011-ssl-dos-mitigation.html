@@ -49,7 +49,7 @@ versions of _Apache_ and _nginx_ just forbid it, even when the
 [non-vulnerable version][rfc5746] is available.
 
 `openssl s_client` can be used to test if TLS renegotiation is really
-disabled. Sending `R` on an empty line trigger renegotiation. Here is
+disabled. Sending `R` on an empty line triggers renegotiation. Here is
 an example where renegotiation is disabled (despite being advertised
 as supported):
 
@@ -107,11 +107,11 @@ The use of `u32` match is a bit difficult to read. The
 allows us to seek for the TCP payload. It only works if there is no
 fragmentation. Then, we check if we have a handshake (`0x16`) and if
 we recognise TLS version (`0x0300`, `0x0301`, `0x0302` or
-`0x0303`). At least, we check if the handshake type is not a known
+`0x0303`). At last, we check if the handshake type is not a known
 value.
 
 There is a risk of false positives but since we use `hashlimit`, we
-should be safe. This is not a bullet proof solution: TCP fragmentation
+should be safe. This is not a bulletproof solution: TCP fragmentation
 would allow an attacker to evade detection. Another equivalent
 solution would be to use `CONNMARK` to record the fact the initial
 handshake has been done and forbid any subsequent handshakes.[^noo]
@@ -201,7 +201,7 @@ However, you can't really use only these shiny cipher suites:
       and `3DES-SHA`. <del>Support for `DHE-DSS-AES256-SHA` requires TLS
       1.2</del> <del>(not supported by any browser).</del>
 
-Let's dig a bit more on why the server needs more computational power
+Let's dig a bit more into why the server needs more computational power
 in the case of RSA. Here is a TLS handshake when using a cipher suite
 like `AES256-SHA`:
 
@@ -240,7 +240,7 @@ key:
  - ·m=c^d\bmod n·  (decryption)
 
 So, why is decryption more expensive? In fact, the key pair is not
-really generated like I said above. Usually, ·e· is a small fixed
+really generated as I described above. Usually, ·e· is a small fixed
 prime number with a lot of 0, like 17 (`0x11`) or 65537 (`0x10001`)
 and ·p· and ·q· are chosen such that ·\varphi(n)· is coprime with
 ·e·. This allows encryption to be fast using
@@ -270,7 +270,7 @@ the server and the client with such a cipher suite.
 
 # Things get worse
 
-Shortly after the release the [denial of service tool][thc], Eric
+Shortly after the release of the [denial of service tool][thc], Eric
 Rescorla[^0] published a
 [good analysis on the impact of such a tool][educated]. He asks
 himself about the efficiency to use renegotiation for such an attack:
@@ -323,7 +323,7 @@ does not match the size of the certificate).
 !!! "Update (2011-11)" Michał Trojnara has written
 [sslsqueeze][sslsqueeze], a similar tool. It uses `libevent2` library
 and should display better performance than mine. It does not compute
-a valid key exchange message but ensure the length is correct.
+a valid key exchange message but ensures the length is correct.
 
 With such a tool and 2048-bit RSA certificate, a server is using 100
 times more processing power than the client. Unfortunately, this means

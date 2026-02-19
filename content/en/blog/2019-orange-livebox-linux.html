@@ -12,7 +12,7 @@ tags:
 A few months ago, I moved back to France and I settled for Orange as
 an ISP with a bundle combining Internet and mobile subscription. In
 Switzerland, I was using my [own router][] instead of the box provided
-by Swisscom. While there is an [abundant documentation][] to replace
+by Swisscom. While there is [abundant documentation][] to replace
 the box provided by Orange, the [instructions around a plain Linux
 box][] are kludgy. I am exposing here my own variation. I am only
 interested in getting IPv4/IPv6 access: no VoIP, no TV.
@@ -39,7 +39,7 @@ With a recent Livebox, Orange usually provides an SFP to be plugged
 inside the Livebox. For some reason I got the external ONT instead of
 the SFP version. As I have a [Netgear GS110TP][] with two SFP ports, I
 have bought an [SFP GPON FGS202][] on *eBay*. It is the same model
-than Orange is providing with its Livebox 4. However, I did not find
+as Orange is providing with its Livebox 4. However, I did not find
 the motivation to test it.[^key]
 
 [^key]: As Orange is using the serial number to authorize the ONT, my
@@ -52,7 +52,7 @@ the motivation to test it.[^key]
 # IPv4 configuration
 
 Internet is provided over VLAN 832 and configured with DHCPv4. The first step is
-to setup the DHCP client to send some additional information, notably the [RFC
+to set up the DHCP client to send some additional information, notably the [RFC
 3118][] authentication string. It includes the alphanumeric connection
 identifier prefixed by `fti/` and the password provided by snail mail.
 `/etc/dhcp/dhclient.conf` looks like this:
@@ -88,15 +88,15 @@ here is how to declare the VLAN interface:[^egress]
       post-down ip link del internet
 
 [^egress]: There is no need to have the VLAN number in the interface
-    name. I usually leaves them out as it doesn't help to describe the
+    name. I usually leave them out as it does not help to describe the
     interface. The VLAN number can still be recovered with `ip -d link
     show`.
 
 The last step is to add the appropriate code in `/etc/firewall/run` to
 ensure DHCP, ARP, IGMP and ICMP packets have an internal priority
 of 6. *Netfilter*'s `CLASSIFY` target would be the easiest solution.
-However, ISC DHCP client is using raw sockets and the packets it sent
-won't pass through *Netfilter*. A clean solution is to use `tc` to
+However, ISC DHCP client is using raw sockets and the packets it sends
+will not pass through *Netfilter*. A clean solution is to use `tc` to
 modify packets just before handing them to the network card. The
 [skbedit][] action allows one to change the priority associated to a
 packet:[^tc]
@@ -196,7 +196,7 @@ get a link-local address before continuing. The `-P` option for the
 DHCPv6 client enables prefix delegation and disables the normal
 address query.
 
-It is not over: the DHCPv6 client will receive a /56 prefix but there
+It is not over: the DHCPv6 client will receive a /56 prefix, but there
 is nothing configured to make use of it. You need to drop a [script][]
 in `/etc/dhcp/dhclient-exit-hooks.d` to actually distribute this
 prefix to your internal network. Here is a simplified non-tested

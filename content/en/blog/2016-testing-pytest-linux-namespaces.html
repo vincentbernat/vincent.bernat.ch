@@ -11,7 +11,7 @@ Started in 2008, [lldpd][] is an implementation of
 [IEEE 802.1AB-2005][] (aka LLDP) written in C. While it contains some
 unit tests, like many other network-related software at the time, their
 coverage is pretty poor: they are hard to write because the
-code is written in an imperative style and tighly coupled with the
+code is written in an imperative style and tightly coupled with the
 system. It would require extensive mocking.[^cwrap] While a rewrite
 (complete or iterative) would help to make the code more
 test-friendly, it would be quite an effort and it will likely
@@ -23,7 +23,7 @@ introduce operational bugs along the way.
 
 To get better test coverage, the major features of *lldpd* are now
 verified through **integration tests**. These tests leverage Linux
-**network namespaces** to setup a lightweight and isolated environment
+**network namespaces** to set up a lightweight and isolated environment
 for each test. They run through **pytest**, a powerful testing tool.
 
 [TOC]
@@ -85,9 +85,9 @@ define one fixture for a set of tests:
             self.assertEqual(stdout.read(), b"hello\n")
 
 In the example above, we want to test various commands on a remote
-VM. The fixture launches a new VM and configure an SSH
+VM. The fixture launches a new VM and configures an SSH
 connection. However, if the SSH connection cannot be established, the
-fixture will fail and the `tearDown()` method won't be invoked. The VM
+fixture will fail and the `tearDown()` method will not be invoked. The VM
 will be left running.
 
 Instead, with *pytest*, we could do this:
@@ -114,11 +114,11 @@ Instead, with *pytest*, we could do this:
         stdout.read() == b"hello\n"
 
 The first fixture will provide a freshly booted VM. The second one
-will setup an SSH connection to the VM provided as an
+will set up an SSH connection to the VM provided as an
 argument. Fixtures are used through **dependency injection**: just
 give their names in the signature of the test functions and fixtures
-that need them. Each fixture only handle the lifetime of one
-entity. Whatever a dependent test function or fixture succeeds or
+that need them. Each fixture only handles the lifetime of one
+entity. Whether a dependent test function or fixture succeeds or
 fails, the VM will always be finally destroyed.
 
 ## Parameters
@@ -138,7 +138,7 @@ functions and fixtures:
 
 # Testing lldpd
 
-The general plan for to test a feature in *lldpd* is the following:
+The general plan to test a feature in *lldpd* is the following:
 
  1. Setup **two namespaces**.
  2. Create a **virtual link** between them.
@@ -174,11 +174,11 @@ take as an LLDP-MED-enabled endpoint.
 
 The signature of the test has four parameters that are not covered by
 the `parametrize()` decorator: `lldpd`, `lldpcli`, `namespaces` and
-`links`. They are *fixtures*. A lot of magic happen in them to keep
+`links`. They are *fixtures*. A lot of magic happens in them to keep
 the actual tests short:
 
  - `lldpd` is a factory to spawn an instance of `lldpd`. When called,
-   it will setup the current namespace (setting up the chroot,
+   it will set up the current namespace (setting up the chroot,
    creating the user and group for privilege separation, replacing
    some files to be distribution-agnostic, ...), then call `lldpd`
    with the additional parameters provided. The output is recorded and
@@ -198,7 +198,7 @@ the actual tests short:
    to another (with `with`) as they are contexts. Behind the scene,
    the factory maintains the appropriate file descriptors for each
    namespace and switch to them with `setns()`. Once the test is done,
-   everything is wipped out as the file descriptors are garbage
+   everything is wiped out as the file descriptors are garbage
    collected. You can read [`fixtures/namespaces.py`][namespaces.py]
    for more details. It is quite reusable in other
    projects.[^limitations]
@@ -213,7 +213,7 @@ the actual tests short:
                 user namespace, only root is mapped to the current
                 user. With *lldpd*, we have two users (`root` and
                 `_lldpd`). Therefore, the tests have to run as root.
-                The second limitation is with the PID namespace. It's
+                The second limitation is with the PID namespace. It is
                 not possible for a process to switch from one PID
                 namespace to another. When you call `setns()` on a PID
                 namespace, only children of the current process will

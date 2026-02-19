@@ -24,7 +24,7 @@ socket. Lennart Poettering [details in a blog post][]:
 
 This is one solution to get **zero-downtime deployment** for your
 application. Another upside is you can run your daemon with less
-privileges—loosing rights is a difficult task in Go.[^system]
+privileges—losing rights is a difficult task in Go.[^system]
 
 [^system]: Many process characteristics in Linux are attached to
     threads. Go runtime transparently manages them without much user
@@ -206,7 +206,7 @@ executed and all existing processes are left undisturbed:
 If you restart the service, the current process gracefully shuts down
 for as long as needed and *systemd* spawns immediately a new instance
 ready to serve incoming requests with its own copy of the listening
-socket. On the other hand, we loose the ability to wait for the
+socket. On the other hand, we lose the ability to wait for the
 service to come to a full stop—either by itself or forcefully after a
 timeout with `SIGKILL`.
 
@@ -309,17 +309,17 @@ short Python helper, wrapped in a `detachedSleep()` function:[^python]
         return pid
     }
 
-[^python]: Python is a good candidate: it's likely to be available on
+[^python]: Python is a good candidate: it is likely to be available on
     the system, it is low-level enough to easily implement the
-    functionality and, as an interpreted language, it doesn't require
+    functionality and, as an interpreted language, it does not require
     a specific build step.
 
     There is no need to fork twice as we only
-    need to detach the decoy from the current process. This simplify
+    need to detach the decoy from the current process. This simplifies
     a bit the Python code.
 
 During reload, there may be a small period during which both the new
-and the old processes accept incoming requests. If you don't want
+and the old processes accept incoming requests. If you do not want
 that, you can move the creation of the short-lived process outside the
 goroutine, after `server.Serve()`, or implement some synchronization
 mechanism. There is also a possible race-condition when we tell
@@ -358,7 +358,7 @@ example, [HAProxy][] had a [long][hack1] [list][hack2] of
 [hacks][hack3] until a [proper—and complex—solution][] was implemented
 in *HAproxy* 1.8. How do we fare with our simple implementation?
 
-From the kernel point of view, there is a **only one socket** with a
+From the kernel point of view, there is **only one socket** with a
 **unique listen queue**. This socket is associated to several file
 descriptors: one in *systemd* and one in the current process. The
 socket stays alive as long as there is at least one file
@@ -378,10 +378,10 @@ connections][] was rejected. *HAProxy* 1.8 is now recycling existing
 sockets by sending them to the new processes through a Unix socket.
 
 [^why]: This approach is more convenient when reloading since you
-    don't have to figure out which sockets to reuse and which ones to
+    do not have to figure out which sockets to reuse and which ones to
     create from scratch. Moreover, when several processes need to
     accept connections, using multiple sockets is more scalable as the
-    different processes won't fight over a shared lock to accept
+    different processes will not fight over a shared lock to accept
     connections.
 
 I hope this post and the [previous one][previous post] show how

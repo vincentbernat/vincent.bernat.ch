@@ -18,7 +18,7 @@ and the conclusions have changed a bit.
 by the Varnish team and is now called
 [hitch](https://github.com/varnish/hitch). However, I would rather
 consider [HAProxy](https://www.haproxy.org). It now features TLS
-support, supplied by one of the major contributor of *stud*.
+support, supplied by one of the major contributors of *stud*.
 
 [TOC]
 
@@ -42,7 +42,7 @@ We focus on the following environment:
    for TLS, 1 core for the system
  - system limit of 100,000 file descriptors per process
 
-[^0]: *HAProxy* and network cards don't need dedicated core for this
+[^0]: *HAProxy* and network cards do not need a dedicated core for this
       kind of load. However, if you also want to handle non-TLS
       traffic, these dedicated cores can get busy.
 
@@ -100,15 +100,15 @@ at 1 transaction out of 1000. The maximum allowed average latency is
       valid if the corresponding average latency is less than 100 ms
       or if the average on the next 8 points is less than
       100 ms. Temporary latency bursts are therefore allowed. We are
-      not so forgiveful with failed transactions.
+      not so forgiving with failed transactions.
 
 ## Control case
 
 Below is the first comparison between *stud*, *nginx* and *stunnel* on
-plain Ubuntu Lucid. Like in previous benchs, *stunnel* is not able to
+plain Ubuntu Lucid. Like in previous benchmarks, *stunnel* is not able to
 scale, with a maximum of 400 TPS. However, early latency issues of
-*nginx* has been solved, thanks to the change in configuration. *stud*
-and *nginx* gets similar performance but, as you can see on the bottom
+*nginx* have been solved, thanks to the change in configuration. *stud*
+and *nginx* get similar performance but, as you can see on the bottom
 plot (whose scale is logarithmic) *stud* starts with an initial
 latency of 40 ms.
 
@@ -161,7 +161,7 @@ latency of 40 ms while *nginx* does not improve.
 
 Most Linux distributions are still using OpenSSL 0.9.8. For example,
 Debian Squeeze ships with OpenSSL 0.9.8o, Ubuntu Lucid with 0.9.8k and
-RHEL 5.7 with 0.9.8e. Therefore, they are not eligible to recent
+RHEL 5.7 with 0.9.8e. Therefore, they are not eligible for recent
 performance improvements. To solve this, Intel released
 [Intel Accelerator Engine][intel-accel], which also brings, among
 other things, AES-NI support:
@@ -205,11 +205,11 @@ also applies with a slight modification to OpenSSL 1.0.0e. Look at
 OpenSSL with IPP.
 
 Simon measured 220% improvement on RSA 1024-bit private key operations
-by using this library. Unfortunately, we don't get such a performance
+by using this library. Unfortunately, we do not get such a performance
 burst with *stud* which exhibits a 15% improvement (but remember that
 private key operations only happen once every 8 transactions thanks to
-session reuse). Worst, with *stunnel*, performance is reduced by one
-third and *nginx* just segfaults. I think such a library is risky to
+session reuse). Worse, with *stunnel*, performance is reduced by one
+third and *nginx* just segfaults. I think such a library is too risky to
 use in production.
 
 ![stud and stunnel with IPP][s3]
@@ -217,7 +217,7 @@ use in production.
 
 ## Hyperthreading
 
-During the previous tests, only half the capacity of each core were
+During the previous tests, only half the capacity of each core was
 used. For *stud*, adding more workers per core only slightly improves
 this situation (less than 10% with 4 workers per core). Therefore, I
 thought using hyperthreading could rectify the situation here. In this
@@ -231,7 +231,7 @@ improvement of 26%.
 
 # Conclusion
 
-Here is a quick recap of the maximum TPS reached on each tests (while
+Here is a quick recap of the maximum TPS reached on each test (while
 keeping average response time below 100 ms). All tests were run on 4
 physical cores with 2048-bit certificates, AES128-SHA cipher
 suite. Each client makes 8 HTTP requests and reuse the first TLS
@@ -255,7 +255,7 @@ reversed : *stunnel* is on top!
 
 !!! "Update (2011-12)" As said earlier, the latency issue with *stud*
 [has been solved][studfix]. Performances remain mostly the same. Here
-is how the latest plot looks like after the fix:
+is what the latest plot looks like after the fix:
 
 ![stud, stunnel and nginx with hyperthreading with stud fixed][s4corrected]
 [s4corrected]: [[!!images/benchs-ssl/stud-stunnel-nginx-ht-corrected.png]] "stud, stunnel and nginx performances with hyperthreading enabled and with Nagle algorithm disabled for stud"

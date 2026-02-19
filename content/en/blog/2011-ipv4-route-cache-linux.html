@@ -10,7 +10,7 @@ tags:
   - outdated
 ---
 
-!!! "Deprecation notice" The information presented in this article are
+!!! "Deprecation notice" The information presented in this article is
 outdated since the route cache has been [removed from Linux
 3.6][removed]. Instead, take a look at “[IPv4 route lookup on
 Linux][].”
@@ -68,7 +68,7 @@ trivial, several questions need to be answered:
             is enabled by setting `rp_filter` in Linux.
 
 These checks can be a bit time consuming, even for small route
-tables. To avoid them for each packets, Linux maintains a *route
+tables. To avoid them for each packet, Linux maintains a *route
 cache* which is queried before doing a regular lookup and updated
 after each one. You can dump it with `ip -s route show cache`:
 
@@ -90,7 +90,7 @@ Here are two examples:
  - If it receives a packet from **203.0.113.16** to **198.51.100.17**,
    there is no appropriate entry in the route cache
    and therefore, the system will have to look at the route tables. It
-   is likely to use the exact same entry than if the source was
+   is likely to use the exact same entry as if the source was
    203.0.113.15 but maybe there is some policy routing requesting the
    use of a special route table or 203.0.113.16 is a local address
    and the packet will therefore be classified as *martian*.
@@ -117,7 +117,7 @@ There are several values you can tune. Most of them are available in
 `sysctl`.
 
  - `rhash_entries` is the **size of the hash table**.[^size] If you
-   don't specify it on the kernel command line, it is computed
+   do not specify it on the kernel command line, it is computed
    dynamically based on the memory available on your system. You can
    view its value by looking at something like `IP route cache hash
    table entries: 262144 (order: 9, 2097152 bytes)` in the kernel
@@ -199,9 +199,9 @@ second. Let's review some of these values:
    triggered shortly beforehand (less than
    `net.ipv4.route.gc_min_interval_ms` milliseconds). The difference
    between these two values should be very small to ensure that the
-   garbage collector does not run more a handful of times per second.
+   garbage collector does not run more than a handful of times per second.
  - `rt_cache_gc_goal_miss` is how often the garbage collector was not
-   able to fulfill its goal. This value should rarely be different of
+   able to fulfill its goal. This value should rarely be different from
    0.
  - `rt_cache_gc_dst_overflow` is how often the route cache is bigger
    than the allowed maximum size. This should never happen except
@@ -215,7 +215,7 @@ second. Let's review some of these values:
    lookups (hit and miss).
 
 As an illustration, here is a plot of the various statistics exposed
-above for a router whose route cache receives about 1000 routes par
+above for a router whose route cache receives about 1000 routes per
 second:
 
 ![Plot of various statistics for the route cache][rtstats]
@@ -279,7 +279,7 @@ be filled too fast. The garbage collector should be able to cope with
 this situation but this may impact performance because it needs to
 walk several times the route cache to find entries to expire. Watching
 `gc_goal_miss` may give you a hint about this: if this value starts to
-be different of 0, lower `net.ipv4.route.gc_timeout`.
+be different from 0, lower `net.ipv4.route.gc_timeout`.
 
 !!! "Update (2011-12)" For a kernel where `net.ipv4.route.gc_interval`
 matters, things become more complicated. Because the cleanup algorithm
@@ -331,8 +331,8 @@ of entries oscillates around 2 millions entries.
 
 On the second plot, `rhash_entries` is now equal to 1,048,576 but
 `net.ipv4.route.gc_elasticity` has been set to 2. Therefore, the
-aggressive part of the garbage collectors kicks at the same threshold
-than for the previous plot. However, its goal is now four times larger
+aggressive part of the garbage collector kicks at the same threshold
+as for the previous plot. However, its goal is now four times larger
 and the oscillations have a larger amplitude. The fact that the
 aggressive part of the garbage collector kicks less often is nullified
 by the fact that it needs to remove more entries each time. Because of
@@ -386,7 +386,7 @@ been removed (and was never really used) and asynchronous cleanup
 
 !!! "Update (2011-12)" As stated earlier, `net.ipv4.route.gc_interval`
 has been [reinstantiated in Linux 3.2][gcinterval2]. The cleanup is a
-bit different of what is done by the garbage collector but have some
+bit different from what is done by the garbage collector but has some
 similarities. It is run every `net.ipv4.route.gc_interval` seconds
 (even when there is less than `net.ipv4.route.gc_threshold`
 entries). It will set a goal proportional to
@@ -429,7 +429,7 @@ running too often, difficulty to remove routes from the cache, ...).
 
 The route cache subsystem still evolves and some old behaviors have
 been dismissed. The best documentation is, unfortunately, still the
-code and other documentations tend to become obsolete.
+code and other documentation tends to become obsolete.
 
 !!! "Update (2019-12)" IPv6 route cache garbage collection is very
 similar to IPv4. The main difference is that route cache entries are

@@ -5,7 +5,7 @@ tags:
   - network-snmp
 ---
 
-One of the best way to
+One of the best ways to
 [add SNMP support to an application is the use of AgentX protocol][extending-netsnmp]:
 an application can act as a *subagent* and handle requests from a
 *master agent* using AgentX protocol. The most widespread
@@ -95,7 +95,7 @@ cluster.
 
 Functions prefixed by `agentx_` are not part of Net-⁠SNMP API and could
 therefore be rewritten to do their work asynchronously. Unfortunately,
-[talk is][runalarms1] [cheap][runalarms2]. Moreover, there exists
+[talk is][runalarms1] [cheap][runalarms2]. Moreover, there exist
 other deep paths that will block a subagent. For example, the
 low-level connection to the master agent (using TCP or a Unix socket,
 but not with UDP) will use a blocking `connect()` call. It seems quite
@@ -113,7 +113,7 @@ Here are some (partial) workarounds:
         netsnmp_ds_set_int(NETSNMP_DS_APPLICATION_ID,
                            NETSNMP_DS_AGENT_AGENTX_PING_INTERVAL, 120);
 
- - Don't call `agentx_check_session()` if we know the master agent is
+ - Do not call `agentx_check_session()` if we know the master agent is
    alive. For example, if it just sent us a new request, no need to
    ping it. I have written a
    [patch implementing such a workaround][noping]. The ABI is left
@@ -188,15 +188,15 @@ unresponsive. Here are two examples:
 More and more code is running in the main agent. You cannot expect it
 to not block. But we could add a *minimal master agent* to the mix: it
 will handle only a few MIB modules by itself while most MIB modules
-will be delagated to a complete agent running as a subagent. Your own
+will be delegated to a complete agent running as a subagent. Your own
 subagent will connect to the minimal master agent.
 
 ![Schema showing the use of a minimal master agent][minimal-snmpd]
 [minimal-snmpd]: [[!!images/minimal-snmpd.svg]] "Adding a minimal master agent and turning snmpd into a subagent"
 
-It is quite easy to turn `snmpd` into a subagent: just use `-X`
+It is quite easy to turn `snmpd` into a subagent: just use the `-X`
 flag. We should also disable unwanted MIB modules for each agent with
-`-I` flag. For the minimal master agent, we only enable some
+the `-I` flag. For the minimal master agent, we only enable some
 modules. All other modules[^modules] will be served by `snmpd` acting
 as a subagent.
 
@@ -219,7 +219,7 @@ directive. Other directives (like `pass`, `pass_persist`, `load`,
 `sysname`, ...) in `/etc/snmp/snmpd.conf`.
 
 The minimal master agent is very unlikely to block and while the
-ground cause is still here, it is now very much mitigated. You may
+root cause is still here, it is now very much mitigated. You may
 extend this solution by splicing `snmpd` into several subagents: one
 handling safe modules, one handling `pass` and `pass_persist` stuff
 and a last one for unsafe modules (like `DISMAN-PING-MIB`).

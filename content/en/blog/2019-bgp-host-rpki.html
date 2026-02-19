@@ -106,7 +106,7 @@ own top-of-the-racks.]([[!!images/rpki-datacenter.svg]] "BGP on the
 host with prefix validation using RTR. Each server has its own AS
 number. The leaf routers establish RTR sessions to the validators.")
 
-You assume we have a place to maintain a mapping between the private
+Assume we have a place to maintain a mapping between the private
 AS numbers used by each host and the allowed prefixes:[^asn]
 
 | ASN      | Allowed prefixes                          |
@@ -244,7 +244,7 @@ statement to reject everything else, notably unknown prefixes.
 
 A ROA only certifies the **origin** of a prefix. A malicious actor can
 therefore prepend the expected AS number to the AS path to circumvent
-the validation. For example, AS 65007 could annonce
+the validation. For example, AS 65007 could announce
 `2001:db8:dd::/64`, a prefix allocated to AS 65006, by advertising it
 with the AS path `65007 65006`. To avoid that, we define an additional
 policy statement to reject AS paths with more than one ASN:[^oneas]
@@ -418,7 +418,7 @@ Then, we can configure *BIRD* to use these RTR servers:
        remote validator2 port 8283;
     }
 
-Unlike *Junos*, *BIRD* doesn't have a feature to only use a subset of
+Unlike *Junos*, *BIRD* does not have a feature to only use a subset of
 validators. Therefore, we only configure two of them. As a safety
 measure, if both connections become unavailable, *BIRD* will keep the
 ROAs for one hour.

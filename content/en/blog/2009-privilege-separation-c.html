@@ -196,7 +196,7 @@ only an educational purpose and avoids bringing up *broadcast* packets. It is a
 filter written in BPF. The comment indicates the `tcpdump` command used to
 obtain this filter.
 
-In ❸, For each received packet, we extract some relevant information to display
+In ❸, for each received packet, we extract some relevant information to display
 to the user.
 
 Finally, every 20 packets, in ❹, we open a log file to indicate that, at such a
@@ -228,7 +228,7 @@ In our example, we captured the result of the `ping` command.
 
 Let's imagine we add a bit more code to our sniffer to display more information,
 similar to `tcpdump`. All this code would run with root privileges. The past has
-shown that it's not uncommon to find, in this type of application,
+shown that it is not uncommon to find, in this type of application,
 vulnerabilities leading at best to a crash of the application[^vuln] and at
 worst to remote code execution.
 
@@ -292,7 +292,7 @@ the `bind()` call:
         exit(1);
     }
 
-Let's see exactly what this code does and why each line is useful. First, it's
+Let's see exactly what this code does and why each line is useful. First, it is
 important to test the result of each call. Indeed, if we fail to change users,
 we remain root and it would then be easier to exit the chroot. Similarly, if we
 fail to set up the chroot, we access important information. It is therefore
@@ -313,7 +313,7 @@ should create a group specific to your application, for example `_sniffer`.
 
 We confine ourselves in the `/var/empty` directory, which as its name suggests
 must be empty. Moreover, it must belong to root and have adequate permissions so
-that it's not possible to create files there. Placing oneself in a chroot
+that it is not possible to create files there. Placing oneself in a chroot
 requires root rights, which explains why we perform this operation before
 dropping root rights.
 
@@ -329,7 +329,7 @@ process is root, it can temporarily lose its privileges, for example with
 therefore important to abandon any possibility of going back. Otherwise, an
 attacker will know how to make good use of it.
 
-To run this example, don't forget to create the `/var/empty` directory. After
+To run this example, do not forget to create the `/var/empty` directory. After
 compilation, the new program works like the old one, but can no longer write the
 statistics to the intended file. Indeed, not only is the file not accessible
 from the chroot, but it belongs to root.
@@ -444,9 +444,9 @@ separate processes.
         }
     }
 
-First, we create a pair of sockets that we'll use as bidirectional pipes: what
+First, we create a pair of sockets that we will use as bidirectional pipes: what
 we write on one of the sockets is received on the other side and vice versa. We
-use Unix sockets (`AF_UNIX`), anonymous ([`socketpair()`][socketpair] can't do
+use Unix sockets (`AF_UNIX`), anonymous ([`socketpair()`][socketpair] cannot do
 anything else) and datagram-oriented (`SOCK_DGRAM`). This last characteristic is
 very interesting because, unlike stream-oriented sockets, it preserves message
 boundaries (if we send 10 bytes, we read 10 bytes on the other side and not 7
@@ -509,14 +509,14 @@ can adopt the following approach:
 
 The parent has much less to do: it no longer needs to configure the filter, it
 no longer needs to read and transmit network packets. Similarly, it will only
-need to open the log file, it will no longer need to write to it. That's less
+need to open the log file, it will no longer need to write to it. That is less
 code in the parent and fewer interactions to manage. This will simplify our code
 and reduce the risk of having a bug in the part that runs as root.
 
 In practice, how do we send and receive a file descriptor in a Unix socket? The
 solution is explained in the [`unix(7)`][unix] manual page: via the
 [`sendmsg()`][sendmsg] and [`recvmsg()`][recvmsg] calls, it is possible to
-transmit a file descriptor or the user's identity (reliably, it's the operating
+transmit a file descriptor or the user's identity (reliably, it is the operating
 system that guarantees this transmission). The [`cmsg(3)`][cmsg] manual page
 contains an example of sending a set of file descriptors.
 
@@ -524,7 +524,7 @@ To find a complete example, I advise you to look at the specialists in privilege
 separation. As an example, we can examine the source code of `syslogd` and
 discover a [file grouping the two functions we need][FDPASS].
 
-Here's a lightweight version that doesn't handle errors. For real projects, of
+Here is a lightweight version that does not handle errors. For real projects, of
 course, you should use the complete version!
 
 
@@ -632,7 +632,7 @@ descriptor using [`fcntl()`][fcntl]. If we attempt to expand permissions, this
 call will fail. This verification has no impact on the security of the process.
 
 On the parent side, we first receive an integer (there is respect for message
-boundaries, it's easy), then, depending on its value, we perform the requested
+boundaries, it is easy), then, depending on its value, we perform the requested
 actions and send back the file descriptor:
 
     ::c
@@ -729,7 +729,7 @@ The code to be seriously audited is now confined to the `priv_loop()` function,
 as well as its dependencies. Bugs found outside this perimeter do not, a priori,
 allow immediate root access. Any parsing errors are still there, but no longer
 provide the attacker with as much power. Despite the possibility for the
-attacker to send arbitrary packets on the interface we're listening to, this
+attacker to send arbitrary packets on the interface we are listening to, this
 latest version of the sniffer seems to constitute a good balance between the
 possibilities offered to an attacker who has compromised the unprivileged
 process and the quantity and complexity of the code running with elevated
@@ -741,7 +741,7 @@ Adding privilege separation is not fundamentally very complicated. It requires
 correctly writing a certain number of lines of code and agreeing on an adequate
 protocol between the parent and the child, particularly with regard to possible
 error reporting. In our simplistic example, we stop the sniffer if the file we
-want to log to is in a directory that doesn't exist. It is sometimes desirable
+want to log to is in a directory that does not exist. It is sometimes desirable
 to be cleaner and to report this kind of error from the parent to the child.
 
 To overcome these difficulties, there are two avenues to explore.
@@ -771,7 +771,7 @@ authorized by the monitor. As mentioned earlier, it is essential that it does
 not turn into a simple proxy. The configuration file indicates, for example, the
 files that can be opened in read-only mode.
 
-Unfortunately, this library no longer seems to be maintained. I also don't know
+Unfortunately, this library no longer seems to be maintained. I also do not know
 if it has been audited.
 
 ## imsg
@@ -804,7 +804,7 @@ While privilege separation is the norm for the OpenBSD project, it is still very
 often the exception in many other universes. Take your favorite GNU/Linux
 distribution, look at the list of processes running as root and find those that
 use privilege separation. For my part, I only spot OpenSSH (and possibly
-Postfix, even if it's not at all the same method).
+Postfix, even if it is not at all the same method).
 
 Privilege separation is, however, a considerable asset in securing an
 application. Let's hope it will be more and more used.

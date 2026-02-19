@@ -31,7 +31,7 @@ in [RFC 5880][] and [RFC 5882][]. BFD can use very low timers, like
 
 However, when BFD runs in a process on top of a generic kernel,[^cp]
 notably when [running BGP on the host][], it is not unexpected to
-loose a few BFD packets on adverse conditions: the daemon handling the
+lose a few BFD packets under adverse conditions: the daemon handling the
 BFD sessions may not get enough CPU to answer in a timely manner. In
 this scenario, it is not unlikely for all the BGP sessions to go down
 at the same time, creating an outage, as depicted in the last case in
@@ -41,11 +41,11 @@ the diagram below.
 of failures on a network using BGP as the underlying routing protocol.
 A link failure is detected by BFD and the failed path is removed from
 the ECMP route. However, when high CPU usage on the bottom router
-prevents BFD packets to be processed timely, all paths are removed.")
+prevents BFD packets from being processed timely, all paths are removed.")
 
 [^undetected]: With point-to-point links, BGP can immediately detect a
     failure without BFD. However, with a pair of fibers, the failure
-    may be undirectional, leaving it undetected by the other end until
+    may be unidirectional, leaving it undetected by the other end until
     the expiration of the hold timer.
 
 [^cp]: On a Juniper MX, BFD is usually handled directly by the
@@ -82,7 +82,7 @@ Long-lived BGP Graceful Restart is a new BGP capability to retain
 **stale routes** for a longer period after a session failure but
 treating them as **least-preferred**. It also defines a well-known
 community to share this information with other routers. It is defined
-inn [RFC 9494][rfc9494] and several implementations already exist:
+in [RFC 9494][rfc9494] and several implementations already exist:
 
  - Juniper Junos (since 15.1, see the [documentation][junos]);
  - Cisco IOS XR (tested on 7.3.2);
@@ -96,7 +96,7 @@ and the failed path is removed from the route as two other paths
 remain with a higher preference. A couple of minutes later, the faulty
 path has its stale timer expired and will not be used anymore. Shortly
 after, in ❸, the bottom router experiences high CPU usage, preventing
-BFD packets to be processed timely. The BGP sessions are closed and
+BFD packets from being processed timely. The BGP sessions are closed and
 the remaining paths become stale but as there is no better path left,
 they are still used until the LLGR timer expires. In the meantime, we
 expect the BGP sessions to resume.

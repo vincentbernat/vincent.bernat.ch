@@ -75,7 +75,7 @@ them does not support this extension, they can fall back to the
 session identifier mechanism built into TLS.
 
 [RFC 5077][rfc5077] identifies situations where tickets are desirable
-over session identifiers. The main improvement is to avoid to maintain
+over session identifiers. The main improvement is to avoid maintaining
 a server-side session cache since the whole session state is
 remembered by the client, not the server. A session cache can be
 costly in terms of memory and difficult to share between multiple hosts
@@ -98,7 +98,7 @@ tickets, I have written a [web server][rfc5077-server] listening to
 several ports with different configurations (session cache disabled or
 enabled, ticket support disabled or enabled). With the help of some
 JavaScript, it is possible to interact with this server to determine
-what kind of session resume a browser support.
+what kind of session resume a browser supports.
 
 ![Checking for browser support for session resume][s3]
 [s3]: [[!!images/benchs-ssl/rfc5077-screenshot-v2.png]] "Example of test with Chromium 14"
@@ -140,12 +140,12 @@ directions:
   shared memory session cache; usually, tickets will work just fine in
   this setup;
 - if you use local load-balancing, one easy way to avoid any problem
-  is to use ensure that one IP is mapped to one server (either
+  is to ensure that one IP is mapped to one server (either
   statically with hashing or dynamically with a stick table); if your
   load-balancer understands TLS, you can also use session identifier
   (and disable tickets[^1]) to build a stick
   table;
-- if you don't want to apply the previous advice, you need to share
+- if you do not want to apply the previous advice, you need to share
   the session cache between the servers with something like
   [memcached][memcached] and disable tickets;
 - if you use global load-balancing (DNS based), there
@@ -181,7 +181,7 @@ With **nginx**, you need to enable the shared session cache with
 cache but [Matt Palmer has some patches to add it][nginxcaching] to
 the 0.8 branch. However, these patches can have a serious impact on
 nginx performance since retrieving a session from memcached is done
-synchronously (mostly because of a limitation in OpenSSL design who
+synchronously (mostly because of a limitation in OpenSSL design which
 does not allow us to register asynchronous callbacks with
 `SSL_CTX_sess_set_get_cb()`).
 

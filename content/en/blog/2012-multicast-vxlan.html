@@ -18,7 +18,7 @@ while still providing isolation:
  2. It wraps L2 frames into UDP datagrams. This allows one to rely on
     some interesting properties of IP networks like availability and
     scalability. A VXLAN segment can be extended far beyond the
-    typical reach of today VLANs.
+    typical reach of today's VLANs.
 
 The _VXLAN Tunnel End Point_ (VTEP) originates and terminates VXLAN
 tunnels. Thanks to a series of patches from Stephen
@@ -126,8 +126,8 @@ check if OSPF is working as expected:
 
 Once unicast routing is up and running, we need to setup multicast
 routing. There are two protocols for this: _IGMP_ and _PIM-SM_. The
-former one enables routers to distribute multicast routes while the
-first one allows hosts to subscribe to a multicast group.
+former one allows hosts to subscribe to a multicast group while the
+latter one enables routers to distribute multicast routes.
 
 ### IGMP
 
@@ -180,7 +180,7 @@ configured to be elected as a RP. Moreover, we give better priority to
     RP              Type      Pri Holdtime Timeout ActiveGroups GroupPrefix
     192.168.101.133 bootstrap 100      150     135            0 239.0.0.0/8
 
-Let's suppose we start `iperf` on both `R2` and `R3`. Using IGMP, they
+Suppose we start `iperf` on both `R2` and `R3`. Using IGMP, they
 subscribe to multicast group `239.0.0.11` with `E2` and `E3`
 respectively. Then, `E2` and `E3` send a join message (also known as a
 _(*,G) join_) to the RP (`C3`) for that multicast group. Using the
@@ -220,7 +220,7 @@ them to the leaves.
         Inherited olist SG_RPT:    O...
         PIM include WC:            O...
 
-Let's suppose that `R1` wants to send multicast packets to
+Suppose that `R1` wants to send multicast packets to
 `239.0.0.11`. It sends them to `E1` which does not have any
 information on how to contact all the members of the multicast group
 because it is not the RP. Therefore, it **encapsulates the multicast
@@ -256,10 +256,10 @@ will decide to switch to native multicast.[^native] Rooted at `R1`,
 **the shortest-path tree (SPT) for the multicast group will be built
 using source-specific join messages** (also known as a _(S,G) join_).
 
-[^native]: The decision is usually done when the bandwidth used by the
-           follow reaches some threshold. With XORP, this can be
+[^native]: The decision is usually made when the bandwidth used by the
+           flow reaches some threshold. With XORP, this can be
            controlled with `switch-to-spt-threshold`. However, I was
-           unable to make this works as expected. XORP never sends the
+           unable to make this work as expected. XORP never sends the
            appropriate PIM packets to make the switch. Therefore, for
            this lab, it has been configured to switch to native
            multicast at the first received packet.
@@ -269,7 +269,7 @@ using source-specific join messages** (also known as a _(S,G) join_).
 
 From here, each router in the tree knows how to handle multicast
 packets from `R1` to the group without involving the RP. For example,
-`E1` knows it must duplicate the packet and sends one through the
+`E1` knows it must duplicate the packet and send one through the
 interface to `C3` and the other one through the interface to `C1`:
 
     ::console
@@ -380,7 +380,7 @@ requests), they are encapsulated into multicast packets:
     11:31:27.464198 IP 192.168.1.1.41958 > 239.0.0.42.8472: UDP, length 106
     11:31:28.463584 IP 192.168.1.1.41958 > 239.0.0.42.8472: UDP, length 106
 
-Recent versions of `iproute` also comes with `bridge`, a utility
+Recent versions of `iproute` also come with `bridge`, a utility
 allowing one to inspect the FDB of bridge-like interfaces:
 
     ::console

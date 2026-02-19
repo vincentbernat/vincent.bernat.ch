@@ -131,10 +131,10 @@ Many routing systems are using Patricia trees:
 ## Lookup with a level-compressed trie
 
 In addition to path compression, **level compression**[^ref-lpc]
-detects parts of the trie that are **densily populated** and replace
+detects parts of the trie that are **densely populated** and replace
 them with a single node and an associated vector of 2<sup>*k*</sup>
 children. This node will handle *k* input bits instead of just
-one. For example, here is a level-compressed version our previous
+one. For example, here is a level-compressed version of our previous
 trie:
 
 ![Level-compressed trie][i13]
@@ -154,7 +154,7 @@ additional bit. On the other hand, if the current ratio is below 25%,
 the node loses the responsibility of one bit. These values are not
 tunable.
 
-Insertion and deletion becomes more complex but lookup times are
+Insertion and deletion become more complex but lookup times are
 also improved.
 
 # Implementation in Linux
@@ -240,15 +240,15 @@ some interesting statistics are available in `/proc/net/fib_triestat`:[^stats]
     handling 2 bits.
 
 When a routing table is very dense, a node can handle many bits. For
-example, a densily populated routing table with 1 million entries
+example, a densely populated routing table with 1 million entries
 packed in a /12 can have one internal node handling 20 bits. In this
 case, route lookup is essentially reduced to a lookup in a vector.
 
 The following graph shows the number of internal nodes used relative
 to the number of routes for different scenarios (routes extracted from
 an Internet full view, /32 routes spread over 4 different subnets
-with various densities). When routes are densily packed, the number of
-internal nodes are quite limited.
+with various densities). When routes are densely packed, the number of
+internal nodes is quite limited.
 
 ![Internal nodes and null pointers][i0]
 [i0]: [[!!images/linux/lpc-trie-nodes-v2.svg]] "Number of internal nodes and null pointers depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
@@ -276,7 +276,7 @@ times are fast.
 
 When forwarding at 10 Gbps, the time budget for a packet would be
 about 50 ns. Since this is also the time needed for the route lookup
-alone in some cases, we wouldn't be able to forward at line rate with
+alone in some cases, we would not be able to forward at line rate with
 only one core. Nonetheless, the results are pretty good and they are
 expected to scale linearly with the number of cores.
 
@@ -319,8 +319,8 @@ rules to select the table to use. These rules can be configured with
     32766:  from all lookup main
     32767:  from all lookup default
 
-Linux will first lookup for a match in the `local` table. If it
-doesn't find one, it will lookup in the `main` table and at last
+Linux will first look for a match in the `local` table. If it
+does not find one, it will look in the `main` table and at last
 resort, the `default` table.
 
 ## Builtin tables
@@ -368,17 +368,17 @@ The `main` table usually contains all the other routes:
     default via 192.168.117.1 dev eno1 proto static metric 100
     192.168.117.0/26 dev eno1 proto kernel scope link src 192.168.117.55 metric 100
 
-The `default` route has been configured by some DHCP daemon. The
+The default route has been configured by some DHCP daemon. The
 connected route (`scope link`) has been automatically added by the
 kernel (`proto kernel`) when configuring an IP address on the `eno1`
 interface.
 
 The `default` table is empty and has little use. It has been kept when
 the current incarnation of advanced routing has been introduced in
-Linux 2.1.68 after a first tentative using "classes" in Linux
+Linux 2.1.68 after a first attempt using "classes" in Linux
 2.1.15.[^old-doc]
 
-[^old-doc]: Fun fact: the documentation of this first tentative of
+[^old-doc]: Fun fact: the documentation of this first attempt at
     more flexible routing is still available in today's kernel tree
     and explains
     the [usage of the "default class"][policy-routing.txt].
@@ -392,7 +392,7 @@ empty). Moreover, since Linux 3.0 ([commit f4530fa574df][]), without
 specific rules, there is no performance hit when enabling the support
 for multiple routing tables. However, as soon as you add new rules,
 some CPU cycles will be spent for each datagram to evaluate them. Here
-is a couple of graphs demonstrating the impact of routing rules on
+are a couple of graphs demonstrating the impact of routing rules on
 lookup times:
 
 ![Routing rules impact on performance][i20]
@@ -442,7 +442,7 @@ rule can be used to select the appropriate table:
 
 The special `l3mdev-table` rule was automatically added when
 configuring the first VRF interface. This rule will select the routing
-table associated to the VRF owning the input (or output) interface.
+table associated with the VRF owning the input (or output) interface.
 
 VRF was introduced in Linux 4.3 ([commit 193125dbd8eb][]), the
 performance was greatly enhanced in Linux 4.8
@@ -456,7 +456,7 @@ details about it in the [kernel documentation][vrf.txt].
 The takeaways from this article are:
 
  - route lookup times hardly increase with the number of routes;
- - densily packed /32 routes lead to amazingly fast route lookups;
+ - densely packed /32 routes lead to amazingly fast route lookups;
  - memory use is low (128 MiB per million routes); and
  - no optimization is done on routing rules.
 

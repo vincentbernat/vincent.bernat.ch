@@ -22,4 +22,4 @@ French (in content/fr/) or English (in content/en/).
 
 Do not modify code blocks. For French, we follow “Lexique des règles
 typographiques en usage à l'Imprimerie nationale.” For English, this is “The
-Chicago Manual of Style.”
+Chicago Manual of Style” but keep contractions.

@@ -17,14 +17,14 @@ router.
 All these tools are a great way to setup your network lab. *Look at
 them!* If you want to setup a virtual network lab for educational
 purpose, one of them should fit your purpose. However, none of these
-solution were a perfect match for me. I did not want to maintain some
+solutions were a perfect match for me. I did not want to maintain some
 root filesystem. I wanted my lab to start in a few seconds. I wanted
 to keep all configuration files (including the ones for the virtual
 hosts) into one subdirectory of my home and be able to modify them
 while the lab was running. I also wanted to be able to plug some Cisco
 router using [Dynamips/Dynagen][dynagen].
 
-None of the listed solution above matched all these
+None of the solutions listed above matched all these
 criteria. Therefore, I setup my own lab script with
 [User Mode Linux][uml]. This is not a complete solution, but is more
 like a home-made solution to match one particular need. You cannot use
@@ -73,7 +73,7 @@ to be root.
     Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(98,0)
 
 You get a Linux kernel that will just panic because it does not find a
-disk to mount to run `init` from it. Usually, you build some root file
+disk to mount and run `init` from. Usually, you build some root file
 system and give it as an argument to your UML kernel.
 
 ## Basic setup
@@ -240,7 +240,7 @@ can also mount some parts of your home with `hostfs` (for example, the
 source directory of the piece of software that you would like to
 test).
 
-Let's consider that Nginx configuration is in
+Let's consider that the Nginx configuration is in
 `/home/bernat/lab/nginx`. We use a symbolic link:
 
     ::console
@@ -298,7 +298,7 @@ I usually use this nifty shell function to setup TAP interfaces:
 
 It will create the interface and put it into a bridge. For example,
 you can create two interfaces linked together through a bridge to
-allow two UML to talk each other:
+allow two UML to talk to each other:
 
     ::console
     $ tap tap-R1 br-R1R2
@@ -339,7 +339,7 @@ run a switch using `vde_switch` command. You will get a console by
 pressing _Enter_. From this console, you can configure the switch: add
 ports, configure VLAN, etc.
 
-Like for TAP interfaces, let's setup two UML connected to this
+Like for TAP interfaces, let's set up two UML connected to this
 switch. The first one is like this:
 
     ::console
@@ -363,7 +363,7 @@ And the second one:
 
 # The lab
 
-So far, we had a look at what can be used to setup a lab. We need to
+So far, we had a look at what can be used to set up a lab. We need to
 put everything together into some script to setup the lab in a quick
 way. For each lab that I want to setup, I copy my latest script to a
 new location and adapt to the topology I want. I have put everything
@@ -429,7 +429,7 @@ the user. We will see the `init` part later. When called, we first
 check some dependencies, then we setup `screen`. Everything is run
 inside a screen session. No multiple windows. The next step is to
 setup the various switches needed for our lab. We take one switch for
-each site and one switch for "Internet." The function that setups the
+each site and one switch for "Internet." The function that sets up the
 switch just invokes `vde_switch` with the help of `start-stop-daemon`
 to record the PID (to shutdown the lab properly).
 
@@ -441,7 +441,7 @@ _I1_.
 
 For each UML, our script will be used as `init`. In this case, its PID
 will be 1. As we have seen earlier, the script checks if it is called
-as `init`. If it is the case, it will setup the UML. During this
+as `init`. If that is the case, it will set up the UML. During this
 setup, host specific configuration will be applied:
 
     ::sh
@@ -566,14 +566,14 @@ route to _V1_ and is now using its OSPF route through _V4_:
     C>* 192.168.101.0/24 is directly connected, eth0
     O>* 192.168.115.0/24 [110/20] via 192.168.101.10, eth0, 00:13:05
 
-We could enhance the resiliance of such a setup by adding a dedicated
+We could enhance the resilience of such a setup by adding a dedicated
 link between _V1_ and _V2_ and between _V3_ and _V4_ and running OSPF
 on this link (or iBGP). This would allow us to support several outages
 on our network.
 
 # Conclusion
 
-The script used to setup this lab can be adapted to setup other labs
+The script used to set up this lab can be adapted to set up other labs
 with little effort. Please, note that it depends on the configuration
 of your environment. However, the whole lab is contained in a single
 directory and is very small. You can email it to your friends or

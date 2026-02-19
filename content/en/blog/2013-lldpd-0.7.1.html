@@ -104,7 +104,7 @@ still maintain a `NEWS` file with important changes.
 ## C99
 
 I have recently read [21<sup>st</sup> Century C][21st Century C] which has some good bits and
-also handles the ecosystem around C. I have definitively adopted
+also handles the ecosystem around C. I have definitely adopted
 [designated initializers][] in my coding style. Being a GCC extension
 since a long time, this is not a major compatibility problem.
 
@@ -341,7 +341,7 @@ the library.
 
 ## CLI
 
-Having a configuration file was requested since a long time. I didn't
+Having a configuration file was requested for a long time. I didn't
 want to include a parser in `lldpd`: I am trying to keep it small. It
 was already possible to configure `lldpd` through
 `lldpctl`. Locations, network policies and power policies were the
@@ -450,7 +450,7 @@ first version of the CLI with this API.[^libeditapi]
 Unfortunately, I noticed later this library is not very common in the
 Linux world and is not available in RHEL. Since I have used the native
 API, it was not possible to fallback to the _GNU Readline_
-library. So, let's switch! Thanks to the
+library. So, time to switch! Thanks to the
 [appropriate macro from the Autoconf Archive][ax_lib_readline] (with
 small modifications), the compilation and linking differences between
 the libraries are taken care of.
@@ -483,7 +483,7 @@ Previously, the list of interfaces was retrieved through
 Linux. This is not a big change since the _GNU C Library_ already uses
 it to implement `getifaddrs()` and additional information, like VLAN,
 are still retrieved through `ioctl()` or _sysfs_. However, _lldpd_
-now gets notified when a change happens and update all interfaces in
+now gets notified when a change happens and updates all interfaces in
 the next second.
 
 Like many other projects, I have written my own _Netlink_ implementation
@@ -495,11 +495,11 @@ some advanced bits. Why?
     availability in major distributions is scarce. It is not available
     in Debian Squeeze but will be available in Debian Wheezy. Like
     _libevent_, I could circumvent this problem by shipping the
-    library with _lldpd_ and use it when there is not system
-    alternative. But...
+    library with _lldpd_ and use it when no suitable system
+    alternative is available. But...
 
  2. _libnl_ is licensed under LGPL 2.1. This makes static linking
-    difficult because the license is quite shaddy about static linking
+    difficult because the license is quite shady about static linking
     being derivative work or not. It is believed that it is authorized
     under the same provisions as in LGPL 3 which handles the case
     explicitly. This has been a problem with many projects. For
@@ -530,9 +530,9 @@ Each BSD has its own `ioctl()` to retrieve VLAN, bridging and bonding
 bits but they are quite similar. The code was usually adapted from
 `ifconfig.c`.
 
-The BSD ports have the same functionalities than the Linux port,
+The BSD ports have the same functionalities as the Linux port,
 except for _NetBSD_ which lacks support for LLDP-MED inventory since I
-didn't find a simple way to retrieve DMI related information.
+did not find a simple way to retrieve DMI related information.
 
 They also offer greater security by filtering packets sent. Moreover,
 _OpenBSD_ allows one to lock the filters set on the socket:
@@ -576,11 +576,11 @@ popular package manager for macOS.
 
 Many distributions propose [Upstart][] and [systemd][] as a
 replacement or an alternative for the classic SysV init. Like most
-daemons, _lldpd_ detaches itself from the terminal and run in the
+daemons, _lldpd_ detaches itself from the terminal and runs in the
 background, by forking twice, once it is ready (for _lldpd_, this just
 means we have setup the control socket). While both _Upstart_ and
 _systemd_ can accommodate daemons that behave like this, it is
-recommended to not fork. How to advertise readiness in this case?
+recommended not to fork. How to advertise readiness in this case?
 
 With _Upstart_, _lldpd_ will send itself the `SIGSTOP`
 signal. _Upstart_ will detect this, resume _lldpd_ with `SIGCONT` and
