@@ -51,6 +51,7 @@
                   pygments-junos.setuptools = [ ];
                   typogrify.setuptools = [ ];
                   markupsafe.setuptools = [ ];
+                  markdown.setuptools = [ ];
                 };
               in
               final: prev: l.mapAttrs
@@ -90,6 +91,19 @@
                          dev_status_map = {
                              'alpha': '3 - Alpha',
                   '')
+                  (pkgs.writeText "Markdown-warn-undefined-links.patch" ''
+                    --- a/markdown/inlinepatterns.py	2026-02-19 21:30:11.497154428 +0100
+                    +++ b/markdown/inlinepatterns.py	2026-02-19 21:32:51.763929988 +0100
+                    @@ -467,6 +467,8 @@
+                             # Clean up linebreaks in id
+                             id = self.NEWLINE_CLEANUP_RE.sub(' ', id)
+                             if id not in self.markdown.references:  # ignore undefined refs
+                    +            import logging
+                    +            logging.getLogger('MARKDOWN').warn("Unknown reference: %r" % id) if id not in ['toc', '…'] else 0
+                                 return None
+                             href, title = self.markdown.references[id]
+
+                  '')
                 ];
               });
             };
@@ -98,6 +112,7 @@
                 inputs.pyproject-build-systems.overlays.wheel
                 overlay
                 buildSystemOverrides
+                moreOverrides
               ]
             );
           in
