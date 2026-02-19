@@ -313,7 +313,7 @@ if err := unix.SetsockoptInt(socketFD, unix.SOL_SOCKET, unix.SO_ATTACH_REUSEPORT
 }
 ```
 
-We are now ready to process incoming packets. Each worker is a Go routine
+We are now ready to process incoming packets. Each worker is a goroutine
 incrementing a counter for each received packet:[^s3]
 
 [^s3]: The complete code is in [`balancing_test.go`][s3]
@@ -386,7 +386,7 @@ prepares its own version of the socket map. Once it attaches the eBPF program to
 the first socket, the kernel steers incoming packets to this new instance. The
 old instance needs to drain the already-received packets before shutting down.
 
-To check we are not losing any packet, we spawn a Go routine to send as many
+To check we are not losing any packet, we spawn a goroutine to send as many
 packets as possible:
 
 ```go
@@ -455,7 +455,7 @@ Previously, we were terminating workers by closing their sockets. However, if we
 close them too soon, the application loses packets that were assigned to them
 but not yet processed. Before stopping, a worker needs to call `conn.Read()`
 until there are no more packets. A solution is to set a deadline for
-`conn.Read()` and check if we should stop the Go routine when the deadline is
+`conn.Read()` and check if we should stop the goroutine when the deadline is
 exceeded:
 
 [^c]: In C, we would `poll()` both the socket and a pipe used to signal for
