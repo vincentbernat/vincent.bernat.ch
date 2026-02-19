@@ -53,8 +53,7 @@ sharing:
 
 The trie in the below illustration encodes 6 prefixes:
 
-![Radix tree][i11]
-[i11]: [[!!images/linux/ipv6-radix-tree-v2.svg]] "Radix tree for a small routing table. Some nodes indicate how many additional input bits to skip. The black nodes contain actual route entries."
+![Radix tree]([[!!images/linux/ipv6-radix-tree-v2.svg]] "Radix tree for a small routing table. Some nodes indicate how many additional input bits to skip. The black nodes contain actual route entries.")
 
 For a more in-depth explanation on the different ways to encode a routing table
 into a trie and a better understanding of radix trees, see
@@ -66,8 +65,7 @@ a node has the `RTN_RTINFO` flag set, it embeds a pointer to
 a [`struct rt6_info`][struct rt6_info] containing information about the
 next-hop.
 
-![Memory representation of a routing table][i14]
-[i14]: [[!!images/linux/ipv6-radix-struct.svg]] "In-memory representation of an IPv6 routing table in Linux. For simplicity, many fields are omitted. 2001:db8:2::/121 prefix is an ECMP route. When several non-ECMP routes match a prefix, they are linked through the dst field (not shown)."
+![Memory representation of a routing table]([[!!images/linux/ipv6-radix-struct.svg]] "In-memory representation of an IPv6 routing table in Linux. For simplicity, many fields are omitted. 2001:db8:2::/121 prefix is an ECMP route. When several non-ECMP routes match a prefix, they are linked through the dst field (not shown).")
 
 The [`fib6_lookup_1()`][fib6_lookup_1()] function walks the radix tree in two
 steps:
@@ -210,8 +208,7 @@ With the help of a small [kernel module][], we can accurately benchmark[^bench]
 the [`ip6_route_output_flags()`][ip6_route_output_flags()] function and
 correlate the results with the radix tree size:
 
-![Maximum depth and lookup time][i2]
-[i2]: [[!!images/linux/ipv6-radix-maxdepth.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic. The error bars represent the median absolute deviation."
+![Maximum depth and lookup time]([[!!images/linux/ipv6-radix-maxdepth.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic. The error bars represent the median absolute deviation.")
 
 [^bench]: The measurements are done in a virtual machine with one vCPU and no
     neighbors. The host is an [Intel Core i5-4670K][] running at 3.7 GHz during
@@ -264,8 +261,7 @@ difference with IPv6 to be explained.
 Let's compare how time is spent in each lookup function. Here is
 a [CPU flamegraph][] for IPv4's [`fib_lookup()`][fib_lookup()]:
 
-![IPv4 route lookup flamegraph][i5]
-[i5]: [[!!images/obj/linux/ipv4-fib-lookup-flamegraph.svg]] "CPU flame graph for IPv4 route lookup function. The local and main tables are unmerged and routing rules are evaluated. The x-axis is the time share (100% is 65 ns). The graph is interactive."
+![IPv4 route lookup flamegraph]([[!!images/obj/linux/ipv4-fib-lookup-flamegraph.svg]] "CPU flame graph for IPv4 route lookup function. The local and main tables are unmerged and routing rules are evaluated. The x-axis is the time share (100% is 65 ns). The graph is interactive.")
 
 Only 50% of the time is spent in the actual route lookup. The remaining time is
 spent evaluating the routing rules (about 30 ns). This ratio is dependent on the
@@ -276,8 +272,7 @@ table and once with the main routing table.
 The equivalent flamegraph for
 IPv6's [`ip6_route_output_flags()`][ip6_route_output_flags()] is depicted below:
 
-![IPv6 route lookup flamegraph][i6]
-[i6]: [[!!images/obj/linux/ipv6-fib-lookup-flamegraph.svg]] "CPU flame graph for IPv6 route lookup function. The x-axis is the time share (100% is 300 ns).  The graph is interactive."
+![IPv6 route lookup flamegraph]([[!!images/obj/linux/ipv6-fib-lookup-flamegraph.svg]] "CPU flame graph for IPv6 route lookup function. The x-axis is the time share (100% is 300 ns).  The graph is interactive.")
 
 Here is an approximate breakdown on the time spent:
 
@@ -304,8 +299,7 @@ able to insert a full view in less than two seconds. For some reason, the
 insertion time is not linear above 50,000 routes and climbs very fast to 60
 seconds for 500,000 routes.
 
-![Insertion time][i3]
-[i3]: [[!!images/linux/ipv6-radix-time.svg]] "Insertion time (system time) for a given number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
+![Insertion time]([[!!images/linux/ipv6-radix-time.svg]] "Insertion time (system time) for a given number of routes. The x-axis scale is logarithmic. The blue line is a linear regression.")
 
 Despite its more complex insertion logic, the IPv4 subsystem is able to insert 2
 million routes in less than 10 seconds.
@@ -330,14 +324,12 @@ In the above example, the used memory is 76104×64+40090×384 bytes (about
 20 MiB). The number of `struct rt6_info` matches the number of routes while the
 number of nodes is roughly twice the number of routes:
 
-![Nodes][i0]
-[i0]: [[!!images/linux/ipv6-radix-nodes.svg]] "Number of nodes in the radix tree depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression."
+![Nodes]([[!!images/linux/ipv6-radix-nodes.svg]] "Number of nodes in the radix tree depending on the number of routes. The x-axis scale is logarithmic. The blue line is a linear regression.")
 
 The memory usage is therefore quite predictable and reasonable, as even a small
 single-board computer can support several full views (20 MiB for each):
 
-![Memory usage][i1]
-[i1]: [[!!images/linux/ipv6-radix-memory.svg]] "Memory usage depending on the number of routes inserted. The x-axis scale is logarithmic. The blue line is a linear regression."
+![Memory usage]([[!!images/linux/ipv6-radix-memory.svg]] "Memory usage depending on the number of routes inserted. The x-axis scale is logarithmic. The blue line is a linear regression.")
 
 The LPC-trie used for IPv4 is more efficient: when 512 MiB of memory is needed
 for IPv6 to store 1 million routes, only 128 MiB are needed for IPv4. The

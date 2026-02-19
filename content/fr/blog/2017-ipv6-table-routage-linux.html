@@ -57,8 +57,7 @@ la solution utilisée pour IPv4 :
 À titre d'exemple, l'illustration ci-dessous montre un arbre radix codant 6
 préfixes :
 
-![Arbre radix][i11]
-[i11]: [[!!images/linux/ipv6-radix-tree-v2.svg]] "Arbre radix pour une petite table de routage. Certains nœuds indiquent le nombre de bits supplémentaires à ignorer en entrée. Les nœuds en noir contiennent une entrée."
+![Arbre radix]([[!!images/linux/ipv6-radix-tree-v2.svg]] "Arbre radix pour une petite table de routage. Certains nœuds indiquent le nombre de bits supplémentaires à ignorer en entrée. Les nœuds en noir contiennent une entrée.")
 
 Pour des explications plus détaillées sur les différents codages possibles d'une
 table de routage et des éclaircissements sur les arbres radix, jetez un œil sur
@@ -71,8 +70,7 @@ structure [`fib6_node`][struct fib6_node]. Quand un nœud a le drapeau
 structure [`rt6_info`][struct rt6_info] contenant des informations sur le
 prochain saut.
 
-![Représentation mémoire d'une table de routage][i14]
-[i14]: [[!!images/linux/ipv6-radix-struct.svg]] "Représentation mémoire d'une table de routage IPv6 sous Linux. Certains champs ont été omis. Le préfixe 2001:db8:2::/121 est une route ECMP. Quand plusieurs routes sont disponibles pour un préfixe donné, elles sont chaînées via le champ dst (non représenté)."
+![Représentation mémoire d'une table de routage]([[!!images/linux/ipv6-radix-struct.svg]] "Représentation mémoire d'une table de routage IPv6 sous Linux. Certains champs ont été omis. Le préfixe 2001:db8:2::/121 est une route ECMP. Quand plusieurs routes sont disponibles pour un préfixe donné, elles sont chaînées via le champ dst (non représenté).")
 
 La fonction [`fib6_lookup_1()`][fib6_lookup_1()] parcourt l'arbre radix en deux
 étapes :
@@ -219,8 +217,7 @@ Préfixes /128 répartis aléatoirements dans un /108
 précisément le temps d'exécution[^bench]
 de la fonction [`ip6_route_output_flags()`][ip6_route_output_flags()]:
 
-![Profondeur maximale et temps de recherche][i2]
-[i2]: [[!!images/linux/ipv6-radix-maxdepth.svg]] "Profondeur maximale de l'arbre radix et temps de recherche en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. Les barres d'erreur représentent l'écart médian absolu."
+![Profondeur maximale et temps de recherche]([[!!images/linux/ipv6-radix-maxdepth.svg]] "Profondeur maximale de l'arbre radix et temps de recherche en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. Les barres d'erreur représentent l'écart médian absolu.")
 
 [^bench]: Les mesures sont faites dans une machine virtuelle disposant d'un seul
     vCPU. Le CPU hôte est un [Intel Core i5-4670K][] tournant à une fréquence de
@@ -280,8 +277,7 @@ Regardons où le temps CPU est dépensé pour chacune des deux fonctions. Voici 
 graphique de type [*flame graph*][CPU flamegraph] pour la fonction
 IPv4 [`fib_lookup()`][fib_lookup()] :
 
-![Graphique flamegraph pour la recherche de routes en IPv4][i5]
-[i5]: [[!!images/obj/linux/ipv4-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv4. Les tables main et local sont séparées et les règles de routage sont évaluées. L'axe horizontal est le temps total écoulé (65 ns). Le graphique est interactif."
+![Graphique flamegraph pour la recherche de routes en IPv4]([[!!images/obj/linux/ipv4-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv4. Les tables main et local sont séparées et les règles de routage sont évaluées. L'axe horizontal est le temps total écoulé (65 ns). Le graphique est interactif.")
 
 Seulement la moitié du temps est dépensé dans le parcours d'arbre via la
 fonction `fib_table_lookup()`. Il convient de noter que cette fonction est en
@@ -293,8 +289,7 @@ cet exemple).
 Voici le graphique équivalent pour la fonction
 IPV6 [`ip6_route_output_flags()`][ip6_route_output_flags()] :
 
-![Graphique flamegraph pour la recherche de routes en IPv6][i6]
-[i6]: [[!!images/obj/linux/ipv6-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv6. L'axe horizontal est le temps total écoulé (300 ns). Le graphique est interactif."
+![Graphique flamegraph pour la recherche de routes en IPv6]([[!!images/obj/linux/ipv6-fib-lookup-flamegraph.svg]] "Répartition par fonctions du temps CPU dépensé lors de la recherche d'une route IPv6. L'axe horizontal est le temps total écoulé (300 ns). Le graphique est interactif.")
 
 Grossièrement, la répartition du temps est la suivante :
 
@@ -321,8 +316,7 @@ place de 40 000 routes se fait en moins de deux secondes. Pour certaines
 raisons, le temps d'insertion n'est plus linéaire au-delà et grimpe rapidement à
 60 secondes pour un demi-million de routes.
 
-![Temps d'insertion][i3]
-[i3]: [[!!images/linux/ipv6-radix-time.svg]] "Temps d'insertion (temps système) en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+![Temps d'insertion]([[!!images/linux/ipv6-radix-time.svg]] "Temps d'insertion (temps système) en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 Malgré sa logique plus complexe pour insérer des routes, le sous-système IPv4
 est capable d'insérer 2 millions de routes en moins de 10 secondes.
@@ -349,15 +343,13 @@ Dans l'exemple ci-dessus, la mémoire utilisée est de 76104×64+40090×384 octe
 (environ 20 Mio). Le nombre de `struct rt6_info` correspond au nombre de routes
 tandis que le nombre de nœuds est environ le double du nombre de routes :
 
-![Nœuds][i0]
-[i0]: [[!!images/linux/ipv6-radix-nodes.svg]] "Nombre de nœuds dans l'arbre radix en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+![Nœuds]([[!!images/linux/ipv6-radix-nodes.svg]] "Nombre de nœuds dans l'arbre radix en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 La quantité de mémoire utilisée est donc simplement prévisible. Elle est
 également très raisonnable puisque quasiment n'importe quelle plateforme
 actuelle peut stocker plusieurs vues complètes (20 Mio chacune) :
 
-![Utilisation mémoire][i1]
-[i1]: [[!!images/linux/ipv6-radix-memory.svg]] "Utilisation mémoire en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire."
+![Utilisation mémoire]([[!!images/linux/ipv6-radix-memory.svg]] "Utilisation mémoire en fonction du nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 L'arbre de recherche utilisé par IPv4 est plus efficace : alors qu'IPv6
 nécessite 512 Mio pour un million de routes, IPv4 se contente de 128 Mio. Cela
