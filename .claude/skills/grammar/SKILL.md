@@ -18,7 +18,7 @@ French (in content/fr/) or English (in content/en/).
 1. Read the article.
 2. Check and fix typos and grammar mistakes in the language of the article.
 3. Apply the edits directly to the file.
-4. Summarize the changes.
+4. Only summarize notable changes. It's OK to not summarize anything at all.
 
 Do not modify code blocks. For French, we follow “Lexique des règles
 typographiques en usage à l'Imprimerie nationale.” For English, this is “The

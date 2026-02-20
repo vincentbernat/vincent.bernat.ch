@@ -23,6 +23,7 @@ currently editing.
 3. Translate the article content following the rules below.
 4. If a French article already exists, update its content. Otherwise, create a
    new file with an appropriate French slug.
+5. Do not summarize anything.
 
 ## Translation rules
 

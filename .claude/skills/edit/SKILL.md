@@ -19,7 +19,7 @@ to check which article the user is currently editing.
 1. Read the article.
 2. Edit the content following the rules below. Do not modify code blocks.
 3. Apply the edits directly to the file.
-4. Summarize the changes.
+4. Only summarize notable changes.
 
 ## Editing rules
 
