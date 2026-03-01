@@ -363,7 +363,6 @@
               git
               git-annex
               nodejs
-              openssl
 
               # Build support
               yarn
