@@ -144,7 +144,7 @@ class ImageFixerPlugin(Plugin):
 
     def _img_properties(self, image):
         """Get size for an image, and opacity: (w, h), o?."""
-        if image.source_file.kind in {"png", "jpg"}:
+        if image.source_file.kind in {"png", "jpg", "webp"}:
             img = Image.open(image.path)
             if "P" in img.mode and any(
                 idx == img.info.get("transparency", -1) for _, idx in img.getcolors()
