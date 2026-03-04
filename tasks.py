@@ -528,6 +528,10 @@ printf " JPG %10s %10s %10s\n" \
    $(find media/images -name '*.jpg' | wc -l) \
    $(find media/images -name '*.jpg.webp' | wc -l) \
    $(find media/images -name '*.jpg.avif' | wc -l)
+printf " GIF %10s %10s %10s\n" \
+   $(find media/images -name '*.gif' | wc -l) \
+   $(find media/images -name '*.gif.webp' | wc -l) \
+   $(find media/images -name '*.gif.avif' | wc -l)
             """,
                 hide="err",
             )

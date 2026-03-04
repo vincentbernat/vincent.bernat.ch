@@ -195,7 +195,7 @@
             # Optimize SVG, JPG and PNG
             let
               jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
-              inherit (pkgs) libwebp libavif pngquant lcms;
+              inherit (pkgs) libwebp libavif pngquant lcms gifsicle;
               svgo = pkgs.svgo.overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
                   (pkgs.writeText "sax.patch" ''
@@ -265,6 +265,14 @@
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
                     | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+
+                # GIF→WebP
+                find . -type f -name '*.gif' -print0 \
+                    | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/gif2webp -quiet '{}' -o $out/'{}'.webp
+
+                # Optimize GIF
+                find . -type f -name '*.gif' -print0 \
+                    | xargs -r0n5 -P$(nproc) -i ${gifsicle}/bin/gifsicle --optimize=3 '{}' -o $out/'{}'
               '';
               installPhase = "true";
             };
