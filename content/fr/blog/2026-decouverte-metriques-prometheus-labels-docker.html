@@ -1,0 +1,289 @@
+---
+title: "Découverte automatique de métriques Prometheus avec les labels Docker"
+description: |
+  Utilisation de Grafana Alloy et des labels Docker pour découvrir et collecter
+  automatiquement les métriques Prometheus des services Docker Compose.
+uuid: 88417970-0533-451c-9302-19408b42afa7
+tags:
+  - network-monitoring
+  - project-akvorado
+attachments:
+  "https://github.com/akvorado/akvorado/blob/main/docker/config.alloy": "Fichier de configuration pour Alloy"
+---
+
+[Akvorado][], un collecteur de flux réseau, s'appuie sur [Traefik][], un proxy
+HTTP, pour exposer les services HTTP d'un environnement [Docker Compose][]. Des
+[labels Docker][docker labels] attachés à chaque service définissent les règles
+de routage. Traefik les prend en compte automatiquement au démarrage d'un
+conteneur. Plutôt que de maintenir un fichier de configuration statique pour
+collecter les [métriques Prometheus][prometheus metrics], la même approche
+s'applique avec [Grafana Alloy][], simplifiant sa configuration.
+
+[akvorado]: [[fr/blog/2025-akvorado-2.0.html]] "Akvorado release 2.0"
+[docker compose]: https://docs.docker.com/compose/ "Docker Compose documentation"
+[traefik]: https://traefik.io/traefik/ "Traefik: modern HTTP reverse proxy and load-balancer"
+[grafana alloy]: https://grafana.com/docs/alloy/latest/ "Grafana Alloy documentation"
+[docker labels]: https://docs.docker.com/engine/manage-resources/labels/ "Docker object labels"
+[prometheus metrics]: https://prometheus.io/docs/concepts/data_model/ "Prometheus Data Model"
+
+[TOC]
+
+# Traefik & Docker
+
+Traefik [écoute les événements sur la socket Docker][listens for events on the
+Docker socket]. Chaque service annonce sa configuration via des labels. Par
+exemple, voici le service Loki dans Akvorado :
+
+[listens for events on the Docker socket]: https://doc.traefik.io/traefik/reference/install-configuration/providers/docker/ "Traefik: Docker provider"
+
+```yaml
+services:
+  loki:
+    # …
+    expose:
+      - 3100/tcp
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.loki.rule=PathPrefix(`/loki`)
+```
+
+Dès que le conteneur est opérationnel, Traefik crée un routeur qui redirige les
+requêtes correspondant à `/loki` vers le premier port exposé. Placer la
+configuration Traefik au sein même de la définition du service est attirant.
+Comment obtenir la même chose pour les métriques Prometheus ?
+
+# Découverte de métriques avec Alloy
+
+[Grafana Alloy][], un collecteur de métriques capable de collecter des métriques
+Prometheus, inclut un composant [`discovery.docker`][discovery.docker]. Tout
+comme Traefik, il se connecte à la socket Docker[^socket]. Avec quelques règles
+de réétiquetage, on peut lui apprendre à utiliser les labels Docker pour
+localiser et collecter les métriques.
+
+[^socket]: Traefik et Alloy nécessitent tous deux l'accès à la socket Docker,
+    ce qui confère un accès root à la machine hôte. Un [Docker socket
+    proxy][] atténue ce risque en n'exposant que les points d'accès de l'API en
+    lecture seule nécessaires à la découverte.
+
+[discovery.docker]: https://grafana.com/docs/alloy/latest/reference/components/discovery/discovery.docker/ "Alloy: discovery.docker"
+[docker socket proxy]: https://github.com/Tecnativa/docker-socket-proxy "Docker Socket Proxy: security-enhanced proxy for Docker socket"
+
+On définit trois labels sur chaque service :
+
+- `metrics.enable` active la collecte de métriques,
+- `metrics.port` indique le port exposant les métriques Prometheus,
+- `metrics.path` indique le chemin vers les métriques.
+
+Si le service expose plus d'un port, `metrics.port` est obligatoire, sinon il
+prend par défaut la valeur de l'unique port exposé. La valeur par défaut de
+`metrics.path` est `/metrics`. Le service Loki devient :
+
+```yaml hl_lines="9 10"
+services:
+  loki:
+    # …
+    expose:
+      - 3100/tcp
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.loki.rule=PathPrefix(`/loki`)
+      - metrics.enable=true
+      - metrics.path=/loki/metrics
+```
+
+La configuration d'Alloy se divise en quatre parties :
+
+1. **découvrir** les conteneurs via la socket Docker,
+2. **filtrer et réétiqueter** les cibles à l'aide des labels Docker,
+3. **collecter** les métriques,
+4. **transmettre** les métriques à Prometheus.
+
+## Découverte des conteneurs Docker
+
+Le premier bloc découvre les conteneurs en cours d'exécution :
+
+```hcl
+discovery.docker "docker" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "30s"
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=akvorado"]
+  }
+}
+```
+
+Alloy se connecte à la socket Docker et liste les conteneurs toutes les 30
+secondes[^events]. Le bloc `filter` restreint la découverte aux conteneurs du
+projet `akvorado`, évitant toute interférence avec d'autres conteneurs sur le
+même hôte. Pour chaque conteneur découvert, Alloy produit une cible avec des
+labels tels que `__meta_docker_container_label_metrics_port` pour le label
+Docker `metrics.port`.
+
+[^events]: Contrairement à Traefik, qui surveille les événements, Grafana Alloy
+    interroge la liste des conteneurs à intervalles réguliers — un comportement
+    hérité de Prometheus.
+
+## Réétiquetage des cibles
+
+L'étape de réétiquetage filtre et transforme les cibles brutes issues de la
+découverte Docker en cibles exploitables. La première étape ne conserve que les
+cibles dont `metrics.enable` vaut `true` :
+
+```hcl
+discovery.relabel "prometheus" {
+  targets = discovery.docker.docker.targets
+
+  // Keep only targets with metrics.enable=true
+  rule {
+    source_labels = ["__meta_docker_container_label_metrics_enable"]
+    regex         = `true`
+    action        = "keep"
+  }
+
+  // …
+}
+```
+
+La deuxième étape remplace le port découvert lorsque `metrics.port` est
+défini :
+
+```hcl
+// When metrics.port is set, override __address__.
+rule {
+  source_labels = ["__address__", "__meta_docker_container_label_metrics_port"]
+  regex         = `(.+):\d+;(.+)`
+  target_label  = "__address__"
+  replacement   = "$1:$2"
+}
+```
+
+Ensuite, on gère les conteneurs en mode réseau `host`. Quand
+`__meta_docker_network_name` vaut `host`, l'adresse est réécrite en
+`host.docker.internal` au lieu de `localhost`[^hostdocker] :
+
+```hcl
+// When host networking, override __address__ to host.docker.internal.
+rule {
+  source_labels = ["__meta_docker_container_label_metrics_port", "__meta_docker_network_name"]
+  regex         = `(.+);host`
+  target_label  = "__address__"
+  replacement   = "host.docker.internal:$1"
+}
+```
+
+[^hostdocker]: Le service Alloy nécessite `extra_hosts:
+    ["host.docker.internal:host-gateway"]` dans sa définition.
+
+L'étape suivante dérive le label `job` à partir du nom du service, en supprimant
+tout suffixe numéroté. Le label `instance` est l'adresse sans le port :
+
+```hcl
+rule {
+  source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+  regex         = `(.+)(?:-\d+)?`
+  target_label  = "job"
+}
+rule {
+  source_labels = ["__address__"]
+  regex         = `(.+):\d+`
+  target_label  = "instance"
+}
+```
+
+Si un conteneur définit `metrics.path`, Alloy l'utilise comme chemin. Sinon, la
+valeur par défaut est `/metrics` :
+
+```hcl
+rule {
+  source_labels = ["__meta_docker_container_label_metrics_path"]
+  regex         = `(.+)`
+  target_label  = "__metrics_path__"
+}
+rule {
+  source_labels = ["__metrics_path__"]
+  regex         = ""
+  target_label  = "__metrics_path__"
+  replacement   = "/metrics"
+}
+```
+
+## Collecte et transmission
+
+Une fois les cibles correctement réétiquetées, la collecte et la transmission
+sont sommaires :
+
+```hcl
+prometheus.scrape "docker" {
+  targets         = discovery.relabel.prometheus.output
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "30s"
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+```
+
+`prometheus.scrape` récupère périodiquement les métriques des cibles
+découvertes. `prometheus.remote_write` les transmet à Prometheus.
+
+
+# Exporteurs intégrés
+
+Certains services n'exposent pas de point d'accès Prometheus. Redis et Kafka en
+sont des exemples courants. Alloy embarque des [exporteurs
+Prometheus][prometheus.exporter] capables d'interroger ces services et d'exposer
+les métriques à leur place.
+
+[prometheus.exporter]: https://grafana.com/docs/alloy/latest/reference/components/prometheus/ "Alloy: Prometheus components"
+
+```hcl
+prometheus.exporter.redis "docker" {
+  redis_addr = "redis:6379"
+}
+discovery.relabel "redis" {
+  targets = prometheus.exporter.redis.docker.targets
+  rule {
+    target_label = "job"
+    replacement  = "redis"
+  }
+}
+prometheus.scrape "redis" {
+  targets         = discovery.relabel.redis.output
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "30s"
+}
+```
+
+Le même schéma s'applique à Kafka :
+
+```hcl
+prometheus.exporter.kafka "docker" {
+  kafka_uris = ["kafka:9092"]
+}
+discovery.relabel "kafka" {
+  targets = prometheus.exporter.kafka.docker.targets
+  rule {
+    target_label = "job"
+    replacement  = "kafka"
+  }
+}
+prometheus.scrape "kafka" {
+  targets         = discovery.relabel.kafka.output
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "30s"
+}
+```
+
+Chaque exporteur est un composant distinct avec sa propre configuration de
+réétiquetage et de collecte. Le label `job` est défini explicitement.
+
+---
+
+Avec cette configuration, ajouter des métriques à un nouveau service disposant
+d'un point d'accès Prometheus se résume à quelques labels dans
+`docker-compose.yml`, tout comme l'ajout d'une route Traefik. Alloy s'en charge
+automatiquement. 🩺
