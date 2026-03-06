@@ -166,7 +166,9 @@
             let
               monospace = <monospace>;
               regular = <regular>;
-              fonttools = pythonEnv;
+              fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
+                dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
+              });
             in
             pkgs.stdenvNoCC.mkDerivation {
               name = "subset-fonts";

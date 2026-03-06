@@ -410,8 +410,11 @@ def build(c):
             c.run(
                 """
 cd ..
-env NIX_PATH=fonts=$PWD/.final/media/fonts:monospace=$PWD/glyphs-monospace.txt:regular=$PWD/glyphs-regular.txt \
-  nix build --impure .#build.subsetFonts
+NIX_PATH=fonts=$PWD/.final/media/fonts
+NIX_PATH=$NIX_PATH:monospace=$PWD/glyphs-monospace.txt
+NIX_PATH=$NIX_PATH:regular=$PWD/glyphs-regular.txt
+export NIX_PATH
+nix build --impure .#build.subsetFonts
 cd -
 cp -r --no-preserve=mode ../result/* media/fonts/.
 rm ../result
