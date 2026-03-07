@@ -192,25 +192,12 @@ body {
     @apply --lf-font-size;
   }
   .admonition {
-    position: relative;
     display: flex;
     margin-left: calc(-1 * var(--lf-admonition-margin));
     margin-top: calc(var(--lf-line-height) * 1em);
-    &::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: calc(var(--lf-admonition-margin) - (var(--lf-left-margin) - var(--lf-admonition-margin)) / 2);
-      width: 1px;
-      background-color: var(--lf-color-low);
-    }
     @media (--lf-medium) {
       display: block;
       margin-left: 0;
-      &::before {
-        content: none;
-      }
     }
   }
   .admonition-title {
@@ -225,9 +212,19 @@ body {
     & + p {
       margin-top: 0;
     }
+    & + p {
+      margin-left: calc((var(--lf-admonition-margin) - var(--lf-left-margin)) / 2);
+      border-left: 1px solid var(--lf-color-low);
+      padding-left: calc((var(--lf-left-margin) - var(--lf-admonition-margin)) / 2);
+    }
     @media (--lf-medium) {
-      padding-right: unset;
+      padding-right: 0;
       text-align: unset;
+      & + p {
+        border-left: none;
+        margin-left: 0;
+        padding-left: 0;
+      }
       &::before {
         content: "📌  ";
         font-style: normal;
