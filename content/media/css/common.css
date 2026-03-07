@@ -10,7 +10,10 @@
   line-height: calc(var(--lf-line-height) / var(--lf-font-factor));
   line-height: round(
     nearest,
-    calc(round(up, calc(var(--lf-font-factor) / 1.5), 1) * 1.5 / var(--lf-font-factor)),
+    calc(
+      round(up, calc(var(--lf-font-factor) / 1.5), 1) * 1.5 /
+        var(--lf-font-factor)
+    ),
     0.001
   );
 }
@@ -70,12 +73,38 @@
 /* Media query breakpoints. See https://drafts.csswg.org/mediaqueries-5/
  *
  * Rely only on max-width and use "not" because both min-width and max-width are
- * inclusive. Print CSS matches "small". Values are not arbitrary and were
- * computed from other dimensions in the past, but this is not possible to use
- * calc for media queries. See commit e33b0d2f4f91.
+ * inclusive. Print CSS matches "small". Values are computed from :root
+ * dimensions using calc() with var(), resolved at build time by the
+ * resolve-custom-props-in-media-calc PostCSS plugin.
  */
-@custom-media --lf-larger  not all and (max-width: 88em);
-@custom-media --lf-medium  only screen and (max-width: 62em), print;
-@custom-media --lf-mediumer not all and (max-width: 62em);
-@custom-media --lf-small   only screen and (max-width: 54em), print;
-@custom-media --lf-smaller only screen and (max-width: 35em);
+/* Larger: big enough to have side notes. */
+@custom-media --lf-larger not all and (max-width: calc((
+   var(--lf-page-width)
+ + var(--lf-left-margin)
+ + var(--lf-minimal-margin)
+ + var(--lf-sidenote-width))
+ * var(--lf-font-size) + 1rem));
+/* Medium: big enough to write something in the left margin */
+@custom-media --lf-medium only screen and (max-width: calc((
+   var(--lf-page-width)
+ + var(--lf-left-margin)
+ + var(--lf-minimal-margin))
+ * var(--lf-font-size))),
+  print;
+/* Mediumer: not medium */
+@custom-media --lf-mediumer not all and (max-width: calc((
+   var(--lf-page-width)
+ + var(--lf-left-margin)
+ + var(--lf-minimal-margin))
+ * var(--lf-font-size)));
+/* Small: no left margin, just minimal side margins */
+@custom-media --lf-small only screen and (max-width: calc((
+   var(--lf-page-width)
+ + var(--lf-minimal-margin)*2)
+ * var(--lf-font-size))),
+  print;
+/* Smaller: phone-sized */
+@custom-media --lf-smaller only screen and (max-width: calc((
+   var(--lf-page-width)
+ + var(--lf-minimal-margin)*2)
+ * var(--lf-font-size) * 0.66));
