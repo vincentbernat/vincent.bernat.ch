@@ -72,33 +72,30 @@
 
 /* Media query breakpoints. See https://drafts.csswg.org/mediaqueries-5/
  *
- * Rely only on max-width and use "not" because both min-width and max-width are
- * inclusive. Print CSS matches "small". Values are computed from :root
+ * Mobile-first: use min-width breakpoints. Values are computed from :root
  * dimensions using calc() with var(), resolved at build time by the
  * resolve-custom-props-in-media-calc PostCSS plugin.
  */
-/* Larger: big enough to have side notes. */
-@custom-media --lf-larger not all and (max-width: calc((
+/* Wide: has side notes */
+@custom-media --lf-wide (min-width: calc((
    var(--lf-page-width)
  + var(--lf-left-margin)
  + var(--lf-minimal-margin)
  + var(--lf-sidenote-width))
- * var(--lf-font-size) + 1rem));
-/* Medium: big enough to write something in the left margin */
-@custom-media --lf-medium only screen and (max-width: calc((
+ * var(--lf-font-size)));
+/* Large: has left margin */
+@custom-media --lf-large (min-width: calc((
    var(--lf-page-width)
  + var(--lf-left-margin)
  + var(--lf-minimal-margin))
- * var(--lf-font-size))),
-  print;
-/* Small: no left margin, just minimal side margins */
-@custom-media --lf-small only screen and (max-width: calc((
+ * var(--lf-font-size)));
+/* Medium: fixed page width, minimal side margins */
+@custom-media --lf-medium (min-width: calc((
    var(--lf-page-width)
  + var(--lf-minimal-margin)*2)
- * var(--lf-font-size))),
-  print;
-/* Smaller: phone-sized */
-@custom-media --lf-smaller only screen and (max-width: calc((
+ * var(--lf-font-size))), print;
+/* Small: above phone-sized */
+@custom-media --lf-small (min-width: calc((
    var(--lf-page-width)
  + var(--lf-minimal-margin)*2)
- * var(--lf-font-size) * 0.66));
+ * var(--lf-font-size) * 0.66)), print;

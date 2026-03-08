@@ -1,7 +1,7 @@
 html {
-  font-size: var(--lf-font-size);
-  @media (--lf-smaller) {
-    font-size: var(--lf-font-size-small);
+  font-size: var(--lf-font-size-small);
+  @media (--lf-small) {
+    font-size: var(--lf-font-size);
   }
 }
 
@@ -18,17 +18,16 @@ body {
 
 /* Horizontal alignment. */
 .lf-main {
-  margin-left: var(--lf-left-margin);
-  width: var(--lf-page-width);
+  margin-left: var(--lf-minimal-margin);
+  margin-right: var(--lf-minimal-margin);
+  width: auto;
 
   @media (--lf-medium) {
-    margin-left: var(--lf-minimal-margin);
+    margin-right: 0;
     width: var(--lf-page-width);
   }
-  @media (--lf-small) {
-    margin-left: var(--lf-minimal-margin);
-    margin-right: var(--lf-minimal-margin);
-    width: auto;
+  @media (--lf-large) {
+    margin-left: var(--lf-left-margin);
   }
 }
 #lf-text > .lf-table {
@@ -38,14 +37,15 @@ body {
     margin-left: auto;
     margin-right: auto;
   }
-  width: 100%;
-  margin-left: auto;
-  margin-right: auto;
+  width: auto;
+  width: 100vw;
+  margin-left: calc(-1 * var(--lf-minimal-margin));
+  margin-right: calc(-1 * var(--lf-minimal-margin));
   overflow-x: auto;
-  @media (--lf-small) {
-    width: 100vw;
-    margin-left: calc(-1 * var(--lf-minimal-margin));
-    margin-right: calc(-1 * var(--lf-minimal-margin));
+  @media (--lf-medium) {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 #lf-text {
@@ -55,13 +55,16 @@ body {
     max-width: 100%;
   }
   & > figure {
+    width: auto;
+    width: 100vw;
+    margin-left: calc(-1 * var(--lf-minimal-margin));
+    margin-right: calc(-1 * var(--lf-minimal-margin));
     @media (--lf-medium) {
-      width: auto;
-      width: 100vw;
-      margin-left: calc(-1 * var(--lf-minimal-margin));
+      margin-right: 0;
     }
-    @media (--lf-small) {
-      margin-right: calc(-1 * var(--lf-minimal-margin));
+    @media (--lf-large) {
+      width: auto;
+      margin-left: 0;
     }
   }
 }
@@ -192,42 +195,36 @@ body {
     @apply --lf-font-size;
   }
   .admonition {
-    display: flex;
-    margin-left: calc(-1 * var(--lf-admonition-margin));
     margin-top: calc(var(--lf-line-height) * 1em);
-    @media (--lf-medium) {
-      display: block;
-      margin-left: 0;
+    @media (--lf-large) {
+      display: flex;
+      margin-left: calc(-1 * var(--lf-admonition-margin));
     }
   }
   .admonition-title {
     box-sizing: border-box;
     font-style: italic;
-    padding-right: calc(var(--lf-left-margin) - var(--lf-admonition-margin));
-    flex: 0 0 var(--lf-admonition-margin);
-    align-self: center;
-    text-align: right;
     hyphens: none;
     &,
     & + p {
       margin-top: 0;
     }
-    & + p {
-      margin-left: calc((var(--lf-admonition-margin) - var(--lf-left-margin)) / 2);
-      border-left: 1px solid var(--lf-color-low);
-      padding-left: calc((var(--lf-left-margin) - var(--lf-admonition-margin)) / 2);
+    &::before {
+      content: "📌  ";
+      font-style: normal;
     }
-    @media (--lf-medium) {
-      padding-right: 0;
-      text-align: unset;
+    @media (--lf-large) {
+      padding-right: calc(var(--lf-left-margin) - var(--lf-admonition-margin));
+      flex: 0 0 var(--lf-admonition-margin);
+      align-self: center;
+      text-align: right;
       & + p {
-        border-left: none;
-        margin-left: 0;
-        padding-left: 0;
+        margin-left: calc((var(--lf-admonition-margin) - var(--lf-left-margin)) / 2);
+        border-left: 1px solid var(--lf-color-low);
+        padding-left: calc((var(--lf-left-margin) - var(--lf-admonition-margin)) / 2);
       }
       &::before {
-        content: "📌  ";
-        font-style: normal;
+        content: none;
       }
     }
   }
@@ -292,7 +289,7 @@ body {
     &::before {
       display: block;
       pointer-events: none;
-      font-size: calc(var(--lf-line-height) * 2em);
+      font-size: calc(var(--lf-line-height) * 1.5em);
       width: 1em;
       overflow: hidden;
       content: "«";
@@ -301,9 +298,8 @@ body {
       position: absolute;
       left: calc(-1em / var(--lf-line-height));
       top: calc(-1em / var(--lf-line-height));
-      @media (--lf-medium) {
-        font-size: calc(var(--lf-line-height) * 1.5em);
-        top: calc(-1em / var(--lf-line-height));
+      @media (--lf-large) {
+        font-size: calc(var(--lf-line-height) * 2em);
       }
     }
     &:lang(en)::before {
