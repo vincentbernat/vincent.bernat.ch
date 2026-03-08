@@ -367,6 +367,7 @@
               UV_NO_SYNC = "1";
               UV_PYTHON = "${pythonEnv}/bin/python";
               UV_PYTHON_DOWNLOADS = "never";
+              NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
             };
             packages = with pkgs; [
               pythonEnv
