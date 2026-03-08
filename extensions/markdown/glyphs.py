@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Extract glyphs used in code and regular blocks."""
 
 import sys

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Turn tables into responsive tables.
 
 This is just a matter of wrapping them into a container.

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Skip any processing for · ... · or ·· ... ··.
 
 This will be processed later by MathJax.

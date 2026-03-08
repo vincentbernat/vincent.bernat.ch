@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Plugin to select CDN depending on the path of the media file.
 
 A `cdn` configuration block should be present. Depending on the path

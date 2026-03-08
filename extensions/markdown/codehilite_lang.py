@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Add language to highlighted code.
 
 """
