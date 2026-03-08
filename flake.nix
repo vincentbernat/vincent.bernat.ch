@@ -118,6 +118,8 @@
           in
           pythonSet.mkVirtualEnv "www-env" workspace.deps.default;
         nodeEnv = pkgs.mkYarnModules {
+          # mkYarnModules do not require to maintain a hash, hence sticking to
+          # Yarn v1.
           pname = "www-yarn-modules";
           version = "1.0.0";
           packageJSON = ./package.json;
