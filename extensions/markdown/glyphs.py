@@ -9,24 +9,24 @@ from markdown.extensions import codehilite
 glyphs = {
     "monospace": set(
         [
-            "\u202f",  # NARROW NO-BREAK SPACE
-            "û",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
+            "\u00fb",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
         ]
     ),
     "regular": set(
         [
             "\u2026",  # HORIZONTAL ELLIPSIS
             "\u2019",  # RIGHT SINGLE QUOTATION MARK
-            "\u200b",  # ZERO WIDTH SPACE
-            "\ufeff",  # ZERO WIDTH NO-BREAK SPACE
         ]
     ),
 }
 
 for c in range(sys.maxunicode + 1):
     u = chr(c)
-    if unicodedata.category(u) == "Zs":
-        glyphs["regular"].add(u)
+    # Zs is Space Separator Category (it contains all non-zero-width spaces)
+    # Cf is Format Category (it contains zero-width-spaces)
+    if unicodedata.category(u) in ("Zs", "Cf"):
+        for kind in glyphs:
+            glyphs[kind].add(u)
 
 
 class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
