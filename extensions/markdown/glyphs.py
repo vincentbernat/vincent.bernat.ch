@@ -65,7 +65,9 @@ class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
 class GlyphsExtension(markdown.Extension):
     def extendMarkdown(self, md, md_globals):
         md.registerExtension(self)
-        patch()
+
+        # Patch the highlight() function to add glyphs for monospace.
+        patch_codehilite()
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.add(
@@ -86,7 +88,7 @@ def makeExtension(configs=None):
 
 
 @functools.cache
-def patch():
+def patch_codehilite():
     previous = codehilite.highlight
 
     def new(src, lexer, formatter):
