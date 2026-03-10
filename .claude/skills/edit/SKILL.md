@@ -27,24 +27,23 @@ to check which article the user is currently editing.
 - Target audience: technical readers who may not be native English speakers
   (CEFR B2 level).
 - Apply light stylistic edits only. Do not rewrite or restructure.
-- Avoid pronoun-verb contractions (write "do not", not "don't").
 - Keep a casual, conversational tone.
 - Suppress passive voice where possible.
-- Remove superfluous words and filler phrases.
-- Use descriptive verbs (e.g. "authenticate" instead of "provide
-  authentication").
 - Break long sentences into shorter ones.
 - Prefer the present tense.
 - Fix common non-native mistakes, notably simple past vs. past perfect.
+- Remove superfluous words and filler phrases. Be suspicious of adverbs and
+  adjectives when they bring nothing to the verb and the noun.
+- Use descriptive verbs (e.g. "authenticate" instead of "provide
+  authentication"). Avoid verbs with a preposition.
+- Don't put "however" as the beginning of a sentence. "But", "yet", "still", and
+  "instead", can be used instead.
+- Prefer "that" to "which", except if a comma is needed and in this case,
+  "which" is more correct.
 
 The following words are forbidden because what is obvious for someone may not be
-for someone else!
-
-- obviously
-- basically
-- simply
-- clearly
-- everyone knows
+for someone else: "obviously", "basically", "simply", "clearly", and "everyone
+knows".
 
 ## About the introduction
 
