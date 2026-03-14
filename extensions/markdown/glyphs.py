@@ -41,14 +41,9 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
             self.glyphs |= set(glyphs)
         with open(self.output, "wb") as f:
             f.write(
-                "".join(
-                    sorted(
-                        g
-                        for g in self.glyphs
-                        if ord(g) >= 0x20
-                        and not (unicodedata.category(g) == "So" and ord(g) > 0xFFFF)
-                    )
-                ).encode("utf-8")
+                "".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)).encode(
+                    "utf-8"
+                )
             )
 
 
