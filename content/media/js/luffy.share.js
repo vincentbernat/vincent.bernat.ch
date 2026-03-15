@@ -2,12 +2,9 @@
 
 luffy.do(() => {
   const el = document.querySelector(".lf-webshare > a");
-  if (!el) return;
-  if (!navigator.share) {
-    el.parentNode.style.display = "none";
-    return;
-  }
+  if (!el || !navigator.share) return;
 
+  el.parentNode.style.display = "inline";
   el.addEventListener("click", (event) => {
     event.preventDefault();
     navigator.share({
