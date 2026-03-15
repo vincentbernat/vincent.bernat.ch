@@ -9,7 +9,7 @@ tags:
 ---
 
 This post shows how to **patch** an **external dependency** for an
-**Android** project at **build-time** with [Gradle][]. This leverages
+**Android** project at **build-time** with [Gradle][]. It relies on
 the [Transform API][] and [Javassist][], a Java bytecode manipulation
 tool.
 
@@ -32,23 +32,22 @@ with a grain of salt.
 
 This section adds some context to the example. Feel free to skip it.
 
-[Dashkiosk][] is an application to manage dashboards on many
-displays. It provides an Android application you can install on one of
-these [cheap Android sticks][]. Under the hood, the application is an
-embedded *webview* backed by the [Crosswalk Project web runtime][]
-which brings an up-to-date web engine, even for older versions of
-Android.[^webview]
+[Dashkiosk][] manages dashboards on many displays. It provides an
+Android application you can install on one of these [cheap Android
+sticks][]. Under the hood, the application embeds a *webview* backed
+by the [Crosswalk Project web runtime][] that brings an up-to-date web
+engine, even for older versions of Android.[^webview]
 
 [^webview]: Before Android 4.4, the webview was severely
-    outdated. Starting from Android 5, the webview is shipped as
+    outdated. Starting from Android 5, the webview ships as
     a [separate component][] with updates. Embedding *Crosswalk* is
     still convenient as you know exactly which version you can rely
     on.
 
-Recently, a [security vulnerability][] has been spotted in how invalid
-certificates were handled. When a certificate cannot be verified, the
-webview defers the decision to the host application by calling
-the [`onReceivedSslError()`][onReceivedSslError] method:
+A [security vulnerability][] surfaced in how invalid certificates were
+handled. When certificate verification fails, the webview defers the
+decision to the host application by calling the
+[`onReceivedSslError()`][onReceivedSslError] method:
 
 > Notify the host application that an SSL error occurred while loading
 > a resource. The host application must call either
@@ -57,28 +56,28 @@ the [`onReceivedSslError()`][onReceivedSslError] method:
 > retained for use in response to future SSL errors. The default
 > behavior is to pop up a dialog.
 
-The default behavior is specific to *Crosswalk* webview: the Android
-built-in one just cancels the load. Unfortunately,
-the [fix applied by Crosswalk][] is different and, as a side effect,
-the `onReceivedSslError()` method is not invoked anymore.[^fix]
+The default behavior is specific to *Crosswalk*'s webview: the Android
+built-in one cancels the load. Unfortunately, [Crosswalk's
+fix][fix applied by Crosswalk] has a side effect: the
+`onReceivedSslError()` method no longer fires.[^fix]
 
 [^fix]: I hope to have this fixed in later versions.
 
-*Dashkiosk* comes with an option to ignore TLS errors.[^ignore] The
-mentioned security fix breaks this feature. The following example will
-demonstrate how to **patch *Crosswalk* to recover the previous
+*Dashkiosk* comes with an option to ignore TLS errors.[^ignore] This
+security fix breaks that feature. The following example demonstrates
+how to **patch *Crosswalk* to recover the previous
 behavior**.[^alternatives]
 
-[^ignore]: This may seem harmful and you are right. However, if you
-    have an internal CA, it is currently not possible to provide its
-    own trust store to a webview. Moreover, the system trust store is
-    not used either. You also may want to use TLS for authentication
-    only with client certificates, a feature supported by *Dashkiosk*.
+[^ignore]: This may seem harmful and you are right. But if you
+    have an internal CA, you cannot provide a custom trust store to a
+    webview. The webview doesn't use the system trust store either. You
+    also may want to use TLS for authentication only with client
+    certificates, a feature *Dashkiosk* supports.
 
 [^alternatives]: *Crosswalk* being an open-source project, an
     alternative would have been to patch *Crosswalk* source code and
-    recompile it. However, *Crosswalk* embeds *Chromium* and
-    recompiling the whole stuff consumes a lot of resources.
+    recompile it. But *Crosswalk* embeds *Chromium* and recompiling
+    everything requires significant resources.
 
 # Simple method replacement
 
@@ -93,9 +92,9 @@ from the `org.xwalk.core.internal.SslUtil` class with this version:
 
 ## Transform registration
 
-*Gradle* [Transform API][] enables the manipulation of compiled class
-files before they are converted to DEX files. To declare a transform
-and register it, include the following code in your `build.gradle`:
+*Gradle*'s [Transform API][] lets you manipulate compiled class files
+before they become DEX files. To declare and register a transform,
+include the following code in your `build.gradle`:
 
     ::groovy
     import com.android.build.api.transform.Context
@@ -146,21 +145,21 @@ and register it, include the following code in your `build.gradle`:
     // Register the transform
     android.registerTransform(new PatchXWalkTransform(logger))
 
-The `getInputTypes()` method should return the set of types of data
-consumed by the transform. In our case, we want to transform
+The `getInputTypes()` method should return the set of data types that
+the transform consumes. In our case, we want to transform
 classes. Another possibility is to transform resources.
 
 The `getScopes()` method should return a set of [scopes][] for the
 transform. In our case, we are only interested in the external
-libraries. It is also possible to transform our own classes.
+libraries. You can also transform your own classes.
 
 The `isIncremental()` method returns true because we support
 incremental builds.
 
-The `transform()` method is expected to take all the provided inputs
-and copy them (with or without modifications) to the location supplied
-by the output provider. We did not implement this method yet. This
-causes the removal of all external dependencies from the application.
+The `transform()` method should take all provided inputs and copy them
+(with or without modifications) to the location that the output
+provider supplies. We haven't implemented this method yet. This
+removes all external dependencies from the application.
 
 ## Noop transform
 
@@ -198,12 +197,11 @@ We also need two additional imports:
     import com.android.build.api.transform.Status
     import org.apache.commons.io.FileUtils
 
-Since we are handling external dependencies, we only have to manage
-JAR files. Therefore, we only iterate on `jarInputs` and not on
-`directoryInputs`. There are two cases when handling incremental build:
-either the file has been removed (❶) or it has been modified (❷). In
-all other cases, we can safely assume the file is already correctly
-copied.
+Since we handle external dependencies, we only need to manage JAR
+files. Therefore, we only iterate over `jarInputs` and not over
+`directoryInputs`. Incremental builds have two cases: either the file
+was removed (❶) or it was modified (❷). In all other cases, we can
+safely assume the file was already copied.
 
 ## JAR patching
 
@@ -241,11 +239,11 @@ We also need the following additional imports to use *Javassist*:
     import javassist.ClassPool
     import javassist.CtNewMethod
 
-Once we have located the JAR file we want to modify, we add it to our
-classpath and retrieve the class we are interested in ❸. We
-locate the appropriate method and delete it (❹). Then, we add our
-custom method using the same name (❺). The whole operation is done
-in memory. We retrieve the bytecode of the modified class in ❻.
+Once we locate the target JAR file, we add it to our classpath and
+retrieve the target class in ❸. We find the method and delete it
+(❹). Then, we add our custom method with the same name (❺).
+Everything happens in memory. We retrieve the bytecode of the modified
+class in ❻.
 
 The remaining step is to rebuild the JAR file:
 
@@ -277,9 +275,9 @@ We need the following additional imports:
     import java.util.jar.JarOutputStream
     import org.apache.commons.io.IOUtils
 
-There are two steps. In ❼, all classes are copied to the new JAR,
-except the `SslUtil` class. In ❽, the modified bytecode for `SslUtil`
-is added to the JAR.
+There are two steps. In ❼, we copy all classes to the new JAR, except
+the `SslUtil` class. In ❽, we add the modified bytecode for `SslUtil`
+to the JAR.
 
 That's all! You can view the complete example on [GitHub][example1].
 
@@ -312,20 +310,20 @@ from the same class with the following one:
         return new SslError(SslError.SSL_INVALID, cert, url);
     }
 
-The major difference with the previous example is that we need to
-import some additional classes.
+The main difference from the previous example is that we need to
+import additional classes.
 
 ## Android SDK import
 
 The classes from the Android SDK are not part of the external
-dependencies. They need to be imported separately. The full path of
-the JAR file is:
+dependencies. You need to import them separately. The full path of the
+JAR file is:
 
     ::groovy
     androidJar = "${android.getSdkDirectory().getAbsolutePath()}/platforms/" +
                  "${android.getCompileSdkVersion()}/android.jar"
 
-We need to load it before adding the new method into `SslUtil` class:
+Load it before adding the new method to the `SslUtil` class:
 
     ::groovy
     def pool = new ClassPool()
@@ -340,9 +338,9 @@ We need to load it before adding the new method into `SslUtil` class:
 
 ## External dependency import
 
-We must also import `org.chromium.net.NetError` and therefore, we need
-to put the appropriate JAR in our classpath. The easiest way is to
-iterate through all the external dependencies and add them to the
+We must also import `org.chromium.net.NetError` and therefore need to
+add the appropriate JAR to our classpath. The easiest way is to
+iterate through all external dependencies and add them to the
 classpath.
 
     ::groovy
