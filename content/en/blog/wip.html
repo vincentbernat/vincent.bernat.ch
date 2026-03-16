@@ -1,0 +1,363 @@
+---
+title: "Scaling Akvorado BMP RIB with sharding"
+description: |
+  ...
+uuid: df3049ca-6b1d-4fff-8c35-66f5ac03cd5e
+cover: akvorado/sharding-step2.svg
+tags:
+  - network-bgp
+  - project-akvorado
+---
+
+<!-- Target audience includes Akvorado users, network operators and Go
+developers. For Akvorado users, this article provides them with an insight on
+Akvorado BMP components (they can discover it for the first time or try it again
+if they ran into performance issues). Network operators should appreciate the
+scale we are now able to achieve and the use of a known solution in the field
+(RIB sharding). They can also discover Akvorado through this article. Go
+developers should enjoy the various attempts to get more performance and the
+tradeoffs of locking/lockless. They could even offer suggestions on how to
+optimize further. -->
+
+To associate routing information—like AS paths or BGP communities—to flows,
+[Akvorado][] can import routes through the [BGP Monitoring Protocol][] (BMP). As
+the Internet routing table contains more than [1 million routes][], Akvorado
+needs to **scale to tens of millions of routes**.[^optimize] This has been a
+long time challenge,[^past] but I expect this issue is now fixed by using **RIB
+sharding**, a method to split the routing database into several parts to enable
+concurrent updates.
+
+[^optimize]: Each router exporting flows doesn't need to send its routes. When
+    Akvorado does not find a route from a specific device, it falls back to a
+    route sent by another equipment. It is up to the operator to decide if this
+    is a good enough approximation.
+
+[^past]: I made many attempts to scale the BMP component. See for example
+    [PR #254][], [PR #255][], [PR #278][], [PR #2244][], and [PR #2245][].
+    Despite these efforts, this component remained problematic for most users.
+    See [discussion #2287][] as the latest example.
+
+[akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
+[bgp monitoring protocol]: rfc://7854 "BGP Monitoring Protocol (BMP)"
+[1 million routes]: https://bgp.potaroo.net "BGP Routing Table Analysis Reports"
+[PR #254]: https://github.com/akvorado/akvorado/pull/254 "inlet/bmp: avoid long lock times when flushing peers"
+[PR #255]: https://github.com/akvorado/akvorado/pull/255 "“Lockless” RIB design"
+[PR #278]: https://github.com/akvorado/akvorado/pull/278 "inlet/bmp: new lockless design"
+[PR #2244]: https://github.com/akvorado/akvorado/pull/2244 "outlet/routing: read from RIB without any locks"
+[PR #2245]: https://github.com/akvorado/akvorado/pull/2245 "outlet/routing: buffer BMP messages to avoid being flagged as “stuck”"
+[discussion #2287]: https://github.com/akvorado/akvorado/discussions/2287 "Using go's unique package"
+
+*[BGP]: Border Gatewat Protocol
+*[RIB]: Routing Information Base
+*[BMP]: BGP Monitoring Protocol
+*[ASN]: Autonomous System Number
+
+[TOC]
+
+# Previous implementation
+
+Akvorado connects 2 elements to build its RIB:
+
+1. a **prefix tree**, and
+2. a **list of routes** attached to each prefix.
+
+![Akvorado BMP RIB implementation before sharding with the memory layout of each
+structure and a single lock.]([[!!images/akvorado/sharding-before.svg]]
+"Akvorado BMP RIB implementation without sharding. One single read/write lock.")
+
+In the diagram above, the RIB stores five IPv4 prefixes and two IPv6 prefixes.
+One of them, `2001:db8:1::/48`, contains three routes:
+
+- from peer 3, next hop `2001:db8::3:1`, AS 65402, AS path `65402`, community
+  `65402:31`,
+- from peer 4, next hop `2001:db8::4:1`, same ASN, AS path and community,
+- from peer 5, next hop `2001:db8::5:1`, same ASN, AS path `65401 65402`,
+  community `65402:31`.
+
+The `rib` structure is defined in Go as follows:
+
+```go
+type rib struct {
+    tree          *bart.Table[prefixIndex]
+    routes        map[routeKey]route
+    nlris         *intern.Pool[nlri]
+    nextHops      *intern.Pool[nextHop]
+    rtas          *intern.Pool[routeAttributes]
+    nextPrefixID  prefixIndex
+    freePrefixIDs []prefixIndex
+}
+```
+
+The prefix tree uses the [bart][] package, an adaptation of Donald Knuth's [ART
+algorithm][]. The [benchmarks][] demonstrate it has better performance than
+other packages, both for lookups, insertions, and memory usage.[^performance]
+Plus, the author is quite helpful.
+
+[^performance]: It keeps improving: [bart 0.28.0][] features a new
+    implementation that trades a bit of memory for greater lookup performance. I
+    did not test it yet, as I am already preparing this blog post for a couple
+    of months.
+
+[art algorithm]: https://www.hariguchi.org/art/art.pdf "ART: A Fast Free Multibit Trie Based Routing Table"
+[benchmarks]: https://github.com/gaissmai/iprbench
+[bart 0.28.0]: https://github.com/gaissmai/bart/releases/tag/v0.28.0 "bart release v0.28.0: New FastNode implementation"
+
+## Storing routes in a map
+
+
+The list of routes for each prefix are not stored directly into the prefix tree:
+it would put too much pressure on the garbage collector by allocating per-prefix
+arrays.
+
+Instead, the RIB assigns a unique 32-bit prefix identifier for each prefix,
+either by picking the last available prefix identifier from the `freePrefixIDs`
+array if any, or using the `nextPrefixID` value before incrementing it. Then,
+the routes are stored in the `routes` map, leveraging the [optimized Swiss
+table][swiss] in Go. To retrieve routes attached to a prefix, we combine the
+32-bit prefix index with a 32-bit route index to get a 64-bit route key used to
+look up the target route in the `routes` map. Akvorado scans routes from the
+first to the last to find the best one.[^scan] It knows there is no more route
+if the route key returns no result.
+
+[^scan]: Akvorado prefers the route matching the exact next hop. Otherwise, it
+    falls back to any other route. This is an approximation. An alternative
+    would be to have one prefix tree for each peer but it would require to
+    configure all routers to export their routes. [pmacct][]'s BMP daemon
+    implements this approach.
+
+```go
+type prefixIndex uint32
+type routeIndex uint32
+type routeKey uint64
+```
+
+[bart]: https://github.com/gaissmai/bart/ "Balanced Routing Tables (BART) in Go"
+[swiss]: https://go.dev/blog/swisstable "Faster Go maps with Swiss Tables"
+[pmacct]: http://www.pmacct.net/
+
+## Interning routes
+
+A route contains a peer identifier, a partial NLRI[^nlri], the next hop, and the
+attributes.
+
+[^nlri]: If we consider the BGP RIB as a database, the Network Layer
+    Reachability Information (NLRI) is the primary key. Its content depends on
+    the BGP family. With IPv4 or IPv6 unicast, this is the prefix. For VPNv4 and
+    VPNv6 families, it includes the route distinguisher. If you enable the
+    [ADD-PATH][] extension, the NLRI also contains a path identifier.
+    
+    In our implementation, we don't store the prefix as we get it from the looked
+    up IP address using the separetely-stored prefix length.
+
+```go
+type route struct {
+    peer       uint32
+    nlri       intern.Reference[nlri]
+    nextHop    intern.Reference[nextHop]
+    attributes intern.Reference[routeAttributes]
+    prefixLen  uint8
+}
+
+type nlri struct {
+    family bgp.Family
+    path   uint32
+    rd     RD
+}
+type nextHop netip.Addr
+type routeAttributes struct {
+    asn              uint32
+    asPath           []uint32
+    communities      []uint32
+    largeCommunities []bgp.LargeCommunity
+}
+```
+
+To save memory and allocations, NLRI, next hops and route attributes are
+"interned:" a 32-bit integer replaces the real value. The mechanism predates the
+[Go's `unique` package][unique] introduced in Go 1.23. We keep the `intern`
+package because it has different trade-offs:
+
+- It uses **explicit reference counting** instead of relying on weak pointers.
+- It works with **non-comparable values** implementing `Hash()` and `Equal()`
+  methods.[^hash]
+- It uses **explicit pool instances**. This will be useful for sharding.
+- It has **better performance**. See for example this [benchmark][].
+- It consumes **half the memory** thanks to unsigned 32-bit references instead
+  of pointers.
+- But, it is **not safe for concurrent use**.
+
+[^hash]: The `Hash()` methods rely on the [`hash/maphash`][hash/maphash] package
+    and on the [`unsafe`][unsafe] package to avoid memory copies. See for
+    example the [`Hash()` function for the `nlri` structure][nlri.Hash()].
+
+[ADD-PATH]: rfc://7911 "Advertisement of Multiple Paths in BGP"
+[unique]: https://go.dev/blog/unique "New unique package"
+[hash/maphash]: https://pkg.go.dev/hash/maphash
+[unsafe]: https://pkg.go.dev/unsafe
+[nlri.Hash()]: https://github.com/akvorado/akvorado/blob/97fced5e855ac220e96148e132f643dc180cd097/outlet/routing/provider/bmp/rib.go#L89-L96
+[benchmark]: https://github.com/akvorado/akvorado/pull/2244/changes/682b6063af50780dcd64e46b39d5e66c5074d9ab "outlet/routing: use Go's unique instead of intern"
+*[NLRI]: Network Layer Reachability Information
+
+## Why does it not scale?
+
+!!! "Note" At [AS 12322][free], we don't use BMP yet.[^cisco] But [Gerhard
+Bogner][] had the patience, availability, and technical skills to help me [debug
+this issue][discussion #2287].
+
+[^cisco]: Despite being author or co-author of the first BMP-related RFCs since
+    2016 ([RFC 7854][], [RFC 8671][], [RFC 9069][]), Cisco did not implement it
+    in a usable way in IOS XR until version 24.2.1. We still need to upgrade a
+    few routers to enable this feature.
+
+The global read/write lock is a bottleneck in this implementation. But how?
+There are several users of the RIB, each with its own set of constraints:
+
+- The **Kafka workers** look up the RIB to enrich flows with routing
+  information. They are bound by the number of Kafka partitions.[^KIP-932]
+  Akvorado also adjusts their number to ensure efficient batching to ClickHouse.
+  On our setup, the number of workers oscillate between 8 and 16. As we want to
+  observe the latest data, we also cannot afford the Kafka workers to lag too
+  much.
+
+- The **monitored routers** send route updates through the BMP protocol. When
+  connecting they can send millions of routes.[^bmpconfig] After the initial
+  synchronization, updates are sent continuously and may spike from time to
+  time. The monitored router detects a stuck BMP station when its TCP window is
+  full and resets the session in this case. While Akvorado implements a large
+  incoming buffer, it still needs to update the received routes with the write
+  lock held fast enough to avoid being detected as stuck.
+
+- When a **remote peer goes down**, Akvorado flushes the associated routes by
+  walking the RIB with the write lock held. When a **monitored router goes
+  down**, Akvorado waits a bit but eventually flush all the associated routes.
+
+In short: on a busy setup, the lock contention is high, both for readers and
+writers and both of neither of them can lag too much behind.
+
+[^KIP-932]: [KIP-932][] introduces, in Kafka 4.2, the concept of share groups to
+    enable cooperative consumption on the same partition by multiple consumers.
+    This is not supported in Akvorado yet.
+    
+[^bmpconfig]: You can configure BMP to send routes for each peer before or after
+    applying the incoming policies. In this case, you can get more than one
+    million routes for each transit peer. You can also tell BMP to send the
+    local RIB, which only contains the best path for each prefix.
+
+[RFC 7854]: rfc://7854 "BGP Monitoring Protocol (BMP)"
+[RFC 8671]: rfc://8671 "Support for Adj-RIB-Out in the BGP Monitoring Protocol (BMP)"
+[RFC 9069]: rfc://9069 "Support for Local RIB in the BGP Monitoring Protocol (BMP)"
+[gerhard bogner]: https://github.com/bogi788 "bogi788 on GitHub"
+[kip-932]: https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka "KIP-932: Queues for Kafka"
+[franz-go]: https://github.com/twmb/franz-go/ "franz-go: complete Apache Kafka client written in Go"
+[no time limit]: https://github.com/twmb/franz-go/issues/708 "There is no option to set max.poll.interval.ms #708"
+[rwmutex]: https://pkg.go.dev/sync#RWMutex
+[free]: https://www.free.fr/freebox
+
+# RIB sharding
+
+## First step: basic sharding
+
+To remove the global lock, the RIB is split into several "shards," each one
+handling a subset of the prefixes:
+
+![Akvorado BMP RIB implementation after sharding with the memory layout of each
+structure and one lock per shard.]([[!!images/akvorado/sharding-step1.svg]]
+"Akvorado BMP RIB implementation with sharding")
+
+The prefix tree stays global and is protected by a single lock. Each shard gets
+its read/write lock, its route map and its intern pools to store NLRIs, next
+hops, and route attributes, which would have not been possible with [Go's
+`unique` package][unique]. The prefix indexes are also sharded: the 8 most
+significant bits are the shard index and the 24 remaining bits are the local
+prefix index.
+
+Gerhard [confirmed][confirmation] that after [this blind change][7e6bbf2210fd],
+the BMP receiver chugged steadily. 🎉
+
+Later, I wrote a [concurrent benchmark][] over half a million synthetic but
+plausible routes[^plausible] partitioned over 0 to 8 writers, churning routes as
+fast as possible, while 1 to 16 readers continuously look up a set of 10,000
+routes.
+
+[^plausible]: The prefixes are random, but the prefix size distribution and the
+    AS path length distribution follow the [data provided by Geoff Husston][]
+
+I don't know if this benchmark is realistic, but it confirms the improvements
+for both read and write latencies:
+
+![Two heatmaps. One for read latency ratio, the other for write latency ratio.
+Both of them comparing the speedup with colored tiles between the code before
+sharding and after sharding. Most tiles are
+green.]([[!!images/akvorado/sharding-heatmap.svg]] "Read and write latency
+performance improvement after sharding")
+
+It also shows that a high number of writers have a negative impact on the read
+latency.
+
+[confirmation]: https://github.com/akvorado/akvorado/discussions/2287#discussioncomment-16020731
+[concurrent benchmark]: https://github.com/akvorado/akvorado/blob/0811c40cc2065380e3a6230c2796312838e57850/outlet/routing/provider/bmp/concurrent_test.go
+[data provided by Geoff Husston]: https://bgp.potaroo.net/as2.0/ "AS65000 BGP Routing Table Analysis Report"
+[7e6bbf2210fd]: http://github.com/akvorado/akvorado/commit/7e6bbf2210fdf7116d2ee168b307b9906cc223c0 "outlet/routing: implement RIB sharding for BMP"
+
+<!-- Commit before sharding but with benchmark: 87a11d72a990 -->
+
+
+## Second step: lock-free reads
+
+The single read/write lock protecting the prefix tree is the next target. The
+[bart][] package provides alternative mutation methods returning an updated tree
+using copy-on-write. Readers don't need the global lock any more, leaving it
+only to synchronize writers. The prefix tree is boxed in an atomic pointer.
+
+![Akvorado BMP RIB implementation for sharding with lock-free reads. It shows with
+the memory layout of each structure.]([[!!images/akvorado/sharding-step2.svg]]
+"Akvorado BMP RIB implementation with sharding and lock-free reads")
+
+Without a lock, readers can now fetch a stale prefix index when walking its copy
+of the tree if a concurrent writer removes the last route attached to this
+prefix index and recycles it for another prefix. To avoid this issue, we combine
+the prefix index with a generation number and store them in the tree:
+
+```go
+type generation uint32
+type prefixRef struct {
+    idx prefixIndex
+    gen generation
+}
+type rib struct {
+    mu     sync.Mutex
+    tree   atomic.Pointer[bart.Table[prefixRef]]
+    shards []*ribShard
+}
+```
+
+Each shard stores the generation number for each local prefix index. The
+generation number increases by one if the associated prefix index is freed. When
+looking up for the routes attached to a prefix index, the reader checks if the
+generation number matches. Otherwise, it assumes the index was recycled and the
+list of routes is empty. You can see this case in the diagram above for prefix
+index 5, stored with a generation index of 3, while the current value in the
+`[]generations` array is 4. The generation number could overflow but it is not a
+problem as lookups are quick.
+
+Running the concurrent benchmark against this new implementation shows the
+improvements for the read latency as soon as the cost of the copy-on-write
+prefix tree is amortized.
+
+![Six heatmaps. Three for read latency ratio, three others for write latency
+ratio. They compare the numbers without sharding, with sharding, and with
+lock-free reads, pair by pair. For read latency, most tiles are green, showing
+an improvement of the second step. For write lancy, the speedup is negative for
+a low number of readers.]([[!!images/akvorado/sharding-heatmap2.svg]] "Read and
+write latency performance improvement after lock-free reads. The middle column
+shows the cumulative improvements of both steps.")
+
+---
+
+Among the multiple attempts to optimize the BMP component, RIB sharding is one
+of the more satisfying. [Akvorado 2.2][] implements the first step.
+[PR #2433][], drafted while writing this blog post, implements the second step
+and will be released with Akvorado 2.4. 🪓
+
+[pr #2433]: https://github.com/akvorado/akvorado/pull/2433 "More efficient RIB tree for BMP"
+[akvorado 2.2]: https://github.com/akvorado/akvorado/releases/tag/v2.2.0
