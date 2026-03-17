@@ -81,6 +81,27 @@ def include_file(ctx, name):
         return jinja2.Markup(f.read())
 
 
+class ReadingTime(int):
+    """Reading time in minutes, with word count accessible via .words."""
+
+    def __new__(cls, minutes, words):
+        obj = super().__new__(cls, minutes)
+        obj.words = words
+        return obj
+
+
+def reading_time(html, words_per_minute=200, code_lines_per_minute=50):
+    """Compute reading time in minutes from HTML."""
+    d = pq(html, parser="html")
+    code_blocks = d.find("pre")
+    code_lines = sum(el.text_content().count("\n") + 1 for el in code_blocks)
+    code_blocks.remove()
+    d.find(".footnote, .endnote").remove()
+    words = len(d.text().split())
+    minutes = max(2, round(words / words_per_minute + code_lines / code_lines_per_minute))
+    return ReadingTime(minutes, words)
+
+
 @jinja2.contextfilter
 def clean_rss(ctx, html):
     doc = pq(html)
