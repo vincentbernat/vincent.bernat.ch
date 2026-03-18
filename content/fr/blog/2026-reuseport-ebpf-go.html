@@ -520,10 +520,10 @@ packets_total{listener="0.0.0.0:2055",worker="6"} 835488
 packets_total{listener="0.0.0.0:2055",worker="7"} 834479
 ```
 
-La cause principale est la limite par défaut de 32 messages par lot pour Kafka.
-Cette limite est trop basse car les brokers ont une charge importante lors du
-traitement de chaque lot : ils doivent [s'assurer de leur bonne persistance
-avant d'accuser réception][internals]. Augmenter la limite à [4096
+La raison majeure est que le module Kafka limite par défaut les lots à 32
+messages. Cette limite est trop basse car les brokers ont une charge importante
+lors du traitement de chaque lot : ils doivent [s'assurer de leur bonne
+persistance avant d'accuser réception][internals]. Augmenter la limite à [4096
 messages][4096 records] corrige ce problème.
 
 Bien que la répartition des flux entrants avec eBPF reste utile, elle n'a pas
