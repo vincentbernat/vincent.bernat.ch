@@ -298,26 +298,18 @@ def fixlinks(c):
             ),
         }
         while True:
-            print(
-                """
+            print("""
 URL:       {urlname}
 Source:    {parentname}
 Result:    {result}
 Warning:   {warningstring}
-Info:      {infostring}""".format(
-                    **row
-                )
-            )
-            print(
-                """
+Info:      {infostring}""".format(**row))
+            print("""
 (c) Continue
 (b) Browse {urlname}
 (p) Browse {parentname}
 (r) Replace by your own URL
-(q) Quit""".format(
-                    **row
-                )
-            )
+(q) Quit""".format(**row))
             valid = "cbprq"
             for a in archive:
                 print("({}) Browse {}".format(a, archive[a]))
@@ -406,8 +398,7 @@ def build(c):
             )
 
         with step("subset fonts"):
-            c.run(
-                """
+            c.run("""
 cd ..
 NIX_PATH=fonts=$PWD/.final/media/fonts
 NIX_PATH=$NIX_PATH:monospace=$PWD/glyphs-monospace.txt
@@ -417,8 +408,7 @@ nix build --impure .#build.subsetFonts
 cd -
 cp -r --no-preserve=mode ../result/* media/fonts/.
 rm ../result
-"""
-            )
+""")
 
         # Compute hash on various files
         with step("cache busting and SRI"):
@@ -549,10 +539,10 @@ printf " GIF %10s %10s %10s\n" \
         )
 
         c.run("git add *")
-        c.run("git diff --stat HEAD || true", pty=True, hide=False)
+        c.run("git diff --find-renames=20% --stat HEAD || true", pty=True, hide=False)
         if confirm("More diff?", default=True):
             c.run(
-                "env GIT_PAGER=less git diff --word-diff HEAD || true",
+                "env GIT_PAGER=less git diff --find-renames=20% --word-diff HEAD || true",
                 pty=True,
                 hide=False,
             )
@@ -596,12 +586,10 @@ def push(c, clean=False):
         # Restore timestamps (this relies on us not truncating
         # history too often)
         with step("restore timestamps"):
-            c.run(
-                """
+            c.run("""
 for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
     touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") -h "$f";
-done"""
-            )
+done""")
 
     # media
     for host in hosts:
