@@ -1,0 +1,168 @@
+---
+title: "Calculate “1/(40rods/​hogshead) → L/100km” from your Zsh prompt"
+description: |
+  Turn the equals sign in your Zsh shell into a calculator powered
+  by Numbat or Qalculate for quick computations or unit conversions.
+uuid: 342b2bba-4237-48b0-8b2b-9a0ad90608cb
+cover: images/simpson-s06e18@2x.jpg
+tags:
+  - programming-shell
+---
+
+<!-- Target audience is people enjoying their shell and customizing its
+configuration. They may not be Zsh users. The goal is to provide them a nice
+tool and show them how flexible Zsh can be. A secondary goal is to make them
+discover calculators like Numbat and Qalculate. -->
+
+I often need a quick calculation or a unit conversion. Rather than reaching for
+a separate tool, a few lines of *Zsh* configuration turn `=` into a calculator.
+Typing `= 660km / (2/3)c * 2 -> ms` gives me `6.60457 ms`[^marseille] without
+leaving my terminal, thanks to the Zsh line editor.
+
+[^marseille]: This is the fastest a packet can travel back and forth between
+    Paris and Marseille over optical fiber.
+
+[TOC]
+
+# The equal alias
+
+The main idea looks simple: define `=` as an alias to a calculator command. I
+prefer [Numbat][], a scientific calculator that supports unit conversions.
+[Qalculate][] is a close second.[^qalc] If neither is available, we fall back to
+Zsh's built-in *zcalc* module.
+
+[^qalc]: Qalculate is less understanding with units. For example, it parses
+    "Mbps" as megabarn per picosecond: ☢️
+    
+        ::console
+        $ numbat -e '5 MB/s -> Mbps'
+        40 Mbps
+        $ qalc 5 MB/s to Mbps
+        5 megabytes/second = 0.000005 B/ps
+
+
+[Numbat]: https://numbat.dev/ "Numbat: a statically typed programming language for scientific computations"
+[Qalculate]: https://qalculate.github.io/ "Qalculate!: the ultimate desktop calculator"
+
+As the `alias` built-in uses `=` as a separator for name and value, we need to
+alter the `aliases` associative array:
+
+```zsh
+if (( $+commands[numbat] )); then
+  aliases[=]='numbat -e'
+elif (( $+commands[qalc] )); then
+  aliases[=]='qalc'
+else
+  autoload -Uz zcalc
+  aliases[=]='zcalc -f -e'
+fi
+```
+
+With this in place, `= 847/11` becomes `numbat -e 847/11`.
+
+# The quoting problem
+
+The first problem surfaces quickly. Typing `= 5 * 3` fails: Zsh expands the `*`
+character as a glob pattern before passing it to the calculator. The same issue
+applies to other characters that Zsh treats specially, such as `>` or `|`. You
+must quote the expression:
+
+```console
+$ = '5 * 3'
+15
+```
+
+We fix this by hooking into the Zsh line editor to **quote the expression**
+before executing it.
+
+## Automatic quoting with ZLE
+
+Zsh calls the `accept-line` widget when you submit a command. We replace it with
+a function that detects the `=` prefix and quotes the expression:
+
+```zsh
+_vbe_calc_accept() {
+  case $BUFFER in
+    "="*)
+      typeset -g _vbe_calc_expr=$BUFFER # not used yet
+      BUFFER="= ${(q-)${${BUFFER#=}# }}"
+      ;;
+  esac
+  zle .accept-line
+}
+zle -N accept-line _vbe_calc_accept
+```
+
+When you type `= 5 * 3` and press <kbd>↲</kbd>, `_vbe_calc_accept` strips the
+`=` prefix, quotes the remainder with the [`(q-)` parameter expansion
+flag][q-flag], and rewrites the buffer to `= '5 * 3'` before invoking the
+original `.accept-line` widget. As a bonus, you can save a few keystrokes with
+`=5*3`! 🚀
+
+[q-flag]: man://zshexpn.1#q~2 "zshexpn(1) manual page"
+
+You can now compute math expressions and convert units directly from your shell.
+Zsh automatically quotes your expressions:
+
+```console
+$ = '1 + 2'
+3
+$ = 'pi/3 + pi |> cos'
+-0.5
+$ = '17 USD -> EUR'
+14.7122 €
+$ = '180*500mg -> g'
+90 g
+$ = '5 gigabytes / (2 minutes + 17 seconds) -> megabits/s'
+291.971 Mbit/s
+$ = 'now() -> tz("Asia/Tokyo")'
+2026-03-22 22:00:03 JST (UTC +09), Asia/Tokyo
+$ = '1 / (40 rods / hogshead) -> L / 100km'
+118548 × 0.01 l/km
+```
+
+![“That's the way I like it!” says Grandpa
+Simpson]([[!!images/simpson-s06e18@2x.jpg]] "The metric system is the tool of
+the devil! My car gets forty rods to the hogshead, and that's the way I like it!
+― <em>Grampa Simpson</em>, A Star Is Burns")
+
+## Storing unquoted history
+
+As is, Zsh records the *quoted* expression in history. You must unquote it
+before submitting it again. Otherwise, the ZLE widget quotes it a second time.
+[Bart Schaefer][help from Bart Schaefer] provided a solution to store the
+original version:
+
+[help from Bart Schaefer]: https://www.zsh.org/mla/users/2026/msg00021.html "Re: A ZLE widget for calculator"
+
+```zsh
+_vbe_calc_history() {
+  return ${+_vbe_calc_expr}
+}
+add-zsh-hook zshaddhistory _vbe_calc_history
+
+_vbe_calc_preexec() {
+  (( ${+_vbe_calc_expr} )) && print -s $_vbe_calc_expr
+  unset _vbe_calc_expr
+  return 0
+}
+add-zsh-hook preexec _vbe_calc_preexec
+```
+
+The `zshaddhistory` hook returns 1 if we are evaluating an expression, telling
+*Zsh* not to record the command. The `preexec` hook then adds the original,
+unquoted command with `print -s`.
+
+---
+
+The complete code is available in my [zshrc][]. A common alternative is the
+[`noglob`][noglob] precommand modifier. If you stick with `to` instead of `->`
+for unit conversion, it covers 90% of use cases. For a related Zsh line editor
+trick, see how I use [auto-expanding aliases][] to fix common typos.
+
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/fc49862528ac9fa1df144d202ff1906df90e787a/rc/alias.zsh#L451-L481
+[noglob]: man://zshmisc.1#noglob "zshmisc(1) manual page"
+[Grandpa Simpson]: https://www.youtube.com/watch?v=Y9XcWqBl8Xs "The Simpsons: My car gets 40 rods to the hogshead"
+[auto-expanding aliases]: [[en/blog/2025-zsh-autoexpand-aliases.html]] "Auto-expanding aliases in Zsh"
+
+*[ZLE]: Zsh Line Editor

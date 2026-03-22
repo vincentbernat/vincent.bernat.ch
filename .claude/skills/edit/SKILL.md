@@ -12,7 +12,8 @@ description: >
 ## Input
 
 If the user does not provide, look at the current status of the Git repository
-to check which article the user is currently editing.
+to check which article the user is currently editing. The article may contain
+some hints on the target audience and goals as HTML comments at the beginning.
 
 ## Steps
 
@@ -33,9 +34,11 @@ to check which article the user is currently editing.
 - Prefer the present tense.
 - Fix common non-native mistakes, notably simple past vs. past perfect.
 - Remove superfluous words and filler phrases. Be suspicious of adverbs and
-  adjectives when they bring nothing to the verb and the noun.
+  adjectives when they bring nothing to the verb and the noun. Be cautious when
+  there are too many prepositions.
 - Use descriptive verbs (e.g. "authenticate" instead of "provide
-  authentication"). Avoid verbs with a preposition.
+  authentication"). Do not flatten a descriptive verb into a bland one like
+  "is". Avoid verbs with a preposition.
 - Don't put "however" as the beginning of a sentence. "But", "yet", "still", and
   "instead", can be used instead.
 - Prefer "that" to "which", except if a comma is needed and in this case,

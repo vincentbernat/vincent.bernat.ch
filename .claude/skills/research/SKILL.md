@@ -5,6 +5,7 @@ description: >
   and suggest additional citations. Triggers when the user mentions
   "research", "verify", "find references", "citations", or asks to
   strengthen or review the content of an article.
+allowed-tools: WebFetch, WebSearch, Read, Grep, Glob, Bash(man *)
 ---
 
 # Research an article topic
@@ -13,7 +14,8 @@ description: >
 
 If the user does not provide a specific article to research, look at the current
 status of the Git repository to check which article the user is currently
-editing.
+editing. The article may contain some hints on the target audience and goals as
+HTML comments at the beginning.
 
 ## Steps
 

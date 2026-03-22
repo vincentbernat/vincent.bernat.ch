@@ -1,0 +1,166 @@
+---
+title: "Calculer « 1/(40rods/​hogshead) → L/100km » depuis l'invite Zsh"
+description: |
+  Transformer le signe égal dans Zsh en calculatrice grâce à Numbat
+  ou Qalculate pour des calculs rapides ou des conversions d'unités.
+uuid: 342b2bba-4237-48b0-8b2b-9a0ad90608cb
+cover: images/simpson-s06e18@2x.jpg
+tags:
+  - programming-shell
+---
+
+J'ai souvent besoin d'un calcul rapide ou de convertir une unité en une autre.
+Plutôt que de recourir à un outil séparé, quelques lignes de configuration *Zsh*
+transforment `=` en calculatrice. En tapant `= 660km / (2/3)c * 2 -> ms`,
+j'obtiens `6.60457 ms`[^marseille] sans quitter mon terminal, grâce à l'éditeur
+de ligne de Zsh.
+
+[^marseille]: C'est le temps le plus court pour qu'un paquet fasse l'aller-retour
+    entre Paris et Marseille par fibre optique.
+
+[TOC]
+
+# L'alias `=`
+
+L'idée de base est simple : définir `=` comme alias vers une calculatrice en
+ligne de commande. Je préfère [Numbat][], une calculatrice scientifique gérant
+les conversions d'unités. [Qalculate][] est une autre option[^qalc]. Si aucun
+des deux n'est disponible, nous nous rabattons sur le module *zcalc* intégré à
+Zsh.
+
+[^qalc]: Qalculate est plus strict avec les unités. Par exemple, il interprète
+    « Mbps » comme mégabarn par picoseconde : ☢️
+
+        ::console
+        $ numbat -e '5 MB/s -> Mbps'
+        40 Mbps
+        $ qalc 5 MB/s to Mbps
+        5 megabytes/second = 0.000005 B/ps
+
+
+[Numbat]: https://numbat.dev/ "Numbat: a statically typed programming language for scientific computations"
+[Qalculate]: https://qalculate.github.io/ "Qalculate!: the ultimate desktop calculator"
+
+Comme la commande `alias` utilise `=` comme séparateur entre nom et valeur, nous
+modifions directement le tableau associatif `aliases` :
+
+```zsh
+if (( $+commands[numbat] )); then
+  aliases[=]='numbat -e'
+elif (( $+commands[qalc] )); then
+  aliases[=]='qalc'
+else
+  autoload -Uz zcalc
+  aliases[=]='zcalc -f -e'
+fi
+```
+
+Ainsi, `= 847/11` devient `numbat -e 847/11`.
+
+# Le problème des caractères spéciaux
+
+Le premier problème apparaît vite. Taper `= 5 * 3` échoue : Zsh interprète `*`
+comme un motif pour fichiers avant de le transmettre à la calculatrice. Le même
+souci se pose avec d'autres caractères spéciaux pour Zsh, comme `>` ou `|`. Il
+faut protéger l'expression :
+
+```console
+$ = '5 * 3'
+15
+```
+
+Nous corrigeons cela en nous appuyant sur l'éditeur de ligne de Zsh pour **placer
+l'expression entre guillemets** avant son exécution.
+
+## Protéger l'expression automatiquement avec ZLE
+
+Zsh appelle `accept-line` quand on valide une commande. Remplaçons-le par une
+fonction qui détecte le préfixe `=` et protège l'expression :
+
+```zsh
+_vbe_calc_accept() {
+  case $BUFFER in
+    "="*)
+      typeset -g _vbe_calc_expr=$BUFFER # not used yet
+      BUFFER="= ${(q-)${${BUFFER#=}# }}"
+      ;;
+  esac
+  zle .accept-line
+}
+zle -N accept-line _vbe_calc_accept
+```
+
+Quand on tape `= 5 * 3` puis <kbd>↲</kbd>, `_vbe_calc_accept` protège
+l'expression avec le [drapeau `(q-)`][parameter expansion flag] et réécrit la
+ligne en `= '5 * 3'` avant de la valider avec `.accept-line`. En bonus, vous
+pouvez économiser quelques caractères avec `=5*3` ! 🚀
+
+[parameter expansion flag]: man://zshexpn.1#q~2 "zshexpn(1) manual page"
+
+Nous pouvons désormais effectuer des calculs et des conversions d'unités
+directement depuis le shell. Zsh protège automatiquement les expressions :
+
+```console
+$ = '1 + 2'
+3
+$ = 'pi/3 + pi |> cos'
+-0.5
+$ = '17 USD -> EUR'
+14.7122 €
+$ = '180*500mg -> g'
+90 g
+$ = '5 gigabytes / (2 minutes + 17 seconds) -> megabits/s'
+291.971 Mbit/s
+$ = 'now() -> tz("Asia/Tokyo")'
+2026-03-22 22:00:03 JST (UTC +09), Asia/Tokyo
+$ = '1 / (40 rods / hogshead) -> L / 100km'
+118548 × 0.01 l/km
+```
+
+![« C'est comme ça que j'aime ! » dit Grand-père
+Simpson]([[!!images/simpson-s06e18@2x.jpg]] "Le système métrique, c'est une
+invention du démon ! Ma voiture fait une demi-lieue avec soixante gallons
+d'essence. Tant pis si ça vous plaît pas ! ― <em>Abraham Simpson</em>, Burns fait
+son cinéma")
+
+## Conserver l'expression originale dans l'historique
+
+En l'état, Zsh enregistre l'expression *protégée* dans l'historique. Il faut la
+déprotéger avant de la soumettre à nouveau, sinon ZLE la protège une seconde
+fois. [Bart Schaefer][help from Bart Schaefer] m'a fourni une solution pour
+stocker la version originale :
+
+[help from Bart Schaefer]: https://www.zsh.org/mla/users/2026/msg00021.html "Re: A ZLE widget for calculator"
+
+```zsh
+_vbe_calc_history() {
+  return ${+_vbe_calc_expr}
+}
+add-zsh-hook zshaddhistory _vbe_calc_history
+
+_vbe_calc_preexec() {
+  (( ${+_vbe_calc_expr} )) && print -s $_vbe_calc_expr
+  unset _vbe_calc_expr
+  return 0
+}
+add-zsh-hook preexec _vbe_calc_preexec
+```
+
+Le *hook* `zshaddhistory` renvoie 1 quand une expression est en cours
+d'évaluation, indiquant à *Zsh* de ne pas enregistrer la commande. Le *hook*
+`preexec` ajoute ensuite la commande originale, non protégée, avec `print -s`.
+
+---
+
+Le code complet est disponible dans mon [zshrc][]. Une alternative courante est
+le modificateur [`noglob`][noglob]. En utilisant `to` au lieu de `->` pour les
+conversions d'unités, il couvre 90 % des cas. Pour une astuce similaire avec
+l'éditeur de ligne de Zsh, voyez comment j'utilise les [expansions automatiques
+des alias][auto-expanding aliases] pour corriger les fautes de frappe courantes.
+
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/fc49862528ac9fa1df144d202ff1906df90e787a/rc/alias.zsh#L451-L481
+[noglob]: man://zshmisc.1#noglob "zshmisc(1) manual page"
+[Grandpa Simpson]: https://www.youtube.com/watch?v=Y9XcWqBl8Xs "The Simpsons: My car gets 40 rods to the hogshead"
+[auto-expanding aliases]: [[fr/blog/2025-zsh-expansion-automatique-alias.html]] "Expansion automatique des alias dans Zsh"
+
+*[ZLE]: Zsh Line Editor
