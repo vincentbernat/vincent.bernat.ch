@@ -90,7 +90,7 @@ class ReadingTime(int):
         return obj
 
 
-def reading_time(html, words_per_minute=200, code_lines_per_minute=50):
+def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
     """Compute reading time in minutes from HTML."""
     d = pq(html, parser="html")
     code_blocks = d.find("pre")
