@@ -184,6 +184,7 @@ class ImageFixerPlugin(Plugin):
                     )
                 ),
                 opaque=False,
+                interactive=svg.find(".//{http://www.w3.org/2000/svg}script") is not None,
             )
         if image.source_file.kind in {"m3u8"}:
             with open(image.path) as f:
@@ -358,8 +359,8 @@ class ImageFixerPlugin(Plugin):
                 img.attr.width = "{}".format(width)
                 img.attr.height = "{}".format(height)
 
-            # If image is a SVG in /obj/, turns into an object
-            if "/obj/" in src and src.endswith(".svg"):
+            # If image is an interactive SVG, turns into an object
+            if src.endswith(".svg") and self.cache.get(src, {}).get("interactive"):
                 img[0].tag = "object"
                 img.attr("type", "image/svg+xml")
                 img.attr("data", src)

@@ -234,10 +234,11 @@
                   | sed "s,^,$out/," \
                   | xargs mkdir -p
 
-                # SVG
-                for d in $(find . -type d | grep -Ev './(l|obj)(/|$)'); do
+                # SVG (skip interactive ones containing <script>)
+                for d in $(find . -type d); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
+                    | xargs -r0 sh -c 'grep -LZ "<script" "$@" || true' grep \
                     | xargs -r0n5 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
