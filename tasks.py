@@ -381,7 +381,6 @@ def build(c):
             hide="out",
         )
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
-    c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
     c.run("rm -rf .final/*")
     with step("run Hyde"):
         c.run("hyde -x gen -c %s" % conf)
@@ -558,6 +557,8 @@ printf " GIF %10s %10s %10s\n" \
                 pty=True,
                 hide=False,
             )
+        with c.cd(".."):
+            c.run('git annex lock && [ -z "$(git status --porcelain)" ]')
         if confirm("Keep?", default=True):
             c.run('git commit -a -m "Autocommit"', hide=False)
         else:
