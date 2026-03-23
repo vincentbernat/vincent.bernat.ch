@@ -477,6 +477,18 @@ rm ../result
                     )
                     sed_html = sed_html[20:]
 
+        with step("check missing images"):
+            pattern = re.escape(media) + r"images/[^\"\s]+"
+            result = c.run(
+                f"grep -rohP '{pattern}' --include='*.html' --include='*.xml' -r ."
+                r" | grep -vP '\.[0-9a-f]{14}\.'"
+                r" | grep -v '/images/favicon\.png$'"
+                r" | sort -u",
+                hide=True,
+            ).stdout.strip()
+            if result:
+                raise RuntimeError(f"Some images are missing:\n{result}")
+
         # Image optimization
         with step("optimize images"):
             c.run(
