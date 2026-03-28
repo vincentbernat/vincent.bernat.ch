@@ -1,0 +1,1433 @@
+---
+title: "Python et le C"
+description: |
+  Présentation de quatre méthodes pour écrire une extension Python en C :
+  ctypes, SWIG, Pyrex et l'API Python/C.
+uuid: 72f3bfc6-5f3e-4ce9-8d4e-17a65a33a74b
+created: !!timestamp 2010-11-01 14:00:00
+tags:
+  - programming-c
+  - programming-python
+  - outdated
+---
+
+!!! "Note" Cet article a été publié dans *GNU/Linux Magazine n° 132* en 2010. Il
+est reproduit ici avec de légères retouches cosmétiques.
+
+Python est un langage particulièrement riche. Il dispose notamment d'une
+importante bibliothèque standard couvrant de larges besoins. Toutefois, il n'est
+pas rare de recourir à un module externe. Par exemple, si votre application
+nécessite l'accès à une base de données PostgreSQL, vous pouvez recourir au
+module tiers psycopg2. Qu'ils soient ou non inclus dans la bibliothèque
+standard, il existe deux grandes familles de modules : les modules natifs,
+écrits entièrement en Python et les extensions, qui sont des modules écrits dans
+un autre langage, typiquement le C. Nous allons nous intéresser dans cet article
+aux différentes façons d'écrire une extension Python.
+
+[TOC]
+
+# Une extension ou un module natif ?
+
+Tout d'abord, pourquoi choisir d'écrire une extension plutôt qu'un module natif
+? Il y a des avantages et des inconvénients aux deux approches.
+
+Un module natif ne nécessite pas de compilation et aucun outil supplémentaire
+pour être fonctionnel. Il est alors généralement immédiatement portable et
+fonctionnera de façon identique quel que soit l'OS : cela fonctionnera aussi
+bien sous Microsoft Windows que sous une distribution GNU/Linux. Enfin, il est
+inutile d'apprendre un autre langage ! En écrivant votre module directement en
+Python, vous disposez immédiatement de ses qualités : richesse, dynamisme et les
+nombreux modules et extensions existants sur lesquels s'appuyer.
+
+Toutefois, il n'est pas toujours possible ou souhaitable d'écrire un module
+natif. Le cas le plus courant et que nous allons exploiter par la suite est
+l'utilisation d'une bibliothèque écrite dans un autre langage comme le C. Il va
+falloir faire le lien entre cette bibliothèque et Python. Une autre raison est
+la vitesse. L'interpréteur Python le plus couramment utilisé (CPython) n'est pas
+encore terriblement rapide. Si la vitesse est un point important, vous pouvez
+avoir à réécrire certaines parties de votre application dans un langage plus
+statique mais plus rapide comme le C. Enfin, vous pouvez avoir besoin d'accéder
+à certaines fonctions de bas niveau, inaccessibles ou difficilement accessibles
+en Python, pour par exemple piloter un appareil électronique sur une interface
+peu commune. Notez que ce dernier exemple est de moins en moins valable car
+Python se dote d'extensions pour combler ce besoin, comme le pilotage des
+périphériques USB.
+
+# La tortue
+
+Pour illustrer cet exemple, imaginons que vous venez de recevoir une [tortue
+robot][TORTUE]. Il s'agit d'un petit robot destiné à reproduire le comportement
+de la tortue du langage LOGO. Le robot est capable d'interpréter un très grand
+nombre de commandes. On peut par exemple lui demander d'avancer, de tourner à
+gauche, de baisser le crayon, de changer de crayon, etc. Il s'interface avec un
+PC afin de pouvoir lui envoyer les commandes adéquates. L'interface se fait avec
+un bus de commande sur port série.
+
+## Bibliothèque en C
+
+Cette tortue est fournie avec une bibliothèque en C permettant de la piloter
+avec quelques fonctions. Il s'agit d'une bibliothèque très simple. Nous allons
+donc exploiter cette bibliothèque plutôt que de tenter de la réimplanter.
+
+### L'interface en C
+
+Voici l'interface fournie avec la bibliothèque :
+
+```c
+#ifndef _TORTUE_H
+#define _TORTUE_H
+
+/* Codes d'erreur */
+#define TURTLE_ERROR_NO_ERROR      0
+#define TURTLE_ERROR_COMMUNICATION 1
+#define TURTLE_ERROR_INVALID_VALUE 2
+#define TURTLE_ERROR_NOT_PRESENT   3
+
+/* Object opaque représentant une tortue */
+struct turtle;
+
+/* Fonctions disponibles */
+struct turtle* turtle_init(int port);
+int            turtle_send(struct turtle *, const char *);
+int            turtle_close(struct turtle *);
+int            turtle_error(struct turtle *);
+const char*    turtle_model(struct turtle *);
+long int       turtle_status(struct turtle *);
+
+#endif
+```
+
+La bibliothèque est capable de piloter simultanément plusieurs tortues.
+Celles-ci sont reliées sur un bus et identifiées par un numéro. La première
+tortue obtient le numéro 1, la suivante le numéro 2 et ainsi de suite.
+
+La fonction `turtle_init()` permet d'initialiser une tortue. On obtient alors
+une structure opaque qui sera utilisée par les autres fonctions pour indiquer
+sur quelle tortue on désire travailler. Si la tortue demandée n'existe pas,
+cette fonction retourne `NULL`. L'interface proposée ne permet pas d'obtenir de
+plus amples renseignements au sujet de cette erreur à ce niveau.
+
+Les fonctions suivantes renvoient `-1` ou `NULL` en cas d'erreur. Il est alors
+possible d'obtenir davantage de renseignements sur l'erreur à l'aide de la
+fonction `turtle_error()`. Il y a 3 erreurs possibles seulement.
+
+La fonction `turtle_send()` permet d'envoyer un ordre à la tortue. Elle renvoie
+`0` en cas de succès. On lui fournit une chaîne comme `FORWARD 10` pour la faire
+avancer ou `LEFT 50` pour la faire tourner. Le robot s'occupe d'interpréter
+lui-même l'ordre.
+
+Pour éteindre la tortue et libérer toutes les ressources associées, on utilise
+la fonction `turtle_close()`. Elle renvoie `0` en cas de succès.
+
+La fonction `turtle_model()` renvoie une chaîne indiquant le modèle de la
+tortue. Enfin, la fonction `turtle_status()` renvoie un entier encodant l'état
+de la tortue. Cet état dépend du modèle et la bibliothèque en C ne nous fournit
+aucune indication sur sa signification. Pour avoir plus de détails sur cette
+valeur, il faut lire les spécifications du modèle de tortue que l'on utilise.
+
+### L'implémentation
+
+À moins de disposer d'un concessionnaire Tortue 3000 à proximité de chez vous,
+il n'est pas facile de trouver la tortue décrite ci-dessus. Pour faciliter
+l'expérimentation, nous allons proposer une implémentation minimaliste de cette
+bibliothèque afin de pouvoir l'utiliser tout au long de l'article.
+
+L'implémentation proposée ici est capable de piloter seulement 3 tortues. Une
+erreur est renvoyée si on tente de piloter une autre tortue. La troisième tortue
+est de plus défectueuse. Il n'est pas possible de lui envoyer des ordres. Chaque
+tortue est d'un modèle différent.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "tortue.h"
+
+FILE *output = NULL;
+
+struct turtle {
+  int index;  /* Index de la tortue */
+  int error;  /* Dernière erreur de la tortue */
+};
+
+struct turtle*
+turtle_init(int port)
+{
+  struct turtle *t;
+  if ((port < 1) || (port > 3))
+    return NULL;
+  t = malloc(sizeof(struct turtle));
+  if (!t) return NULL;
+  t->index = port;
+  t->error = 0;
+  fprintf(output, "Open turtle %d\n", t->index);
+  fflush(output);
+  return t;
+}
+
+int
+turtle_send(struct turtle *t, const char *command)
+{
+  if (t->index == 3) {
+    t->error = TURTLE_ERROR_COMMUNICATION;
+    return -1;
+  }
+  fprintf(output, "Command for turtle %d: %s\n", t->index, command);
+  fflush(output);
+  return 0;
+}
+
+int
+turtle_close(struct turtle *t)
+{
+  free(t);
+  return 0;
+}
+
+int
+turtle_error(struct turtle *t)
+{
+  return t->error;
+}
+
+const char*
+turtle_model(struct turtle *t)
+{
+  switch (t->index) {
+  case 1: return "T1988";
+  case 2: return "T2000";
+  default: return "T3000";
+  }
+}
+
+long int
+turtle_status(struct turtle *t)
+{
+  switch (t->index) {
+  case 1: return 458751;
+  case 2: return 812;
+  default: return 0;
+  }
+}
+
+void __attribute__ ((constructor))
+my_init() {
+  output = fdopen(3, "a");
+  if (!output) output = stderr;
+}
+```
+
+Nous pouvons compiler notre bibliothèque avec les commandes suivantes :
+
+```console
+$ gcc -O2 -Wall -fPIC -shared -Wl,-soname,libtortue.so.1 \
+      -o libtortue.so.1.0.0
+$ ln -s libtortue.so.1.0.0 libtortue.so.1
+$ ln -s libtortue.so.1 libtortue.so
+```
+
+Cette bibliothèque a une petite bizarrerie qui va nous permettre de la tester
+plus facilement. Si le descripteur 3 existe, elle va l'utiliser pour imprimer
+les messages de diagnostic. Il est alors possible d'intercepter ces messages
+pour vérifier le bon fonctionnement de notre bibliothèque.
+
+Avant de passer au Python, essayons d'utiliser notre bibliothèque avec un simple
+programme de test.
+
+```c
+/* sample.c */
+#include <assert.h>
+#include <stdlib.h>
+#include "tortue.h"
+
+int main() {
+  struct turtle *t;
+  assert((t = turtle_init(1)) != NULL);
+  assert(turtle_send(t, "GO 10") == 0);
+  assert(turtle_send(t, "LEFT 50") == 0);
+  assert(turtle_send(t, "GO 40") == 0);
+  assert(turtle_close(t) == 0);
+  return 0;
+}
+```
+
+Compilons et exécutons.
+
+```console
+$ gcc -Wall -O2 -o sample sample.c -L. -ltortue
+$ LD_LIBRARY_PATH=. ./sample
+Open turtle 1
+Command for turtle 1: GO 10
+Command for turtle 1: LEFT 50
+Command for turtle 1: GO 40
+```
+
+Tout semble fonctionner comme on l'attend !
+
+## L'interface Python
+
+Vous voilà donc en possession d'une superbe tortue et de quoi la programmer
+aisément en C. Toutefois, vous destinez cette tortue à un public désireux de la
+programmer en Python plutôt qu'en C. Il y a alors deux solutions possibles :
+réimplémenter la bibliothèque en un module natif Python (en regardant son code
+source ou en écoutant ce qui se passe sur le port série) ou en créant une
+extension Python. Nous nous orientons pour cet article vers la seconde solution.
+
+Avant de se lancer dans le code de l'extension, il est préférable de définir
+quelle interface nous désirons obtenir. Dans les grandes lignes, nous voulons un
+objet `Turtle` avec une méthode `send()` et des attributs `model` et `status`.
+Les erreurs devront être converties en exceptions.
+
+Afin de vérifier que l'interface que l'on va concevoir est adaptée à ce que nous
+voudrons faire par la suite, il est généralement utile d'écrire quelques lignes
+d'utilisation de l'extension plutôt que de foncer tête baissée dans le code.
+Généralement, c'est à ce niveau qu'on se rend compte si l'interface est complète
+et pratique à utiliser. Une autre approche est d'écrire dès le début des [tests
+unitaires][TDD]. On pourra ainsi vérifier que le code répond bien à nos
+attentes. Nous pourrons aussi vérifier que les différentes implémentations que
+nous allons proposer par la suite sont bien équivalentes. Lançons-nous sans plus
+attendre dans l'écriture de ces tests !
+
+```python
+#!/usr/bin/python
+
+import unittest
+import os
+
+r, w = os.pipe()
+os.dup2(r, 200)
+os.close(r)
+os.dup2(w, 3)
+os.close(w)
+output = os.fdopen(200)
+
+from tortue import Turtle
+from tortue import TurtleException
+
+class TestTurtle(unittest.TestCase):
+
+    def test_turtle(self):
+        t1 = Turtle(1)
+        self.assertEqual(output.readline().strip(), "Open turtle 1")
+
+    def test_send(self):
+        t1 = Turtle(1)
+        output.readline()
+        t1.send("GO 10")
+        self.assertEqual(output.readline().strip(), "Command for turtle 1: GO 10")
+
+    def test_model(self):
+        t1 = Turtle(1)
+        output.readline()
+        self.assertEqual(t1.model, "T1988")
+        t2 = Turtle(2)
+        output.readline()
+        self.assertEqual(t2.model, "T2000")
+
+    def test_status(self):
+        t1 = Turtle(1)
+        self.assertEqual(t1.status["ready"], True)
+        self.assertEqual(t1.status["distance"], 458)
+        self.assertEqual(t1.status["speed"], 75)
+
+    def test_exception(self):
+        t3 = Turtle(3)
+        output.readline()
+        self.assertRaises(TurtleException, t3.send, "GO 10")
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+Nous commençons par effectuer une petite manipulation au niveau des descripteurs
+de fichier pour pouvoir lire ce qui sort du descripteur 3. Cela va nous
+permettre de contrôler le bon fonctionnement de notre extension. Nous importons
+ensuite l'extension que nous souhaitons tester. Nous effectuons ensuite les 5
+tests nécessaires pour valider notre interface.
+
+## L'implémentation en Python
+
+Notre bibliothèque en C est très simple. Nous aurions pu l'écrire directement
+sous forme de module Python. Ce n'est pas le but de l'exercice mais afin de bien
+montrer que les tests fonctionnent avant même d'écrire notre première version de
+l'extension, nous allons écrire la version en Python. Pour ce faire, nous créons
+un répertoire `tortue` dans lequel nous plaçons un fichier `__init__.py`
+contenant simplement `from native import *`. Le but de ce fichier est
+d'aiguiller notre module `tortue` sur la bonne version de l'extension. Dans ce
+répertoire, nous plaçons aussi le code du module natif dans le fichier
+`native.py`.
+
+```python
+import os
+import sys
+
+from status import TurtleStatus
+
+try:
+    output = os.fdopen(3, "a")
+except OSError:
+    output = sys.stdout
+
+class Turtle:
+    def __init__(self, nb):
+        print >> output, "Open turtle %d" % nb
+        output.flush()
+        self.nb = nb
+        if nb == 1:
+            self.model = "T1988"
+            self.status = TurtleStatus(self.model, 458751)
+        elif nb == 2:
+            self.model = "T2000"
+            self.status = TurtleStatus(self.model, 812)
+        else:
+            self.model = "T3000"
+            self.status = TurtleStatus(self.model, 0)
+
+    def send(self, cmd):
+        if self.nb == 3:
+            raise TurtleException("communication error")
+        print >> output, "Command for turtle 1: %s" % cmd
+        output.flush()
+
+class TurtleException(Exception):
+    pass
+```
+
+Ce module fait appel à un module additionnel dont le rôle est de déchiffrer
+l'état du robot en fonction de son modèle et de la valeur numérique de l'état.
+On désire en effet obtenir un état sous forme de dictionnaire, plus lisible
+qu'une valeur numérique. Comme le décodage de l'état du robot peut évoluer avec
+les nouveaux modèles, il nous apparaît plus simple de coder celui-ci en Python
+plutôt que de l'inclure dans l'extension. Bien sûr, par la suite, cela aura
+aussi une vertu pédagogique ! Le contenu du fichier `status.py` est le suivant
+:
+
+```python
+class TurtleStatus(dict):
+
+    def __init__(self, model, status):
+        if model == "T1988":
+            dict.__init__(
+                self,
+                {
+                    "ready": (status % 10 == 1),
+                    "distance": status / 1000,
+                    "speed": (status / 10) % 100,
+                },
+            )
+        else:
+            dict.__init__(
+                self, {"ready": (status & 2) != 0, "distance": (status & 0xFF0) >> 8}
+            )
+```
+
+Une fois tout ceci en place, nous pouvons lancer nos tests et tout devrait
+réussir !
+
+```console
+$ python turtletest.py
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK
+```
+
+Nous n'avons cependant pas utilisé la bibliothèque en C. Si nous essayons de
+piloter de vraies tortues, il ne va pas se passer grand-chose. Il est donc temps
+d'écrire l'extension en utilisant la bibliothèque C.
+
+# Écriture de l'extension Python
+
+Il y a plusieurs méthodes pour écrire une extension Python. Nous allons en voir
+4 : l'utilisation de [*ctypes*][ctypes], l'utilisation de [*SWIG*][SWIG],
+l'utilisation de [*Pyrex*][Pyrex] et enfin l'écriture de l'extension directement
+en C avec l'[API Python/C][Python/C API].
+
+## Utilisation de ctypes
+
+Le module [`ctypes`][ctypes] permet de s'interfacer avec une bibliothèque et
+d'en utiliser les fonctions. Son utilisation a déjà été détaillée dans un
+article de Victor Stinner dans un précédent hors-série. Le grand avantage de
+cette approche est de pouvoir manipuler directement la bibliothèque sous sa
+forme compilée. On obtient ainsi une extension qui ne nécessite aucune
+compilation pour être utilisable. L'inconvénient est qu'il n'y a pas de filet de
+sécurité : si on se trompe ou si l'interface binaire de la bibliothèque change,
+on aura généralement droit à un segfault de l'interpréteur Python.
+
+L'utilisation du module `ctypes` est extrêmement simple. On charge la
+bibliothèque en mémoire avec `CDLL()` puis on peut appeler directement les
+fonctions contenues dans la bibliothèque en les considérant comme des méthodes
+de l'objet obtenu. Dans les coulisses, le module va se charger de trouver la
+signature de la fonction C à partir de la façon dont vous invoquez la méthode
+Python.
+
+```pycon
+$ LD_LIBRARY_PATH=. python
+Python 2.6.6 (r266:84292, Sep 14 2010, 08:45:25)
+[GCC 4.4.5 20100909 (prerelease)] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+>>> from ctypes import *
+>>> libtortue = CDLL("libtortue.so.1")
+>>> t1 = libtortue.turtle_init(1)
+Open turtle 1
+>>> libtortue.turtle_model(t1)
+-1600443770
+```
+
+Cependant, tout ne peut pas se dérouler par magie. Il faudra dans certains cas
+aider un peu le module. Par exemple, par défaut, il est attendu que les
+fonctions C retournent un `int`. C'est pour cette raison que nous obtenons
+-1600443770 dans l'exemple ci-dessus. Il s'agit de la conversion du pointeur sur
+une chaîne de caractères en un entier. Il va falloir donc aider un peu ctypes en
+lui indiquant les valeurs de retour.
+
+```pycon
+>>> libtortue.turtle_init.restype = c_void_p
+>>> libtortue.turtle_model.restype = c_char_p
+>>> t1 = libtortue.turtle_init(1)
+Open turtle 1
+>>> libtortue.turtle_model(t1)
+'T1988'
+```
+
+Bien entendu, il ne s'agit pas de se tromper. Dans le cas contraire, la sanction
+est immédiate. C'est pour cette raison que le développement d'une extension avec
+`ctypes` est fragile et ne devrait permettre que de monter un premier prototype.
+
+```pycon
+>>> libtortue.turtle_model(1)
+sh: segmentation fault  LD_LIBRARY_PATH=. python
+```
+
+Le module `ctypes` permet de nombreuses autres manipulations sur les structures
+en C. Cependant, nous n'en avons pas besoin pour écrire notre extension.
+
+```python
+from ctypes import *
+from status import TurtleStatus
+
+libtortue = CDLL("libtortue.so.1")
+libtortue.turtle_init.restype = c_void_p
+libtortue.turtle_model.restype = c_char_p
+libtortue.turtle_status.restype = c_long
+
+class Turtle(object):
+    def __init__(self, nb):
+        t = libtortue.turtle_init(nb)
+        if t == 0:
+            raise TurtleException("unable to create turtle %d" % nb)
+        self.t = c_void_p(t)
+
+    def send(self, cmd):
+        result = libtortue.turtle_send(self.t, cmd)
+        if result != 0:
+            raise TurtleException("got error %d" % libtortue.turtle_error(self.t))
+
+    def __getattribute__(self, attr):
+        if attr == "model":
+            return libtortue.turtle_model(self.t)
+        if attr == "status":
+            s = libtortue.turtle_status(self.t)
+            if s == -1:
+                raise TurtleException("got error %d" % libtortue.turtle_error(self.t))
+            return TurtleStatus(self.model, s)
+        return object.__getattribute__(self, attr)
+
+    def __del__(self):
+        libtortue.turtle_close(self.t)
+
+class TurtleException(Exception):
+    pass
+```
+
+Nommez ce nouveau fichier `mctypes.py` puis modifiez le fichier `__init__.py`
+pour importer ce fichier à la place de `native.py`. Les tests devraient passer
+sans problème !
+
+Notez comment l'intégration est simple. La méthode `send()` appelle simplement
+la fonction C `send()` et transforme l'erreur éventuelle en exception. Nous
+avons également fait usage de la méthode `__getattribute__` qui permet
+d'intercepter les accès aux attributs afin de fournir dynamiquement le bon
+modèle et surtout le bon état.
+
+Le module ainsi construit est cependant très fragile. Si une erreur se glisse,
+le programme se terminera simplement sous forme d'un segfault, ce qui est assez
+inhabituel en Python. C'est le lot de l'interfaçage de Python et C mais le
+problème est ici aggravé par l'absence de toute compilation qui permettrait de
+détecter certaines erreurs, y compris dans des parties du code non exécutées
+dans les tests.
+
+## Utilisation de SWIG
+
+SWIG signifie [*Simplified Wrapper and Interface Generator*][SWIG]. Son but est
+de construire très rapidement à partir d'un fichier d'interface (notre
+`tortue.h`) une extension Python (ou Perl, ou Ruby, ...).
+
+Lançons-nous dans le vif du sujet. Pour utiliser SWIG, il faut écrire un fichier
+d'interface. SWIG va lire celui-ci pour générer une extension écrite en C que
+l'on pourra ensuite compiler. Voici le fichier d'interface le plus court que
+nous pouvons écrire :
+
+```swig
+%module swig
+%{
+#include "../tortue.h"
+%}
+
+%include "../tortue.h"
+```
+
+Un fichier d'interface est un fichier contenant des directives C ainsi que des
+directives spécifiques à SWIG commençant par le signe `%`. La directive
+`%module` indique le nom de l'extension que nous voulons construire. Le bloc qui
+suit, délimité par `%{` et `%}` permet d'inclure du code arbitraire dans
+l'extension en C généré par SWIG. Nous l'utilisons pour inclure l'entête de
+notre bibliothèque comme on l'a fait pour le programme d'exemple écrit en C. La
+directive `%include` permet d'inclure un fichier arbitraire dans notre fichier
+d'interface. Son format doit être compréhensible par SWIG. Notre fichier
+d'entête `tortue.h` est suffisamment simple pour être compris directement par
+SWIG, on peut donc l'inclure directement. S'il était trop complexe ou contenant
+des symboles que l'on ne veut pas rendre accessible dans l'extension Python, il
+aurait fallu écrire directement les déclarations de fonctions.
+
+Nous allons maintenant compiler le fichier d'interface en un fichier C. Ce
+fichier C sera ensuite compilé en une extension Python que l'on pourra utiliser
+depuis l'interpréteur.
+
+```console
+$ cd tortue
+$ swig -python swig.i
+$ gcc -Wall -O2 -c -fPIC swig_wrap.c $(python-config --cflags)
+$ gcc -shared swig_wrap.o -L.. -ltortue -o _swig.so
+$ cd ..
+```
+```pycon
+$ LD_LIBRARY_PATH=. python
+>>> from tortue import swig
+>>> [f for f in dir(swig) if f.startswith("turtle_")]
+['turtle_close', 'turtle_error', 'turtle_init', 'turtle_model', 'turtle_send', 'turtle_status']
+>>> a = swig.turtle_init(1)
+>>> swig.turtle_send(a, "GO 10")
+Command for turtle 1: GO 10
+0
+```
+
+SWIG a converti chacune des déclarations en une fonction Python que l'on peut
+utiliser comme la fonction C correspondante. On obtient ainsi une interface
+identique de ce que l'on peut obtenir directement avec le module `ctypes` avec
+cependant une meilleure vérification des arguments. Il y a toujours possibilité
+d'obtenir un segfault, mais dans la plupart des cas, les erreurs sont détectées
+correctement :
+
+```pycon
+>>> swig.turtle_model(1)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in >module<
+TypeError: in method 'turtle_model', argument 1 of type 'struct turtle *'
+```
+
+Le travail n'est cependant pas fini. L'extension générée par SWIG ne respecte
+pas du tout notre interface. Cependant, l'interface obtenue étant quasiment
+identique à celle obtenue avec le module `ctypes`, on va reprendre le fichier
+`mctypes.py` et le copier en `mswig.py`. Seul le début change :
+
+```python
+import swig as libtortue
+from status import TurtleStatus
+
+class Turtle(object):
+    def __init__(self, nb):
+        t = libtortue.turtle_init(nb)
+        if t == 0:
+            raise TurtleException("unable to create turtle %d" % nb)
+        self.t = t
+```
+
+Le reste est strictement identique. On modifie `__init__.py` pour utiliser ce
+module et on relance les tests. Tout doit passer correctement.
+
+SWIG dispose d'un certain nombre de fonctionnalités pour produire directement
+une extension utilisable sans *wrapper* supplémentaire comme on a dû faire ici.
+Il est par exemple capable de générer des exceptions selon le code de retour des
+fonctions. Il est également capable de transformer des structures en objet.
+Enfin, une dernière fonctionnalité permet de modifier les fonctions générées en
+leur ajoutant du code supplémentaire. Cette dernière fonctionnalité nous serait
+nécessaire si on voulait renvoyer une instance de `TurtleStatus` lors de l'accès
+à l'attribut `status`. Nous n'allons pas détailler ici l'ensemble de ces
+fonctionnalités car elles nécessitent un certain nombre de connaissances sur
+l'API Python et SWIG n'est généralement pas utilisé pour produire directement
+une interface de haut niveau à partir d'une bibliothèque en C de bas niveau.
+Regardons simplement comment obtenir un objet `Turtle` plutôt qu'une suite de
+fonctions :
+
+```swig
+// swig.i
+%module swig
+%{
+#include "../tortue.h"
+
+  typedef struct {
+    struct turtle *t;
+  } Turtle;
+
+  Turtle *new_Turtle(int port) {
+    Turtle *t;
+    t = malloc(sizeof(Turtle));
+    t->t = turtle_init(port);
+    return t;
+  }
+
+  void delete_Turtle(Turtle *t) {
+    turtle_close(t->t);
+    free(t);
+  }
+
+  void Turtle_send(Turtle *t, char *cmd) {
+    turtle_send(t->t, cmd);
+  }
+
+  const char *Turtle_model_get(Turtle *t) {
+    return turtle_model(t->t);
+  }
+
+  const int Turtle_status_get(Turtle *t) {
+    return turtle_status(t->t);
+  }
+%}
+
+typedef struct {
+  %extend {
+    Turtle(int);
+    ~Turtle();
+    void send(char *cmd);
+    %immutable;
+    const char *model;
+    const int status;
+  }
+} Turtle;
+```
+
+Dans la partie C, nous déclarons une nouvelle structure `Turtle` contenant juste
+l'identifiant de la tortue. Dans la partie SWIG, nous utilisons la directive
+`%extend` afin de transformer cette structure en classe et d'ajouter des
+méthodes et des attributs respectant notre interface. Nous avons ainsi un
+constructeur (équivalent de `__init__`), un destructeur (équivalent de
+`__del__`), la fonction d'envoi et les deux attributs `model` et `status`. Ces
+derniers sont marqués comme `%immutable` pour indiquer que l'on ne va pas écrire
+de fonction permettant de les modifier. SWIG s'attend à disposer des fonctions
+correspondantes définies dans la partie C.
+
+Cette nouvelle extension ne passe pas nos tests. La gestion des exceptions est
+absente. Il faudrait déclarer une nouvelle exception et l'utiliser dans chacune
+des méthodes. La déclaration et l'utilisation des exceptions fait appel à des
+fonctions de l'API Python que nous verrons par la suite. L'attribut `status` est
+un entier alors que nous attendions une instance de `TurtleStatus`. Il nous
+faudrait importer le module contenant cet objet puis instancier cet objet. Il
+nous faudrait encore faire appel à des fonctions de l'API Python que nous
+verrons par la suite.
+
+SWIG est très intéressant si on a une bibliothèque C avec beaucoup de fonctions
+à convertir, comme une bibliothèque OpenGL. Un autre avantage de SWIG est sa
+compatibilité avec un grand nombre de versions de Python, depuis la version 2.0
+jusqu'aux versions 3.
+
+Quand on essaie d'aller un peu plus loin, il est nécessaire de faire appel
+directement à certaines fonctions de l'API Python. L'utilisation avancée de SWIG
+peut donc devenir rapidement plus difficile. Pour ces raisons, les bibliothèques
+utilisant SWIG sont généralement de bas niveau : elles fournissent un équivalent
+Python des fonctions en C, avec éventuellement une gestion des exceptions.
+L'ajout d'une interface plus pythonique se fait en écrivant un module
+additionnel en Python utilisant l'extension produite par SWIG. Ainsi, aucune
+connaissance de l'API Python n'est réellement nécessaire pour utiliser SWIG.
+
+## Utilisation de Pyrex
+
+Il est possible de combiner la grande liberté d'utilisation du module `ctypes`
+avec la sécurité d'un compilateur. Cette solution s'appelle [*Pyrex*][Pyrex] qui
+est un compilateur de code Python en C qui dispose de fonctionnalités permettant
+d'utiliser directement des données C.
+
+Pyrex prend en entrée du code Python et va le transformer en code C. Quelques
+limitations sont présentes, mais un code Python existant peut généralement être
+transformé en C par Pyrex. Pyrex sait également utiliser des données et des
+fonctions en C. Il devient alors possible de mélanger du code C et du code
+Python, un peu à la manière du module `ctypes`. L'extension que nous allons
+écrire est d'ailleurs très proche de ce que l'on peut faire avec le module
+`ctypes` :
+
+```pyrex
+cdef extern from "../tortue.h":
+  struct turtle
+  turtle* turtle_init(int port)
+  int turtle_send(turtle *, char *)
+  int turtle_close(turtle *)
+  int turtle_error(turtle *)
+  char* turtle_model(turtle *)
+  long int turtle_status(turtle *)
+
+from status import TurtleStatus
+
+cdef class Turtle:
+
+    cdef turtle *t
+
+    def __cinit__(self, port):
+        cdef turtle* t
+        t = turtle_init(port)
+        if (t == NULL):
+            raise TurtleException("unable to create turtle %d" % port)
+        self.t = t
+
+    def send(self, cmd):
+        cdef int result
+        result = turtle_send(self.t, cmd)
+        if result != 0:
+            raise TurtleException("got error %d" % turtle_error(self.t))
+
+    def __getattr__(self, attr):
+        cdef int s
+        if attr == "model":
+            return turtle_model(self.t)
+        if attr == "status":
+            s = turtle_status(self.t)
+            if s == -1:
+                raise TurtleException("got error %d" % turtle_error(self.t))
+            return TurtleStatus(self.model, s)
+        return object.__getattribute__(self, attr)
+
+    def __dealloc__(self):
+        turtle_close(self.t)
+
+class TurtleException(Exception):
+    pass
+```
+
+En tête du fichier, on importe les fonctions qui nous intéressent. La syntaxe
+n'est ni du Python, ni du C. Il n'est pas possible d'importer tout un tas de
+fonctions sans les énumérer une à une. On déclare d'abord la structure `struct
+turtle`. Elle est référencée par la suite sous le nom `turtle`. On définit
+ensuite chaque fonction en suivant au mieux le prototype de la fonction C. Pyrex
+n'aime pas le mot clef `const` ; on ne l'utilise donc pas. Une fois les
+fonctions C ainsi définies, on peut y faire appel n'importe où dans le code.
+
+Sans précisions supplémentaires, toutes les variables sont réputées contenir des
+objets Python. Si besoin et si possible, Pyrex assurera la conversion
+automatique des données C en objets Python. Pour les données qui ne peuvent pas
+être converties en Python ou pour lesquelles on ne souhaite pas de conversion en
+Python (pour des raisons de performance par exemple), il est nécessaire de les
+déclarer à l'aide du mot clef `cdef`. Notons que la classe entière est déclarée
+avec le mot clef `cdef`. En effet, on désire stocker dans la classe le pointeur
+vers notre tortue et il n'est pas possible de stocker une donnée C dans un objet
+Python. Les méthodes `__init__` et `__del__` deviennent `__cinit__` et
+`__dealloc__` (sachant qu'il faut éviter de faire trop de choses dans cette
+dernière). Si la bibliothèque en C utilisait un entier plutôt qu'une structure
+pour identifier les tortues, il aurait été possible d'utiliser une classe Python
+classique. Enfin, notons le mélange curieux de l'utilisation de `__getattr__` et
+`__getattribute__` pour une classe n'héritant pas de `object`. C'est une
+particularité de Pyrex.
+
+Essayons de compiler ce code après avoir modifié `__init__.py` pour utiliser
+l'extension écrite avec l'aide de `pyrex` :
+
+```console
+$ pyrexc pyrex.pyx
+$ gcc -shared -fPIC -O2 -Wall $(python-config --cflags) pyrex.c \
+      -L.. -ltortue -o pyrex.so
+$ (cd .. ; LD_LIBRARY_PATH=. python turtletest.py)
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 0.000s
+
+OK
+```
+
+Pyrex dispose donc des avantages de SWIG (compilation, vérification des
+paramètres des fonctions) et des avantages du module `ctypes` (mélange avec du
+code Python). Il n'y a toutefois pas de génération automatique de toutes les
+fonctions d'une bibliothèque et il est donc fastidieux de convertir ainsi une
+bibliothèque conséquente.
+
+## Utilisation de l'API Python/C
+
+Une dernière option s'offre à nous pour écrire notre extension : l'utilisation
+de l'[API Python/C][Python/C API] qui permet d'écrire toute l'extension
+directement en C. Outre le côté didactique d'écrire directement en
+C l'extension Python, il existe plusieurs côtés pratiques pour se pencher sur
+cette approche. Tout d'abord, des outils comme SWIG peuvent nécessiter d'écrire
+un peu plus de code C qu'on ne le souhaiterait, code qui va nécessiter de bien
+comprendre l'API Python. Ensuite, si vous rencontrez un segfault ou autre bug,
+que ce soit avec Pyrex ou SWIG, il faudra regarder et de préférence comprendre
+le code C généré. Enfin, vous pouvez préférer le code écrit à la main à celui
+généré automatiquement pour diverses raisons : concision, rapidité, flexibilité.
+Notez que l'intégration d'une extension Python dans la bibliothèque standard ne
+s'accommode pas de code généré automatiquement.
+
+### Gestion de la mémoire
+
+En C, la gestion de la mémoire est généralement laissée à la discrétion du
+programmeur. On alloue un espace mémoire pour contenir des données à un endroit,
+il faut penser à libérer cet espace mémoire à un autre. Le programmeur est seul
+maître à bord et doit adopter sa propre méthodologie pour ne pas oublier de
+désallouer les espaces mémoire inutilisés. Il peut effectuer cette gestion
+manuellement ou faire appel à un mécanisme de gestion de la mémoire tel qu'un
+ramasse-miettes. En Python, la gestion de la mémoire est automatique.
+L'interpréteur tient à jour un compteur pour chaque objet. Ce compteur est
+incrémenté si l'objet est référencé par une variable, décrémenté quand ce n'est
+plus le cas. Arrivé à zéro, l'objet est libéré.
+
+Lors de l'écriture d'une extension en C, les objets que l'on va créer et
+manipuler peuvent être communiqués au code Python. Il va donc falloir utiliser
+ce mécanisme de compteur pour chaque objet que l'on va manipuler. Il faudra
+incrémenter le compteur si on veut garder un objet et le décrémenter quand on
+n'en a plus besoin.
+
+Toute la difficulté consiste à savoir s'il est nécessaire ou non de toucher au
+compteur d'un objet ou si une autre fonction s'en est chargée. Il existe
+heureusement quelques conventions de façon à ce que l'exercice paraisse naturel
+avec un peu d'habitude. Tout tourne autour de la notion de *possession d'une
+référence à un objet*. Quand on possède une référence à un objet, il est
+nécessaire, quand on n'a plus besoin de celle-ci de la libérer en décrémentant
+le compteur de l'objet ou d'en transférer la propriété à une autre fonction.
+Inversement, quand on veut utiliser un objet, il est nécessaire de s'assurer que
+l'on possède bien la référence de l'objet qu'on manipule.
+
+Quand on fait appel à une fonction et que celle-ci renvoie un objet, il y a deux
+possibilités. Soit la fonction nous renvoie une nouvelle référence à l'objet,
+c'est-à-dire nous délégue la propriété de la référence à l'objet et dans ce cas,
+il ne faut pas incrémenter le compteur de l'objet si on souhaite le garder mais
+le décrémenter quand on n'en a plus besoin. Soit la fonction nous prête une
+référence à l'objet. C'est le cas inverse. Il faut incrémenter le compteur si
+l'on souhaite garder cette référence (afin de posséder sa propre référence) et
+si ce n'est pas le cas, il est inutile de décrémenter le compteur.
+
+Inversement, quand on donne une référence à un objet à une fonction, celle-ci
+peut adopter deux comportements. Soit elle vole la référence à cet objet,
+c'est-à-dire que l'appelant n'a plus la propriété de la référence à l'objet,
+soit elle ne la vole pas et l'appelant doit se débarrasser de cette référence
+s'il ne souhaite plus utiliser l'objet.
+
+Commençons par les cas simples. Sauf indication contraire dans la
+[documentation][Python/C API], une fonction appelée ne vole pas la référence à
+un objet. Si la fonction nécessite de garder une référence sur l'objet, elle
+incrémentera elle-même le compteur de l'objet. L'appelant doit donc se
+débarrasser lui-même de la référence sur l'objet dans la plupart des cas. Les
+deux fonctions connues pour voler la référence sont `PyList_SetItem()` et
+`PyTuple_SetItem()` qui permettent de placer l'objet dans une liste ou dans un
+tuple.
+
+En ce qui concerne le transfert ou l'emprunt de la référence, une règle
+générale est que la création d'un objet entraîne le transfert de la propriété de
+la référence correspondante vers l'appelant tandis que la consultation d'une
+propriété consiste simplement en un emprunt. Par exemple, si on crée une
+nouvelle liste avec `PyList_New()`, la propriété de la référence renvoyée est
+transférée à l'appelant. Celui-ci n'a pas besoin d'incrémenter le compteur de
+l'objet. On dit dans ce cas que l'appelant obtient une nouvelle référence. Par
+contre, quand on consulte un élément d'une liste avec `PyList_GetItem()`,
+l'appelant emprunte la référence renvoyée. S'il souhaite conserver cette
+référence, il doit incrémenter lui-même le compteur de l'objet. En cas de doute,
+la documentation indique à chaque fois qu'une fonction renvoie un objet Python
+si la responsabilité est transférée (nouvelle référence) ou empruntée dans la
+[documentation][Python/C API]. Les fonctions C appelées depuis Python doivent
+retourner de nouvelles références.
+
+Il n'est pas forcément utile d'incrémenter le compteur avant d'utiliser un
+objet. Par exemple, si cet objet est l'argument d'une fonction appelée depuis
+l'interpréteur Python, il est garanti que la référence sur celui-ci sera valide
+pendant toute la durée de vie de la fonction. Il n'est donc nécessaire
+d'incrémenter le compteur que lorsque l'on désire garder cette référence au-delà
+de la vie de la fonction. Quand la référence provient d'une fonction à laquelle
+on l'emprunte, il convient d'être plus prudent. Il est possible que cette
+référence devienne invalide avant la fin de la fonction. En effet, certaines
+fonctions peuvent déclencher du code qui va libérer la référence en question. Il
+est donc préférable, dans ce cas, d'incrémenter le compteur de l'objet.
+
+Mais donc, comment manipule-t-on ce compteur ? Il existe plusieurs macros.
+`Py_INCREF` permet d'incrémenter le compteur, `Py_DECREF` permet de le
+décrémenter et `Py_XDECREF` fait de même à condition que l'objet ne soit pas
+`NULL` (auquel cas, la macro ne fait rien).
+
+### Présentation de l'API
+
+La gestion mémoire constitue un point central pour bien utiliser l'API Python.
+N'hésitez pas à relire la section précédente si cela vous semble flou. Le reste
+de l'API Python est beaucoup plus simple à comprendre.
+
+Depuis le code de votre extension en C, vous allez recevoir des objets Python,
+les manipuler et les renvoyer. Tout ce qui provient de l'interpréteur Python ou
+qui lui est destiné est un objet Python, y compris les entiers ou les chaînes de
+caractères. Quand vous manipulez un objet Python en C, vous avez une référence
+sur cet objet sous la forme d'un pointeur `PyObject *`. Tous les objets que vous
+allez manipuler ne sont pas équivalents mais ils sont toujours représentés sous
+la forme d'un pointeur `PyObject *`.
+
+Les fonctions manipulant des objets sont préfixées selon le type d'objet
+qu'elles vont manipuler. Par exemple, les fonctions commençant par `PyList_`
+manipulent des listes tandis que les fonctions commençant par `PyInt_`
+manipulent des entiers. Pour chaque type, on dispose généralement de fonctions
+pour créer un objet, vérifier le type d'un objet (est-ce que la donnée qu'on me
+donne en argument est bien un entier ?), convertir un objet en un autre. Tout ce
+que vous pouvez faire avec les objets depuis l'interpréteur Python a une
+fonction équivalente dans l'API.
+
+Il existe deux fonctions qui seront utilisées très régulièrement. La première
+est `PyArg_ParseTuple()` qui permet de vérifier que les arguments d'une fonction
+sont bien du type attendu et de les stocker dans un ensemble de variables, en un
+seul appel. L'appelant a-t-il bien fourni un entier puis une liste puis
+optionnellement un autre entier ? Dans ce cas, stocker chaque valeur dans telle
+et telle variable. La seconde fonction est `Py_BuildValue()` qui permet de
+construire facilement certains objets simples comme un entier, un couple
+contenant un entier et une chaîne de caractères.
+
+### La gestion des erreurs
+
+Python dispose d'un mécanisme d'exceptions. Quand une erreur survient dans une
+extension, celle-ci doit remonter une exception. L'API Python permet de gérer
+les cas d'erreurs de manière assez simple. La règle générale est que quand une
+fonction qui doit retourner à l'interpréteur une référence sur un objet retourne
+en réalité `NULL`, une exception sera générée. Notamment, si une fonction de
+l'API Python vous retourne `NULL` et que vous ne souhaitez pas gérer ce cas
+d'erreur, retournez également `NULL` et l'exception sera propagée avec le
+message d'erreur adéquat. Quand une fonction ne retourne pas un objet Python, il
+faut se référer à la [documentation][Python/C API] pour voir comment sont gérés
+les cas d'erreur. Dans tous les cas, on peut faire appel à `PyErr_Occurred()`
+pour savoir si on est actuellement dans un cas d'erreur.
+
+Quand vous voulez générer une exception, il vous faut non seulement retourner
+`NULL` (ou `-1` dans le cas de la plupart des fonctions qui retournent un
+entier) à l'interpréteur, mais aussi indiquer quelle exception vous voulez faire
+remonter. Pour ce faire, vous pouvez utiliser les fonctions commençant par
+`PyErr_` comme `PyErr_NoMemory()`, `PyErr_SetString()` ou
+`PyErr_FormatString()`.
+
+### Écriture de l'extension
+
+Nous allons nous lancer doucement dans l'écriture de notre extension. Voici une
+première version de celle-ci contenant son initialisation et la déclaration de
+l'exception `TurtleException` :
+
+```c
+#include <Python.h>
+
+static PyObject *TurtleException;
+
+PyMODINIT_FUNC
+initpythonc(void)
+{
+    PyObject *m;
+
+    m = Py_InitModule("pythonc", NULL);
+    if (!m)
+        return;
+
+    TurtleException = PyErr_NewException("pythonc.TurtleException", NULL, NULL);
+    if (!TurtleException)
+      return;
+    Py_INCREF(TurtleException);
+    PyModule_AddObject(m, "TurtleException", TurtleException);
+}
+```
+
+L'entête `Python.h` contient les déclarations nécessaires pour utiliser l'API
+Python. On déclare ensuite l'objet `TurtleException` qui pourra être utilisé
+dans le reste de l'extension. La fonction marquée par `PyMODINIT_FUNC`
+représente la fonction chargée d'initialiser le module. Un module est aussi un
+objet Python. On l'initialise avec `Py_InitModule()`. Le premier paramètre est
+le nom du module et le second est l'ensemble des méthodes du module.
+Actuellement, on ne dispose d'aucune méthode. Notez ensuite la gestion des
+erreurs propre à l'API. Si `Py_InitModule` a retourné `NULL`, c'est qu'une
+erreur est survenue. Le cas de l'initialisation du module est un peu particulier
+puisque la fonction ne retourne pas un objet. On se contente de sortir de la
+fonction. L'interpréteur Python détectera le cas d'erreur et remontera une
+exception.
+
+Nous revenons à notre objet `TurtleException`. La fonction
+`PyErr_NewException()` va nous permettre de créer une nouvelle exception. Encore
+une fois, on vérifie si on ne nous a pas retourné `NULL` et dans ce cas, inutile
+d'aller plus loin. Suivant la logique décrite auparavant,
+`PyErr_NewException()` doit nous transférer une nouvelle référence sur l'objet
+créé. La documentation confirme que c'est le cas. Pourquoi donc
+incrémentons-nous le compteur de l'objet ? La fonction suivante,
+`PyModule_AddObject()` dont le rôle est d'ajouter un objet au module (sous le
+nom de son choix), vole la référence à l'objet. Or nous voulons garder cette
+exception car nous allons l'utiliser dans le reste de l'extension. Si
+l'interpréteur décide de retirer l'exception du module (avec `del
+pythonc.TurtleException` par exemple), nous pourrions perdre la seule référence
+sur l'exception et l'objet serait désalloué.
+
+Compilons notre nouvelle extension :
+
+```console
+$ gcc -shared -fPIC -O2 -Wall \
+     $(python-config --cflags) pythonc.c -L.. -ltortue \
+     -o pythonc.so
+```
+
+```pycon
+$ (cd .. ; LD_LIBRARY_PATH=. python )
+>>> from tortue import pythonc
+>>> dir(pythonc)
+['TurtleException', '__doc__', '__file__', '__name__', '__package__']
+>>> raise pythonc.TurtleException
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+pythonc.TurtleException
+```
+
+Nous devons ensuite ajouter notre classe `Turtle` au module. Pour faire ceci, il
+faut d'abord déclarer une structure qui représentera une instance de la classe
+et donc l'objet Python correspondant. Elle contiendra notamment le compteur
+permettant de suivre le nombre de références actives sur l'objet mais aussi tout
+ce que vous jugerez utile d'associer avec chaque instance. Dans notre cas, notre
+structure est déclarée comme ceci :
+
+```c
+#include "../tortue.h"
+
+typedef struct {
+  PyObject_HEAD
+  struct turtle *t;
+} TurtleObject;
+```
+
+La macro `PyObject_HEAD` se charge d'inclure tout ce qui est nécessaire pour que
+cette structure puisse se comporter comme un objet Python, dont le compteur de
+références. Ainsi, une variable qui aura pour type cette structure pourra être
+transformée en une variable de type `PyObject`. Nous ajoutons ensuite les
+éléments nécessaires à chaque instance. Dans notre cas, il s'agit de la
+référence vers la tortue.
+
+Nous devons ensuite définir toutes les opérations possibles sur notre objet
+ainsi que ses caractéristiques essentielles. Pour ce faire, on définit une
+variable de type `PyTypeObject` qui représentera la classe :
+
+```c
+static PyTypeObject TurtleType = {
+  PyObject_HEAD_INIT(NULL)
+  0,                            /*ob_size*/
+  "pythonc.Turtle",             /*tp_name*/
+  sizeof(TurtleObject),         /*tp_basicsize*/
+  0,                            /*tp_itemsize*/
+  (destructor)Turtle_dealloc,   /*tp_dealloc*/
+  0,                            /*tp_getattr*/
+  0,                            /*tp_setattr*/
+  0,                            /*tp_compare*/
+  0,                            /*tp_repr*/
+  0,                            /*tp_as_number*/
+  0,                            /*tp_as_sequence*/
+  0,                            /*tp_as_mapping*/
+  0,                            /*tp_hash */
+  0,                            /*tp_call*/
+  0,                            /*tp_str*/
+  0,                            /*tp_getattro*/
+  0,                            /*tp_setattro*/
+  0,                            /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT,           /*tp_flags*/
+  "Turtle objects",             /*tp_doc*/
+  0,                            /*tp_traverse*/
+  0,                            /*tp_clear*/
+  0,                            /*tp_richcompare*/
+  0,                            /*tp_weaklistoffset*/
+  0,                            /*tp_iter*/
+  0,                            /*tp_iternext*/
+  0,                            /*tp_methods*/
+  0,                            /*tp_members*/
+  0,                            /*tp_getset*/
+  0,                            /*tp_base*/
+  0,                            /*tp_dict*/
+  0,                            /*tp_descr_get*/
+  0,                            /*tp_descr_set*/
+  0,                            /*tp_dictoffset*/
+  (initproc)Turtle_init,        /*tp_init*/
+  0,                            /*tp_alloc*/
+  PyType_GenericNew,            /*tp_new*/
+};
+```
+
+Pour le moment, notre type ne permet pas de faire grand-chose. On lui donne un
+nom, la taille de l'objet qui lui correspond et une chaîne de documentation. Il
+n'a pour le moment ni méthode, ni attribut. On doit cependant expliquer
+comment créer une nouvelle instance de notre objet à l'aide de `Turtle_init()`.
+Cette fonction jouera le rôle de `__init__()`. Voyons son code :
+
+```c
+static int
+Turtle_init(TurtleObject *self, PyObject *args, PyObject *kwds)
+{
+  int port;
+
+  if (!PyArg_ParseTuple(args, "i", &port))
+    return -1;
+
+  self->t = turtle_init(port);
+  if (!self->t) {
+    PyErr_Format(TurtleException, "unable to create turtle %d", port);
+    return -1;
+  }
+
+  return 0;
+}
+```
+
+Remarquons d'abord que cette fonction ne retourne pas un `PyObject *`, tout
+comme un constructeur d'une classe Python. En dehors de cela, la signature de la
+fonction est classique. Toutes les fonctions seront appelées avec trois
+arguments : un pointeur sur l'instance, un pointeur sur une liste d'arguments
+positionnels et un pointeur sur un dictionnaire d'arguments nommés.
+Généralement, les fonctions renvoient un objet Python. Ce n'est pas le cas ici.
+
+On commence par regarder les arguments obtenus. On désire que notre constructeur
+soit appelé avec comme seul et unique argument un entier représentant le port de
+la tortue. Le rôle de `PyArg_ParseTuple()` est justement de vérifier que les
+arguments positionnels fournis sont bien au nombre de 1 et représentent un
+entier. Si on attendait un objet Python, il aurait fallu mettre `O` plutôt que
+`i`. Il aurait alors fallu également vérifier nous-même que l'objet fourni est
+bien du type attendu. Par exemple, si on attendait une liste, la fonction
+`PyList_Check()` nous aurait confirmé si nous avions bien une liste. Si
+l'utilisateur fournit plus d'un argument ou que celui-ci n'est pas un entier,
+`PyArg_ParseTuple()` va générer une exception et renvoyer `NULL`. Dans ce cas,
+on se contente de propager cette exception en renvoyant `-1`. Notons que si
+l'utilisateur fournit des arguments nommés, ceux-ci sont ignorés. On pourrait
+remplacer l'appel à `PyArg_ParseTuple()` par un appel à
+`PyArg_ParseTupleAndKeywords()` pour être plus strict.
+
+Nous faisons ensuite appel à notre bibliothèque en C pour initialiser la tortue.
+Si l'initialisation échoue, on génère une exception à l'aide de `PyErr_Format()`
+et en retournant `-1`. Dans le cas contraire, `0` est retourné pour indiquer le
+succès de l'opération.
+
+Nous devons aussi définir la fonction `Turtle_dealloc()` qui est appelée lorsque
+l'objet doit être désalloué. Dans cette fonction, nous faisons appel à
+`turtle_close()` :
+
+```c
+static void
+Turtle_dealloc(TurtleObject *self)
+{
+  if (self->t)
+    turtle_close(self->t);
+  self->ob_type->tp_free((PyObject*)self);
+}
+```
+
+Si nous compilons et lançons nos tests à ce stade, le premier test passe. Nous
+sommes sur la bonne voie ! Nous allons pouvoir ajouter la méthode `send()` à
+notre objet. Nous devons d'abord écrire la fonction correspondante :
+
+```c
+static PyObject *
+Turtle_send(TurtleObject *self, PyObject *args, PyObject *kwds)
+{
+  const char *cmd = NULL;
+  int result;
+  if (!PyArg_ParseTuple(args, "s", &cmd))
+    return NULL;
+
+  result = turtle_send(self->t, cmd);
+  if (result != 0) {
+    PyErr_Format(TurtleException, "got error %d", turtle_error(self->t));
+    return NULL;
+  }
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+```
+
+Ici encore, nous commençons à vérifier nos arguments. Nous attendons exactement
+une chaîne de caractères. Si ce n'est pas le cas, nous transmettons l'exception.
+Nous faisons ensuite appel à la fonction `turtle_send()` de notre bibliothèque
+et vérifions le résultat. Si celui-ci n'est pas satisfaisant, nous générons une
+exception. Dans le cas contraire, il nous faut renvoyer `None`. Une fonction
+Python qui ne renvoie pas de résultat renvoie `None`. Il ne faut pas renvoyer
+`NULL` car cela correspondrait à un cas d'erreur ! Notez également que nous
+incrémentons le compteur de l'objet `Py_None` qui est un objet comme les autres
+(mais dont il n'existe qu'un exemplaire). Rappelez-vous, par convention, les
+méthodes doivent renvoyer à l'interpréteur une nouvelle référence à l'objet. Il
+nous faut donc incrémenter le compteur de tout objet Python renvoyé.
+
+Nous devons ensuite référencer cette nouvelle méthode pour notre objet. Toutes
+les méthodes d'un objet sont référencées dans une même structure que nous
+déclarons ainsi :
+
+```c
+static PyMethodDef Turtle_methods[] = {
+    {"send", (PyCFunction)Turtle_send, METH_VARARGS,
+     "Send a command to the turtle"
+    },
+    {NULL}  /* Sentinel */
+};
+```
+
+Nous donnons le nom de la méthode, la méthode à appeler (dont la signature doit
+systématiquement correspondre à la signature d'une fonction C appelée depuis
+l'interpréteur Python), les arguments qu'elle attend (ici un nombre variable
+d'arguments positionnels mais pas d'arguments nommés) et enfin une chaîne de
+documentation. Enfin, dans la définition du type `TurtleType`, nous remplaçons
+la valeur du membre `tp_methods` par cette structure (au lieu de `0`).
+
+Après compilation, il ne reste que les tests concernant les attributs `model`
+et `status` qui échouent. Nous allons donc écrire les fonctions qui permettent
+d'accéder à ces attributs. Commençons par l'attribut le plus simple :
+
+```c
+static PyObject *
+Turtle_getmodel(TurtleObject *self, void *closure)
+{
+  return PyString_FromString(turtle_model(self->t));
+}
+```
+
+La fonction qui permet d'accéder à l'attribut `model` est très simple. Elle se
+contente de créer un nouvel objet Python de type chaîne construit à partir de la
+valeur renvoyée par la fonction C `turtle_model()`. La fonction
+`PyString_FromString()` nous obtient une nouvelle référence. Nous faisons
+simplement passer cette référence à l'appelant. Inutile donc de toucher au
+compteur de l'objet. À noter qu'à la place de `PyString_FromString()`, il aurait
+été aussi possible de faire appel à `Py_BuildValue()`.
+
+L'ensemble des fonctions permettant de manipuler les attributs sont regroupés au
+sein d'une même structure que nous définissons ainsi :
+
+```c
+static PyGetSetDef Turtle_getseters[] = {
+        {"model",
+         (getter)Turtle_getmodel, NULL,
+         "model", NULL},
+        {NULL}                  /* Sentinel */
+};
+```
+
+Pour chaque attribut, nous donnons un nom puis la fonction qui permet d'obtenir
+la valeur de cet attribut, la fonction qui permet de modifier cette valeur
+(`NULL` dans notre cas), la chaîne de documentation ainsi que des données
+supplémentaires qui seraient passées en dernier paramètre des fonctions. Dans la
+définition du type `TurtleType`, nous remplaçons la valeur du membre `tp_getset`
+par cette structure.
+
+Après compilation, seul un dernier test échoue ! Il nous faut donc ajouter le
+support de l'attribut `status`. Rappelez-vous cet attribut est obtenu en
+retournant une instance de `TurtleStatus`. Il va donc nous falloir importer le
+module correspondant et instancier la classe en question, ce qui revient à
+appeler du code Python depuis notre code C. Voici comment importer le module :
+
+```c
+    StatusModule = PyImport_ImportModule("tortue.status");
+    if (!StatusModule)
+      return;
+```
+
+Ce code est à ajouter à la fin de l'initialisation du module. La fonction
+`PyImport_ImportModule()` nous renvoie une nouvelle référence. On n'ajoute pas cette
+référence au module et on conserve donc la propriété de celle-ci. Il est donc
+inutile d'incrémenter le compteur. `StatusModule` est déclaré en variable
+globale de type `static PyObject *`. Nous allons désormais pouvoir appeler les
+fonctions de ce module dans la fonction qui permet d'accéder à l'attribut
+`status` :
+
+```c
+static PyObject *
+Turtle_getstatus(TurtleObject *self, void *closure)
+{
+  long int status = turtle_status(self->t);
+  const char *model = turtle_model(self->t);
+  PyObject *cstatus, *istatus;
+  if (status == -1) {
+    PyErr_Format(TurtleException, "got error %d", turtle_error(self->t));
+    return NULL;
+  }
+  cstatus = PyObject_GetAttrString(StatusModule, "TurtleStatus");
+  if (!cstatus)
+    return NULL;
+  istatus = PyObject_CallFunction(cstatus, "sl", model, status);
+  Py_DECREF(cstatus);
+  if (!status)
+    return NULL;
+  return istatus;
+}
+```
+
+On stocke tout d'abord le modèle et l'état courant dans deux variables. Si la
+fonction `turtle_status()` retourne une erreur, nous levons une exception.
+Ensuite, nous récupérons dans `cstatus` la classe `TurtleStatus` depuis le
+module que nous avons importé précédemment. Un module étant un objet classique,
+on utilise la fonction générique `PyObject_GetAttrString()` qui nous renvoie une
+nouvelle référence sur l'objet en question. Notons que par la suite, nous
+n'aurons plus besoin de cette référence et donc, sitôt utilisée, nous nous la
+libérons en décrémentant le compteur.
+
+Nous possédons donc maintenant une référence sur la classe que nous désirons
+instancier. Une instanciation consiste en fait à considérer la classe comme une
+fonction et à l'exécuter. L'API Python dispose de la fonction
+`PyObject_CallFunction()` à cet effet. Nous lui fournissons la référence que
+nous avons sur la classe, le format des arguments (une chaîne et un entier long)
+ainsi que les arguments en eux-mêmes. La fonction `PyObject_CallFunction()`
+s'occupe de tout pour nous : elle transforme nos variables en objets Python et
+instancie la classe. En cas d'échec, nous obtenons `NULL` et nous propageons
+donc l'exception. En cas de succès, nous obtenons une nouvelle référence sur
+l'instance qui nous intéresse et nous transférons celle-ci à l'appelant.
+
+Pour terminer, il convient d'ajouter la référence à cette fonction dans la
+structure dans laquelle nous avions déclaré le précédent attribut. Celle-ci
+devient :
+
+```c
+static PyGetSetDef Turtle_getseters[] = {
+        {"model",
+         (getter)Turtle_getmodel, NULL,
+         "model", NULL},
+        {"status",
+         (getter)Turtle_getstatus, NULL,
+         "status", NULL},
+        {NULL}                  /* Sentinel */
+};
+```
+
+Après compilation, tous les tests passent désormais. Notre module est donc
+fonctionnel ! L'API Python est très riche et nous n'en avons effleuré qu'une
+partie. Cela devrait vous donner les bases nécessaires pour [aller plus
+loin][API Tutorial].
+
+## Automatiser la compilation
+
+La plupart des solutions qui ont été présentées dans cet article nécessitent une
+phase de compilation. Nous avons lancé des commandes manuellement pour obtenir
+les différentes extensions Python. Sachez que le module `distutils` fournit le
+nécessaire pour automatiser cette compilation et l'intégrer correctement dans le
+système de construction et d'installation des modules Python.
+
+Pour une extension écrite directement en C, vous pouvez ajouter l'argument
+`ext_modules` à l'appel de la fonction `setup()` afin de compiler votre
+extension. Dans notre cas :
+
+```python
+from distutils.core import setup, Extension
+setup(name="tortue", version="1.0",
+      ext_modules=[Extension("tortue.pythonc",
+                             libraries = ['tortue']
+                             sources = ['tortue/pythonc.c'])])
+```
+
+SWIG et Pyrex proposent des extensions à `distutils` qui permettent d'arriver à
+un résultat similaire. Consultez leurs documentations.
+
+# Conclusion
+
+Interfacer une bibliothèque en C avec du code Python n'est finalement pas si
+compliqué. Selon vos affinités, de nombreuses solutions s'offrent à vous. SWIG
+vous permet de générer facilement un équivalent Python de votre bibliothèque en
+C. Charge à vous de compléter le résultat avec un peu de Python pour rendre la
+bibliothèque obtenue un peu plus pythonique. Pyrex vous permet de mélanger du
+code Python avec des données et des fonctions C tout en gardant une certaine
+sécurité. La connaissance de l'API Python n'est pas nécessaire pour concevoir
+des extensions évoluées. Le module `ctypes` vous permet d'arriver à un résultat
+similaire sans disposer des sources de la bibliothèque. Il nécessite quelques
+précautions mais permet d'obtenir très rapidement un résultat que l'on pourra
+ensuite consolider avec les autres outils. Enfin, pour les plus aventureux, la
+conception d'une extension en utilisant directement l'API Python/C reste
+accessible et vous autorise toutes les fantaisies.
+
+[TORTUE]: https://en.wikipedia.org/wiki/Turtle_(robot) "Turtle robots"
+[TDD]: https://fr.wikipedia.org/wiki/Test_Driven_Development "Test Driven Development"
+[ctypes]: https://docs.python.org/2.7/library/ctypes.html "foreign function library for Python"
+[SWIG]: https://www.swig.org/ "Simplified Wrapper and Interface Generator"
+[Pyrex]: https://www.csse.canterbury.ac.nz/greg.ewing/python/Pyrex/ "a Language for Writing Python Extension Modules"
+[Python/C API]: https://docs.python.org/2.7/c-api/ "Python/C API Reference Manual"
+[API Tutorial]: https://docs.python.org/2.7/extending/index.html "Extending and Embedding the Python Interpreter"
