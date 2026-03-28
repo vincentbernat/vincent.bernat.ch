@@ -74,25 +74,24 @@ l'expression entre guillemets** avant son exécution.
 
 ## Protéger l'expression automatiquement avec ZLE
 
-Zsh appelle `accept-line` quand on valide une commande. Remplaçons-le par une
-fonction qui détecte le préfixe `=` et protège l'expression :
+Zsh appelle le widget `line-finish` avant de valider une commande. Nous y
+attachons une fonction qui détecte le préfixe `=` et protège l'expression :
 
 ```zsh
-_vbe_calc_accept() {
+_vbe_calc_quote() {
   case $BUFFER in
     "="*)
       typeset -g _vbe_calc_expr=$BUFFER # not used yet
       BUFFER="= ${(q-)${${BUFFER#=}# }}"
       ;;
   esac
-  zle .accept-line
 }
-zle -N accept-line _vbe_calc_accept
+add-zle-hook-widget line-finish _vbe_calc_quote
 ```
 
-Quand on tape `= 5 * 3` puis <kbd>↲</kbd>, `_vbe_calc_accept` protège
+Quand on tape `= 5 * 3` puis <kbd>↲</kbd>, `_vbe_calc_quote` protège
 l'expression avec le [drapeau `(q-)`][parameter expansion flag] et réécrit la
-ligne en `= '5 * 3'` avant de la valider avec `.accept-line`. En bonus, vous
+ligne en `= '5 * 3'` avant que Zsh ne valide la commande. En bonus, vous
 pouvez économiser quelques caractères avec `=5*3` ! 🚀
 
 [parameter expansion flag]: man://zshexpn.1#q~2 "zshexpn(1) manual page"
@@ -158,7 +157,7 @@ conversions d'unités, il couvre 90 % des cas. Pour une astuce similaire avec
 l'éditeur de ligne de Zsh, voyez comment j'utilise les [expansions automatiques
 des alias][auto-expanding aliases] pour corriger les fautes de frappe courantes.
 
-[zshrc]: https://github.com/vincentbernat/zshrc/blob/fc49862528ac9fa1df144d202ff1906df90e787a/rc/alias.zsh#L451-L481
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/9af588820bed37b3b64b2f06777a77d32f4654c4/rc/alias.zsh#L451-L480
 [noglob]: man://zshmisc.1#noglob "zshmisc(1) manual page"
 [Grandpa Simpson]: https://www.youtube.com/watch?v=Y9XcWqBl8Xs "The Simpsons: My car gets 40 rods to the hogshead"
 [auto-expanding aliases]: [[fr/blog/2025-zsh-expansion-automatique-alias.html]] "Expansion automatique des alias dans Zsh"

@@ -77,27 +77,25 @@ before executing it.
 
 ## Automatic quoting with ZLE
 
-Zsh calls the `accept-line` widget when you submit a command. We replace it with
-a function that detects the `=` prefix and quotes the expression:
+Zsh calls the `line-finish` widget before submitting a command. We hook a
+function that detects the `=` prefix and quotes the expression:
 
 ```zsh
-_vbe_calc_accept() {
+_vbe_calc_quote() {
   case $BUFFER in
     "="*)
       typeset -g _vbe_calc_expr=$BUFFER # not used yet
       BUFFER="= ${(q-)${${BUFFER#=}# }}"
       ;;
   esac
-  zle .accept-line
 }
-zle -N accept-line _vbe_calc_accept
+add-zle-hook-widget line-finish _vbe_calc_quote
 ```
 
-When you type `= 5 * 3` and press <kbd>↲</kbd>, `_vbe_calc_accept` strips the
-`=` prefix, quotes the remainder with the [`(q-)` parameter expansion
-flag][q-flag], and rewrites the buffer to `= '5 * 3'` before invoking the
-original `.accept-line` widget. As a bonus, you can save a few keystrokes with
-`=5*3`! 🚀
+When you type `= 5 * 3` and press <kbd>↲</kbd>, `_vbe_calc_quote` strips the `=`
+prefix, quotes the remainder with the [`(q-)` parameter expansion flag][q-flag],
+and rewrites the buffer to `= '5 * 3'` before Zsh submits the command. As a
+bonus, you can save a few keystrokes with `=5*3`! 🚀
 
 [q-flag]: man://zshexpn.1#q~2 "zshexpn(1) manual page"
 
@@ -160,7 +158,7 @@ The complete code is available in my [zshrc][]. A common alternative is the
 for unit conversion, it covers 90% of use cases. For a related Zsh line editor
 trick, see how I use [auto-expanding aliases][] to fix common typos.
 
-[zshrc]: https://github.com/vincentbernat/zshrc/blob/fc49862528ac9fa1df144d202ff1906df90e787a/rc/alias.zsh#L451-L481
+[zshrc]: https://github.com/vincentbernat/zshrc/blob/9af588820bed37b3b64b2f06777a77d32f4654c4/rc/alias.zsh#L451-L480
 [noglob]: man://zshmisc.1#noglob "zshmisc(1) manual page"
 [Grandpa Simpson]: https://www.youtube.com/watch?v=Y9XcWqBl8Xs "The Simpsons: My car gets 40 rods to the hogshead"
 [auto-expanding aliases]: [[en/blog/2025-zsh-autoexpand-aliases.html]] "Auto-expanding aliases in Zsh"
