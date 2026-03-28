@@ -94,7 +94,10 @@ def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
     """Compute reading time in minutes from HTML."""
     d = pq(html, parser="html")
     code_blocks = d.find("pre")
-    code_lines = sum(el.text_content().count("\n") + 1 for el in code_blocks)
+    code_lines = sum(
+        sum(1 for line in el.text_content().splitlines() if line.strip())
+        for el in code_blocks
+    )
     code_blocks.remove()
     d.find(".footnote, .endnote").remove()
     words = len(d.text().split())
