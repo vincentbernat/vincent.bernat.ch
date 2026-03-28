@@ -1,0 +1,1897 @@
+---
+title: "Python et le réseau"
+description: |
+  Exploration des possibilités offertes par Python pour écrire des
+  applications réseau : clients, serveurs, primitives bas niveau et Twisted.
+uuid: 392cb927-d4dc-41e9-9551-6b17ac92ad30
+created: !!timestamp 2009-01-01 14:00:00
+tags:
+  - programming-python
+  - outdated
+---
+
+!!! "Note" Cet article a été publié dans *GNU/Linux Magazine HS n° 40* en 2009.
+    Il est reproduit ici avec de légères retouches cosmétiques.
+
+Comme de nombreux langages, Python propose tout l'arsenal nécessaire pour
+construire des applications réseau. La bibliothèque standard propose de quoi
+écrire aussi bien des serveurs que des clients. Nous allons voir dans cet
+article les différentes possibilités offertes par Python dans ce domaine.
+
+[TOC]
+
+Cet article se décompose en quatre parties. Nous allons déjà explorer les
+possibilités offertes par Python pour écrire des clients réseau à l'aide de la
+bibliothèque standard. Ensuite, nous aborderons la problématique des serveurs.
+Dans ces deux premières parties, nous utiliserons des primitives de haut niveau,
+mises à disposition par Python, accélérant grandement l'écriture des
+applications. Nous verrons ensuite dans la troisième partie comment utiliser les
+primitives équivalentes à ce qui se trouve dans les programmes écrits en C.
+Python permet, en effet, à l'aide de ces primitives, de mimer le comportement de
+tout outil réseau écrit habituellement en C. Enfin, afin de montrer une approche
+toute différente, nous explorerons les possibilités du *framework* réseau
+Twisted dans la dernière partie.
+
+# Écrire un client
+
+Python dispose dans sa bibliothèque standard de très nombreux modules permettant
+d'écrire très facilement des clients pour une grande variété de protocoles dont,
+par exemple, [HTTP](https://docs.python.org/2.7/library/urllib2.html),
+[FTP](https://docs.python.org/2.7/library/ftplib.html),
+[POP](https://docs.python.org/2.7/library/poplib.html),
+[IMAP](https://docs.python.org/2.7/library/imaplib.html),
+[SMTP](https://docs.python.org/2.7/library/smtplib.html) et
+[Telnet](https://docs.python.org/2.7/library/telnetlib.html).
+
+D'autres protocoles sont supportés et il est toujours possible d'écrire un
+module supportant son propre protocole ou de trouver son bonheur parmi les
+modules proposés par de tierces parties. Nous allons nous concentrer sur
+quelques exemples d'utilisation de certains des modules cités ci-dessus.
+
+Ceux-ci sont des modules de haut niveau. Ils effectuent en une seule commande de
+nombreuses tâches pour établir la connexion sans qu'il soit nécessaire de
+s'occuper des détails. Ainsi, par exemple, le module FTP expose une simple
+fonction pour envoyer un fichier au serveur. Cette fonction s'occupe de négocier
+l'ouverture du canal de données propre au serveur FTP et gère le mode actif ou
+passif automatiquement. Autant de détails dont on ne souhaite pas forcément
+s'occuper quand on veut simplement écrire un programme qui va déposer ou
+récupérer quelques fichiers à l'aide du protocole FTP.
+
+Nous verrons par la suite comment écrire des applications de plus bas niveau et
+gérer l'ensemble des échanges réseau.
+
+## Un simple client HTTP
+
+Pour écrire un client HTTP, le plus simple est de faire appel au module
+`urllib2`. Il n'est pas limité aux requêtes HTTP puisqu'il est destiné à gérer
+des URL et, à ce titre, sait prendre en compte d'autres protocoles, comme FTP ou
+GOPHER et peut être étendu. Cependant, sa principale utilisation reste HTTP.
+Parmi les fonctionnalités supportées par ce module, citons la gestion de
+l'authentification, la gestion des serveurs mandataires (proxies), les
+redirections web et les cookies. Nous n'allons pas explorer l'ensemble des
+fonctionnalités disponibles. Aussi, pour approfondir, il est conseillé d'aller
+lire la documentation disponible en ligne sur ce module.
+
+Commençons par un client très simple récupérant le contenu d'une page sur le web
+:
+
+```python
+import urllib2
+
+lm = urllib2.urlopen("http://www.gnulinuxmag.com/")
+print(lm.read())
+```
+
+Ce programme très simple récupère la page web du site de *GNU/Linux Mag* et
+affiche celle-ci. Vous devriez obtenir le code HTML de la page web de votre
+magazine préféré. En cas de problème lors de la récupération de la page, vous
+recevrez une exception telle que `URLError` ou `HTTPError`. À vous de gérer
+correctement ce cas.
+
+Notre premier client HTTP n'est pas très intéressant. À titre d'illustration,
+nous allons écrire un script un peu plus utile. Celui-ci va afficher les
+dernières vulnérabilités CVE. C'est une sorte de mini-lecteur RSS. Le [flux est
+disponible][nvd-rss] en ligne. Comme il s'agit de XML, nous allons pouvoir le
+*parser* facilement à l'aide d'une bibliothèque XML. Python 2.5 a intégré le
+module `ElementTree` qui est très simple d'utilisation. Pour les utilisateurs de
+Python 2.4, il est possible de l'installer séparément (sous Debian, il s'agit du
+paquet `python-celementtree`).
+
+```python
+import urllib2
+
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    import cElementTree as ET
+cve = urllib2.urlopen("http://nvd.nist.gov/download/nvd-rss.xml")
+root = ET.parse(cve).getroot()
+titles = []
+for i in root.findall("{http://purl.org/rss/1.0/}item"):
+    titles.append(i.find("{http://purl.org/rss/1.0/}title").text)
+print("\n".join(titles))
+```
+
+Expliquons un peu ce code. Nous tentons de charger le module XML `ElementTree`
+de Python 2.5. S'il n'est pas trouvé, on se rabat sur le module `cElementTree`
+qui doit être installé. Ensuite, nous récupérons la page web qui nous intéresse,
+puis nous la fournissons au *parseur* XML. Enfin, nous récupérons les éléments
+qui nous intéressent : depuis la racine, nous recherchons tous les éléments «
+item ». Dans ceux-ci, nous ne gardons que l'élément « *title* ».
+
+!!! "Note" Nous utilisons une notation curieuse pour trouver les éléments en
+    question. Cette notation est due à l'utilisation des espaces de nommage XML
+    dans le fichier XML en question. En effet, il est possible de mélanger à
+    l'intérieur d'un même fichier XML plusieurs vocabulaires, comme du XHTML
+    avec du [RSS][xml-ns]. `ElementTree` permet de gérer ces espaces de nommage
+    en utilisant la notation que l'on peut trouver dans notre exemple. Dans
+    celui-ci, `{http://purl.org/rss/1.0/}` indique l'espace de nommage RSS. Une
+    notation plus habituelle serait `rss:title` avec une déclaration du préfixe
+    dans le préambule XML.
+
+Notre programme est déjà un peu plus utile. Nous pourrions l'améliorer en gérant
+correctement les exceptions qui peuvent survenir, aussi bien lors de la
+récupération du fichier XML que lors de son interprétation. Toutefois, ce n'est
+pas le but de cet article.
+
+Si nous voulions envoyer un formulaire pour en récupérer le contenu, c'est une
+opération quasiment aussi simple :
+
+```python
+import urllib, urllib2
+
+content = urllib2.urlopen(
+    "http://www.example.com/form", data=urllib.urlencode({"p1": 6, "p2": "alpha"})
+)
+```
+
+Lorsque le paramètre `data` est utilisé, `urllib2` va utiliser la méthode `POST`
+au lieu de la méthode `GET` avec les données fournies. Celles-ci doivent être
+codées en une chaîne compréhensible par l'application qui va recevoir les
+données. Dans notre exemple, on doit envoyer les données sous la forme
+`p2=alpha&p1=6`. C'est le rôle de la méthode `urlencode` du module `urllib`.
+
+## Un client SMTP
+
+Revenons à notre premier exemple. Imaginons que nous voulons envoyer les
+vulnérabilités CVE par mail plutôt que de les afficher sur l'écran. C'est le
+rôle du module `smtplib`. Ce module va s'adresser à un serveur SMTP de façon à
+lui envoyer un message.
+
+`smtplib` se contente de gérer la partie SMTP. Il est nécessaire de lui fournir
+un mail respectant la RFC 822. Dans sa bibliothèque standard, Python dispose du
+module `email` permettant de créer de tels messages. Dans notre programme
+précédent, nous remplaçons l'affichage final par la construction du mail :
+
+```python
+import smtplib
+from email.MIMEText import MIMEText
+
+msg = MIMEText("\n".join(titles)
+msg['Subject'] = 'Latest CVE'
+msg['From'] = 'cve@example.com'
+msg['To'] = 'user@example.com'
+```
+
+`msg` représente le message que nous voulons envoyer en SMTP. L'utilisation de
+`smtplib` est très simple :
+
+```python
+s = smtplib.SMTP()
+s.connect()
+s.sendmail("cve-bounces@example.com", ["user@example.com"], msg.as_string())
+s.close()
+```
+
+Comme nous ne donnons aucun paramètre, ni au constructeur `SMTP`, ni à la
+méthode `connect`, la connexion va s'effectuer sur l'IP 127.0.0.1. Il est donc
+nécessaire d'avoir un serveur SMTP fonctionnel tournant en local. Dans le cas
+contraire, on peut passer en premier paramètre du constructeur de l'objet `SMTP`
+(ou de la méthode `connect`) le nom du serveur SMTP à utiliser.
+
+Nous indiquons à deux endroits différents l'adresse de l'expéditeur et celle du
+destinataire. En fait, le protocole SMTP fait une distinction entre l'enveloppe
+et le message. Lorsque vous recevez un mail, vous ne voyez plus que le message
+(qui comprend les en-têtes et le corps). Lorsque le mail voyage de serveurs SMTP
+en serveurs SMTP, c'est l'enveloppe qui est utilisée. Le message est
+généralement ignoré. Une fois le message arrivé, l'enveloppe est détruite.
+Ainsi, vous pouvez mettre ce que vous voulez dans les champs `To:` et `From:`.
+Ce qui importe est ce qui est donné à la fonction `sendmail`. Dans notre
+exemple, nous avons utilisé `cve-bounces@example.com` comme adresse dans
+l'enveloppe. Ainsi, nous recevrons les *bounces* à cette adresse (ceux-ci sont
+envoyés à l'expéditeur indiqué dans l'enveloppe) et les éventuelles réponses du
+destinataire à l'adresse `cve@example.com` qui est l'adresse qui apparaîtra dans
+le client mail.
+
+Encore une fois, notre programme reste très basique et ne gère pas les
+exceptions qui peuvent survenir.
+
+## Un client FTP
+
+Le module `ftplib` permet d'écrire facilement un client FTP. Bien que ce
+protocole soit particulièrement peu sécurisé, c'est encore le protocole le plus
+courant quand il s'agit de transférer des données chez un hébergeur. C'est aussi
+le protocole utilisé quand vous disposez d'un serveur dédié et que votre
+hébergeur vous fournit un espace de stockage. Plaçons notre exemple pratique
+dans ce dernier cas : vous effectuez des sauvegardes journalières de votre
+serveur dédié dans un répertoire particulier. Vous désirez maintenant transférer
+ces sauvegardes sur l'espace qui vous est alloué sur le serveur FTP de
+l'hébergeur.
+
+Il serait bien sûr tout à fait possible de scripter un client FTP existant.
+Toutefois, ce client aura sans doute du mal à rivaliser avec les possibilités
+offertes par Python. De plus, nous sommes dans un hors-série Python !
+
+Nous supposons que les sauvegardes à transférer sont de la forme « nom.xx » où «
+xx » est un numéro d'ordre. Par exemple « web.15 », « archives.17 » et ainsi de
+suite. Nous allons écrire une fonction prenant en paramètre le nom et le numéro
+d'ordre et qui va effectuer les actions suivantes :
+
+- vérifier si le fichier existe déjà et l'envoyer dans le cas contraire ;
+- supprimer les fichiers de même nom, mais dont le numéro d'ordre est trop
+  vieux.
+
+Voici une proposition :
+
+```python
+import re
+from ftplib import FTP
+
+dst = "/backup"
+ftp_host = "ftp.example.com"
+ftp_login = "login"
+ftp_password = "password"
+keep = 5
+
+def upload_ftp(backups):
+    ftp = FTP(ftp_host, ftp_login, ftp_password)
+    remotes = ftp.nlst()
+    for f in backups:
+        name = "%s.%d" % (f, backups[f])
+        # Envoie le fichier s'il n'est pas present
+        if name not in remotes:
+            print("Envoi de %s" % name)
+            ftp.storbinary("STOR %s" % name, file("%s/%s" % (dst, name)))
+        # Supprime les anciens fichiers
+        for r in remotes:
+            mo = re.match(r"%s\.([0-9]+)$" % f, r)
+            if mo:
+                current = int(mo.group(1))
+                if current < backups[f] - keep + 1:
+                    print("Supprime %s" % r)
+                    ftp.delete(r)
+                else:
+                    print("Conserve %s" % r)
+    ftp.quit()
+```
+
+La variable `backups` attendue par la fonction est un dictionnaire dont les
+clefs sont les noms et les valeurs sont les numéros d'ordre. Par exemple :
+
+```python
+{ 'web': 15, 'archives': 17 }
+```
+
+Que fait-on ? On crée d'abord un objet `FTP` en donnant le nom de l'hôte, le
+login et le mot de passe. En l'absence des deux derniers renseignements, c'est
+une connexion anonyme qui sera effectuée. La méthode `nlst` de l'objet obtenu
+permet d'avoir la liste des fichiers du répertoire courant. Cette liste nous
+permettra de savoir si les fichiers que l'on désire envoyer existent déjà et
+quels sont les fichiers à effacer.
+
+Ensuite, pour chaque fichier de *backup*, on vérifie que le fichier n'existe
+pas. Dans ce cas, on l'envoie à l'aide de la méthode `storbinary`. Cette méthode
+va effectuer les actions suivantes :
+
+- passer en mode binaire,
+- négocier le canal de données (actif, passif, choix du port à utiliser, ...)
+- envoyer le contenu du fichier
+
+On lui donne en paramètre la commande à envoyer au serveur. Celle-ci doit
+commencer par `STOR` et être suivie du nom que le fichier doit avoir sur le
+serveur. Le second paramètre de la méthode est le fichier à envoyer. Il est
+possible de donner tout ce qui peut ressembler à un fichier pour Python. Par
+exemple, il serait possible de donner le résultat de `urllib2.urlopen()` !
+
+Ensuite, on regarde tous les fichiers présents sur le serveur et on supprime les
+plus vieux avec la méthode `delete`.
+
+Ainsi, bien que le protocole FTP soit assez complexe à implémenter de zéro, le
+module `ftplib` permet de s'en sortir très simplement avec quelques méthodes
+simples. Comme pour les autres exemples, il convient de gérer au mieux les
+erreurs...
+
+## Et le reste ?
+
+Il reste beaucoup de protocoles non explorés. Pour certains d'entre eux, Python
+propose un module mâchant le travail. Il convient donc de lire la documentation
+associée, car chaque module propose une interface différente. Si vous rencontrez
+un protocole qui ne dispose pas d'un module dans la bibliothèque standard de
+Python, il vous reste plusieurs pistes :
+
+- descendre d'un cran et utiliser le module `socket`, comme nous le verrons par
+  la suite ;
+- utiliser le module `telnetlib` si le protocole utilise TCP et est orienté
+  texte ;
+- trouver un module externe ;
+- utiliser Twisted qui supporte des protocoles supplémentaires.
+
+Lorsque l'on désire tester un serveur, il n'est pas rare d'utiliser la commande
+`telnet`. Le protocole telnet est en effet extrêmement basique et le client
+telnet fourni sur de nombreux systèmes permet donc de dialoguer avec un serveur
+SMTP, POP, NNTP, etc. Il est donc possible d'utiliser le module `telnetlib` de
+Python dans des situations similaires. Il convient cependant de noter que le
+protocole telnet dispose d'un ensemble de commandes que l'on invoque en envoyant
+une séquence spécifique. Cette séquence peut entrer en conflit avec le protocole
+que vous tentez d'implémenter. Il est donc absolument nécessaire de s'assurer
+que l'on utilise le module `telnetlib` uniquement avec un serveur telnet ou un
+serveur qui ne va pas utiliser cette séquence d'échappement.
+
+Le module `telnetlib` fournit certaines méthodes pratiques permettant d'attendre
+telle ou telle séquence de caractères. Toutefois, pour les raisons invoquées
+ci-dessus, il est préférable de lui préférer les méthodes de plus bas niveau que
+nous verrons par la suite couplées avec un module tel que `pexpect` qui fournira
+les mêmes services.
+
+Concernant les modules externes, il existe de nombreux choix, y compris des
+modules entrant en concurrence avec les modules fournis en standard dans Python.
+La bibliothèque standard de Python n'a pas la prétention d'être exhaustive
+(aussi bien au niveau des protocoles proposés que de la richesse fonctionnelle
+pour chacun d'eux) et il ne faut donc pas hésiter à piocher dans les modules
+fournis par la communauté. Par exemple, si on désire bénéficier des services
+d'un client SSH, le module `paramiko` est un bon candidat à considérer.
+
+# Écrire un serveur
+
+Nous venons de voir que Python proposait un très grand nombre de modules pour
+écrire des clients. En ce qui concerne l'écriture de serveurs, l'offre est
+beaucoup moins fournie. Si vous désirez écrire un serveur FTP, par exemple, il
+va falloir soit utiliser un module tiers, soit vous retrousser les manches pour
+écrire les choses à partir de zéro.
+
+Toutefois, Python dispose d'un [serveur SMTP][smtpd], ainsi que d'un [serveur
+HTTP][BaseHTTPServer]. Nous n'aborderons pas ici le cas du serveur SMTP. Python
+dispose également d'un module permettant d'écrire des [serveurs
+génériques][SocketServer]. Nous allons aborder ces deux derniers modules.
+
+## Un serveur HTTP
+
+Dans sa bibliothèque standard, Python propose quelques modules pour écrire des
+serveurs Web. Ces modules s'articulent autour de la classe `HTTPServer` du
+module `BaseHTTPServer`. Chaque requête d'un client HTTP est prise en charge par
+une instance de `BaseHTTPRequestHandler`.
+
+### Servir des fichiers statiques
+
+Le module `SimpleHTTPServer` fournit une classe héritant de
+`BaseHTTPRequestHandler` et permettant de mettre à disposition des fichiers.
+
+Par exemple, si l'on désire servir le contenu du répertoire `public_html` dans
+son répertoire personnel, il est possible d'écrire le code suivant :
+
+```python
+#!/usr/bin/env python
+import os
+from BaseHTTPServer import HTTPServer
+from SimpleHTTPServer import SimpleHTTPRequestHandler
+
+os.chdir(os.path.expanduser("~/public_html"))
+httpd = HTTPServer(("", 8080), SimpleHTTPRequestHandler)
+httpd.serve_forever()
+```
+
+Regardons en détail les deux dernières lignes. Nous instancions la classe
+`HTTPServer` avec deux paramètres. Le premier paramètre indique, sous forme d'un
+*tuple*, sur quelle adresse et quel port le serveur doit écouter. Nous
+fournissons une chaîne vide pour l'adresse, ce qui signifie que nous écoutons
+sur toutes les adresses. Nous aurions pu également préciser une IP comme
+127.0.0.1. Le second paramètre est une classe qui sera instanciée avec trois
+paramètres pour chaque requête et dont le rôle sera de traiter la requête en
+question. Une fois le serveur Web instancié, nous lui demandons de répondre aux
+requêtes. C'est le but de la dernière ligne.
+
+La classe `SimpleHTTPRequestHandler` est tellement simple qu'il n'existe pas de
+moyen trivial de choisir le répertoire qui sera servi. Nous changeons donc de
+répertoire avant de servir les requêtes. Une fois ce script lancé, vous pouvez
+le tester avec votre navigateur en utilisant l'URL <http://localhost:8080>. Vous
+obtiendrez le contenu du répertoire `public_html` dans votre répertoire
+personnel.
+
+En quelques lignes, vous obtenez un serveur Web fonctionnel. Bien que rustique,
+il supporte HTTP/0.9, HTTP/1.0 et HTTP/1.1 et dispose de quelques sécurités
+empêchant les attaques basées sur l'ajout de « `..` » dans le chemin. Toutefois,
+il est très peu performant (il ne répond qu'à une seule requête à la fois).
+
+### Servir des pages dynamiques
+
+Il y a peu d'intérêt à ne servir que des pages statiques. Pour créer un
+mini-site dynamique, il suffit d'écrire une classe héritant de
+`BaseHTTPRequestHandler`. Cette classe doit implémenter des méthodes telles que
+`do_GET`, `do_HEAD`, `do_POST`, etc. Voyons un premier exemple simple.
+
+```python
+#!/usr/bin/env python
+from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+
+class MyRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write("""<html><body><h1>Hello world !</h1></body></html>""")
+
+httpd = HTTPServer(("", 8080), MyRequestHandler)
+httpd.serve_forever()
+```
+
+Nous avons écrit notre propre classe pour répondre aux requêtes. Nous ne savons
+répondre qu'aux requêtes `GET` et nous répondons invariablement la même page
+HTML. La classe `BaseHTTPRequestHandler` fournit un certain nombre de méthodes
+pour nous faciliter la tâche. Avec la méthode `send_response`, nous envoyons le
+code de réponse 200 indiquant que la page a été trouvée. Nous envoyons ensuite,
+à l'aide de `send_header`, l'en-tête HTTP `Content-Type` indiquant que le
+contenu de la réponse est du HTML. Ensuite, la méthode `end_headers` se contente
+d'inscrire une ligne blanche. Nous sommes alors libres d'envoyer le contenu qui
+nous plaît. Pour cela, l'attribut `wfile` est mis à disposition. Il suffit
+d'écrire dedans pour répondre au client.
+
+Essayez d'accéder à l'URL `http://localhost:8080/test/` et vous devriez obtenir
+une page indiquant « Hello world ! ». Pas très dynamique. Mais vous pouvez
+ensuite faire tout ce que vous voulez. Par exemple, réécrivons la classe
+`MyRequestHandler` de cette façon :
+
+```python
+class MyRequestHandler(BaseHTTPRequestHandler):
+    visiteur = 0
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        MyRequestHandler.visiteur += 1
+        self.wfile.write("""<html><body><h1>Hello world !</h1>
+Vous avez demandé la page %s. Votre IP est %s. Vous êtes le visiteur %d.
+</body></html>""" % (self.path, self.client_address[0], MyRequestHandler.visiteur))
+```
+
+Nous obtenons une page dynamique donnant la page demandée, l'IP du client et
+affichant un compteur. Il est à noter que la classe est réinstanciée pour le
+traitement de chaque requête. Pour que le compteur perdure entre les requêtes,
+on en a donc fait un attribut de la classe et non un attribut de l'instance, ce
+qui explique que l'on utilise `MyRequestHandler.visiteur` et non
+`self.visiteur`.
+
+Bien entendu, la bibliothèque standard de Python n'est pas adaptée pour écrire
+toute une application Web. Vous devriez coder vous-même la gestion des sessions,
+la gestion des *cookies*, le décodage des arguments ou encore la correspondance
+entre les pages demandées et les fonctions appelées. En plus, vous devez écrire
+vous-même du HTML. Un framework comme Django ou Twisted vous « offre »
+gratuitement de telles fonctionnalités.
+
+### Un serveur TCP
+
+La classe `HTTPServer` hérite en fait d'une classe plus générique permettant de
+programmer des serveurs arbitraires. La bibliothèque standard de Python propose
+en effet des classes pour faciliter l'écriture de serveurs TCP ou UDP. Ces
+classes se situent dans le module `SocketServer`. On y trouve par exemple la
+classe `TCPServer` que nous allons mettre à profit pour écrire un petit serveur
+permettant d'obtenir quelques informations sur le système.
+
+Nous définissons un protocole très simple pour ce serveur : suite à la
+connexion, l'utilisateur peut passer des commandes telles que `uptime` et `df`.
+Le serveur renvoie alors les réponses à ces commandes, puis ferme la connexion.
+Ce n'est pas sans rappeler le fonctionnement de base d'un serveur HTTP.
+
+Comme pour l'écriture d'un serveur HTTP, nous devons définir une instance de
+`TCPServer` et lui fournir en argument une classe qui sera instanciée à chaque
+requête. Voyons dans un premier temps comment mettre simplement en œuvre
+`TCPServer`. Nous verrons par la suite comment construire le serveur que nous
+venons de décrire.
+
+```python
+#!/usr/bin/env python
+import os
+from SocketServer import TCPServer, StreamRequestHandler
+
+class MyRequestHandler(StreamRequestHandler):
+    def handle(self):
+        self.wfile.write("Votre est IP est %s. Au revoir\n" % self.client_address[0])
+
+tcpd = TCPServer(("", 2020), MyRequestHandler)
+tcpd.serve_forever()
+```
+
+La structure est très proche de notre serveur HTTP ! Nous définissons une classe
+héritant de `StreamRequestHandler` qui sera instanciée pour chaque connexion et
+qui devra prendre en charge celle-ci du début à la fin. Nous créons ensuite le
+serveur TCP en instanciant `TCPServer` et nous lui demandons de servir en boucle
+les connexions qui peuvent survenir.
+
+Vous pouvez tester ce serveur très simple à l'aide du programme `nc` :
+
+```console
+$ nc localhost 2020
+Votre est IP est 127.0.0.1. Au revoir
+```
+
+Pour chaque connexion, le serveur TCP va instancier `MyRequestHandler` et va
+appeler, entre autres, la méthode `handle`. Lorsque cette méthode termine, la
+connexion est fermée. Pour réaliser notre serveur TCP tel que nous l'avons
+défini, nous allons réécrire ainsi notre programme :
+
+```python
+#!/usr/bin/env python
+import os
+import time
+import commands
+from SocketServer import TCPServer, StreamRequestHandler
+
+class MyRequestHandler(StreamRequestHandler):
+    def handle(self):
+        self.wfile.write("Que puis-je faire pour vous ?\n")
+        ligne = self.rfile.readline().strip()
+        if hasattr(self, "do_%s" % ligne):
+            getattr(self, "do_%s" % ligne)()
+        else:
+            self.wfile.write("Commande inconnue.")
+        self.wfile.write("\n")
+
+    def do_uptime(self):
+        status, uptime = commands.getstatusoutput("uptime")
+        self.wfile.write(uptime)
+
+    def do_df(self):
+        status, df = commands.getstatusoutput("df -h")
+        self.wfile.write(df)
+
+TCPServer.allow_reuse_address = True
+tcpd = TCPServer(("", 2020), MyRequestHandler)
+tcpd.serve_forever()
+```
+
+Nous avons modifié la classe `MyRequestHandler`. Désormais, nous lisons une
+ligne (nous attendons donc une entrée du client), puis nous cherchons une
+fonction correspondant à la commande demandée que nous exécutons. Si cette
+fonction n'existe pas, nous renvoyons un message générique. Il est donc facile
+d'ajouter des commandes.
+
+Cet exemple simpliste ne gère pas les erreurs, et en cas de problèmes survenant
+dans une instance de `MyRequestHandler`, la connexion est simplement terminée,
+mais le serveur reste pleinement fonctionnel.
+
+Notre serveur a un gros défaut : il ne peut servir qu'une seule connexion à la
+fois. Essayez la manipulation suivante : ouvrez deux terminaux. Connectez-vous
+sur le serveur depuis le premier, ne tapez aucune commande, puis essayez de vous
+connecter. Tant que la connexion ne sera pas coupée sur le premier terminal,
+vous ne verrez pas la bannière apparaître sur le second ! En effet, votre
+serveur ne gère qu'une seule connexion simultanée.
+
+Il y a plusieurs solutions pour gérer plusieurs connexions simultanées. Parmi
+celles-ci, il y a l'utilisation des *threads* ou l'utilisation de processus
+multiples. Dans le premier cas, un thread sera créé pour prendre en charge
+chaque nouvelle connexion. Le second cas est identique, mais des processus
+seront utilisés au lieu d'utiliser des threads.
+
+Python propose deux classes dérivées de `TCPServer` : `ThreadingTCPServer` et
+`ForkingTCPServer`. Au lieu d'instancier simplement `TCPServer`, instanciez
+l'une ou l'autre de ces classes. Vous pouvez alors gérer plusieurs connexions
+simultanément. Essayez !
+
+Nous savons désormais aussi bien écrire des clients que des serveurs en
+utilisant les différents modules fournis en standard dans Python. Nous allons
+maintenant voir qu'il est également possible de descendre d'un cran et
+d'utiliser les mêmes primitives qu'en C pour écrire des clients et des serveurs.
+Cela peut s'avérer utile dans certains cas, par exemple pour écrire un serveur
+sans utiliser ni threads, ni processus multiples, mais en gérant tout de même
+plusieurs connexions simultanément. Ou simplement pour s'amuser.
+
+# Utiliser les primitives de bas niveau
+
+Lorsqu'il s'agit d'écrire des clients ou des serveurs en C, on en revient
+souvent à quelques primitives de base, à savoir l'API [BSD
+*sockets*][bsd-sockets]. Il existe bien sûr quelques frameworks de plus haut
+niveau facilitant la tâche, notamment quand on a besoin d'intégrer le serveur ou
+le client dans un *toolkit* graphique (tel que QT ou GTK), mais la plupart du
+temps, on utilise des fonctions telles que `socket()`, `bind()`, `listen()`,
+`connect()`, `accept()`, etc. On trouvera une description dans la page de manuel
+`ip` (en section 7), ainsi que dans les pages de manuel `udp` et `tcp` (toujours
+en section 7).
+
+Pour écrire un client TCP (en UDP, c'est un peu différent, mais cela n'a pas
+beaucoup d'importance pour notre exemple), il faut :
+
+- ouvrir une socket avec `socket()` ;
+- établir une connexion avec un serveur distant avec `connect()` ;
+- envoyer des données avec `send()` ou en recevoir avec `recv()` ;
+- terminer avec `close()`.
+
+Pour un serveur TCP, on utilisera les fonctions suivantes :
+
+- ouvrir une socket avec `socket()` ;
+- allouer un port local avec `bind()` ;
+- écouter sur ce port avec `listen()` ;
+- accepter une connexion entrante avec `accept()` qui permet d'obtenir une
+  nouvelle socket propre au client ;
+- envoyer des données avec `send()` ou en recevoir avec `recv()` ;
+- terminer la connexion avec le client à l'aide de `close()` ;
+- fermer la socket du serveur avec `close()`.
+
+## Écrire un client
+
+Reprenons nos exemples simplistes. Comment pourrions-nous écrire un client HTTP
+en C avec les primitives décrites ci-dessus ? Le code ci-dessous représente un
+client simpliste. Toutefois, il ne s'agit pas d'un hors-série sur le C. Nous
+voulons uniquement vous montrer un prototype d'application à titre d'exemple.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+
+int main() {
+  int s;
+  struct sockaddr_in serv;
+  char request[] = "GET / HTTP/1.0\r\nHost:www.gnulinuxmag.com\r\n\r\n";
+  char buffer[200];
+  serv.sin_family = AF_INET;
+  serv.sin_port = htons(80);
+  serv.sin_addr.s_addr = inet_addr("91.121.166.153");
+  if ((s = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+    perror("socket(): ");
+    exit(1);
+  }
+  if (connect(s, (struct sockaddr *)&serv,
+              (socklen_t)sizeof(struct sockaddr_in)) < 0) {
+    perror("connect(): ");
+    exit(1);
+  }
+  if (send(s, request, sizeof(request), 0) < 0) {
+    perror("send(): ");
+    exit(1);
+  }
+  if (recv(s, buffer, sizeof(buffer), 0) < 0) {
+    perror("recv(): ");
+    exit(1);
+  }
+  buffer[199] = '\0';
+  printf("Nous avons reçu ceci:\n\n%s\n\n", buffer);
+  return 0;
+}
+```
+
+Commentons un peu notre code. Commençons par l'appel `socket()`. Celui-ci est
+destiné à créer un point de communication qui permettra d'envoyer et de recevoir
+des données. Nous devons en préciser le domaine (une socket pour IPv4 ici avec
+`PF_INET`), le type (`SOCK_STREAM` qui signifie en fait que l'on désire une
+communication fiable et en IPv4, le système comprend alors TCP) et un numéro de
+protocole qui est inutile donc mis à 0, car il n'y a plus rien à choisir.
+
+Notre socket n'est connectée à rien. Si on essayait d'envoyer des données
+dessus, le système n'accepterait pas. Nous allons la connecter à un serveur
+distant avec la primitive `connect()`. Si vous n'êtes pas familier avec le C, la
+ligne correspondante peut sembler énigmatique. `connect()` prend comme premier
+paramètre la socket que nous venons d'obtenir. Le second paramètre est une
+structure indiquant quel serveur nous voulons contacter. Nous avons rempli cette
+structure dans les premières lignes du programme en précisant la famille (IPv4),
+le port cible avec les octets dans l'ordre réseau (qui est l'inverse de ce qu'on
+a sur x86), d'où l'utilisation de `htons()` qui effectue la conversion, ainsi
+que l'adresse de l'hôte. Nous avons mis l'IP en dur dans le programme. Il aurait
+fallu dans le cas contraire effectuer en plus une résolution de nom. Les choses
+se compliquent un peu. La fonction attend un type `struct sockaddr` et nous lui
+fournissons un type `struct sockaddr_in` (qui correspond au type pour faire de
+l'IPv4). Les notations compliquées sont donc là pour faire la conversion pour
+que le compilateur soit content. Si on avait voulu causer en IPv6, on aurait
+utilisé `struct sockaddr_in6`.
+
+Si tout se passe bien, nous voici connectés. On peut alors utiliser les
+fonctions `send()` et `recv()` pour envoyer des données ou en recevoir. Nous
+envoyons donc une requête HTTP construite à la main et recevons les 200 premiers
+octets en réponse. Compilons et testons :
+
+```console
+$ gcc web1.c -o web1
+$ ./web1
+Nous avons reçu ceci:
+
+HTTP/1.1 200 OK
+Date: Sat, 10 May 2008 12:46:10 GMT
+Server: Apache/2.2.6 (Debian) DAV/2 PHP/5.2.3-1+b1
+X-Powered-By: PHP/5.2.3-1+b1
+Last-Modified: Tue, 29 Apr 2008 10:01:15 GMT
+Cache-Control: mu
+```
+
+Notre *buffer* n'est pas assez grand pour recevoir plus que le début des
+en-têtes. Mais, voilà notre client HTTP en C fini. Mais attendez, ne sommes-nous
+pas dans un hors-série Python ? Nous allons donc le convertir rapidement en
+Python pour réparer cette méprise. Il va falloir utiliser les fonctions
+contenues dans le module `socket`. Le résultat a alors un air de famille certain
+avec la version en C.
+
+```python
+import socket
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+s.connect(("213.186.60.195", 80))
+s.send("GET / HTTP/1.0\r\nHost:www.gnulinuxmag.com\r\n\r\n")
+buf = s.recv(200)
+print("Nous avons recu ceci:\n\n%s\n\n" % buf)
+```
+
+Nous commençons donc par créer notre socket. Les paramètres sont les mêmes qu'en
+C. Les constantes faisant partie du module `socket`, nous devons les chercher
+dans cet espace de nommage. Ensuite, nous connectons notre socket au serveur
+distant. Ici, pas de conversions compliquées à faire, on donne un couple
+contenant l'IP et le port. La primitive `connect` du module `socket` va faire un
+peu plus que d'appeler simplement la fonction `socket` en C.
+
+Ensuite, nous envoyons notre requête et recevons la réponse que nous affichons.
+Testons :
+
+```console
+$ python ./web4.py
+Nous avons recu ceci:
+
+HTTP/1.1 200 OK
+Date: Sat, 10 May 2008 13:03:51 GMT
+Server: Apache/2.2.6 (Debian) DAV/2 PHP/5.2.3-1+b1
+X-Powered-By: PHP/5.2.3-1+b1
+Last-Modified: Tue, 29 Apr 2008 10:01:15 GMT
+Cache-Control: mus
+```
+
+Le résultat est identique, mais nous avons tout de même économisé beaucoup de
+lignes de code par rapport à la version en C. Nous n'avons plus à gérer
+manuellement les erreurs, car le mécanisme d'exception le fait pour nous.
+
+Notons cependant que ce programme Python ne correspond pas tout à fait à
+l'exemple donné avec `urllib2` en début d'article. En effet, si le serveur avait
+répondu avec une redirection, le programme utilisant `urllib2` aurait suivi
+automatiquement cette redirection tandis que notre programme ne l'aurait pas
+fait.
+
+## Écrire un serveur
+
+Passons maintenant à l'écriture d'un serveur. Comme notre premier exemple de
+serveur en Python, il va simplement accepter la connexion, afficher l'IP du
+client, puis fermer la connexion. Nous allons écrire directement notre programme
+en Python, ce qui nous facilite bien évidemment la vie :
+
+```python
+import socket
+
+s = socket.socket()
+s.bind(("", 2020))
+s.listen(5)
+while True:
+    conn, client = s.accept()
+    conn.send("Votre IP est %s\n" % client[0])
+    conn.close()
+```
+
+Comme pour le client, nous créons une socket. Inutile de demander une socket
+IPv4 de type `SOCK_STREAM` : ce sont les paramètres par défaut de la fonction
+`socket`. Nous indiquons ensuite quel port nous allons utiliser. Nous indiquons
+que nous allons écouter sur toutes les interfaces disponibles sur le port 2020.
+En C, nous aurions dû renseigner une structure et utiliser `INADDR_ANY` au lieu
+de la chaîne vide. Si l'on voulait restreindre l'usage du serveur à l'ordinateur
+local, il aurait fallu utiliser 127.0.0.1 comme premier élément du tuple passé à
+`bind`. Ensuite, nous indiquons au système d'exploitation de mettre à l'écoute
+notre socket. Nous indiquons au système d'exploitation de mettre en attente pour
+nous jusqu'à 5 connexions. Ainsi, si notre programme est trop occupé pour
+accepter les nouvelles connexions, le système d'exploitation les mettra en
+attente. Au-delà de 5, les connexions seront refusées.
+
+Nous passons ensuite dans une boucle infinie pour traiter les connexions de
+chaque client qui pourrait se présenter à nous. Nous utilisons la fonction
+`accept`. En C, celle-ci retourne une socket qui permet de dialoguer avec le
+client et passe l'adresse du client en modifiant les deux derniers arguments. En
+Python, les deux informations sont simplement retournées sous forme d'un tuple.
+
+!!! "Note" Pour un serveur, il y a donc une socket par client. Si on utilise
+    TCP, chaque socket correspond à une IP et un port. Il faut donc deux sockets
+    pour faire une connexion : celle du serveur (IP du serveur, port sur lequel
+    le serveur écoute) et la socket du client (IP du client, port sur lequel le
+    client attend les réponses, habituellement un port élevé aléatoire). Avant
+    de pouvoir utiliser une socket, il faut l'associer à ce couple. C'est
+    l'utilité de la fonction `bind`. Cette fonction est automatiquement appelée
+    par `connect` dans le cas d'un client si on l'a omis, ce qui explique son
+    absence dans notre exemple pour le client HTTP. Il existe d'autres types de
+    socket. Par exemple, une socket Unix nommée utilise le nom d'un fichier
+    plutôt qu'un couple IP/port. Pour communiquer sur la même socket, deux
+    processus doivent s'associer au même chemin. Le lecteur intéressé par ces
+    histoires de socket peut se reporter aux pages de manuel de socket, ip, tcp,
+    udp, raw et unix dans la section 7.
+
+Notre serveur est plus fragile que le serveur présenté précédemment. S'il y a
+une erreur dans la boucle, le serveur se termine. Ce qui n'était pas le cas en
+utilisant la classe `TCPServer`.
+
+Enfin, notre serveur ne traite qu'une connexion à la fois. Ce n'est pas
+problématique pour notre exemple simpliste, mais si vous attendez une entrée de
+l'utilisateur, personne ne pourra se connecter en attendant ! Modifions notre
+programme pour qu'il accepte une entrée de l'utilisateur.
+
+```python
+#!/usr/bin/env python
+import os
+import commands
+import socket
+
+s = socket.socket()
+s.bind(("", 2021))
+s.listen(5)
+while True:
+    conn, client = s.accept()
+    conn.send("Que puis-je faire pour vous ?\n")
+    ordre = conn.recv(30).strip()
+    if ordre == "uptime":
+        status, uptime = commands.getstatusoutput("uptime")
+        conn.send("%s\n" % uptime)
+    elif ordre == "df":
+        status, df = commands.getstatusoutput("df -h")
+        conn.send("%s\n" % df)
+    else:
+        conn.send("Je n'ai rien compris.\n")
+    conn.close()
+```
+
+Le début est identique à la version précédente. Nous envoyons ensuite un prompt
+pour demander à l'utilisateur d'entrer une action. Nous rencontrons ensuite une
+différence fonctionnelle importante avec la version utilisant les primitives de
+plus haut niveau : nous lisons au plus 30 caractères. Si nous voulions lire des
+lignes entières proprement, nous devrions faire le découpage et l'assemblage
+nous-même alors que Python mettait à disposition une classe dédiée à cet usage.
+Pour notre exemple, cela n'a pas beaucoup d'importance. La suite est sans
+surprise.
+
+Vous pouvez refaire le test : ouvrez deux terminaux, connectez-vous sur le
+serveur de l'un, puis connectez-vous de l'autre. Le second arrivé n'aura pas le
+prompt tant que le premier n'a pas terminé la connexion. Dans le cas précédent,
+nous avions résolu le problème en substituant simplement `TCPServer` par une
+classe dérivée gérant un processus par connexion. Ici, une telle manipulation
+n'est pas aussi simple : il va falloir gérer cet aspect nous-même. Nous allons
+utiliser la primitive `fork` disponible dans le module `os`. Il existe bien sûr
+d'autres solutions, dont l'utilisation du module `threading`.
+
+```python
+#!/usr/bin/env python
+import os
+import commands
+import socket
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+s.bind(("0.0.0.0", 2022))
+s.listen(5)
+while True:
+    conn, client = s.accept()
+    if os.fork():
+        # Nous sommes dans le pere
+        conn.close()
+    else:
+        # Nous sommes dans le fils
+        conn.send("Que puis-je faire pour vous ?\n")
+        ordre = conn.recv(30).strip()
+        if ordre == "uptime":
+            status, uptime = commands.getstatusoutput("uptime")
+            conn.send("%s\n" % uptime)
+        elif ordre == "df":
+            status, df = commands.getstatusoutput("df -h")
+            conn.send("%s\n" % df)
+        else:
+            conn.send("Je n'ai rien compris.\n")
+        conn.close()
+        os._exit(0)
+```
+
+Après avoir accepté une connexion, nous utilisons la fonction `fork`. Cette
+fonction va dupliquer le processus actuel et les deux copies tourneront en même
+temps avec une très légère différence entre les deux. Dans le fils, `fork`
+retourne 0, tandis que dans le père, elle retourne le PID du fils. Cette
+différence nous permet d'exécuter du code différent dans les deux cas.
+
+Si nous sommes dans le père, nous fermons simplement la socket et on repasse
+dans la boucle pour accepter un nouveau client. La fermeture de la socket
+n'entraîne pas la fermeture de la connexion, car la socket est toujours ouverte
+dans le fils. La connexion ne sera terminée que quand cette socket sera fermée.
+
+Dans le fils, nous faisons notre travail comme précédemment. À la fin, nous
+terminons le processus avec la fonction `_exit` du module `os`. Cette fonction
+évite tous les effets de bord de la fonction `exit` qui pourraient impacter le
+fils.
+
+Vous pouvez désormais refaire le test : nous pouvons gérer plusieurs connexions
+à la fois. Notre exemple n'est pas parfait : nous laissons des processus zombis
+un peu partout. Il faudrait que le père acquiesce la mort de chaque fils avec
+`waitpid`. La façon la plus simple pour faire ceci est de mettre en place un
+gestionnaire de signal. Toutefois, cela sort largement du cadre de cet article.
+
+## À quoi ça sert ?
+
+À la vue des exemples présentés, on peut se demander pourquoi nous voudrions
+utiliser les primitives de bas niveau. En effet, le code est plus long, moins
+pythonesque, comporte des limitations et des fragilités supplémentaires. Que de
+défauts. Y a-t-il un intérêt en dehors de l'aspect éducatif ? Faire appel aux
+primitives de bas niveau peut être nécessaire quand on essaie de sortir du cadre
+des primitives de haut niveau. Par exemple, le serveur TCP fourni par Python
+permet de n'utiliser qu'un seul processus (mais de ne gérer qu'une seule
+connexion à la fois dans ce cas), d'utiliser des threads ou bien d'utiliser
+plusieurs processus. Imaginons qu'aucune de ces approches ne nous convienne.
+Nous voulons être capable de gérer plusieurs connexions, mais un seul thread et
+un seul processus. Si, si, c'est possible, mais il faut utiliser les primitives
+de bas niveau !
+
+Il existe plusieurs méthodes pour arriver à un tel résultat. L'une d'entre elles
+consiste à utiliser le module `select` contenant la fonction `select` qui permet
+de surveiller une liste de descripteurs de fichier en attendant qu'un événement
+se produise sur l'un d'eux. Il s'agit encore d'une fonction d'assez bas niveau
+dont les fonctionnalités sont équivalentes à la fonction `select()` disponible
+en C. Elle a été rendue un brin pythonesque en gérant les exceptions.
+
+Comment allons-nous procéder ? Nous allons maintenir nous-même la liste des
+clients se connectant et surveiller avec la fonction `select` leur activité. Si
+un client envoie des données, la fonction `select` nous l'indique et nous
+effectuons les actions nécessaires. Nous ne serons ainsi pas bloqués si un
+client devient inactif. La fonction `select` attend une liste de descripteurs
+(les sockets sont des descripteurs) et rend la main quand n'importe lequel de
+ces descripteurs devient disponible (pour un descripteur en lecture, cela
+signifie qu'il y a de nouvelles données à lire).
+
+```python
+#!/usr/bin/env python
+import os
+import commands
+import socket
+import select
+
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("", 2022))
+s.listen(5)
+conns = [s]
+while True:
+    rlist, wlist, xlist = select.select(conns, [], [])
+    for r in rlist:
+        if r == s:
+            conn, client = s.accept()
+            conn.send("Que puis-je faire pour vous ?\n")
+            conns.append(conn)
+        else:
+            ordre = r.recv(30).strip()
+            if ordre == "uptime":
+                status, uptime = commands.getstatusoutput("uptime")
+                r.send("%s\n" % uptime)
+            elif ordre == "df":
+                status, df = commands.getstatusoutput("df -h")
+                r.send("%s\n" % df)
+            else:
+                conn.send("Je n'ai rien compris.\n")
+            r.close()
+            conns.remove(r)
+```
+
+Examinons le code proposé à partir de l'appel à `select`. `Select` accepte comme
+paramètres trois ensembles de descripteurs : ceux sur lesquels on attend des
+données, ceux pour lesquels on attend une disponibilité en écriture et ceux pour
+lesquels on attend des évènements tels que la fermeture de la connexion ou une
+erreur. Nous ne renseignons que le premier type de descripteurs. L'appel de
+`select` sera donc bloquant tant que l'un des descripteurs contenu dans la liste
+`conns` n'aura pas de données disponibles. Lorsque nous acceptons une nouvelle
+connexion, nous l'ajoutons dans cette liste. Quand nous fermons une connexion,
+nous la retirons. Nous ajoutons aussi notre socket serveur dans cette liste. Si
+une nouvelle connexion peut être acceptée, `select` retournera également la
+main. La fonction renvoie trois ensembles : l'ensemble des descripteurs prêts en
+lecture, ceux en écriture et ceux en condition exceptionnelle. Chacun de ces
+ensembles est un sous-ensemble des paramètres. Ainsi, dans `rlist`, nous
+obtenons un sous-ensemble de `conns`.
+
+Nous avons donc dans `rlist`, le sous-ensemble des descripteurs de `conns`, à
+partir desquels nous pouvons au moins lire un octet sans être bloqué. Si l'un
+des membres est la socket, cela signifie que nous pouvons accepter une nouvelle
+connexion. Pour les autres, on effectue les actions habituelles.
+
+Testez ce programme pour vérifier qu'il fonctionne comme attendu. Vous pouvez en
+effet ouvrir plusieurs connexions vers le serveur alors qu'un unique processus
+tourne. Toutefois, ce programme a plusieurs défauts importants :
+
+- Nous utilisons `select` uniquement en lecture, les appels à `send` peuvent
+  bloquer (ce qui ne doit pas arriver sur une socket).
+- Nous comptons sur le fait que nous recevons la commande en entier du premier
+  coup. Avec TCP, ce n'est pas garanti. Si le client envoyait la commande
+  caractère par caractère, ce ne serait pas le cas. Il faudrait donc
+  reconstituer la commande avant de procéder à une action.
+- Si la commande à exécuter est longue, notre programme est bloqué pendant son
+  exécution. Comme il n'y a qu'un seul thread et un seul processus, cela
+  signifie que tout est bloqué. Il faudrait utiliser `select` sur la sortie
+  standard de ces programmes, ce qui va compliquer le code.
+
+Corriger ces défauts nécessite plusieurs lignes de code supplémentaire. Nous
+n'allons pas les étudier ici. Cet exemple nous permet d'introduire la section
+suivante de cet article. Il existe des frameworks en Python qui permettent
+d'écrire du code asynchrone (c'est-à-dire du code évitant tout appel bloquant).
+Parmi ceux-ci, il y a Twisted !
+
+# Utiliser Twisted
+
+[Twisted][] se définit comme étant le moteur de votre Internet. Il a deux
+caractéristiques essentielles :
+
+- C'est un framework réseau très complet permettant de construire à la fois des
+  clients et des serveurs utilisant des protocoles très variés : HTTP, SMTP,
+  IMAP, POP, SSH, DNS, FTP, IRC...
+- Il est asynchrone et piloté par les évènements, c'est-à-dire que l'on associe
+  des actions à exécuter lorsque des évènements surviennent (comme l'arrivée
+  d'un paquet).
+
+Le support d'un très grand nombre de protocoles est un atout pour Twisted. Non
+seulement, il supporte plus de protocoles que la bibliothèque standard de
+Python, mais, en plus, ces protocoles sont le plus souvent disponibles en tant
+que client et serveur. Enfin, il s'agit le plus souvent d'implémentations très
+complètes. Par exemple, le serveur SSH supporte SFTP et le client SSH est
+capable d'utiliser un agent. C'est un point très important pour les développeurs
+de Twisted : il s'agit de fournir des implémentations pouvant être utilisées en
+production.
+
+L'aspect asynchrone de Twisted peut être déroutant. Quand une action est
+bloquante, on fournit une fonction qui sera exécutée quand cette action sera
+terminée. Ainsi, quand on veut lire un paquet réseau, on fournit une fonction
+qui sera appelée avec le paquet reçu en paramètre. Le moteur de Twisted
+appellera lui-même cette fonction quand le paquet sera reçu. En attendant, il
+peut gérer d'autres aspects, comme accepter une nouvelle connexion. Les
+avantages d'une telle approche sont multiples :
+
+- On n'a pas à gérer les problèmes de communication interprocessus ou les
+  problèmes de concurrence dans les threads.
+- Le passage à l'échelle est plus prévisible ; il n'y a par exemple pas de
+  problème à gérer 200 000 connexions simultanées (en dehors de la consommation
+  mémoire et processeur), alors que ce serait problématique si chaque connexion
+  devait être gérée par un processus.
+- Les performances peuvent être meilleures. En effet, une portion de code ne
+  rend la main que quand elle effectue une action bloquante (souvent liée au
+  réseau). Le reste du temps, elle utilise 100% du processeur. Il faut voir que
+  Twisted est un framework réseau. Cette efficacité s'entend donc sur les
+  applications réseau. S'il vous venait à l'idée d'écrire une base de données
+  avec Twisted, les mécanismes proposés ne sont pas aussi efficaces. Par
+  exemple, Twisted ne gère pas les lectures asynchrones de fichiers sur le
+  disque.
+
+Si vous n'êtes pas convaincu des performances de Twisted, citons deux produits
+libres l'utilisant et offrant des performances remarquables grâce à celui-ci :
+
+- [Flumotion][], un serveur de *streaming*.
+- [ZenOSS][], un logiciel de surveillance, concurrent de Nagios ou Zabbix.
+
+Utiliser Twisted apporte aussi quelques inconvénients :
+
+- La programmation asynchrone peut être difficile à appréhender. Elle se traduit
+  dans Twisted par la nécessité de définir de nombreuses fonctions pour réagir
+  aux évènements. Le code ne se lit donc pas d'un seul bloc. Il existe toutefois
+  une possibilité d'écrire du code à l'apparence plus classique en utilisant les
+  nouveaux itérateurs de Python 2.5.
+- Il n'y a qu'un seul processus, qu'un seul thread. On n'exploite donc pas les
+  machines avec plusieurs cœurs. Ceux-ci sont toutefois disponibles pour les
+  autres processus (la base de données par exemple). Twisted offre cependant la
+  possibilité de gérer plusieurs processus ou plusieurs threads, mais, dans ce
+  cas, on se prive de certains avantages de la programmation asynchrone.
+- La programmation asynchrone rend difficile la compréhension des tracebacks, ce
+  qui peut rendre assez pénible la mise au point des applications : quand une
+  exception survient, si elle apparaît lors du traitement d'un appel différé, le
+  contexte correspondant à cet appel différé n'est plus disponible.
+- La documentation manque cruellement d'exemples. Il est parfois assez difficile
+  de savoir de quelle façon il faut agencer les différentes briques mises à
+  disposition pour arriver au résultat voulu. La documentation contient quelques
+  très bons tutoriels, mais au-delà, il faudra souvent aller lire le code.
+- Twisted est très complet et veut s'adapter à la plupart des situations. Il
+  utilise alors des concepts de très hauts niveaux que l'on ne voit pas
+  forcément dans d'autres projets : les interfaces, les composants, les
+  fabriques, etc. Il dispose de nombreuses fonctionnalités permettant par
+  exemple de gérer l'authentification aussi bien à l'aide d'un fichier plat que
+  d'une base de données. Le même moteur d'authentification peut être utilisé
+  pour obtenir aussi bien une entité représentant un utilisateur pour un serveur
+  web (associé à une session) qu'un ensemble de boîtes mails. Twisted utilise
+  les concepts cités précédemment pour imbriquer proprement les choses, mais
+  ceux-ci peuvent être difficiles à aborder.
+
+Il est impossible d'aborder Twisted dans son intégralité en un seul article. Un
+précédent numéro de *GNU/Linux Magazine* contenait déjà une très bonne
+introduction à Twisted. Nous allons essayer d'utiliser une approche différente
+en présentant des exemples simples correspondant à ce que l'on a pu faire
+auparavant sans Twisted. Certains exemples seront enrichis de façon à démontrer
+la puissance de Twisted.
+
+## La programmation asynchrone avec Twisted
+
+Pour nos lecteurs qui n'auraient pas lu l'introduction à Twisted précédemment
+citée, nous allons rappeler ici les rudiments de la programmation asynchrone
+avec Twisted.
+
+Nous avons déjà écrit une application asynchrone utilisant l'appel système
+`select`. Twisted n'expose pas une méthode de ce type. Quand votre programme va
+effectuer une action potentiellement bloquante, vous allez appeler une fonction
+qui va immédiatement vous retourner un objet `Deferred`. Vous allez ensuite
+pouvoir attacher des actions à cet objet. Ces actions seront effectuées soit
+quand la donnée attendue est disponible, soit quand une erreur est survenue. Le
+moteur de Twisted, appelé un réacteur, tient à jour une liste de l'ensemble de
+ces objets et exécute les méthodes qui y sont rattachées selon les évènements
+qui surviennent.
+
+Pour mieux comprendre ce principe, reprenons notre tout premier exemple. Nous le
+reproduisons ici :
+
+```python
+import urllib2
+
+lm = urllib2.urlopen('http://www.gnulinuxmag.com/')
+print(lm.read())
+```
+
+Comment faire avec Twisted ? Il y a manifestement une action bloquante qui est
+la lecture de la page Web. Twisted va nous simplifier la vie en offrant un
+équivalent de `urllib2`, mais adapté à son moteur. Voici un programme similaire
+utilisant Twisted :
+
+```python
+from twisted.web.client import getPage
+from twisted.internet import reactor
+
+def printContents(content):
+    print(content)
+    reactor.stop()
+
+deferred = getPage("http://www.gnulinuxmag.com/")
+deferred.addCallback(printContent)
+reactor.run()
+```
+
+C'est un peu plus long. Voyons pas à pas comment cela fonctionne. Twisted
+dispose d'une bibliothèque permettant d'écrire facilement un client web. Nous
+importons la méthode qui nous intéresse. Nous importons aussi le moteur de
+Twisted : le réacteur. Celui-ci dispose de deux méthodes : `run` et `stop`. La
+première méthode permet de démarrer le réacteur. Démarrer le réacteur permet
+d'amorcer une boucle infinie qui va gérer les différents évènements. Cette
+boucle est similaire à ce que l'on trouve avec Qt et GTK. Il existe d'ailleurs
+un réacteur compatible avec la boucle de GTK. Cette boucle s'interrompt quand on
+appelle la méthode `stop`. Il n'est pas conseillé de tenter de la redémarrer de
+nouveau avec `run`. L'appel à `stop` interrompt généralement le programme et il
+ne sera plus possible d'utiliser Twisted par la suite.
+
+Ignorons pour le moment la fonction `printContent`. Nous appelons donc la
+fonction `getPage` avec en paramètre la page que nous souhaitons récupérer.
+Cette action n'est pas immédiate. Il faut ouvrir une socket réseau, résoudre le
+nom de domaine, effectuer une requête http, puis attendre la réponse. La
+fonction `getPage` fait tout ceci, tout comme le faisait la fonction `urlopen`.
+Toutefois, cette dernière ne rendait pas la main avant d'avoir pu contacter le
+serveur. Avec Twisted, les fonctions qui effectuent des actions potentiellement
+bloquantes rendent immédiatement la main. Elles renvoient un objet `Deferred`
+auquel il est possible d'attacher des actions.
+
+Dans notre exemple, nous récupérons cet objet `Deferred` dans une variable et
+nous lui attachons un `callback` qui est une fonction qui sera appelée quand les
+données seront disponibles. Cet attachement se fait à l'aide de la méthode
+`addCallback` de l'objet `Deferred`. Elle prend comme premier paramètre une
+fonction qui est ici `printContent`. On peut lui donner des paramètres
+supplémentaires qui seront passés à la fonction `printContent`.
+
+Lorsque le contenu de la page web est disponible, le réacteur va appeler la
+fonction `printContent` avec comme premier paramètre le contenu de la page web.
+De manière générale, la fonction déclarée en `callback` recevra en premier
+paramètre la donnée attendue. Elle peut prendre des paramètres supplémentaires
+qui devront alors être fournis lors de l'appel à `addCallback`.
+
+Notre fonction `printContent` affiche la page obtenue, puis stoppe le réacteur.
+Cette dernière action permet au programme de se terminer.
+
+Regardons de nouveau le tout premier programme de cet article. Que se passe-t-il
+si l'URL demandée n'existe pas ? Par exemple, si la page demandée renvoie une
+erreur 404 ? Nous obtenons une exception. Nous pouvons la traiter comme le
+montre cet exemple :
+
+```python
+import urllib2
+
+try:
+    lm = urllib2.urlopen("http://www.gnulinuxmag.com/")
+    print(lm.read())
+except:
+    print("Impossible de récupérer la page")
+```
+
+Que se passe-t-il avec Twisted ? Il ne se passe rien, le programme ne rend pas
+la main, mais n'affiche rien non plus. Si on l'interrompt avec
+<kbd>Ctrl</kbd>+<kbd>C</kbd>, il nous dit :
+
+```text
+Unhandled error in Deferred:
+Traceback (most recent call last):
+Failure: twisted.web.error.Error: 404 Not Found
+```
+
+Twisted n'appelle la fonction `printContent` qu'en cas de succès. En cas
+d'erreur, il faut lui fournir une autre fonction à appeler pour gérer cette
+erreur. Nous perdons alors partiellement le mécanisme d'exceptions de Python. Il
+est toujours possible de lancer des exceptions, mais, pour les capturer, il faut
+attacher des fonctions conçues à cet effet. Modifions notre exemple.
+
+```python
+from twisted.web.client import getPage
+from twisted.internet import reactor
+
+def printContent(content):
+    print(content)
+    reactor.stop()
+
+def handleError(error):
+    print("Une erreur est survenue :")
+    print(error)
+    reactor.stop()
+
+deferred = getPage("http://www.gnulinuxmag.com/ooo")
+deferred.addCallback(printContent)
+deferred.addErrback(handleError)
+reactor.run()
+```
+
+Nous avons donc déclaré une nouvelle fonction prenant en paramètre l'erreur
+obtenue (il s'agit en fait d'une instance de la classe `Failure`). Nous
+attachons cette fonction à l'objet `Deferred` obtenu précédemment avec la
+méthode `addErrback`.
+
+Pour finir cette introduction sur la programmation asynchrone avec Twisted, il
+reste à découvrir une dernière subtilité. Il est possible d'enchaîner les
+`callback` :
+
+```python
+from twisted.web.client import getPage
+from twisted.internet import reactor
+
+def printContent(content):
+    print(content[:100])
+    return 18
+
+def addTwo(number):
+    return number + 2
+
+def printResult(number):
+    print("J'ai obtenu %d" % number)
+
+def finalCallback(dummy):
+    print("Fini!")
+    reactor.stop()
+
+deferred = getPage("http://www.gnulinuxmag.com/")
+deferred.addCallback(printContent)
+deferred.addCallback(addTwo)
+deferred.addCallback(printResult)
+deferred.addBoth(finalCallback)
+reactor.run()
+```
+
+Notre programme va donc récupérer la page indiquée. En cas de succès, il va
+afficher les premiers caractères de cette page. Toujours en cas de succès, la
+fonction `addTwo` va être appelée. Elle va prendre en paramètre ce qui a été
+retourné par la fonction `printContent`. En cas de succès, c'est la fonction
+`printResult` qui va être appelée. Enfin, dans tous les cas, on appelle la
+fonction `finalCallback` qui arrête le réacteur. En lançant ce programme, nous
+obtenons :
+
+```text
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1
+J'ai obtenu 20
+Fini!
+```
+
+Il est ainsi possible de chaîner les `callback`. Chaque `callback` utilise le
+résultat du `callback` précédent. Un `callback` peut également retourner un
+`Deferred`. Dans ce cas, le `callback` suivant ne sera appelé que quand le
+contenu associé à ce `Deferred` sera disponible et aura comme paramètre le
+contenu en question. Il est aussi possible de lancer une exception ou de
+retourner un objet `Failure`. Dans ce cas, c'est le prochain `callback` d'erreur
+dans la chaîne qui sera appelé.
+
+L'illustration 1 présente le comportement attendu pour le pseudo code suivant.
+La flèche rouge est suivie en cas d'erreur (exception ou objet `Failure` renvoyé
+par la fonction), tandis que la flèche verte est suivie dans les autres cas.
+
+```python
+deferred.addCallbacks(callback1, errback1)
+deferred.addCallbacks(callback2, errback2)
+deferred.addCallbacks(callback3, errback3)
+```
+
+La fonction `addCallbacks` permet d'enregistrer à la fois un `callback` et un
+`errback`. C'est un petit peu différent du code suivant :
+
+```python
+deferred.addCallback(callback1)
+deferred.addErrback(errback1)
+```
+
+En effet, dans le premier cas, `errback1` ne traitera que les erreurs provenant
+de `getPage`, tandis que, dans le second cas, elle traitera également les
+erreurs qui ont pu survenir dans `callback1`. Pour résumer, si un `callback` ou
+un `errback` émet une exception ou retourne un objet `Failure`, c'est le
+prochain `errback` dans la chaîne qui va s'en occuper. Dans le cas inverse,
+c'est le prochain `callback` dans la chaîne qui prend le relais.
+
+![Callbacks and errbacks handling in Twisted with potential crossovers between
+the two paths]([[!!images/twisted-deferred-process.png]] "Enchaînement des
+callbacks")
+
+## Écrire un serveur avec Twisted
+
+Nous allons, dans un premier temps, nous consacrer à l'écriture d'un serveur
+équivalent à celui que nous avions écrit pour illustrer l'utilisation de
+`select`. Pour ce faire, nous allons nous aider du programme `twistd` fourni
+avec Twisted. Ce dernier va gérer un certain nombre de choses pour nous, dont la
+gestion du réacteur (démarrage et arrêt), la mise en démon et les logs.
+
+### Découverte de twistd
+
+Le programme `twistd` peut prendre en entrée différents types de fichiers. Nous
+allons nous concentrer sur l'option permettant de lui fournir un fichier Python
+à évaluer. Dans ce cas, il faut définir une variable `application` qui sera une
+instance de `twisted.applications.service.Application`. L'exemple minimal est
+alors le suivant (que l'on appelle `exemple.py`) :
+
+```python
+from twisted.application import service
+
+application = service.Application("exemple")
+```
+
+Essayons de le lancer pour voir ce qui se passe :
+
+```console
+$ twistd -n -o -y exemple.py
+2008-06-14 18:54:32+0200 [-] Log opened.
+2008-06-14 18:54:32+0200 [-] twistd 8.1.0 (/usr/bin/python 2.5.2) starting up
+2008-06-14 18:54:32+0200 [-] reactor class: <class 'twisted.internet.selectreactor.SelectReactor'>
+```
+
+Et si on appuie sur <kbd>Ctrl</kbd>+<kbd>C</kbd>, l'application s'arrête
+proprement :
+
+```console
+2008-06-14 18:55:11+0200 [-] Received SIGINT, shutting down.
+2008-06-14 18:55:11+0200 [-] Main loop terminated.
+2008-06-14 18:55:11+0200 [-] Server Shut Down.
+```
+
+Nous avons donné les paramètres `-n`, `-o` et `-y` à `twistd`. Le premier
+indique que l'on ne veut pas qu'il se transforme en démon de façon à garder la
+main. Dans le cas contraire, il tournerait en tâche de fond et les logs seraient
+écrits dans syslog. Le second permet de lui dire de ne pas sauver l'état de
+l'application lors de la sortie. En effet, Twisted propose des fonctionnalités
+permettant de faire un *snapshot* d'une application pour la redémarrer au même
+endroit par la suite. Enfin, le dernier paramètre indique que nous allons
+fournir un fichier Python.
+
+Lors du démarrage, `twistd` indique quel réacteur il utilise (celui à base de
+`select` dans notre cas). Il en existe d'autres. Consultez la page de manuel
+pour savoir comment choisir un autre réacteur.
+
+### Premiers pas vers un serveur fonctionnel
+
+Notre application est pour le moment peu intéressante : nous avons créé une
+application qui ne fait rien. Nous allons lui attacher un service. Ce service va
+écouter sur un port et, pour chaque client se connectant, il va demander à une
+entité spéciale (`Factory`) de créer une instance de `Protocol` qui va discuter
+avec le client. Quand plusieurs clients sont connectés, ils auront chacun une
+instance de `Protocol`, mais il n'y aura qu'une seule instance de `Factory`.
+Quand il n'y a aucun client, l'instance de `Factory` est encore là. Dans la
+pratique, cette instance permet de stocker des informations persistantes (que
+les clients peuvent éventuellement modifier).
+
+Voyons ce que cela donne. Avant d'écrire notre serveur de commandes, écrivons un
+serveur qui dit « bonjour », répète tout ce que nous lui envoyons et tient le
+compte du nombre de clients. Voici le code !
+
+```python
+from twisted.application import internet, service
+from twisted.internet.protocol import Protocol, Factory
+
+class SimpleProtocol(Protocol):
+    def connectionMade(self):
+        self.factory.numClients += 1
+        self.transport.write("Bonjour ! Il y a %d clients.\n" % self.factory.numClients)
+
+    def connectionLost(self, reason):
+        self.factory.numClients -= 1
+
+    def dataReceived(self, data):
+        self.transport.write(data)
+
+class SimpleFactory(Factory):
+    protocol = SimpleProtocol
+
+    def __init__(self):
+        self.numClients = 0
+
+application = service.Application("exemple")
+myfactory = SimpleFactory()
+myservice = internet.TCPServer(2022, myfactory)
+myservice.setServiceParent(application)
+```
+
+Nous définissons deux classes. La première hérite de la classe `Protocol` et va
+donc discuter directement avec le client. La méthode `connectionMade` est
+appelée lorsque la connexion est établie, la méthode `connectionLost` quand
+celle-ci est coupée et, enfin, `dataReceived` est appelé lorsque des données
+sont reçues. Une instance de cette classe contient une référence vers l'instance
+de `Factory` dont elle dépend. Cela nous permet de stocker le nombre de clients.
+Elle contient également une référence vers une instance d'un objet qui va nous
+permettre d'envoyer réellement des données au client. Cet objet dispose d'une
+méthode `write` que nous utilisons pour renvoyer au client les données que l'on
+a reçues.
+
+La seconde classe est la fabrique (ou l'usine) qui va fournir des instances de
+`Protocol` pour chaque client. Elle doit contenir une méthode `buildProtocol`
+renvoyant une instance de `Protocol` capable de dialoguer avec le client. Nous
+héritons cette méthode de `Factory`. Celle-ci va instancier l'attribut
+`protocol` que nous avons initialisé à `SimpleProtocol`. Cette méthode est aussi
+responsable de lier l'instance de `Factory` à l'instance de `Protocol` créée.
+
+Enfin, après avoir défini notre application, nous instancions notre fabrique et
+nous créons un service qui utilisera cette fabrique pour obtenir une instance de
+`Protocol` à même de discuter avec le client. Nous rattachons ce service à notre
+application afin qu'il soit démarré au lancement du client.
+
+Voyons ce que cela donne !
+
+```console
+$ twistd -noy exemple2.py
+2008-06-14 19:15:12+0200 [-] Log opened.
+2008-06-14 19:15:12+0200 [-] twistd 8.1.0 (/usr/bin/python 2.5.2) starting up
+2008-06-14 19:15:12+0200 [-] reactor class: <class 'twisted.internet.selectreactor.SelectReactor'>
+2008-06-14 19:15:12+0200 [-] __builtin__.SimpleFactory starting on 2022
+2008-06-14 19:15:12+0200 [-] Starting factory <__builtin__.SimpleFactory instance at 0x18cc2d8>
+```
+
+Et depuis un autre terminal, nous pouvons nous connecter.
+
+```console
+$ nc localhost 2022
+Bonjour ! Il y a 1 clients.
+Allo ?
+Allo ?
+```
+
+Si vous vous connectez depuis d'autres terminaux, le nombre de clients va
+augmenter. Tout va pour le mieux.
+
+### Une parenthèse sur les concepts de Twisted
+
+Comme indiqué par ailleurs, Twisted utilise beaucoup de concepts objets auxquels
+il faut s'habituer. Encore une fois, les articles d'introduction de Twisted sont
+très importants à lire pour bien comprendre chacun des principes utilisés. Si
+vous êtes familiers avec la notion de « *Design Patterns* », vous avez reconnu
+la notion de fabrique utilisée. Sans entrer dans les détails, le motto d'une
+telle approche est le découplage maximal : le service ne sait pas créer
+directement le protocole, il fait appel à un intermédiaire qui sait. Le fait de
+ne pas lier le service au protocole peut sembler d'abord peu naturel, mais on
+gagne par la suite en flexibilité : cet intermédiaire peut par exemple décider
+de ne pas fournir le protocole immédiatement ou de fournir un protocole
+différent selon le client (par exemple, s'il y a trop de clients).
+
+Un deuxième concept auquel il faut s'habituer est l'utilisation d'interfaces.
+Nous avons vu ci-dessus que nous devions fournir au service une instance de
+`Factory` disposant de la méthode `buildProtocol`. C'est en fait inexact. En
+règle générale, Twisted ne demande pas que les objets soient des instances de
+classes particulières. Il demande de lui fournir une instance qui respecte une
+interface, c'est-à-dire qui possède un certain nombre de méthodes et
+d'attributs. Pour créer un service, il faut donc fournir un objet qui respecte
+l'interface `IProtocolFactory`. On peut utiliser ou hériter de la classe
+`Factory`, mais ce n'est pas obligatoire. Il existe des interfaces qui n'ont pas
+de classe canonique. Dans ce cas, pour créer une classe qui respecte une telle
+interface, il faut donc écrire chacune des méthodes déclarées dans l'interface
+et indiquer que la classe implémente l'interface voulue (avec `implements`).
+Pour une introduction sur les interfaces, le lecteur est invité à se référer à
+l'article sur la *Zope Component Architecture* de ce numéro. À noter cependant
+que Twisted n'utilise qu'une partie de cette architecture et réimplémente
+certaines parties (le registre des adaptateurs par exemple). Aussi, il est
+conseillé de lire également l'introduction aux interfaces et adaptateurs de la
+[documentation de Twisted][twisted-doc]. C'est une lecture indispensable quand
+on veut aller un peu plus loin dans Twisted.
+
+La documentation de l'API de Twisted indique pour chaque objet quelle est
+l'interface qu'il respecte et, pour chaque interface, quelles sont les classes
+qui implémentent cette interface.
+
+Cette notion d'interface participe aussi au découplage entre objets. En
+demandant simplement un objet respectant une interface donnée, on se permet de
+changer l'implémentation facilement. C'est similaire à l'utilisation des classes
+abstraites (qui sont des classes dont on doit hériter et implémenter les
+différentes méthodes déclarées).
+
+### Première implémentation du serveur de commandes
+
+Nous allons maintenant nous attaquer à une première implémentation du serveur de
+commandes. Si nous adaptons le code que nous avions utilisé pour présenter la
+fonction `select`, nous obtenons alors le code suivant :
+
+```python
+import commands
+from twisted.protocols.basic import LineReceiver
+from twisted.application import internet, service
+from twisted.internet.protocol import Protocol, Factory
+
+class SimpleProtocol(LineReceiver):
+    delimiter = "\n"
+
+    def connectionMade(self):
+        self.transport.write("Que puis-je faire pour vous ?\n")
+
+    def lineReceived(self, line):
+        ordre = line.strip()
+        if ordre == "uptime":
+            status, uptime = commands.getstatusoutput("uptime")
+            self.transport.write("%s\n" % uptime)
+        elif ordre == "df":
+            status, df = commands.getstatusoutput("df -h")
+            self.transport.write("%s\n" % df)
+        else:
+            self.transport.write("Je n'ai rien compris.\n")
+        self.transport.loseConnection()
+
+application = service.Application("exemple")
+myfactory = Factory()
+myfactory.protocol = SimpleProtocol
+myservice = internet.TCPServer(2022, myfactory)
+myservice.setServiceParent(application)
+```
+
+Afin de raccourcir le code, nous avons utilisé un petit raccourci évitant de
+déclarer une classe héritant de `Factory`. Nous créons simplement une instance
+de `Factory` et adaptons l'attribut `protocol`.
+
+Autre nouveauté, nous n'héritons pas simplement de `Protocol`, mais d'une de ses
+spécialisations, `LineReceiver`, qui offre la possibilité de recevoir les
+commandes ligne par ligne. En effet, la méthode `dataReceived` de `Protocol` ne
+nous garantissait pas que nous allions recevoir une et une seule ligne à chaque
+fois. Ici, pas de problème. Cette classe propose la méthode `lineReceived` qui
+est appelée avec la ligne reçue en paramètre. Le reste du code est alors
+similaire à ce que nous avions fait dans la présentation de `select`.
+
+L'application semble se comporter exactement de la même façon. Toutefois, elle a
+aussi les mêmes défauts. L'utilisation du module `commands` est bloquante. Si
+jamais une des commandes est bloquante (par exemple si `df` met du temps à
+rendre la main en raison de partages NFS), notre application est figée : il est
+impossible d'ouvrir de nouvelles connexions ou d'utiliser les connexions
+existantes.
+
+Nous n'avons pas présenté de version corrigeant ce défaut quand nous utilisions
+simplement `select`, car c'était quelque chose d'assez pénible. Avec Twisted,
+c'est beaucoup plus simple ! En effet, ce dernier dispose d'un ensemble de
+classes nous aidant à réaliser ceci. Tout d'abord, on peut dialoguer avec un
+processus externe comme avec un client réseau. Nous pourrions donc créer un
+protocole qui lirait tout ce que le processus nous envoie et l'envoyer au
+client. Mais, il y a encore plus simple ! Twisted dispose déjà d'une fonction
+capable de faire de telles opérations. Voyons cela :
+
+```python
+from twisted.protocols.basic import LineReceiver
+from twisted.application import internet, service
+from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import utils
+
+class SimpleProtocol(LineReceiver):
+    delimiter = "\n"
+
+    def connectionMade(self):
+        self.transport.write("Que puis-je faire pour vous ?\n")
+
+    def lineReceived(self, line):
+        ordre = line.strip()
+        if ordre == "uptime":
+            output = utils.getProcessOutput("/usr/bin/uptime")
+            output.addCallbacks(self.sendOutput, self.sendError)
+        elif ordre == "df":
+            output = utils.getProcessOutput("/bin/df", ("-h",))
+            output.addCallbacks(self.sendOutput, self.sendError)
+        else:
+            self.transport.write("Je n'ai rien compris.\n")
+            self.transport.loseConnection()
+
+    def sendOutput(self, output):
+        self.transport.write(output)
+        self.transport.loseConnection()
+
+    def sendError(self, reason):
+        self.transport.write("Uh?\n")
+        self.transport.loseConnection()
+
+application = service.Application("exemple")
+myfactory = Factory()
+myfactory.protocol = SimpleProtocol
+myservice = internet.TCPServer(2022, myfactory)
+myservice.setServiceParent(application)
+```
+
+Nous avons utilisé la fonction `getProcessOutput`. Cette fonction nous permet
+d'introduire pour la première fois un objet `Deferred` dans une application
+réelle. En effet, elle retourne un objet `Deferred` étant donné que l'exécution
+de l'application est bloquante. Ainsi, pendant que l'application s'exécute, le
+réacteur va effectuer d'autres tâches telles que l'accueil de nouveaux clients
+ou le traitement de clients supplémentaires.
+
+Pour que ce `Deferred` ait un effet, nous attachons des `callback`. La méthode
+`sendOutput` en cas de succès et la méthode `sendError` en cas d'échec (par
+exemple, si la commande n'existe pas). Lorsque les résultats sont disponibles,
+la méthode `sendOutput` sera appelée avec comme argument le résultat de la
+commande. Nous écrivons le résultat et coupons la connexion.
+
+Notez que, dans la méthode `lineReceived`, nous ne coupons pas la connexion en
+fin de méthode (sauf en cas de commande non reconnue). En effet, si tel était le
+cas, la connexion serait fermée avant d'avoir pu afficher le résultat (et ceci
+dans tous les cas ; le code n'est jamais préempté !).
+
+Nous avons réalisé notre première application totalement asynchrone avec
+Twisted. Ce n'était pas si difficile, n'est-ce pas ?
+
+### Et la sécurité ?
+
+Admettons que nous voulions mettre notre application sur Internet afin de
+pouvoir consulter à distance l'espace disque. Actuellement, toutes les
+informations passent en clair et il n'y a pas d'authentification. Nous allons
+simplement utiliser SSL pour se protéger. Nous en profitons pour demander un mot
+de passe avant d'accepter une commande. Voici le nouveau code :
+
+```python
+from twisted.protocols.basic import LineReceiver
+from twisted.application import internet, service
+from twisted.internet.protocol import Protocol, Factory
+from twisted.internet import utils, ssl
+
+class SimpleProtocol(LineReceiver):
+    delimiter = "\n"
+
+    def connectionMade(self):
+        self.transport.write("Le mot de passe ?\n")
+        self.authenticated = 0
+
+    def lineReceived(self, line):
+        if self.authenticated == 0:
+            password = line.strip()
+            if password != "toto":
+                self.transport.loseConnection()
+            else:
+                self.transport.write("Que puis-je faire pour vous ?\n")
+                self.authenticated = 1
+            return
+        ordre = line.strip()
+        if ordre == "uptime":
+            output = utils.getProcessOutput("/usr/bin/uptime")
+            output.addCallbacks(self.sendOutput, self.sendError)
+        elif ordre == "df":
+            output = utils.getProcessOutput("/bin/df", ("-h",))
+            output.addCallbacks(self.sendOutput, self.sendError)
+        else:
+            self.transport.write("Je n'ai rien compris.\n")
+            self.transport.loseConnection()
+
+    def sendOutput(self, output):
+        self.transport.write(output)
+        self.transport.loseConnection()
+
+    def sendError(self, reason):
+        self.transport.write("Uh?\n")
+        self.transport.loseConnection()
+
+application = service.Application("exemple")
+myfactory = Factory()
+myfactory.protocol = SimpleProtocol
+myservice = internet.TCPServer(2022, myfactory)
+myservice.setServiceParent(application)
+sslcontext = ssl.DefaultOpenSSLContextFactory("/tmp/privkey.pem", "/tmp/cacert.pem")
+sslservice = internet.SSLServer(2023, myfactory, sslcontext)
+sslservice.setServiceParent(application)
+```
+
+Nous avons ajouté un peu de code pour demander un mot de passe au début de la
+méthode `lineReceived`. Ensuite, nous avons ajouté un service à notre
+application : ce sont les trois dernières lignes. Pour tester, vous devez créer
+la paire de clefs et le certificat autosigné de cette façon :
+
+```console
+$ cd /tmp
+$ openssl req -new -x509 -keyout privkey.pem -out cacert.pem -days 1000
+```
+
+Et pour tester :
+
+```console
+$ openssl s_client -host localhost -port 2023
+```
+
+Simple, n'est-ce pas ? Nous commençons à voir les avantages du découplage. Nous
+avons conservé le même protocole et avons ajouté un nouveau service encapsulant
+notre protocole dans SSL. Le service TCP est toujours disponible.
+
+### Ajouter une interface Web
+
+Pourquoi ne pas ajouter une interface Web ? Twisted vous permet de créer
+facilement un serveur Web. Voici ce que nous devons ajouter à notre code :
+
+```python
+from twisted.web import server, resource
+
+class SimpleWeb(resource.Resource):
+    isLeaf = True
+
+    def render_GET(self, request):
+        ordre = request.path[1:]
+        if ordre == "":
+            return """<html><ul>
+<li><a href="/df">df</a></li>
+<li><a href="/uptime">uptime</a></li>
+</ul></html>"""
+        if ordre == "uptime":
+            output = utils.getProcessOutput("/usr/bin/uptime")
+            output.addCallback(self.sendOutput, request)
+        elif ordre == "df":
+            output = utils.getProcessOutput("/bin/df", ("-h",))
+            output.addCallback(self.sendOutput, request)
+        else:
+            return """<html>Je n'ai rien compris</html>"""
+        return server.NOT_DONE_YET
+
+    def sendOutput(self, data, request):
+        request.write("<html>Voici le resultat : <pre>%s</pre></html>" % data)
+        request.finish()
+
+website = server.Site(SimpleWeb())
+webservice = internet.TCPServer(2024, website)
+webservice.setServiceParent(application)
+```
+
+Le code n'est pas un modèle de beauté. Nous aurions dû préparer une classe
+séparée qui aurait permis de mutualiser la gestion des différentes commandes
+entre la partie web et la partie ligne de commande. Toutefois, nous conservons
+cette approche plus simple. Nous instancions donc une ressource que nous
+transformons en un service que nous attachons à notre application. Cette
+ressource dispose d'une méthode `render_GET` appelée à chaque fois que l'on
+effectue un `GET`. Cette méthode prend en paramètre une instance de `Request`
+que nous utilisons pour récupérer le chemin demandé, mais aussi pour répondre.
+
+Il y a alors deux manières de répondre. Si la réponse est prête, on peut
+simplement retourner une chaîne qui sera alors transmise au client pour
+affichage dans son navigateur. Toutefois, quand la requête n'est pas prête, nous
+devons retourner une valeur spéciale (`server.NOT_DONE_YET`). Dans ce cas, on
+peut appeler la méthode `write` de l'objet `Request` autant de fois que l'on
+veut et terminer par l'appel de la méthode `finish`. C'est ce que nous faisons
+dans notre `callback`.
+
+!!! "Note" C'est une approche qui n'est pas cohérente avec la philosophie de
+    Twisted. Il aurait été plus naturel de retourner un objet `Deferred`. Comme
+    Rome, Twisted ne s'est pas construit en un jour. C'est un défaut qui est
+    corrigé dans la nouvelle génération de serveurs Web pour Twisted.
+
+Pour tester, dirigez votre navigateur vers <http://localhost:2024>.
+
+Le framework web de Twisted est relativement complet. Il est possible d'associer
+des classes à certaines URL de façon à modulariser la construction du site web.
+Il reste cependant assez basique. Il ne contient par exemple pas de moteur de
+*templates* pour construire des pages web plus proprement. Une nouvelle version
+est en cours de développement (`web2`). Il n'est cependant pas conseillé de
+l'utiliser. Progressivement, les points forts de cette version seront intégrés
+dans le module actuel. En attendant, la méthode la plus conseillée est
+d'utiliser [Nevow][], un framework web complet s'appuyant sur Twisted.
+
+### Un accès via SSH ?
+
+Twisted propose un module appelé `conch` pour écrire des clients ou des serveurs
+SSH. Voyons comment rajouter un accès SSH. SSH est un protocole compliqué
+proposant de nombreuses possibilités : diverses méthodes d'authentification,
+possibilité d'ouvrir plusieurs canaux, ouverture d'un terminal, exécution d'une
+commande à distance, etc. Twisted tente de simplifier son utilisation tout en
+permettant d'exploiter toutes les subtilités. On aurait pu espérer quelque chose
+d'aussi simple que d'écouter sur un port en TCP, mais, malheureusement, un tel
+niveau d'abstraction n'existe pas. Twisted propose un module cachant la majeure
+partie de la complexité pour une utilisation simple. On ne peut toutefois pas
+facilement utiliser notre classe `SimpleProtocol` existante, car le protocole
+attendu doit respecter l'interface `IterminalProtocol`. Il n'existe a priori pas
+d'adaptateur entre les deux interfaces pour le moment. Nous allons encore une
+fois dupliquer du code par souci de simplicité. Voici la partie SSH de notre
+application :
+
+```python
+from twisted.conch.manhole_ssh import ConchFactory, TerminalRealm
+from twisted.cred import portal, checkers
+from twisted.conch import avatar, interfaces, recvline
+from twisted.conch.ssh import session
+from twisted.conch.insults import insults
+from zope.interface import implements
+
+class MySSHProtocol(recvline.HistoricRecvLine):
+    def lineReceived(self, line):
+        ordre = line.strip()
+        if ordre == "uptime":
+            output = utils.getProcessOutput("/usr/bin/uptime")
+            output.addCallbacks(self.sendOutput, self.sendError)
+        elif ordre == "df":
+            output = utils.getProcessOutput("/bin/df", ("-h",))
+            output.addCallbacks(self.sendOutput, self.sendError)
+        elif ordre == "quit":
+            self.terminal.loseConnection()
+        else:
+            self.terminal.write("Je n'ai rien compris.")
+            self.terminal.nextLine()
+
+    def sendOutput(self, output):
+        self.terminal.write(output)
+
+    def sendError(self, reason):
+        self.terminal.write("Uh?\n")
+
+tr = TerminalRealm()
+tr.chainedProtocolFactory.protocolFactory = MySSHProtocol
+p = portal.Portal(tr)
+users = {"admin": "toto", "root": "hello"}
+p.registerChecker(checkers.InMemoryUsernamePasswordDatabaseDontUse(**users))
+sshfactory = ConchFactory(p)
+sshservice = internet.TCPServer(2025, sshfactory)
+sshservice.setServiceParent(application)
+```
+
+Commençons par la fin. Twisted propose toute une infrastructure pour gérer
+l'authentification de manière aussi générique que possible. Cette infrastructure
+n'est pas limitée à SSH, mais peut être réutilisée pour un serveur Web par
+exemple. La documentation de Twisted propose une introduction complète à
+[celle-ci][twisted-cred]. La pièce centrale est l'objet `Portal`. Celui-ci va
+interagir avec le protocole pour obtenir les éléments d'identification de
+l'utilisateur. Il va ensuite les soumettre à différents mécanismes de
+vérification. Ici, nous n'en avons instancié qu'un seul : la vérification par
+mot de passe avec une base de données contenue dans un dictionnaire. Une fois
+l'utilisateur authentifié, l'objet `Portal` va s'adresser à un objet `Realm` qui
+doit lui retourner un avatar qui est la représentation de l'utilisateur adapté
+au contexte demandé (ici un utilisateur SSH).
+
+Nous instancions donc divers objets pour construire l'objet `Factory` qui sera
+utilisé pour construire le service. Lors des instanciations, nous trouvons une
+occasion pour attacher notre protocole. Ce dernier est quasiment identique au
+protocole utilisé pour les connexions en clair et les connexions SSL. Le
+transport est substitué par un terminal qui nécessite quelques précautions
+supplémentaires. Étant donné que ce dernier est effacé avant de fermer la
+connexion, nous acceptons plusieurs commandes et nous ajoutons une commande
+`quit`.
+
+Conch est considéré comme l'un des modules les plus compliqués de Twisted. Il
+subit actuellement d'importantes refontes afin de le rendre plus cohérent avec
+les autres modules. Nous sommes toutefois parvenus à écrire notre serveur SSH en
+quelques lignes. Ainsi, nous avons une application sécurisée, supportant une
+authentification par mot de passe et pouvant facilement être étendue pour
+supporter en plus une authentification par clefs.
+
+# Conclusion
+
+Python est un langage de premier choix pour écrire tout type d'applications
+réseau. Il dispose dans sa bibliothèque standard de nombreux modules pour aider
+à l'écriture de celles-ci et est capable de fournir aussi bien des primitives de
+haut niveau que des primitives de bas niveau, proches des primitives offertes en
+C. Il existe également de nombreuses contributions pour enrichir les
+fonctionnalités existantes en supportant notamment de nombreux protocoles
+supplémentaires.
+
+Ces capacités, combinées à la productivité et à la lisibilité qui caractérisent
+Python, vous permettront de concevoir des applications exploitant directement ou
+indirectement le réseau.
+
+Pour des projets ambitieux, n'hésitez pas à jeter un œil à Twisted qui, si vous
+vous adaptez au paradigme asynchrone, vous permettra de bénéficier de sa
+versatilité et de sa robustesse.
+
+[nvd-rss]: https://web.archive.org/web/2009/http://nvd.nist.gov/download/nvd-rss.xml
+[xml-ns]: https://web.archive.org/web/2009/http://en.wikipedia.org/wiki/XML_namespace
+[smtpd]: https://web.archive.org/web/2009/http://docs.python.org/lib/module-smtpd.html
+[BaseHTTPServer]: https://docs.python.org/2.7/library/basehttpserver.html
+[SocketServer]: https://docs.python.org/2.7/library/socketserver.html
+[bsd-sockets]: https://web.archive.org/web/2009/http://en.wikipedia.org/wiki/Berkeley_sockets
+[Twisted]: https://web.archive.org/web/2009/http://twistedmatrix.com/trac/
+[twisted-doc]: https://web.archive.org/web/2009/http://twistedmatrix.com/projects/core/documentation/howto/index.html
+[twisted-cred]: https://web.archive.org/web/2009/http://twistedmatrix.com/projects/core/documentation/howto/cred.html
+[nevow]: https://web.archive.org/web/2009/http://divmod.org/trac/wiki/DivmodNevow
+[zenoss]: https://web.archive.org/web/2009/http://www.zenoss.com/
+[flumotion]: https://web.archive.org/web/2009/http://www.flumotion.net/
