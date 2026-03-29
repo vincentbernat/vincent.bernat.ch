@@ -14,14 +14,13 @@ tags:
 !!! "Note" This article was published in *GNU/Linux Magazine n° 132* in 2010 in
     French. It is translated here to English.
 
-Python is a particularly rich language. It notably features an extensive
-standard library covering a wide range of needs. However, it is not uncommon to
-resort to an external module. For example, if your application requires access
-to a PostgreSQL database, you can use the third-party module psycopg2. Whether
-or not they are included in the standard library, there are two major families
-of modules: native modules, written entirely in Python, and extensions, which
-are modules written in another language, typically C. In this article, we will
-look at the different ways to write a Python extension.
+Python is a rich language with an extensive standard library covering a wide
+range of needs. Yet it is not uncommon to reach for an external module. For
+example, if your application needs a PostgreSQL database, you can use the
+third-party module psycopg2. Whether or not they are in the standard library,
+modules fall into two families: native modules, written entirely in Python, and
+extensions, written in another language, typically C. This article looks at the
+different ways to write a Python extension.
 
 [TOC]
 
@@ -30,25 +29,21 @@ look at the different ways to write a Python extension.
 First, why choose to write an extension rather than a native module? There are
 advantages and disadvantages to both approaches.
 
-A native module requires no compilation and no additional tools to be
-functional. It is generally immediately portable and will work identically
-regardless of the OS: it will work just as well on Microsoft Windows as on a
-GNU/Linux distribution. Finally, there is no need to learn another language! By
-writing your module directly in Python, you immediately benefit from its
-qualities: richness, dynamism, and the many existing modules and extensions to
-build upon.
+A native module requires no compilation and no additional tools. It is portable
+and works identically regardless of the OS: on Microsoft Windows as on a
+GNU/Linux distribution. There is no need to learn another language! By writing
+your module in Python, you benefit from its qualities: richness, dynamism, and
+the many existing modules and extensions to build upon.
 
-However, it is not always possible or desirable to write a native module. The
-most common case, and the one we will explore later, is using a library written
-in another language such as C. A bridge between this library and Python must be
-created. Another reason is speed. The most commonly used Python interpreter
-(CPython) is not yet tremendously fast. If speed is an important factor, you may
-need to rewrite certain parts of your application in a more static but faster
-language like C. Finally, you may need to access certain low-level functions
-that are inaccessible or difficult to access in Python, for example to control
-an electronic device on an uncommon interface. Note that this last example is
-increasingly less relevant as Python gains extensions to fill this need, such as
-USB device control.
+But it is not always possible or desirable to write a native module. The most
+common case, and the one we explore later, is using a library written in another
+language such as C. You need to bridge this library and Python. Another reason
+is speed. The most common Python interpreter (CPython) is not yet fast. If speed
+matters, you may need to rewrite certain parts in a more static but faster
+language like C. Finally, you may need to access low-level functions that are
+hard to reach from Python, for example to control an electronic device on an
+uncommon interface. This last example is increasingly less relevant as Python
+gains extensions to fill this need, such as USB device control.
 
 # The turtle
 
@@ -62,8 +57,7 @@ a serial port.
 ## C library
 
 This turtle comes with a C library for controlling it with a few functions. It
-is a very simple library. We will therefore use this library rather than trying
-to reimplement it.
+is a simple library. We use this library rather than trying to reimplement it.
 
 ### The C interface
 
@@ -98,14 +92,13 @@ bus and identified by a number. The first turtle gets number 1, the next one
 number 2, and so on.
 
 The `turtle_init()` function initializes a turtle. It returns an opaque
-structure that will be used by other functions to indicate which turtle to work
-with. If the requested turtle does not exist, this function returns `NULL`. The
-provided interface does not allow obtaining more information about the error at
-this level.
+structure that other functions use to identify which turtle to work with. If the
+requested turtle does not exist, this function returns `NULL`. The interface
+does not allow obtaining more information about the error at this level.
 
-The following functions return `-1` or `NULL` on error. More information about
-the error can then be obtained using the `turtle_error()` function. There are
-only 3 possible errors.
+The following functions return `-1` or `NULL` on error. You can then get more
+information using the `turtle_error()` function. There are only 3 possible
+errors.
 
 The `turtle_send()` function sends a command to the turtle. It returns `0` on
 success. You provide it with a string like `FORWARD 10` to move it forward or
@@ -123,13 +116,12 @@ specifications of the turtle model you are using.
 ### The implementation
 
 Unless you have a Turtle 3000 dealership nearby, it is not easy to find the
-turtle described above. To facilitate experimentation, we will provide a
-minimalist implementation of this library so it can be used throughout the
-article.
+turtle described above. To facilitate experimentation, we provide a minimalist
+implementation of this library to use throughout the article.
 
-The implementation proposed here can control only 3 turtles. An error is
-returned if you try to control another one. The third turtle is also defective.
-It is not possible to send commands to it. Each turtle is a different model.
+This implementation can control only 3 turtles. An error is returned if you try
+to control another one. The third turtle is also defective: you cannot send
+commands to it. Each turtle is a different model.
 
 ```c
 #include <stdio.h>
@@ -219,9 +211,9 @@ $ ln -s libtortue.so.1.0.0 libtortue.so.1
 $ ln -s libtortue.so.1 libtortue.so
 ```
 
-This library has a small quirk that will make testing easier. If file descriptor
-3 exists, it will use it to print diagnostic messages. It is then possible to
-intercept these messages to verify the proper functioning of our library.
+This library has a small quirk that makes testing easier. If file descriptor 3
+exists, it prints diagnostic messages there. You can intercept these messages to
+verify the proper functioning of the library.
 
 Before moving on to Python, let us try using our library with a simple test
 program.
@@ -259,24 +251,21 @@ Everything seems to work as expected!
 ## The Python interface
 
 So you now have a superb turtle and everything needed to program it easily in C.
-However, you intend this turtle for an audience that wants to program it in
-Python rather than C. There are then two possible solutions: reimplement the
-library as a native Python module (by looking at its source code or by listening
-to what happens on the serial port) or by creating a Python extension. In this
-article, we take the second approach.
+But you intend this turtle for an audience that wants to program it in Python
+rather than C. Two solutions exist: reimplement the library as a native Python
+module (by reading its source code or by listening on the serial port) or create
+a Python extension. We take the second approach.
 
-Before diving into the extension code, it is best to define what interface we
-want to achieve. Broadly, we want a `Turtle` object with a `send()` method and
-`model` and `status` attributes. Errors should be converted into exceptions.
+Before diving into the extension code, let us define the target interface.
+Broadly, we want a `Turtle` object with a `send()` method and `model` and
+`status` attributes. Errors should become exceptions.
 
-To verify that the interface we are going to design is suited to what we will
-want to do later, it is generally useful to write a few lines using the
-extension rather than rushing headlong into the code. This is typically where
-you realize whether the interface is complete and practical to use. Another
-approach is to write [unit tests][TDD] from the start. This way, we can verify
-that the code meets our expectations. We can also check that the different
-implementations we will propose are indeed equivalent. Let us dive right into
-writing these tests!
+To verify that the interface suits our needs, it is useful to write a few lines
+using the extension before rushing into the code. This is where you realize
+whether the interface is complete and practical. Another approach is to write
+[unit tests][TDD] from the start. This way, we can verify that the code meets
+our expectations and that the different implementations are equivalent. Let us
+dive right into writing these tests!
 
 ```python
 #!/usr/bin/python
@@ -329,10 +318,10 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-We start with a small manipulation of file descriptors to be able to read what
-comes out of descriptor 3. This will let us verify the proper functioning of our
-extension. We then import the extension we want to test. We then run the 5 tests
-needed to validate our interface.
+We start with a small manipulation of file descriptors to read what comes out of
+descriptor 3. This lets us verify the proper functioning of our extension. We
+then import the extension we want to test and run the 5 tests that validate our
+interface.
 
 ## The Python implementation
 
@@ -380,12 +369,12 @@ class TurtleException(Exception):
     pass
 ```
 
-This module calls an additional module whose role is to decode the robot's state
-based on its model and the numerical state value. We want to obtain the state as
-a dictionary, which is more readable than a numerical value. Since the robot's
-state decoding may evolve with new models, it seems simpler to code it in Python
-rather than including it in the extension. Of course, this will also have
-educational value later! The contents of the `status.py` file are as follows:
+This module calls an additional module that decodes the robot's state based on
+its model and the numerical state value. We want to obtain the state as a
+dictionary, which is more readable than a numerical value. Since the decoding
+may evolve with new models, it seems simpler to code it in Python rather than
+including it in the extension. This will also have educational value later! The
+contents of the `status.py` file are as follows:
 
 ```python
 class TurtleStatus(dict):
@@ -416,32 +405,29 @@ Ran 5 tests in 0.000s
 OK
 ```
 
-However, we did not use the C library. If we try to control real turtles, not
-much will happen. It is therefore time to write the extension using the C
-library.
+But we did not use the C library. If we try to control real turtles, not much
+will happen. It is time to write the extension using the C library.
 
 # Writing the Python extension
 
-There are several methods for writing a Python extension. We will look at 4:
-using [*ctypes*][ctypes], using [*SWIG*][SWIG], using [*Pyrex*][Pyrex], and
-finally writing the extension directly in C with the [Python/C API][Python/C
-API].
+There are several methods for writing a Python extension. We look at four: using
+[*ctypes*][ctypes], using [*SWIG*][SWIG], using [*Pyrex*][Pyrex], and finally
+writing the extension directly in C with the [Python/C API][Python/C API].
 
 ## Using ctypes
 
-The [`ctypes`][ctypes] module allows interfacing with a library and using its
+The [`ctypes`][ctypes] module lets you interface with a library and call its
 functions. Its use was already detailed in an article by Victor Stinner in a
-previous special issue. The great advantage of this approach is being able to
-directly manipulate the library in its compiled form. This yields an extension
-that requires no compilation to be usable. The downside is that there is no
-safety net: if you make a mistake or if the binary interface of the library
-changes, you will generally get a segfault from the Python interpreter.
+previous special issue. The great advantage of this approach is manipulating the
+library in its compiled form. This yields an extension that requires no
+compilation. The downside is that there is no safety net: if you make a mistake
+or if the binary interface of the library changes, you get a segfault from the
+Python interpreter.
 
-Using the `ctypes` module is extremely simple. You load the library into memory
-with `CDLL()` and then you can directly call the functions contained in the
-library by treating them as methods of the obtained object. Behind the scenes,
-the module will figure out the C function's signature from the way you invoke
-the Python method.
+Using the `ctypes` module is straightforward. You load the library into memory
+with `CDLL()` and then call the functions as methods of the obtained object.
+Behind the scenes, the module figures out the C function's signature from the
+way you invoke the Python method.
 
 ```pycon
 $ LD_LIBRARY_PATH=. python
@@ -456,11 +442,10 @@ Open turtle 1
 -1600443770
 ```
 
-However, not everything can happen by magic. In some cases, you need to help the
-module a bit. For example, by default, C functions are expected to return an
-`int`. That is why we get -1600443770 in the example above. It is the conversion
-of a pointer to a character string into an integer. We therefore need to help
-ctypes by specifying the return values.
+But not everything can happen by magic. In some cases, you need to help the
+module. By default, C functions are expected to return an `int`. That is why we
+get -1600443770 in the example above: a pointer to a character string cast to an
+integer. We need to help ctypes by specifying the return types.
 
 ```pycon
 >>> libtortue.turtle_init.restype = c_void_p
@@ -480,8 +465,8 @@ should only be used to build a first prototype.
 sh: segmentation fault  LD_LIBRARY_PATH=. python
 ```
 
-The `ctypes` module allows many other manipulations on C structures. However, we
-do not need them to write our extension.
+The `ctypes` module allows many other manipulations on C structures. But we do
+not need them for our extension.
 
 ```python
 from ctypes import *
@@ -525,21 +510,20 @@ Name this new file `mctypes.py`, then modify the `__init__.py` file to import
 this file instead of `native.py`. The tests should pass without any problems!
 
 Note how simple the integration is. The `send()` method calls the C `send()`
-function and converts the potential error into an exception. We also made use of
-the `__getattribute__` method, which intercepts attribute accesses to
-dynamically provide the correct model and, more importantly, the correct state.
+function and converts any error into an exception. We also use the
+`__getattribute__` method, which intercepts attribute accesses to dynamically
+provide the correct model and state.
 
-The resulting module is, however, very fragile. If an error creeps in, the
-program will terminate with a segfault, which is quite unusual in Python. This
-is the nature of interfacing Python and C, but the problem is aggravated here by
-the absence of any compilation that would detect certain errors, including in
-parts of the code not exercised by the tests.
+The resulting module is fragile, though. If an error creeps in, the program
+terminates with a segfault, which is unusual in Python. This is the nature of
+interfacing Python and C, but the problem is aggravated by the absence of
+compilation that would detect certain errors, including in code paths not
+exercised by the tests.
 
 ## Using SWIG
 
 SWIG stands for [*Simplified Wrapper and Interface Generator*][SWIG]. Its goal
-is to very quickly build a Python extension from an interface file (our
-`tortue.h`).
+is to quickly build a Python extension from an interface file (our `tortue.h`).
 
 Let us dive right in. To use SWIG, you need to write an interface file. SWIG
 will read it to generate a C extension that can then be compiled. Here is the
@@ -555,19 +539,17 @@ shortest interface file we can write:
 ```
 
 An interface file contains C directives as well as SWIG-specific directives
-starting with the `%` sign. The `%module` directive indicates the name of the
-extension we want to build. The block that follows, delimited by `%{` and `%}`,
-allows including arbitrary code in the C extension generated by SWIG. We use it
-to include the header of our library, as we did for the sample program written
-in C. The `%include` directive allows including an arbitrary file in our
-interface file. Its format must be understandable by SWIG. Our header file
-`tortue.h` is simple enough to be understood directly by SWIG, so we can include
-it directly. If it were too complex or contained symbols we do not want to
-expose in the Python extension, we would have had to write the function
-declarations directly.
+starting with the `%` sign. The `%module` directive names the extension we want
+to build. The block delimited by `%{` and `%}` lets us include arbitrary code in
+the generated C extension. We use it to include our library's header, as we did
+for the sample C program. The `%include` directive includes an arbitrary file in
+our interface file. Its format must be understandable by SWIG. Our header file
+`tortue.h` is simple enough for SWIG to parse directly. If it were too complex
+or contained symbols we do not want to expose, we would have had to write the
+function declarations by hand.
 
-We will now compile the interface file into a C file. This C file will then be
-compiled into a Python extension that can be used from the interpreter.
+We now compile the interface file into a C file. This C file is then compiled
+into a Python extension usable from the interpreter.
 
 ```console
 $ cd tortue
@@ -600,10 +582,10 @@ Traceback (most recent call last):
 TypeError: in method 'turtle_model', argument 1 of type 'struct turtle *'
 ```
 
-The work is not done, however. The extension generated by SWIG does not respect
-our interface at all. However, since the obtained interface is nearly identical
-to the one obtained with the `ctypes` module, we will take the `mctypes.py` file
-and copy it to `mswig.py`. Only the beginning changes:
+The work is not done, though. The SWIG-generated extension does not respect our
+interface at all. But since the obtained interface is nearly identical to the
+one from the `ctypes` module, we take the `mctypes.py` file and copy it to
+`mswig.py`. Only the beginning changes:
 
 ```python
 import swig as libtortue
@@ -620,16 +602,15 @@ class Turtle(object):
 The rest is strictly identical. Modify `__init__.py` to use this module and
 rerun the tests. Everything should pass correctly.
 
-SWIG has a number of features to produce a directly usable extension without the
-additional wrapper we had to write here. For example, it can generate exceptions
-based on function return codes. It can also transform structures into objects.
-Finally, a feature allows modifying the generated functions by adding additional
-code. This last feature would be needed if we wanted to return a `TurtleStatus`
-instance when accessing the `status` attribute. We will not detail all these
-features here because they require some knowledge of the Python API, and SWIG is
-generally not used to directly produce a high-level interface from a low-level C
-library. Let us see how to obtain a `Turtle` object rather than a collection of
-functions:
+SWIG has features to produce a directly usable extension without the additional
+wrapper we had to write here. For example, it can generate exceptions based on
+function return codes. It can also transform structures into objects. Another
+feature lets you modify the generated functions by adding code. This last
+feature would be needed to return a `TurtleStatus` instance when accessing the
+`status` attribute. We do not detail all these features here because they
+require some knowledge of the Python API, and SWIG is generally not used to
+directly produce a high-level interface from a low-level C library. Let us see
+how to obtain a `Turtle` object rather than a collection of functions:
 
 ```swig
 // swig.i
@@ -688,36 +669,33 @@ write a function to modify them. SWIG expects to have the corresponding
 functions defined in the C section.
 
 This new extension does not pass our tests. Exception handling is missing. We
-would need to declare a new exception and use it in each method. Declaring and
-using exceptions requires Python API functions that we will see later. The
-`status` attribute is an integer whereas we expected a `TurtleStatus` instance.
-We would need to import the module containing this object and then instantiate
-it. Again, this would require Python API functions that we will cover later.
+would need to declare a new exception and use it in each method—this requires
+Python API functions that we cover later. The `status` attribute is an integer
+whereas we expected a `TurtleStatus` instance. We would need to import the
+module and instantiate the class—again requiring Python API functions.
 
 SWIG is very interesting when you have a C library with many functions to
 convert, like an OpenGL library. Another advantage of SWIG is its compatibility
 with a large number of Python versions, from version 2.0 up to version 3.
 
-When trying to go further, it becomes necessary to call certain Python API
-functions directly. Advanced use of SWIG can therefore quickly become more
-difficult. For these reasons, libraries using SWIG are generally low-level: they
-provide a Python equivalent of C functions, possibly with exception handling.
-Adding a more Pythonic interface is done by writing an additional Python module
-that uses the extension produced by SWIG. Thus, no knowledge of the Python API
-is truly necessary to use SWIG.
+When going further, you need to call certain Python API functions directly.
+Advanced use of SWIG can quickly become difficult. For these reasons, libraries
+using SWIG are typically low-level: they provide a Python equivalent of C
+functions, possibly with exception handling. A more Pythonic interface is then
+added by writing an additional Python module on top of the SWIG extension. No
+knowledge of the Python API is truly necessary to use SWIG.
 
 ## Using Pyrex
 
-It is possible to combine the great freedom of use of the `ctypes` module with
-the safety of a compiler. This solution is called [*Pyrex*][Pyrex], a compiler
-of Python code to C that has features for directly using C data.
+You can combine the freedom of the `ctypes` module with the safety of a
+compiler. This solution is called [*Pyrex*][Pyrex], a compiler from Python code
+to C that can directly use C data.
 
 Pyrex takes Python code as input and transforms it into C code. Some limitations
-exist, but existing Python code can generally be transformed into C by Pyrex.
-Pyrex also knows how to use C data and functions. It then becomes possible to
-mix C code and Python code, somewhat like the `ctypes` module. The extension we
-are going to write is actually very close to what can be done with the `ctypes`
-module:
+exist, but existing Python code can generally be transformed by Pyrex. Pyrex
+also knows how to use C data and functions, making it possible to mix C and
+Python code, somewhat like the `ctypes` module. The extension we are going to
+write is actually very close to what can be done with the `ctypes` module:
 
 ```pyrex
 cdef extern from "../tortue.h":
@@ -767,26 +745,25 @@ class TurtleException(Exception):
 ```
 
 At the top of the file, we import the functions we need. The syntax is neither
-Python nor C. It is not possible to import a bunch of functions without
-enumerating them one by one. We first declare the `struct turtle` structure. It
-is subsequently referenced by the name `turtle`. We then define each function
-following the C function prototype as closely as possible. Pyrex does not like
-the `const` keyword, so we do not use it. Once the C functions are defined this
-way, they can be called anywhere in the code.
+Python nor C. You cannot import a bunch of functions without enumerating them
+one by one. We first declare the `struct turtle` structure, subsequently
+referenced by the name `turtle`. We then define each function following the C
+prototype as closely as possible. Pyrex does not like the `const` keyword, so we
+omit it. Once defined this way, these C functions can be called anywhere in the
+code.
 
 Without further specification, all variables are assumed to contain Python
-objects. If needed and where possible, Pyrex will handle the automatic
-conversion of C data into Python objects. For data that cannot be converted to
-Python or for which conversion is not desired (for performance reasons, for
-example), it must be declared using the `cdef` keyword. Note that the entire
-class is declared with the `cdef` keyword. Indeed, we want to store the pointer
-to our turtle in the class, and it is not possible to store C data in a Python
-object. The `__init__` and `__del__` methods become `__cinit__` and
-`__dealloc__` (keeping in mind that you should avoid doing too many things in
-the latter). If the C library used an integer rather than a structure to
-identify turtles, it would have been possible to use a regular Python class.
-Finally, note the curious mix of using `__getattr__` and `__getattribute__` for
-a class not inheriting from `object`. This is a Pyrex peculiarity.
+objects. Where possible, Pyrex handles the automatic conversion of C data into
+Python objects. For data that cannot be converted or for which conversion is not
+desired (for performance reasons), you must declare it with the `cdef` keyword.
+Note that the entire class uses `cdef` because we want to store the pointer to
+our turtle in the class, and you cannot store C data in a regular Python object.
+The `__init__` and `__del__` methods become `__cinit__` and `__dealloc__`
+(keeping in mind that you should avoid doing too many things in the latter). If
+the C library used an integer rather than a structure to identify turtles, it
+would have been possible to use a regular Python class. Finally, note the
+curious mix of using `__getattr__` and `__getattribute__` for a class not
+inheriting from `object`. This is a Pyrex peculiarity.
 
 Let us try to compile this code after modifying `__init__.py` to use the
 extension written with the help of `pyrex`:
@@ -805,39 +782,34 @@ OK
 
 Pyrex thus combines the advantages of SWIG (compilation, function parameter
 checking) with the advantages of the `ctypes` module (mixing with Python code).
-However, there is no automatic generation of all functions from a library, so
+But there is no automatic generation of all functions from a library, so
 converting a large library this way is tedious.
 
 ## Using the Python/C API
 
-One last option is available for writing our extension: using the [Python/C
-API][Python/C API], which allows writing the entire extension directly in C.
-Beyond the educational aspect of writing the Python extension directly in C,
-there are several practical reasons to consider this approach. First, tools like
-SWIG may require writing a bit more C code than desired, code that will require
-a good understanding of the Python API. Second, if you encounter a segfault or
-other bug, whether with Pyrex or SWIG, you will need to look at and preferably
-understand the generated C code. Finally, you may prefer hand-written code over
-automatically generated code for various reasons: conciseness, speed,
-flexibility. Note that integrating a Python extension into the standard library
-does not accommodate automatically generated code.
+One last option: using the [Python/C API][Python/C API] to write the entire
+extension directly in C. Beyond the educational aspect, there are practical
+reasons to consider this approach. First, tools like SWIG may require writing
+more C code than desired, code that demands a good understanding of the Python
+API. Second, if you encounter a segfault or other bug with Pyrex or SWIG, you
+need to read and understand the generated C code. Finally, you may prefer
+hand-written code for conciseness, speed, or flexibility. Note that the Python
+standard library does not accept automatically generated code.
 
 ### Memory management
 
-In C, memory management is generally left to the programmer's discretion. You
-allocate memory to hold data in one place, and you must remember to free that
-memory in another. The programmer is solely in charge and must adopt their own
-methodology to avoid forgetting to deallocate unused memory. They can manage
-this manually or use a memory management mechanism such as a garbage collector.
-In Python, memory management is automatic. The interpreter maintains a counter
-for each object. This counter is incremented when the object is referenced by a
-variable and decremented when it is no longer referenced. When it reaches zero,
-the object is freed.
+In C, the programmer manages memory. You allocate memory in one place and must
+remember to free it in another. The programmer is solely in charge and must
+adopt a methodology to avoid forgetting to deallocate unused memory—either
+manually or using a mechanism such as a garbage collector. In Python, memory
+management is automatic. The interpreter maintains a counter for each object,
+increments it when a variable references the object, and decrements it when no
+longer referenced. When the counter reaches zero, the object is freed.
 
 When writing an extension in C, the objects you create and manipulate can be
-communicated to Python code. You will therefore need to use this counter
-mechanism for each object you manipulate. You must increment the counter if you
-want to keep an object and decrement it when you no longer need it.
+passed to Python code. You must therefore use this counter mechanism for each
+object you manipulate: increment the counter to keep an object and decrement it
+when you no longer need it.
 
 The whole difficulty lies in knowing whether it is necessary to touch an
 object's counter or whether another function has already taken care of it.
@@ -902,45 +874,43 @@ same provided the object is not `NULL` (in which case the macro does nothing).
 
 ### API overview
 
-Memory management is a central point for properly using the Python API. Do not
-hesitate to reread the previous section if it seems unclear. The rest of the
-Python API is much simpler to understand.
+Memory management is central to using the Python API properly. Reread the
+previous section if it seems unclear. The rest of the Python API is much simpler
+to understand.
 
-From your extension's C code, you will receive Python objects, manipulate them,
-and return them. Everything that comes from or is destined for the Python
-interpreter is a Python object, including integers and strings. When you
-manipulate a Python object in C, you have a reference to it in the form of a
-`PyObject *` pointer. Not all the objects you manipulate are equivalent, but
-they are always represented as a `PyObject *` pointer.
+From your extension's C code, you receive Python objects, manipulate them, and
+return them. Everything that comes from or goes to the Python interpreter is a
+Python object, including integers and strings. When you manipulate a Python
+object in C, you have a reference to it in the form of a `PyObject *` pointer.
+Not all the objects you manipulate are equivalent, but they are always
+represented as a `PyObject *` pointer.
 
-Functions that manipulate objects are prefixed according to the type of object
-they handle. For example, functions starting with `PyList_` manipulate lists,
-while functions starting with `PyInt_` manipulate integers. For each type, you
-generally have functions to create an object, check an object's type (is the
-data given to me as an argument actually an integer?), and convert an object
-into another. Everything you can do with objects from the Python interpreter has
-an equivalent function in the API.
+Functions are prefixed according to the type of object they handle. For example,
+`PyList_` functions manipulate lists, while `PyInt_` functions manipulate
+integers. For each type, you typically have functions to create an object, check
+its type (is this argument actually an integer?), and convert it to another
+type. Everything you can do from the Python interpreter has an equivalent
+function in the API.
 
-Two functions will be used very regularly. The first is `PyArg_ParseTuple()`,
-which verifies that a function's arguments are of the expected type and stores
-them in a set of variables, in a single call. Did the caller provide an integer,
-then a list, then optionally another integer? If so, store each value in such
-and such variable. The second function is `Py_BuildValue()`, which makes it easy
-to construct certain simple objects like an integer, or a tuple containing an
-integer and a string.
+Two functions come up regularly. The first is `PyArg_ParseTuple()`, which
+verifies that a function's arguments match the expected types and stores them in
+variables, in a single call. Did the caller provide an integer, then a list,
+then optionally another integer? If so, store each value in the right variable.
+The second is `Py_BuildValue()`, which makes it easy to construct simple objects
+like an integer, or a tuple containing an integer and a string.
 
 ### Error handling
 
 Python has an exception mechanism. When an error occurs in an extension, it must
-raise an exception. The Python API handles error cases in a fairly simple way.
-The general rule is that when a function that should return a reference to an
-object actually returns `NULL`, an exception will be generated. In particular,
-if a Python API function returns `NULL` and you do not wish to handle this error
-case, also return `NULL` and the exception will be propagated with the
-appropriate error message. When a function does not return a Python object,
-refer to the [documentation][Python/C API] to see how error cases are handled.
-In all cases, you can call `PyErr_Occurred()` to find out whether you are
-currently in an error state.
+raise an exception. The Python API handles errors in a straightforward way. The
+general rule is that when a function that should return a reference to an object
+returns `NULL` instead, an exception is generated. In particular, if a Python
+API function returns `NULL` and you do not wish to handle this error case, also
+return `NULL` and the exception will be propagated with the appropriate error
+message. When a function does not return a Python object, refer to the
+[documentation][Python/C API] to see how error cases are handled. In all cases,
+you can call `PyErr_Occurred()` to find out whether you are currently in an
+error state.
 
 When you want to generate an exception, you must not only return `NULL` (or `-1`
 in the case of most functions returning an integer) to the interpreter, but also
@@ -950,7 +920,7 @@ starting with `PyErr_` such as `PyErr_NoMemory()`, `PyErr_SetString()`, or
 
 ### Writing the extension
 
-We will ease into writing our extension. Here is a first version containing its
+Let us ease into writing our extension. Here is a first version containing its
 initialization and the declaration of the `TurtleException`:
 
 ```c
@@ -975,16 +945,15 @@ initpythonc(void)
 }
 ```
 
-The `Python.h` header contains the declarations needed to use the Python API. We
-then declare the `TurtleException` object, which can be used throughout the
-extension. The function marked with `PyMODINIT_FUNC` is the function responsible
-for initializing the module. A module is also a Python object. We initialize it
-with `Py_InitModule()`. The first parameter is the module name and the second is
-the set of module methods. Currently, we have no methods. Note the error
-handling specific to the API. If `Py_InitModule` returned `NULL`, an error
-occurred. The module initialization case is somewhat special since the function
-does not return an object. We exit the function. The Python interpreter will
-detect the error and raise an exception.
+The `Python.h` header contains the declarations needed for the Python API. We
+then declare the `TurtleException` object, usable throughout the extension. The
+function marked with `PyMODINIT_FUNC` initializes the module. A module is also a
+Python object. We initialize it with `Py_InitModule()`. The first parameter is
+the module name and the second is the set of module methods. Currently, we have
+no methods. Note the error handling specific to the API. If `Py_InitModule`
+returns `NULL`, an error occurred. Module initialization is somewhat special
+since the function does not return an object. We exit the function. The Python
+interpreter detects the error and raises an exception.
 
 Let us return to our `TurtleException` object. The `PyErr_NewException()`
 function allows us to create a new exception. Again, we check whether `NULL` was
@@ -1087,11 +1056,10 @@ static PyTypeObject TurtleType = {
 };
 ```
 
-For now, our type does not allow doing much. We give it a name, the size of the
+For now, our type does not do much. We give it a name, the size of the
 corresponding object, and a documentation string. It has no methods or
-attributes yet. However, we must explain how to create a new instance of our
-object using `Turtle_init()`. This function will serve as `__init__()`. Let us
-look at its code:
+attributes yet. But we must explain how to create a new instance using
+`Turtle_init()`. This function serves as `__init__()`. Let us look at its code:
 
 ```c
 static int
@@ -1112,12 +1080,12 @@ Turtle_init(TurtleObject *self, PyObject *args, PyObject *kwds)
 }
 ```
 
-Note first that this function does not return a `PyObject *`, just like a Python
-class constructor. Other than that, the function's signature is standard. All
-functions will be called with three arguments: a pointer to the instance, a
-pointer to a list of positional arguments, and a pointer to a dictionary of
-keyword arguments. Generally, functions return a Python object. That is not the
-case here.
+Note that this function does not return a `PyObject *`, just like a Python class
+constructor. Other than that, the function's signature is standard. All
+functions are called with three arguments: a pointer to the instance, a pointer
+to a list of positional arguments, and a pointer to a dictionary of keyword
+arguments. Generally, functions return a Python object. That is not the case
+here.
 
 We start by examining the arguments received. We want our constructor to be
 called with a single argument: an integer representing the turtle's port. The
@@ -1137,8 +1105,8 @@ We then call our C library to initialize the turtle. If initialization fails, we
 generate an exception using `PyErr_Format()` and return `-1`. Otherwise, `0` is
 returned to indicate success.
 
-We must also define the `Turtle_dealloc()` function, which is called when the
-object must be deallocated. In this function, we call `turtle_close()`:
+We must also define `Turtle_dealloc()`, called when the object is deallocated.
+In this function, we call `turtle_close()`:
 
 ```c
 static void
@@ -1151,8 +1119,8 @@ Turtle_dealloc(TurtleObject *self)
 ```
 
 If we compile and run our tests at this point, the first test passes. We are on
-the right track! We can now add the `send()` method to our object. We must first
-write the corresponding function:
+the right track! Now we add the `send()` method. We must first write the
+corresponding function:
 
 ```c
 static PyObject *
@@ -1184,8 +1152,8 @@ increment the counter of the `Py_None` object, which is an object like any other
 return a new reference to the interpreter. We therefore need to increment the
 counter of any Python object returned.
 
-We must then register this new method for our object. All methods of an object
-are referenced in the same structure, which we declare as follows:
+We then register this new method. All methods of an object are referenced in a
+single structure:
 
 ```c
 static PyMethodDef Turtle_methods[] = {
@@ -1196,16 +1164,14 @@ static PyMethodDef Turtle_methods[] = {
 };
 ```
 
-We provide the method name, the method to call (whose signature must always
-match the signature of a C function called from the Python interpreter), the
-arguments it expects (here a variable number of positional arguments but no
-keyword arguments), and finally a documentation string. Finally, in the
-definition of the `TurtleType` type, we replace the value of the `tp_methods`
-member with this structure (instead of `0`).
+We provide the method name, the function to call (whose signature must match a C
+function called from the Python interpreter), the arguments it expects (here a
+variable number of positional arguments but no keyword arguments), and a
+documentation string. In the `TurtleType` definition, we replace the
+`tp_methods` member with this structure (instead of `0`).
 
-After compilation, only the tests concerning the `model` and `status` attributes
-fail. We will therefore write the functions that provide access to these
-attributes. Let us start with the simpler attribute:
+After compilation, only the tests for the `model` and `status` attributes fail.
+Let us write the accessor functions, starting with the simpler attribute:
 
 ```c
 static PyObject *
@@ -1215,15 +1181,12 @@ Turtle_getmodel(TurtleObject *self, void *closure)
 }
 ```
 
-The function that provides access to the `model` attribute is very simple. It
-merely creates a new Python string object constructed from the value returned by
-the C function `turtle_model()`. The `PyString_FromString()` function gives us a
-new reference. We pass this reference to the caller. There is therefore no need
-to touch the object's counter. Note that instead of `PyString_FromString()`, it
-would also have been possible to use `Py_BuildValue()`.
+The `model` accessor is straightforward. It creates a new Python string from the
+value returned by `turtle_model()`. The `PyString_FromString()` function gives
+us a new reference. We pass this reference to the caller, so there is no need to
+touch the counter. Note that `Py_BuildValue()` would also work here.
 
-All functions for manipulating attributes are grouped within the same structure,
-which we define as follows:
+All attribute accessors are grouped in a single structure:
 
 ```c
 static PyGetSetDef Turtle_getseters[] = {
@@ -1240,11 +1203,10 @@ and additional data that would be passed as the last parameter of the functions.
 In the definition of the `TurtleType` type, we replace the value of the
 `tp_getset` member with this structure.
 
-After compilation, only one last test fails! We need to add support for the
-`status` attribute. Remember, this attribute is obtained by returning a
-`TurtleStatus` instance. We will therefore need to import the corresponding
-module and instantiate the class, which amounts to calling Python code from our
-C code. Here is how to import the module:
+After compilation, only one last test fails! We need to add the `status`
+attribute. Remember, this attribute returns a `TurtleStatus` instance. We
+therefore need to import the corresponding module and instantiate the class—that
+is, call Python code from our C code. Here is how to import the module:
 
 ```c
     StatusModule = PyImport_ImportModule("tortue.status");
@@ -1252,12 +1214,11 @@ C code. Here is how to import the module:
       return;
 ```
 
-This code should be added at the end of the module initialization. The
-`PyImport_ImportModule()` function returns a new reference. We do not add this
-reference to the module, so we retain ownership. There is therefore no need to
-increment the counter. `StatusModule` is declared as a `static PyObject *`
-global variable. We can now call this module's functions in the function that
-provides access to the `status` attribute:
+Add this code at the end of the module initialization. `PyImport_ImportModule()`
+returns a new reference. We do not add this reference to the module, so we
+retain ownership. No need to increment the counter. `StatusModule` is declared
+as a `static PyObject *` global variable. We can now use this module in the
+`status` accessor:
 
 ```c
 static PyObject *
@@ -1314,16 +1275,16 @@ static PyGetSetDef Turtle_getseters[] = {
 };
 ```
 
-After compilation, all tests now pass. Our module is functional! The Python API
-is very rich and we have only scratched the surface. This should give you the
-foundation needed to [go further][API Tutorial].
+After compilation, all tests pass. Our module is functional! The Python API is
+rich and we have only scratched the surface. This should give you the foundation
+to [go further][API Tutorial].
 
 ## Automating compilation
 
-Most of the solutions presented in this article require a compilation step. We
-ran commands manually to obtain the different Python extensions. Be aware that
-the `distutils` module provides everything needed to automate this compilation
-and properly integrate it into Python's module build and installation system.
+Most solutions presented in this article require a compilation step. We ran
+commands manually to obtain the different extensions. The `distutils` module
+provides everything needed to automate this compilation and integrate it into
+Python's module build and installation system.
 
 For an extension written directly in C, you can add the `ext_modules` argument
 to the `setup()` function call to compile your extension. In our case:
@@ -1341,17 +1302,16 @@ Consult their documentation.
 
 # Conclusion
 
-Interfacing a C library with Python code is ultimately not that complicated.
-Depending on your preferences, many solutions are available. SWIG lets you
-easily generate a Python equivalent of your C library. It is then up to you to
-complete the result with some Python to make the resulting library more
-Pythonic. Pyrex lets you mix Python code with C data and functions while
-maintaining a degree of safety. Knowledge of the Python API is not required to
-build advanced extensions. The `ctypes` module lets you achieve a similar result
-without having access to the library's source code. It requires some precautions
-but allows getting a result very quickly that can then be consolidated with the
-other tools. Finally, for the more adventurous, building an extension using the
-Python/C API directly remains accessible and gives you complete freedom.
+Interfacing a C library with Python code is not that complicated. Depending on
+your preferences, many solutions are available. SWIG generates a Python
+equivalent of your C library; it is then up to you to add some Python to make
+the result more Pythonic. Pyrex lets you mix Python code with C data and
+functions while maintaining some safety. Knowledge of the Python API is not
+required to build advanced extensions. The `ctypes` module achieves a similar
+result without access to the library's source code. It requires some precautions
+but gets results quickly that can then be consolidated with the other tools.
+Finally, for the more adventurous, building an extension with the Python/C API
+directly remains accessible and gives you complete freedom.
 
 [TORTUE]: https://en.wikipedia.org/wiki/Turtle_(robot) "Turtle robots"
 [TDD]: https://fr.wikipedia.org/wiki/Test_Driven_Development "Test Driven Development"

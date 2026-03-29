@@ -14,59 +14,53 @@ tags:
     in French. It is translated here to English.
 
 Like many languages, Python provides the full arsenal needed to build network
-applications. The standard library offers everything required to write both
-servers and clients. In this article, we will explore the various possibilities
-Python offers in this area.
+applications. The standard library covers both servers and clients. This article
+explores what Python offers in this area.
 
 [TOC]
 
-This article is divided into four parts. First, we will explore the
-possibilities offered by Python for writing network clients using the standard
-library. Then, we will tackle the server side. In these first two parts, we will
-use high-level primitives provided by Python that greatly speed up application
-development. In the third part, we will see how to use primitives equivalent to
-those found in programs written in C. Python allows, using these primitives, to
-mimic the behavior of any network tool usually written in C. Finally, to
-demonstrate a completely different approach, we will explore the possibilities
-of the Twisted network framework in the last part.
+The article has four parts. First, we explore how to write network clients using
+the standard library. Then, we tackle the server side. In these first two parts,
+we use high-level primitives that speed up development. In the third part, we
+drop down to primitives equivalent to those found in C programs. Python can,
+using these primitives, mimic the behavior of any network tool usually written
+in C. Finally, we explore a different approach with the Twisted network
+framework.
 
 # Writing a client
 
-Python provides in its standard library a large number of modules that make it
-very easy to write clients for a wide variety of protocols, including, for
-example, [HTTP](https://docs.python.org/2.7/library/urllib2.html),
+Python's standard library includes many modules that make it easy to write
+clients for a wide variety of protocols, including, for example,
+[HTTP](https://docs.python.org/2.7/library/urllib2.html),
 [FTP](https://docs.python.org/2.7/library/ftplib.html),
 [POP](https://docs.python.org/2.7/library/poplib.html),
 [IMAP](https://docs.python.org/2.7/library/imaplib.html),
 [SMTP](https://docs.python.org/2.7/library/smtplib.html), and
 [Telnet](https://docs.python.org/2.7/library/telnetlib.html).
 
-Other protocols are supported too, and it is always possible to write a module
-supporting your own protocol or to find what you need among third-party modules.
-We will focus on a few usage examples of some of the modules mentioned above.
+Other protocols are supported too, and you can always write a module for your
+own protocol or find what you need among third-party modules. We focus on a few
+usage examples of the modules mentioned above.
 
 These are high-level modules. They perform many tasks in a single command to
 establish a connection without requiring you to deal with the details. For
 instance, the FTP module exposes a simple function to send a file to the server.
-This function handles negotiating the data channel specific to the FTP server
-and manages active or passive mode automatically. These are details you do not
-necessarily want to deal with when you want to write a program that uploads or
-retrieves files using the FTP protocol.
+This function negotiates the data channel and manages active or passive mode
+automatically. These are details you do not want to deal with when writing a
+program that uploads or retrieves files over FTP.
 
-We will see later how to write lower-level applications and manage all network
+We see later how to write lower-level applications and manage all network
 exchanges ourselves.
 
 ## A simple HTTP client
 
 To write an HTTP client, the simplest approach is to use the `urllib2` module.
-It is not limited to HTTP requests, as it is designed to handle URLs and, as
-such, supports other protocols like FTP or GOPHER, and can be extended. However,
-its primary use remains HTTP. Among the features supported by this module, we
-can mention authentication handling, proxy support, web redirections, and
-cookies. We will not explore all the available features. For further details,
-reading the online documentation for this module is recommended.
+It is not limited to HTTP: it handles URLs in general and supports other
+protocols like FTP or GOPHER. Still, its primary use remains HTTP. It supports
+authentication, proxies, redirections, and cookies. We will not explore all
+available features. For details, read the online documentation.
 
-Let us start with a very simple client that retrieves the content of a web page:
+Let us start with a simple client that retrieves the content of a web page:
 
 ```python
 import urllib2
@@ -75,19 +69,17 @@ lm = urllib2.urlopen("http://www.gnulinuxmag.com/")
 print(lm.read())
 ```
 
-This very simple program retrieves the web page of the *GNU/Linux Mag* site and
-displays it. You should see the HTML source of your favorite magazine's web
-page. If a problem occurs while retrieving the page, you will receive an
-exception such as `URLError` or `HTTPError`. It is up to you to handle this case
-properly.
+This program retrieves the web page of the *GNU/Linux Mag* site and displays it.
+You should see the HTML source of your favorite magazine's web page. If
+something goes wrong, you get an exception such as `URLError` or `HTTPError`. It
+is up to you to handle this case properly.
 
-Our first HTTP client is not very interesting. As an illustration, we will write
-a slightly more useful script. It will display the latest CVE vulnerabilities.
-It is a kind of mini RSS reader. The [feed is available][nvd-rss] online. Since
-it is XML, we can parse it easily using an XML library. Python 2.5 integrated
-the `ElementTree` module, which is very simple to use. For Python 2.4 users, it
-can be installed separately (on Debian, it is the `python-celementtree`
-package).
+Our first HTTP client is not very interesting. Let us write a slightly more
+useful script that displays the latest CVE vulnerabilities—a mini RSS reader.
+The [feed is available][nvd-rss] online. Since it is XML, we can parse it with
+an XML library. Python 2.5 integrated the `ElementTree` module, which is simple
+to use. For Python 2.4 users, it can be installed separately (on Debian, it is
+the `python-celementtree` package).
 
 ```python
 import urllib2
@@ -119,12 +111,12 @@ the root, we search for all "item" elements. Within those, we keep only the
     the RSS namespace. A more common notation would be `rss:title` with a prefix
     declaration in the XML preamble.
 
-Our program is already a bit more useful. We could improve it by properly
-handling the exceptions that may occur, both during retrieval of the XML file
-and during its parsing. However, that is not the purpose of this article.
+Our program is already a bit more useful. We could improve it by handling the
+exceptions that may occur during retrieval or parsing. But that is not the
+purpose of this article.
 
-If we wanted to submit a form and retrieve the content, it is an almost equally
-simple operation:
+Submitting a form and retrieving the content is an almost equally simple
+operation:
 
 ```python
 import urllib, urllib2
@@ -134,18 +126,16 @@ content = urllib2.urlopen(
 )
 ```
 
-When the `data` parameter is used, `urllib2` will use the `POST` method instead
-of `GET` with the provided data. The data must be encoded into a string
-understandable by the receiving application. In our example, the data must be
-sent in the form `p2=alpha&p1=6`. This is the role of the `urlencode` method
-from the `urllib` module.
+When the `data` parameter is present, `urllib2` uses the `POST` method instead
+of `GET`. The data must be encoded into a string the receiving application
+understands. In our example, the data must be sent in the form `p2=alpha&p1=6`.
+This is the role of the `urlencode` method from the `urllib` module.
 
 ## An SMTP client
 
 Let us go back to our first example. Imagine we want to send the CVE
-vulnerabilities by email rather than displaying them on screen. This is the role
-of the `smtplib` module. This module communicates with an SMTP server to send a
-message.
+vulnerabilities by email rather than displaying them on screen. The `smtplib`
+module handles this: it communicates with an SMTP server to send a message.
 
 `smtplib` only handles the SMTP part. You need to provide it with an email
 compliant with RFC 822. In its standard library, Python includes the `email`
@@ -173,40 +163,38 @@ s.close()
 ```
 
 Since we provide no parameters, neither to the `SMTP` constructor nor to the
-`connect` method, the connection will be made to IP 127.0.0.1. A functional SMTP
-server running locally is therefore required. Otherwise, you can pass the SMTP
-server name as the first parameter of the `SMTP` object constructor (or the
-`connect` method).
+`connect` method, the connection will be made to IP 127.0.0.1. You need a
+functional SMTP server running locally. Otherwise, you can pass the SMTP server
+name as the first parameter of the `SMTP` object constructor (or the `connect`
+method).
 
 We specify the sender and recipient addresses in two different places. In fact,
 the SMTP protocol distinguishes between the envelope and the message. When you
 receive an email, you only see the message (which includes headers and body).
-When the email travels from SMTP server to SMTP server, it is the envelope that
-is used. The message is generally ignored. Once the message arrives, the
-envelope is destroyed. Thus, you can put whatever you want in the `To:` and
-`From:` fields. What matters is what is given to the `sendmail` function. In our
-example, we used `cve-bounces@example.com` as the envelope address. This way,
-bounces will be received at this address (they are sent to the sender indicated
-in the envelope) and any replies from the recipient will go to
-`cve@example.com`, which is the address that will appear in the email client.
+When the email travels from SMTP server to SMTP server, the servers use the
+envelope and ignore the message. Once the message arrives, the envelope is
+destroyed. Thus, you can put whatever you want in the `To:` and `From:` fields.
+What matters is what is given to the `sendmail` function. In our example, we
+used `cve-bounces@example.com` as the envelope address. This way, bounces will
+be received at this address (they are sent to the sender indicated in the
+envelope) and any replies from the recipient will go to `cve@example.com`, which
+is the address that will appear in the email client.
 
-Once again, our program remains very basic and does not handle the exceptions
-that may occur.
+Our program remains basic and does not handle the exceptions that may occur.
 
 ## An FTP client
 
 The `ftplib` module makes it easy to write an FTP client. Although this protocol
-is particularly insecure, it is still the most common protocol when it comes to
-transferring data to a hosting provider. It is also the protocol used when you
-have a dedicated server and your hosting provider gives you storage space. Let
-us place our practical example in this latter scenario: you perform daily
-backups of your dedicated server into a specific directory. You now want to
-transfer these backups to the space allocated to you on the hosting provider's
-FTP server.
+is particularly insecure, it is still the most common protocol for transferring
+data to a hosting provider. It is also the protocol used when you have a
+dedicated server and your hosting provider gives you storage space. Let us place
+our practical example in this latter scenario: you perform daily backups of your
+dedicated server into a specific directory. You now want to transfer these
+backups to the space allocated to you on the hosting provider's FTP server.
 
-It would, of course, be entirely possible to script an existing FTP client.
-However, such a client would have trouble competing with the possibilities
-offered by Python. Besides, we are in a Python special issue!
+It would be possible to script an existing FTP client. But such a client would
+have trouble competing with what Python offers. Besides, we are in a Python
+special issue!
 
 We assume the backups to transfer follow the pattern "name.xx" where "xx" is a
 sequence number. For example, "web.15", "archives.17", and so on. We will write
@@ -258,10 +246,9 @@ the names and values are the sequence numbers. For example:
 ```
 
 What does it do? First, we create an `FTP` object by providing the hostname,
-login, and password. Without the last two, an anonymous connection would be
-made. The `nlst` method of the obtained object gives us the list of files in the
-current directory. This list will tell us whether the files we want to send
-already exist and which files need to be deleted.
+login, and password. Without the last two, the client connects anonymously. The
+`nlst` method gives us the list of files in the current directory. This list
+tells us whether the files we want to send already exist and which to delete.
 
 Then, for each backup file, we check whether the file exists. If not, we upload
 it using the `storbinary` method. This method performs the following actions:
@@ -272,16 +259,15 @@ it using the `storbinary` method. This method performs the following actions:
 
 We pass as a parameter the command to send to the server. It must start with
 `STOR` followed by the name the file should have on the server. The second
-parameter of the method is the file to upload. Anything that looks like a file
-to Python can be used. For example, it would be possible to pass the result of
-`urllib2.urlopen()`!
+parameter is the file to upload. Anything that looks like a file to Python
+works. For example, you could pass the result of `urllib2.urlopen()`!
 
 Then, we look at all the files present on the server and delete the oldest ones
 with the `delete` method.
 
-Thus, although the FTP protocol is quite complex to implement from scratch, the
-`ftplib` module makes it very easy with just a few simple methods. As with the
-other examples, proper error handling should be implemented...
+Although the FTP protocol is quite complex to implement from scratch, the
+`ftplib` module makes it easy with a few methods. As with the other examples,
+you should add proper error handling...
 
 ## And the rest?
 
@@ -297,45 +283,42 @@ several options:
 - use Twisted, which supports additional protocols.
 
 When testing a server, it is common to use the `telnet` command. The telnet
-protocol is indeed extremely basic, and the telnet client provided on many
-systems allows you to communicate with an SMTP, POP, NNTP server, and so on. It
-is therefore possible to use Python's `telnetlib` module in similar situations.
-However, it should be noted that the telnet protocol has a set of commands that
-are invoked by sending a specific escape sequence. This sequence may conflict
-with the protocol you are trying to implement. It is therefore absolutely
-necessary to ensure that the `telnetlib` module is only used with a telnet
-server or a server that will not use this escape sequence.
+protocol is basic, and the telnet client provided on many systems allows you to
+communicate with an SMTP, POP, NNTP server, and so on. You can use Python's
+`telnetlib` module in similar situations. But the telnet protocol has a set of
+commands invoked through a specific escape sequence. This sequence may conflict
+with the protocol you are trying to implement. Make sure the `telnetlib` module
+is only used with a telnet server or a server that does not use this escape
+sequence.
 
 The `telnetlib` module provides some handy methods for waiting for specific
-character sequences. However, for the reasons stated above, it is preferable to
-use the lower-level methods we will see later, combined with a module like
-`pexpect` that provides the same services.
+character sequences. Still, for the reasons stated above, prefer the lower-level
+methods we see later, combined with a module like `pexpect` that provides the
+same services.
 
 As for external modules, there are many choices, including modules that compete
 with those provided in Python's standard library. Python's standard library does
-not claim to be exhaustive (neither in terms of supported protocols nor in
-functional richness for each), so do not hesitate to look into modules provided
-by the community. For example, if you want SSH client capabilities, the
-`paramiko` module is a good candidate to consider.
+not claim to be exhaustive, neither in supported protocols nor in functional
+richness, so do not hesitate to look into community modules. For example, if you
+want SSH client capabilities, the `paramiko` module is a good candidate.
 
 # Writing a server
 
-We have just seen that Python offers a very large number of modules for writing
-clients. When it comes to writing servers, the offering is much smaller. If you
-want to write an FTP server, for example, you will need to either use a
-third-party module or roll up your sleeves and write things from scratch.
+We have just seen that Python offers many modules for writing clients. For
+servers, the offering is much smaller. If you want to write an FTP server, for
+example, you will need to either use a third-party module or roll up your
+sleeves and write things from scratch.
 
-However, Python provides an [SMTP server][smtpd] as well as an [HTTP
-server][BaseHTTPServer]. We will not cover the SMTP server case here. Python
-also provides a module for writing [generic servers][SocketServer]. We will
-cover these latter two modules.
+Still, Python provides an [SMTP server][smtpd] as well as an [HTTP
+server][BaseHTTPServer]. We do not cover the SMTP server here. Python also
+provides a module for writing [generic servers][SocketServer]. We cover these
+latter two modules.
 
 ## An HTTP server
 
 In its standard library, Python provides several modules for writing web
-servers. These modules are built around the `HTTPServer` class from the
-`BaseHTTPServer` module. Each request from an HTTP client is handled by an
-instance of `BaseHTTPRequestHandler`.
+servers. These modules build on the `HTTPServer` class from the `BaseHTTPServer`
+module. An instance of `BaseHTTPRequestHandler` handles each HTTP request.
 
 ### Serving static files
 
@@ -373,8 +356,8 @@ directory in your home folder.
 
 In just a few lines, you get a functional web server. Although basic, it
 supports HTTP/0.9, HTTP/1.0, and HTTP/1.1 and has some security measures
-preventing attacks based on adding "`..`" to the path. However, it is very
-inefficient (it only responds to one request at a time).
+preventing attacks based on adding "`..`" to the path. But it is inefficient: it
+handles one request at a time.
 
 ### Serving dynamic pages
 
@@ -405,11 +388,11 @@ easier. With the `send_response` method, we send the 200 response code
 indicating the page was found. Then, using `send_header`, we send the
 `Content-Type` HTTP header indicating that the response content is HTML. Next,
 the `end_headers` method writes a blank line. We are then free to send whatever
-content we like. For this purpose, the `wfile` attribute is made available.
-Writing to it sends data to the client.
+content we like. The `wfile` attribute serves this purpose: writing to it sends
+data to the client.
 
 Try accessing the URL `http://localhost:8080/test/` and you should see a page
-saying "Hello world!". Not very dynamic. But you can then do whatever you want.
+saying "Hello world!" Not very dynamic. But you can then do whatever you want.
 For example, let us rewrite the `MyRequestHandler` class as follows:
 
 ```python
@@ -432,11 +415,10 @@ For the counter to persist between requests, we made it a class attribute rather
 than an instance attribute, which explains why we use
 `MyRequestHandler.visiteur` instead of `self.visiteur`.
 
-Of course, Python's standard library is not suited for writing a full web
-application. You would have to code session management, cookie handling,
-argument decoding, and URL-to-function mapping yourself. On top of that, you
-have to write HTML manually. A framework like Django or Twisted provides such
-features for free.
+Python's standard library is not suited for writing a full web application. You
+would have to code session management, cookie handling, argument decoding, and
+URL-to-function mapping yourself. On top of that, you have to write HTML
+manually. A framework like Django or Twisted provides such features for free.
 
 ### A TCP server
 
@@ -470,9 +452,9 @@ tcpd.serve_forever()
 ```
 
 The structure is very similar to our HTTP server! We define a class inheriting
-from `StreamRequestHandler` that will be instantiated for each connection and
-must handle it from start to finish. We then create the TCP server by
-instantiating `TCPServer` and ask it to continuously serve incoming connections.
+from `StreamRequestHandler`. It gets instantiated for each connection and must
+handle it from start to finish. We then create the TCP server by instantiating
+`TCPServer` and ask it to continuously serve incoming connections.
 
 You can test this very simple server using the `nc` program:
 
@@ -542,23 +524,20 @@ Python provides two classes derived from `TCPServer`: `ThreadingTCPServer` and
 other of these classes. You can then handle multiple connections simultaneously.
 Try it!
 
-We now know how to write both clients and servers using the various modules
-provided in Python's standard library. We will now see that it is also possible
-to go one level lower and use the same primitives as in C to write clients and
-servers. This can be useful in certain cases, for example to write a server
-without using threads or multiple processes while still handling multiple
-simultaneous connections. Or for fun.
+We now know how to write both clients and servers using the various modules in
+Python's standard library. We now go one level lower and use the same primitives
+as in C. This can be useful to write a server without threads or multiple
+processes while still handling multiple simultaneous connections. Or for fun.
 
 # Using low-level primitives
 
 When writing clients or servers in C, it often comes down to a few basic
-primitives, namely the [BSD sockets][bsd-sockets] API. There are, of course,
-some higher-level frameworks that make the task easier, especially when you need
-to integrate the server or client into a graphical toolkit (such as Qt or GTK),
-but most of the time, functions like `socket()`, `bind()`, `listen()`,
-`connect()`, `accept()`, etc. are used. A description can be found in the `ip`
-man page (section 7), as well as in the `udp` and `tcp` man pages (also in
-section 7).
+primitives, namely the [BSD sockets][bsd-sockets] API. There are higher-level
+frameworks that make the task easier, especially to integrate a server or client
+into a graphical toolkit (such as Qt or GTK), but most of the time, functions
+like `socket()`, `bind()`, `listen()`, `connect()`, `accept()`, etc. are used. A
+description can be found in the `ip` man page (section 7), as well as in the
+`udp` and `tcp` man pages (also in section 7).
 
 To write a TCP client (for UDP, it is slightly different, but that does not
 matter much for our example), you need to:
@@ -583,8 +562,8 @@ For a TCP server, you use the following functions:
 
 Let us revisit our simplistic examples. How could we write an HTTP client in C
 using the primitives described above? The code below represents a simplistic
-client. However, this is not a C special issue. We only want to show you a
-prototype application as an example.
+client. But this is not a C special issue. We only want to show a prototype
+application.
 
 ```c
 #include <stdio.h>
@@ -626,11 +605,11 @@ int main() {
 ```
 
 Let us comment on our code. We begin with the `socket()` call. Its purpose is to
-create a communication endpoint that allows sending and receiving data. We must
-specify the domain (an IPv4 socket here with `PF_INET`), the type
-(`SOCK_STREAM`, which in practice means we want reliable communication—and for
-IPv4, the system understands this as TCP), and a protocol number set to 0 since
-there is nothing left to choose.
+create a communication endpoint for sending and receiving data. We must specify
+the domain (an IPv4 socket here with `PF_INET`), the type (`SOCK_STREAM`, which
+in practice means we want reliable communication—and for IPv4, the system
+understands this as TCP), and a protocol number set to 0 since there is nothing
+left to choose.
 
 Our socket is not connected to anything. If we tried to send data on it, the
 system would reject it. We connect it to a remote server using the `connect()`
@@ -666,9 +645,9 @@ Cache-Control: mu
 
 Our buffer is not large enough to receive more than the beginning of the
 headers. But there you go, our HTTP client in C is done. But wait, are we not in
-a Python special issue? We will therefore quickly convert it to Python to remedy
-this oversight. We will need to use the functions contained in the `socket`
-module. The result has a certain family resemblance to the C version.
+a Python special issue? Let us convert it to Python. We need to use the
+functions from the `socket` module. The result has a certain family resemblance
+to the C version.
 
 ```python
 import socket
@@ -683,9 +662,8 @@ print("Nous avons recu ceci:\n\n%s\n\n" % buf)
 We start by creating our socket. The parameters are the same as in C. Since the
 constants belong to the `socket` module, we must look them up in that namespace.
 Then, we connect our socket to the remote server. Here, no complicated
-conversions are needed: we pass a tuple containing the IP and port. The
-`connect` primitive from the `socket` module does a bit more than calling the C
-`socket` function.
+conversions: we pass a tuple containing the IP and port. The `connect` primitive
+from the `socket` module does a bit more than calling the C `socket` function.
 
 Then, we send our request and receive the response, which we display. Let us
 test:
@@ -706,10 +684,10 @@ The result is identical, but we saved a lot of lines of code compared to the C
 version. We no longer have to manually handle errors, as the exception mechanism
 does it for us.
 
-Note, however, that this Python program does not quite correspond to the example
-given with `urllib2` at the beginning of the article. Indeed, if the server had
-responded with a redirect, the program using `urllib2` would have automatically
-followed it, while our program would not.
+Note that this Python program does not quite correspond to the example with
+`urllib2` at the beginning of the article. If the server had responded with a
+redirect, the program using `urllib2` would have automatically followed it,
+while our program would not.
 
 ## Writing a server
 
@@ -738,14 +716,13 @@ server to the local machine, we would have used 127.0.0.1 as the first element
 of the tuple passed to `bind`. Then, we tell the operating system to start
 listening on our socket. We tell the operating system to queue up to 5
 connections for us. Thus, if our program is too busy to accept new connections,
-the operating system will put them on hold. Beyond 5, connections will be
-refused.
+the operating system will put them on hold. Beyond 5, the system refuses new
+connections.
 
 We then enter an infinite loop to process connections from each client that may
 come our way. We use the `accept` function. In C, it returns a socket for
 communicating with the client and passes the client's address by modifying the
-last two arguments. In Python, both pieces of information are returned as a
-tuple.
+last two arguments. In Python, the function returns both as a tuple.
 
 !!! "Note" For a server, there is one socket per client. If TCP is used, each
     socket corresponds to an IP and a port. Two sockets are therefore needed to
@@ -808,8 +785,7 @@ the first has finished the connection. In the previous case, we solved the
 problem by substituting `TCPServer` with a derived class handling one process
 per connection. Here, such a manipulation is not as simple: we will have to
 manage this aspect ourselves. We will use the `fork` primitive available in the
-`os` module. There are, of course, other solutions, including using the
-`threading` module.
+`os` module. There are other solutions, including the `threading` module.
 
 ```python
 #!/usr/bin/env python
@@ -859,27 +835,27 @@ side effects of the regular `exit` function that could affect the child.
 You can now repeat the test: we can handle multiple connections at once. Our
 example is not perfect: we leave zombie processes everywhere. The parent should
 acknowledge each child's termination with `waitpid`. The simplest way to do this
-is to set up a signal handler. However, that is well beyond the scope of this
+is to set up a signal handler. But that is well beyond the scope of this
 article.
 
 ## What is it good for?
 
-Looking at the examples presented, one might wonder why we would want to use
-low-level primitives. Indeed, the code is longer, less Pythonic, and has
-additional limitations and fragilities. So many drawbacks. Is there any benefit
-beyond the educational aspect? Using low-level primitives can be necessary when
-trying to go beyond what the high-level primitives offer. For example, the TCP
-server provided by Python only allows using a single process (but handling only
-one connection at a time in that case), using threads, or using multiple
-processes. Imagine that none of these approaches suits us. We want to handle
-multiple connections, but with a single thread and a single process. Yes, it is
-possible, but we must use the low-level primitives!
+Looking at these examples, one might wonder why we would use low-level
+primitives. The code is longer, less Pythonic, and has additional limitations
+and fragilities. So many drawbacks. Is there any benefit beyond the educational
+aspect? Low-level primitives become necessary when trying to go beyond what the
+high-level primitives offer. For example, the TCP server provided by Python only
+allows using a single process (but handling only one connection at a time in
+that case), using threads, or using multiple processes. Imagine that none of
+these approaches suits us. We want to handle multiple connections, but with a
+single thread and a single process. Yes, it is possible, but we must use the
+low-level primitives!
 
 There are several methods to achieve such a result. One of them is to use the
 `select` module containing the `select` function, which monitors a list of file
-descriptors waiting for an event to occur on one of them. It is again a fairly
-low-level function whose capabilities are equivalent to the `select()` function
-available in C. It has been made slightly more Pythonic by handling exceptions.
+descriptors waiting for an event to occur on one of them. It is a fairly
+low-level function with capabilities equivalent to the `select()` function in C,
+made slightly more Pythonic by handling exceptions.
 
 How shall we proceed? We will maintain the list of connecting clients ourselves
 and monitor their activity with the `select` function. If a client sends data,
@@ -971,21 +947,19 @@ characteristics:
 - It is asynchronous and event-driven, meaning actions are associated with
   events that occur (such as the arrival of a packet).
 
-Support for a very large number of protocols is a strength of Twisted. Not only
-does it support more protocols than Python's standard library, but these
-protocols are most often available as both client and server. Moreover, these
-are typically very complete implementations. For example, the SSH server
-supports SFTP and the SSH client can use an agent. This is a very important
-point for Twisted developers: the goal is to provide implementations that can be
-used in production.
+Support for many protocols is a strength of Twisted. Not only does it support
+more protocols than Python's standard library, but these protocols are most
+often available as both client and server. Moreover, these are typically
+complete implementations. For example, the SSH server supports SFTP and the SSH
+client can use an agent. This is an important point for Twisted developers: the
+goal is to provide production-grade implementations.
 
 The asynchronous aspect of Twisted can be disconcerting. When an action is
-blocking, you provide a function that will be executed when the action
-completes. So when you want to read a network packet, you provide a function
-that will be called with the received packet as a parameter. The Twisted engine
-will call this function when the packet is received. In the meantime, it can
-handle other tasks, such as accepting a new connection. The advantages of such
-an approach are numerous:
+blocking, you provide a function that runs when the action completes. So when
+you want to read a network packet, you provide a function that receives the
+packet as a parameter. The Twisted engine calls this function when the packet
+arrives. In the meantime, it can handle other tasks, such as accepting a new
+connection. The advantages of such an approach are numerous:
 
 - There is no need to manage inter-process communication or thread concurrency
   issues.
@@ -993,7 +967,7 @@ an approach are numerous:
   connections is not a problem (aside from memory and CPU consumption), whereas
   it would be problematic if each connection had to be managed by a separate
   process.
-- Performance can be better. Indeed, a piece of code only yields control when it
+- Performance can be better. A piece of code only yields control when it
   performs a blocking action (often network-related). The rest of the time, it
   uses 100% of the CPU. Keep in mind that Twisted is a network framework. This
   efficiency applies to network applications. If you were to write a database
@@ -1010,10 +984,10 @@ Using Twisted also brings some drawbacks:
 
 - Asynchronous programming can be difficult to grasp. In Twisted, it translates
   into the need to define many functions to react to events. The code therefore
-  cannot be read as a single block. However, it is possible to write more
+  cannot be read as a single block. Still, it is possible to write more
   conventional-looking code using Python 2.5's new iterators.
 - There is only one process, only one thread. Multi-core machines are therefore
-  not exploited. However, these cores are available for other processes (the
+  not exploited. But these cores are available for other processes (the
   database, for example). Twisted does offer the ability to manage multiple
   processes or threads, but in that case, some advantages of asynchronous
   programming are lost.
@@ -1034,11 +1008,11 @@ Using Twisted also brings some drawbacks:
   mailboxes. Twisted uses the concepts mentioned above to properly nest things
   together, but these can be difficult to approach.
 
-It is impossible to cover Twisted in its entirety in a single article. A
-previous issue of *GNU/Linux Magazine* already contained an excellent
-introduction to Twisted. We will try a different approach by presenting simple
-examples corresponding to what we previously did without Twisted. Some examples
-will be enhanced to demonstrate Twisted's power.
+It is impossible to cover Twisted entirely in a single article. A previous issue
+of *GNU/Linux Magazine* already contained an excellent introduction to Twisted.
+We try a different approach by presenting simple examples corresponding to what
+we previously did without Twisted. Some examples will be enhanced to demonstrate
+Twisted's power.
 
 ## Asynchronous programming with Twisted
 
@@ -1048,11 +1022,10 @@ Twisted, we will cover here the basics of asynchronous programming with Twisted.
 We have already written an asynchronous application using the `select` system
 call. Twisted does not expose such a method. When your program performs a
 potentially blocking action, you call a function that immediately returns a
-`Deferred` object. You can then attach actions to this object. These actions
-will be executed either when the expected data is available or when an error has
-occurred. The Twisted engine, called a reactor, maintains a list of all these
-objects and executes the methods attached to them according to the events that
-occur.
+`Deferred` object. You can then attach actions to this object. These actions run
+either when the expected data is available or when an error occurs. The Twisted
+engine, called a reactor, maintains a list of all these objects and executes the
+attached methods as events occur.
 
 To better understand this principle, let us revisit our very first example. We
 reproduce it here:
@@ -1082,23 +1055,22 @@ reactor.run()
 ```
 
 It is a bit longer. Let us see step by step how it works. Twisted has a library
-for easily writing a web client. We import the method we need. We also import
-the Twisted engine: the reactor. It has two methods: `run` and `stop`. The first
+for writing a web client. We import the method we need. We also import the
+Twisted engine: the reactor. It has two methods: `run` and `stop`. The first
 method starts the reactor. Starting the reactor initiates an infinite loop that
-manages the various events. This loop is similar to what is found in Qt and GTK.
-There is even a reactor compatible with the GTK loop. This loop stops when the
-`stop` method is called. It is not recommended to try to restart it again with
-`run`. Calling `stop` generally terminates the program, and Twisted can no
-longer be used afterwards.
+manages the various events. This loop is similar to what Qt and GTK use. There
+is even a reactor compatible with the GTK loop. The loop stops when you call
+`stop`. Do not try to restart it with `run`. Calling `stop` generally terminates
+the program, and Twisted can no longer be used afterwards.
 
 Let us ignore the `printContent` function for now. We call the `getPage`
 function with the page we want to retrieve as a parameter. This action is not
 immediate. A network socket must be opened, the domain name resolved, an HTTP
 request made, and then the response awaited. The `getPage` function does all of
-this, just as `urlopen` did. However, the latter did not return until it had
+this, just as `urlopen` did. But the latter did not return until it had
 contacted the server. With Twisted, functions that perform potentially blocking
-actions return immediately. They return a `Deferred` object to which actions can
-be attached.
+actions return immediately. They return a `Deferred` object that you can attach
+actions to.
 
 In our example, we capture this `Deferred` object in a variable and attach a
 callback to it—a function that will be called when the data becomes available.
@@ -1168,8 +1140,8 @@ We declared a new function that takes the error as a parameter (it is actually
 an instance of the `Failure` class). We attach this function to the `Deferred`
 object obtained earlier using the `addErrback` method.
 
-To conclude this introduction to asynchronous programming with Twisted, there is
-one last subtlety to discover. It is possible to chain callbacks:
+To conclude this introduction to asynchronous programming with Twisted, one last
+subtlety: you can chain callbacks:
 
 ```python
 from twisted.web.client import getPage
@@ -1213,9 +1185,9 @@ Fini!
 It is thus possible to chain callbacks. Each callback uses the result of the
 previous callback. A callback can also return a `Deferred`. In that case, the
 next callback will only be called when the content associated with that
-`Deferred` is available, receiving said content as its parameter. It is also
-possible to raise an exception or return a `Failure` object. In that case, the
-next error callback in the chain will be called.
+`Deferred` is available, receiving said content as its parameter. You can also
+raise an exception or return a `Failure` object. In that case, the next error
+callback in the chain takes over.
 
 Figure 1 shows the expected behavior for the following pseudo code. The red
 arrow is followed in case of error (exception or `Failure` object returned by
@@ -1246,10 +1218,10 @@ the two paths]([[!!images/twisted-deferred-process.png]] "Callback chaining")
 
 ## Writing a server with Twisted
 
-First, we will focus on writing a server equivalent to the one we wrote to
-illustrate the use of `select`. To do this, we will use the `twistd` program
-provided with Twisted. It will handle a number of things for us, including
-reactor management (starting and stopping), daemonization, and logging.
+First, we write a server equivalent to the one we wrote to illustrate the use of
+`select`. To do this, we will use the `twistd` program provided with Twisted. It
+will handle a number of things for us, including reactor management (starting
+and stopping), daemonization, and logging.
 
 ### Discovering twistd
 
@@ -1381,16 +1353,16 @@ well.
 
 ### A note on Twisted concepts
 
-As noted elsewhere, Twisted uses many object-oriented concepts that take getting
-used to. Once again, reading the introductory articles on Twisted is very
-important for understanding each principle. If you are familiar with the concept
-of "Design Patterns," you recognized the factory pattern in use. Without going
-into details, the motto of such an approach is maximum decoupling: the service
-does not know how to create the protocol directly; it calls an intermediary that
-does. Not linking the service to the protocol may seem unnatural at first, but
-it provides flexibility later: this intermediary can, for example, decide not to
-provide the protocol immediately or to provide a different protocol depending on
-the client (e.g., if there are too many clients).
+Twisted uses many object-oriented concepts that take getting used to. Reading
+the introductory articles on Twisted is important for understanding each
+principle. If you are familiar with the concept of "Design Patterns," you
+recognized the factory pattern in use. Without going into details, the motto of
+such an approach is maximum decoupling: the service does not know how to create
+the protocol directly; it calls an intermediary that does. Not linking the
+service to the protocol may seem unnatural at first, but it provides flexibility
+later: this intermediary can, for example, decide not to provide the protocol
+immediately or to provide a different protocol depending on the client (e.g., if
+there are too many clients).
 
 A second concept to get used to is the use of interfaces. We saw above that we
 had to provide the service with a `Factory` instance having a `buildProtocol`
@@ -1460,15 +1432,15 @@ inheriting from `Factory`. We create a `Factory` instance and modify the
 
 Another novelty: we do not inherit from `Protocol`, but from one of its
 specializations, `LineReceiver`, which offers the ability to receive commands
-line by line. Indeed, the `dataReceived` method of `Protocol` did not guarantee
-that we would receive exactly one line each time. Here, no such problem. This
-class provides the `lineReceived` method, which is called with the received line
-as a parameter. The rest of the code is similar to what we did when presenting
+line by line. The `dataReceived` method of `Protocol` did not guarantee that we
+would receive exactly one line each time. Here, no such problem. This class
+provides the `lineReceived` method, which is called with the received line as a
+parameter. The rest of the code is similar to what we did when presenting
 `select`.
 
-The application appears to behave exactly the same way. However, it also has the
-same flaws. Using the `commands` module is blocking. If one of the commands
-blocks (for example, if `df` takes a long time to return due to NFS mounts), our
+The application appears to behave exactly the same way. But it also has the same
+flaws. Using the `commands` module is blocking. If one of the commands blocks
+(for example, if `df` takes a long time to return due to NFS mounts), our
 application freezes: it is impossible to open new connections or use existing
 ones.
 
@@ -1477,8 +1449,8 @@ because it was quite tedious. With Twisted, it is much simpler! Twisted provides
 a set of classes to help us achieve this. First, you can communicate with an
 external process just as with a network client. We could therefore create a
 protocol that reads everything the process sends us and forwards it to the
-client. But there is something even simpler! Twisted already has a function
-capable of doing such operations. Let us see:
+client. But there is something even simpler! Twisted already has a function for
+this. Let us see:
 
 ```python
 from twisted.protocols.basic import LineReceiver
@@ -1520,10 +1492,10 @@ myservice.setServiceParent(application)
 ```
 
 We used the `getProcessOutput` function. This function allows us to introduce a
-`Deferred` object in a real application for the first time. Indeed, it returns a
-`Deferred` object since the application execution is blocking. Thus, while the
-application is running, the reactor will perform other tasks such as welcoming
-new clients or processing additional clients.
+`Deferred` object in a real application for the first time. It returns a
+`Deferred` object since the process execution is blocking. While the process
+runs, the reactor performs other tasks such as accepting new clients or
+processing existing ones.
 
 For this `Deferred` to have an effect, we attach callbacks. The `sendOutput`
 method on success and the `sendError` method on failure (for example, if the
@@ -1532,9 +1504,9 @@ will be called with the command's output as an argument. We write the result and
 close the connection.
 
 Note that in the `lineReceived` method, we do not close the connection at the
-end of the method (except for unrecognized commands). Indeed, if we did, the
-connection would be closed before the result could be displayed (and this in all
-cases; the code is never preempted!).
+end of the method (except for unrecognized commands). If we did, the connection
+would close before the result could be displayed (and this in all cases; the
+code is never preempted!).
 
 We have built our first fully asynchronous application with Twisted. That was
 not so difficult, was it?
@@ -1655,16 +1627,15 @@ webservice.setServiceParent(application)
 ```
 
 The code is not a model of beauty. We should have prepared a separate class to
-share command handling between the web part and the command-line part. However,
-we keep this simpler approach. We instantiate a resource, turn it into a
-service, and attach it to our application. This resource has a `render_GET`
-method called each time a `GET` request is made. This method takes a `Request`
-instance as a parameter, which we use to retrieve the requested path and also to
-respond.
+share command handling between the web part and the command-line part. But we
+keep this simpler approach. We instantiate a resource, turn it into a service,
+and attach it to our application. This resource has a `render_GET` method called
+each time a `GET` request is made. This method takes a `Request` instance as a
+parameter, which we use to retrieve the requested path and also to respond.
 
 There are then two ways to respond. If the response is ready, you can return a
-string that will be transmitted to the client for display in their browser.
-However, when the response is not ready, we must return a special value
+string that will be transmitted to the client for display in their browser. But
+when the response is not ready, we must return a special value
 (`server.NOT_DONE_YET`). In that case, you can call the `write` method of the
 `Request` object as many times as you want and finish with the `finish` method
 call. This is what we do in our callback.
@@ -1676,14 +1647,12 @@ call. This is what we do in our callback.
 
 To test, point your browser to <http://localhost:2024>.
 
-Twisted's web framework is relatively complete. It is possible to associate
-classes with certain URLs to modularize the web site construction. However, it
-remains fairly basic. For example, it does not include a template engine for
-building web pages more cleanly. A new version is under development (`web2`).
-However, it is not recommended to use it yet. Gradually, the strengths of this
-version will be integrated into the current module. In the meantime, the most
-recommended approach is to use [Nevow][], a complete web framework built on top
-of Twisted.
+Twisted's web framework is relatively complete. You can associate classes with
+certain URLs to modularize the web site construction. But it remains fairly
+basic. For example, it does not include a template engine for building web pages
+more cleanly. A new version is under development (`web2`), but do not use it
+yet. Its strengths will gradually be integrated into the current module. In the
+meantime, use [Nevow][], a complete web framework built on top of Twisted.
 
 ### SSH access?
 
@@ -1694,7 +1663,7 @@ channels, opening a terminal, remote command execution, etc. Twisted tries to
 simplify its use while allowing all subtleties to be exploited. One might have
 hoped for something as simple as listening on a TCP port, but unfortunately such
 a level of abstraction does not exist. Twisted provides a module that hides most
-of the complexity for simple use. However, we cannot easily use our existing
+of the complexity for simple use. But we cannot easily reuse our existing
 `SimpleProtocol` class, because the expected protocol must respect the
 `ITerminalProtocol` interface. There does not appear to be an adapter between
 the two interfaces at the moment. We will once again duplicate code for the sake
@@ -1739,9 +1708,9 @@ sshservice = internet.TCPServer(2025, sshfactory)
 sshservice.setServiceParent(application)
 ```
 
-Let us start from the end. Twisted offers an entire infrastructure for managing
-authentication in the most generic way possible. This infrastructure is not
-limited to SSH but can be reused for a web server, for example. The Twisted
+Let us start from the end. Twisted provides an entire infrastructure for
+authentication, designed to be as generic as possible. This infrastructure is
+not limited to SSH but can be reused for a web server, for example. The Twisted
 documentation provides a complete introduction to [this system][twisted-cred].
 The centerpiece is the `Portal` object. It interacts with the protocol to obtain
 the user's identification elements. It then submits them to various verification
@@ -1759,25 +1728,23 @@ closing the connection, we accept multiple commands and add a `quit` command.
 
 Conch is considered one of Twisted's most complex modules. It is currently
 undergoing significant refactoring to make it more consistent with other
-modules. However, we managed to write our SSH server in just a few lines. Thus,
-we have a secure application supporting password authentication that can easily
-be extended to also support key-based authentication.
+modules. Still, we managed to write our SSH server in a few lines. We now have a
+secure application supporting password authentication that we can extend to also
+support key-based authentication.
 
 # Conclusion
 
 Python is a first-class language for writing any type of network application.
-Its standard library contains many modules to help write such applications and
-is capable of providing both high-level and low-level primitives, close to those
-offered in C. There are also many third-party contributions that enrich existing
-capabilities by supporting additional protocols.
+Its standard library covers both high-level and low-level primitives, close to
+those offered in C. Many third-party contributions enrich existing capabilities
+by supporting additional protocols.
 
-These capabilities, combined with the productivity and readability that
-characterize Python, allow you to design applications that directly or
-indirectly leverage the network.
+Combined with the productivity and readability that characterize Python, these
+capabilities let you design applications that directly or indirectly leverage
+the network.
 
-For ambitious projects, do not hesitate to take a look at Twisted, which, if you
-adapt to the asynchronous paradigm, will let you benefit from its versatility
-and robustness.
+For ambitious projects, take a look at Twisted. If you adapt to the asynchronous
+paradigm, it will reward you with its versatility and robustness.
 
 [nvd-rss]: https://web.archive.org/web/2009/http://nvd.nist.gov/download/nvd-rss.xml
 [xml-ns]: https://web.archive.org/web/2009/http://en.wikipedia.org/wiki/XML_namespace
