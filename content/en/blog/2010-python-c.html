@@ -337,12 +337,12 @@ needed to validate our interface.
 ## The Python implementation
 
 Our C library is very simple. We could have written it directly as a Python
-module. That is not the point of the exercise, but to clearly show that the
-tests work even before writing our first version of the extension, we will write
-the Python version. To do this, we create a `tortue` directory containing a file
-`__init__.py` with simply `from native import *`. The purpose of this file is to
-direct our `tortue` module to the right version of the extension. In this
-directory, we also place the native module code in the file `native.py`.
+module. That is not the point of the exercise, but to show that the tests work
+even before writing our first version of the extension, we will write the Python
+version. To do this, we create a `tortue` directory containing a file
+`__init__.py` with `from native import *`. The purpose of this file is to direct
+our `tortue` module to the right version of the extension. In this directory, we
+also place the native module code in the file `native.py`.
 
 ```python
 import os
@@ -524,17 +524,16 @@ class TurtleException(Exception):
 Name this new file `mctypes.py`, then modify the `__init__.py` file to import
 this file instead of `native.py`. The tests should pass without any problems!
 
-Note how simple the integration is. The `send()` method simply calls the C
-`send()` function and converts the potential error into an exception. We also
-made use of the `__getattribute__` method, which intercepts attribute accesses
-to dynamically provide the correct model and, more importantly, the correct
-state.
+Note how simple the integration is. The `send()` method calls the C `send()`
+function and converts the potential error into an exception. We also made use of
+the `__getattribute__` method, which intercepts attribute accesses to
+dynamically provide the correct model and, more importantly, the correct state.
 
 The resulting module is, however, very fragile. If an error creeps in, the
-program will simply terminate with a segfault, which is quite unusual in Python.
-This is the nature of interfacing Python and C, but the problem is aggravated
-here by the absence of any compilation that would detect certain errors,
-including in parts of the code not exercised by the tests.
+program will terminate with a segfault, which is quite unusual in Python. This
+is the nature of interfacing Python and C, but the problem is aggravated here by
+the absence of any compilation that would detect certain errors, including in
+parts of the code not exercised by the tests.
 
 ## Using SWIG
 
@@ -629,8 +628,8 @@ code. This last feature would be needed if we wanted to return a `TurtleStatus`
 instance when accessing the `status` attribute. We will not detail all these
 features here because they require some knowledge of the Python API, and SWIG is
 generally not used to directly produce a high-level interface from a low-level C
-library. Let us simply see how to obtain a `Turtle` object rather than a
-collection of functions:
+library. Let us see how to obtain a `Turtle` object rather than a collection of
+functions:
 
 ```swig
 // swig.i
@@ -984,8 +983,8 @@ with `Py_InitModule()`. The first parameter is the module name and the second is
 the set of module methods. Currently, we have no methods. Note the error
 handling specific to the API. If `Py_InitModule` returned `NULL`, an error
 occurred. The module initialization case is somewhat special since the function
-does not return an object. We simply exit the function. The Python interpreter
-will detect the error and raise an exception.
+does not return an object. We exit the function. The Python interpreter will
+detect the error and raise an exception.
 
 Let us return to our `TurtleException` object. The `PyErr_NewException()`
 function allows us to create a new exception. Again, we check whether `NULL` was
@@ -1129,10 +1128,10 @@ also need to check ourselves that the provided object is of the expected type.
 For example, if we expected a list, the `PyList_Check()` function would confirm
 whether we actually have one. If the user provides more than one argument or one
 that is not an integer, `PyArg_ParseTuple()` will generate an exception and
-return `NULL`. In this case, we simply propagate the exception by returning
-`-1`. Note that if the user provides keyword arguments, those are ignored. We
-could replace the call to `PyArg_ParseTuple()` with a call to
-`PyArg_ParseTupleAndKeywords()` to be stricter.
+return `NULL`. In this case, we propagate the exception by returning `-1`. Note
+that if the user provides keyword arguments, those are ignored. We could replace
+the call to `PyArg_ParseTuple()` with a call to `PyArg_ParseTupleAndKeywords()`
+to be stricter.
 
 We then call our C library to initialize the turtle. If initialization fails, we
 generate an exception using `PyErr_Format()` and return `-1`. Otherwise, `0` is
@@ -1219,10 +1218,9 @@ Turtle_getmodel(TurtleObject *self, void *closure)
 The function that provides access to the `model` attribute is very simple. It
 merely creates a new Python string object constructed from the value returned by
 the C function `turtle_model()`. The `PyString_FromString()` function gives us a
-new reference. We simply pass this reference to the caller. There is therefore
-no need to touch the object's counter. Note that instead of
-`PyString_FromString()`, it would also have been possible to use
-`Py_BuildValue()`.
+new reference. We pass this reference to the caller. There is therefore no need
+to touch the object's counter. Note that instead of `PyString_FromString()`, it
+would also have been possible to use `Py_BuildValue()`.
 
 All functions for manipulating attributes are grouped within the same structure,
 which we define as follows:

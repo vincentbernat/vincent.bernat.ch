@@ -50,8 +50,8 @@ establish a connection without requiring you to deal with the details. For
 instance, the FTP module exposes a simple function to send a file to the server.
 This function handles negotiating the data channel specific to the FTP server
 and manages active or passive mode automatically. These are details you do not
-necessarily want to deal with when you simply want to write a program that
-uploads or retrieves files using the FTP protocol.
+necessarily want to deal with when you want to write a program that uploads or
+retrieves files using the FTP protocol.
 
 We will see later how to write lower-level applications and manage all network
 exchanges ourselves.
@@ -404,9 +404,9 @@ requests, and we invariably return the same HTML page. The
 easier. With the `send_response` method, we send the 200 response code
 indicating the page was found. Then, using `send_header`, we send the
 `Content-Type` HTTP header indicating that the response content is HTML. Next,
-the `end_headers` method simply writes a blank line. We are then free to send
-whatever content we like. For this purpose, the `wfile` attribute is made
-available. Simply writing to it sends data to the client.
+the `end_headers` method writes a blank line. We are then free to send whatever
+content we like. For this purpose, the `wfile` attribute is made available.
+Writing to it sends data to the client.
 
 Try accessing the URL `http://localhost:8080/test/` and you should see a page
 saying "Hello world!". Not very dynamic. But you can then do whatever you want.
@@ -453,8 +453,8 @@ of an HTTP server.
 
 As with writing an HTTP server, we must define a `TCPServer` instance and
 provide it with a class that will be instantiated for each request. Let us first
-see how to simply use `TCPServer`. We will then see how to build the server we
-just described.
+see how to use `TCPServer`. We will then see how to build the server we just
+described.
 
 ```python
 #!/usr/bin/env python
@@ -522,7 +522,7 @@ execute it. If the function does not exist, we return a generic message. Adding
 new commands is therefore straightforward.
 
 This simplistic example does not handle errors, and if problems occur within a
-`MyRequestHandler` instance, the connection is simply terminated, but the server
+`MyRequestHandler` instance, the connection is terminated, but the server
 remains fully functional.
 
 Our server has a major flaw: it can only handle one connection at a time. Try
@@ -538,16 +538,16 @@ is created to handle each new connection. The second case is identical, but
 processes are used instead of threads.
 
 Python provides two classes derived from `TCPServer`: `ThreadingTCPServer` and
-`ForkingTCPServer`. Instead of simply instantiating `TCPServer`, instantiate one
-or the other of these classes. You can then handle multiple connections
-simultaneously. Try it!
+`ForkingTCPServer`. Instead of instantiating `TCPServer`, instantiate one or the
+other of these classes. You can then handle multiple connections simultaneously.
+Try it!
 
 We now know how to write both clients and servers using the various modules
 provided in Python's standard library. We will now see that it is also possible
 to go one level lower and use the same primitives as in C to write clients and
 servers. This can be useful in certain cases, for example to write a server
 without using threads or multiple processes while still handling multiple
-simultaneous connections. Or simply for fun.
+simultaneous connections. Or for fun.
 
 # Using low-level primitives
 
@@ -683,9 +683,9 @@ print("Nous avons recu ceci:\n\n%s\n\n" % buf)
 We start by creating our socket. The parameters are the same as in C. Since the
 constants belong to the `socket` module, we must look them up in that namespace.
 Then, we connect our socket to the remote server. Here, no complicated
-conversions are needed—we simply pass a tuple containing the IP and port. The
-`connect` primitive from the `socket` module does a bit more than simply calling
-the C `socket` function.
+conversions are needed: we pass a tuple containing the IP and port. The
+`connect` primitive from the `socket` module does a bit more than calling the C
+`socket` function.
 
 Then, we send our request and receive the response, which we display. Let us
 test:
@@ -714,9 +714,8 @@ followed it, while our program would not.
 ## Writing a server
 
 Let us now move on to writing a server. Like our first Python server example, it
-will simply accept the connection, display the client's IP, and close the
-connection. We will write our program directly in Python, which obviously makes
-things easier:
+will accept the connection, display the client's IP, and close the connection.
+We will write our program directly in Python, which makes things easier:
 
 ```python
 import socket
@@ -745,8 +744,8 @@ refused.
 We then enter an infinite loop to process connections from each client that may
 come our way. We use the `accept` function. In C, it returns a socket for
 communicating with the client and passes the client's address by modifying the
-last two arguments. In Python, both pieces of information are simply returned as
-a tuple.
+last two arguments. In Python, both pieces of information are returned as a
+tuple.
 
 !!! "Note" For a server, there is one socket per client. If TCP is used, each
     socket corresponds to an IP and a port. Two sockets are therefore needed to
@@ -806,10 +805,10 @@ straightforward.
 You can repeat the test: open two terminals, connect to the server from one,
 then connect from the other. The second arrival will not get the prompt until
 the first has finished the connection. In the previous case, we solved the
-problem by simply substituting `TCPServer` with a derived class handling one
-process per connection. Here, such a manipulation is not as simple: we will have
-to manage this aspect ourselves. We will use the `fork` primitive available in
-the `os` module. There are, of course, other solutions, including using the
+problem by substituting `TCPServer` with a derived class handling one process
+per connection. Here, such a manipulation is not as simple: we will have to
+manage this aspect ourselves. We will use the `fork` primitive available in the
+`os` module. There are, of course, other solutions, including using the
 `threading` module.
 
 ```python
@@ -848,10 +847,10 @@ slight difference between them. In the child, `fork` returns 0, while in the
 parent, it returns the child's PID. This difference allows us to execute
 different code in each case.
 
-If we are in the parent, we simply close the socket and go back to the loop to
-accept a new client. Closing the socket does not terminate the connection, as
-the socket is still open in the child. The connection will only end when this
-socket is closed.
+If we are in the parent, we close the socket and go back to the loop to accept a
+new client. Closing the socket does not terminate the connection, as the socket
+is still open in the child. The connection will only end when this socket is
+closed.
 
 In the child, we do our work as before. At the end, we terminate the process
 with the `_exit` function from the `os` module. This function avoids all the
@@ -1065,9 +1064,9 @@ lm = urllib2.urlopen('http://www.gnulinuxmag.com/')
 print(lm.read())
 ```
 
-How do we do it with Twisted? There is clearly a blocking action, which is
-reading the web page. Twisted simplifies our life by offering an equivalent of
-`urllib2`, but adapted to its engine. Here is a similar program using Twisted:
+How do we do it with Twisted? There is a blocking action, which is reading the
+web page. Twisted simplifies our life by offering an equivalent of `urllib2`,
+but adapted to its engine. Here is a similar program using Twisted:
 
 ```python
 from twisted.web.client import getPage
@@ -1415,7 +1414,7 @@ The Twisted API documentation indicates for each object which interface it
 respects and, for each interface, which classes implement it.
 
 This notion of interfaces also contributes to decoupling between objects. By
-simply requesting an object that respects a given interface, you allow the
+requesting an object that respects a given interface, you allow the
 implementation to be changed easily. This is similar to using abstract classes
 (classes that must be inherited from, with all declared methods implemented).
 
@@ -1456,10 +1455,10 @@ myservice.setServiceParent(application)
 ```
 
 To shorten the code, we used a small shortcut that avoids declaring a class
-inheriting from `Factory`. We simply create a `Factory` instance and modify the
+inheriting from `Factory`. We create a `Factory` instance and modify the
 `protocol` attribute.
 
-Another novelty: we do not simply inherit from `Protocol`, but from one of its
+Another novelty: we do not inherit from `Protocol`, but from one of its
 specializations, `LineReceiver`, which offers the ability to receive commands
 line by line. Indeed, the `dataReceived` method of `Protocol` did not guarantee
 that we would receive exactly one line each time. Here, no such problem. This
@@ -1544,9 +1543,8 @@ not so difficult, was it?
 
 Let us say we want to put our application on the Internet so we can check disk
 space remotely. Currently, all information travels in clear text and there is no
-authentication. We will simply use SSL for protection. We also take the
-opportunity to ask for a password before accepting a command. Here is the new
-code:
+authentication. We will use SSL for protection. We also take the opportunity to
+ask for a password before accepting a command. Here is the new code:
 
 ```python
 from twisted.protocols.basic import LineReceiver
@@ -1664,9 +1662,9 @@ method called each time a `GET` request is made. This method takes a `Request`
 instance as a parameter, which we use to retrieve the requested path and also to
 respond.
 
-There are then two ways to respond. If the response is ready, you can simply
-return a string that will be transmitted to the client for display in their
-browser. However, when the response is not ready, we must return a special value
+There are then two ways to respond. If the response is ready, you can return a
+string that will be transmitted to the client for display in their browser.
+However, when the response is not ready, we must return a special value
 (`server.NOT_DONE_YET`). In that case, you can call the `write` method of the
 `Request` object as many times as you want and finish with the `finish` method
 call. This is what we do in our callback.
