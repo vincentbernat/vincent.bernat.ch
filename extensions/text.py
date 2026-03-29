@@ -7,33 +7,34 @@ from hyde.plugin import Plugin
 
 
 class FootnotesPlugin(Plugin):
-    """Copy footnotes as asides."""
+    """Move footnotes to sidenotes."""
 
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind != "html":
             return
         d = pq(text, parser="html")
 
-        # Rename footnote to endnote
-        for cls in ["footnote", "footnote-ref", "footnote-backref"]:
+        # Rename footnote to sidenote
+        for cls in ["footnote-ref", "footnote-backref"]:
             els = d(f".{cls}")
             els.removeClass(cls)
-            els.addClass(cls.replace("foot", "end"))
+            els.addClass(cls.replace("foot", "side"))
 
-        endnotes = d(".endnote ol")
+        sidenotes = d(".footnote ol")
 
         # Pop out orphaned backlinks
-        backrefs = endnotes(".endnote-backref")
+        backrefs = sidenotes(".sidenote-backref")
         for backref in backrefs.items():
             parent = backref.parent()
             if len(parent.contents()) == 1:
                 # We only have the <a> link
                 parent.replace_with(backref)
 
-        # Create sidenotes
+        # Create sidenotes and insert them after their parent.
+        insertion_points = {}
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]
-            fn = endnotes("li[id=fn-{}]".format(name))
+            fn = sidenotes("li[id=fn-{}]".format(name))
             assert fn
             parents = ref.parents()
             for i in range(len(parents) - 1):
@@ -42,12 +43,22 @@ class FootnotesPlugin(Plugin):
             sidenote = pq("<aside>")
             sidenote.attr.role = "note"
             sidenote.attr.class_ = "lf-sidenote"
-            sidenote[0].set("hidden", None)
+            sidenote.attr.id = "sidenote-{}".format(name)
+            ref[0].set("style", "anchor-name: --fn-{}".format(name))
+            sidenote[0].set("style", "position-anchor: --fn-{}".format(name))
             sidenote.html(
                 '<sup class="lf-refmark">{}</sup>{}'.format(ref.text(), fn.html())
             )
-            sidenote("a.endnote-backref").remove()
-            sidenote.insert_before(parent)
+            sidenote("a.sidenote-backref").remove()
+            ref("a.sidenote-ref").attr.href = "#sidenote-{}".format(name)
+            parent_id = id(parent[0])
+            insert_point = insertion_points.get(parent_id, parent)
+            sidenote.insert_after(insert_point)
+            insertion_points[parent_id] = sidenote
+
+        # Remove footnote section
+        d(".footnote").remove()
+
         return "<!DOCTYPE html>\n" + d.outer_html()
 
 

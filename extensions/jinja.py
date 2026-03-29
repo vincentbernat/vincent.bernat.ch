@@ -99,7 +99,7 @@ def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
         for el in code_blocks
     )
     code_blocks.remove()
-    d.find(".footnote, .endnote").remove()
+    d.find(".footnote").remove()
     words = len(d.text().split())
     minutes = round(words / words_per_minute + code_lines / code_lines_per_minute)
     return ReadingTime(max(1, minutes), words)

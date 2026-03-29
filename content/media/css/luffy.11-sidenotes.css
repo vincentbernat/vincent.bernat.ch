@@ -1,0 +1,96 @@
+.lf-main {
+  #lf-text sup {
+    /* Increase surface size, notably for touch devices */
+    &[id^="fnref-"] {
+      white-space: nowrap;
+      margin-left: 0.1em;
+    }
+
+    .sidenote-ref {
+      user-select: none;
+      @apply --lf-disabled-link;
+      &:lang(fr)::before {
+        content: " ";
+      }
+      &::after {
+        content: "↓";
+        vertical-align: baseline;
+      }
+    }
+  }
+
+  .sidenote-ref,
+  .sidenote-mark {
+    font-variant-numeric: lining-nums;
+  }
+  .lf-sidenote {
+    pre {
+      font-size: 0.875em;
+    }
+    p,
+    ul,
+    ol {
+      --lf-font-factor: 0.875;
+      @apply --lf-font-size;
+    }
+    p {
+      margin-top: calc(var(--lf-line-height) / 0.875 * 1em);
+    }
+
+    /* Inline display (default / narrow viewports) */
+    box-sizing: border-box;
+    position: relative;
+    margin: calc(var(--lf-line-height) * 1em) 0;
+    & + .lf-sidenote {
+      margin-top: 0;
+    }
+    &:has(+ .lf-sidenote) {
+      margin-bottom: 0;
+    }
+    color: var(--lf-color-low);
+    .lf-refmark {
+      position: absolute;
+      right: 100%;
+      top: 0;
+      margin-right: 0.3rem;
+      font-size: var(--lf-font-size-sidenoteref);
+      & + p {
+        margin-top: 0 !important;
+      }
+    }
+  }
+}
+
+/* Anchor-positioned sidenotes for wide viewports. See
+   https://meyerweb.com/eric/thoughts/2023/09/12/nuclear-anchored-sidenotes/ */
+@supports (anchor-name: --a) {
+  @media (--lf-wide) {
+    .lf-main {
+      #lf-text {
+        position: relative;
+      }
+      .lf-sidenote {
+        position: absolute;
+        anchor-name: --sidenote;
+        top: max(anchor(top), calc(anchor(--sidenote bottom, 0px) + var(--lf-line-height) * 1rem));
+        left: 100%;
+        width: var(--lf-sidenote-width);
+        margin: 0;
+        padding-left: var(--lf-sidenote-margin);
+        color: var(--lf-color-foreground);
+        .lf-refmark {
+          right: auto;
+          left: 0;
+          width: calc(var(--lf-sidenote-margin) - 0.3rem);
+          text-align: right;
+        }
+      }
+      #lf-text a.sidenote-ref {
+        &::after {
+          content: "→";
+          vertical-align: middle;
+        }
+      }
+    }
+  }
+}
