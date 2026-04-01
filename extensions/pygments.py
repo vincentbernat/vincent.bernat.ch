@@ -2,6 +2,7 @@ from pygments.lexer import RegexLexer, bygroups, using, include, words
 from pygments.token import Text, Comment, Punctuation, Operator, Keyword, Whitespace
 from pygments.token import Number, String, Name
 from pygments.lexers.go import GoLexer
+from pygments.lexers.shell import BashSessionLexer
 from pygments.lexers import LEXERS
 from hyde.plugin import Plugin
 
@@ -168,3 +169,7 @@ class HurlLexer(RegexLexer):
             (r".", Text),
         ],
     }
+
+
+# Patch BashSessionLexer
+BashSessionLexer._bare_continuation = True
