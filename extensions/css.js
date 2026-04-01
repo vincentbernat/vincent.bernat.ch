@@ -6,6 +6,43 @@ const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 const { calc: resolveCalc } = require("@csstools/css-calc");
 
+// Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
+// The line-height is computed to maintain vertical rhythm:
+//
+//   ceil(fontFactor / lineHeight) * lineHeight / fontFactor
+//
+// The idea is to be have the first multiple of lineHeight / fontFactor which is
+// >= 1.
+const lfFontSize = {
+    postcssPlugin: "lf-font-size",
+    Once(root) {
+        let lineHeight = 0;
+        root.walkRules(":root", (rule) => {
+            rule.walkDecls("--lf-line-height", (decl) => {
+                lineHeight = parseFloat(decl.value);
+            });
+        });
+        root.walkAtRules("apply", (atRule) => {
+            const match = atRule.params.match(/^--lf-font-size\(([^)]+)\)$/);
+            if (!match) return;
+            const fontFactor = parseFloat(match[1]);
+            const lh = Math.ceil(fontFactor / lineHeight) * (lineHeight / fontFactor);
+            atRule.replaceWith(
+                postcss.decl({
+                    prop: "font-size",
+                    value: `${fontFactor}rem`,
+                }),
+                postcss.decl({
+                    prop: "line-height",
+                    value: String(
+                        Math.round(lh * 10000) / 10000,
+                    ),
+                }),
+            );
+        });
+    },
+};
+
 // light-dark() fallback: for each rule with declarations using
 // light-dark(a, b), insert a @supports fallback with the light value.
 const lightDarkFallback = {
@@ -100,6 +137,7 @@ process.stdin.on("end", function () {
     postcss([
         resolveCustomPropsInMediaCalc,
         postcssCustomMedia,
+        lfFontSize,
         postcssMixins,
         lightDarkFallback,
         autoprefixer,
