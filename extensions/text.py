@@ -15,7 +15,14 @@ class FootnotesPlugin(Plugin):
         # These are the elements with margin-top. We can insert sidenotes before them.
         MARGIN_TOP_TAGS = frozenset({"p", "dl", "h1", "h2", "h3", "h4"})
         MARGIN_TOP_CLASSES = frozenset(
-            {"codehilite", "admonition", "lf-table", "lf-media-outer"}
+            {
+                "codehilite",
+                "admonition",
+                "toc",
+                "lf-table",
+                "lf-media-outer",
+                "lf-listing",
+            }
         )
 
         if el.tag in MARGIN_TOP_TAGS:
