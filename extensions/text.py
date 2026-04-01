@@ -9,6 +9,20 @@ from hyde.plugin import Plugin
 class FootnotesPlugin(Plugin):
     """Move footnotes to sidenotes."""
 
+    @classmethod
+    def _has_margin_top(cls, el):
+        """Check if an element has margin-top in CSS."""
+        # These are the elements with margin-top. We can insert sidenotes before them.
+        MARGIN_TOP_TAGS = frozenset({"p", "dl", "h1", "h2", "h3", "h4"})
+        MARGIN_TOP_CLASSES = frozenset(
+            {"codehilite", "admonition", "lf-table", "lf-media-outer"}
+        )
+
+        if el.tag in MARGIN_TOP_TAGS:
+            return True
+        classes = (el.get("class") or "").split()
+        return bool(MARGIN_TOP_CLASSES.intersection(classes))
+
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind != "html":
             return
@@ -31,7 +45,6 @@ class FootnotesPlugin(Plugin):
                 parent.replace_with(backref)
 
         # Create sidenotes and insert them after their parent.
-        insertion_points = {}
         for ref in d.items("sup[id^=fnref-]"):
             name = ref.attr.id[6:]
             fn = sidenotes("li[id=fn-{}]".format(name))
@@ -51,10 +64,13 @@ class FootnotesPlugin(Plugin):
             )
             sidenote("a.sidenote-backref").remove()
             ref("a.sidenote-ref").attr.href = "#sidenote-{}".format(name)
-            parent_id = id(parent[0])
-            insert_point = insertion_points.get(parent_id, parent)
+            insert_point = parent
+            # Skip past following siblings without margin-top
+            next_el = insert_point[0].getnext()
+            while next_el is not None and not self._has_margin_top(next_el):
+                insert_point = pq(next_el)
+                next_el = next_el.getnext()
             sidenote.insert_after(insert_point)
-            insertion_points[parent_id] = sidenote
 
         # Remove footnote section
         d(".footnote").remove()
