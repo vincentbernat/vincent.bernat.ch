@@ -58,6 +58,12 @@ Upgrade a dependency:
 yarn upgrade-interactive --modules-folder ~/tmp/node_modules --ignore-scripts --latest
 ```
 
+Add a dependency:
+
+```
+yarn add --modules-folder ~/tmp/node_modules --ignore-scripts @eslint/css
+```
+
 ### Nix
 
 Update nixpkgs:
