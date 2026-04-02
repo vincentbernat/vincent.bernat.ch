@@ -125,6 +125,9 @@
           packageJSON = ./package.json;
           yarnLock = ./yarn.lock;
         };
+        fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
+          dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
+        });
       in
       {
         apps = {
@@ -168,9 +171,6 @@
             let
               monospace = <monospace>;
               regular = <regular>;
-              fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
-                dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
-              });
             in
             pkgs.stdenvNoCC.mkDerivation {
               name = "subset-fonts";
@@ -384,6 +384,7 @@
 
               # Helper tools
               mp4v2 # video2hls
+              fonttools
             ];
             shellHook = ''
               unset PYTHONPATH
