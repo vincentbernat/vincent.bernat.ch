@@ -344,6 +344,7 @@
                       cap = 790;
                       ascender = 790;
                       xHeight = 570;
+                      leading = 1500; /* Box drawing characters will connect */
                     };
                   };
                 };
