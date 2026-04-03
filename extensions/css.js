@@ -4,6 +4,7 @@ const postcss = require("postcss");
 const postcssCustomMedia = require("postcss-custom-media");
 const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
+const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc: resolveCalc } = require("@csstools/css-calc");
 
 // Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
@@ -142,6 +143,7 @@ process.stdin.on("end", function () {
         lightDarkFallback,
         autoprefixer,
         postcssNesting,
+        postcssIsPseudoClass,
         cssnano({
             preset: [
                 "default",
