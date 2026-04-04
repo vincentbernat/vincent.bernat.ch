@@ -10,8 +10,9 @@ luffy.do(() => {
   let lastRlh = getRlh();
 
   const adjust = (el, height) => {
-    const remainder = height % lastRlh;
-    el.style.padding = `${(lastRlh - remainder) / 2}px 0`;
+    const minPad = lastRlh / 4;
+    const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
+    el.style.padding = `${padding / 2}px 0`;
   };
 
   /* React to the change of dimension of a media element. */
