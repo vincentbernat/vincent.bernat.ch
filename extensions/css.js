@@ -44,6 +44,18 @@ const lfFontSize = {
     },
 };
 
+// Replace rlh units with calc(var(--lf-line-height)*Xrem).
+const rlhUnit = {
+    postcssPlugin: "rlh-unit",
+    Declaration(decl) {
+        if (!decl.value.includes("rlh")) return;
+        decl.value = decl.value.replace(
+            /(\d*\.?\d+)rlh\b/g,
+            (_, n) => `calc(var(--lf-line-height)*${n}rem)`,
+        );
+    },
+};
+
 // light-dark() fallback: for each rule with declarations using
 // light-dark(a, b), insert a @supports fallback with the light value.
 const lightDarkFallback = {
@@ -139,6 +151,7 @@ process.stdin.on("end", function () {
         resolveCustomPropsInMediaCalc,
         postcssCustomMedia,
         lfFontSize,
+        rlhUnit,
         postcssMixins,
         lightDarkFallback,
         autoprefixer,

@@ -550,10 +550,10 @@ printf " GIF %10s %10s %10s\n" \
         )
 
         c.run("git add *")
-        c.run("git diff --find-renames=20% --stat HEAD || true", pty=True, hide=False)
+        c.run("git diff --find-renames=10% --stat HEAD || true", pty=True, hide=False)
         if confirm("More diff?", default=True):
             c.run(
-                "env GIT_PAGER=less git diff --find-renames=20% --word-diff HEAD || true",
+                "env GIT_PAGER=less git diff --find-renames=10% --word-diff HEAD || true",
                 pty=True,
                 hide=False,
             )
