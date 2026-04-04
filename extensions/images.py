@@ -15,14 +15,14 @@ import lxml.html
 import types
 import subprocess
 import json
-from functools import partial
+from functools import cache, partial
 from fractions import Fraction
 
 from hyde.plugin import Plugin
 from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import langcodes
 from PyPDF2 import PdfReader
 
@@ -45,12 +45,8 @@ def thumb(self, defaults={}, width=None, height=None):
         width, height = defaults["width"], defaults["height"]
     im = Image.open(self.path)
     # Convert to a thumbnail
-    if width is None:
-        # height is not None
-        width = im.size[0] * height // im.size[1] + 1
-    elif height is None:
-        # width is not None
-        height = im.size[1] * width // im.size[0] + 1
+    width = width or im.size[0] * height // im.size[1] + 1
+    height = height or im.size[1] * width // im.size[0] + 1
     im.thumbnail((width, height), Image.Resampling.LANCZOS)
     # Prepare path
     path = os.path.join(
@@ -60,9 +56,9 @@ def thumb(self, defaults={}, width=None, height=None):
     target = File(Folder(self.site.config.deploy_root_path).child(path))
     target.parent.make()
     if self.name.endswith(".jpg"):
-        im.save(target.path, "JPEG", optimize=True, quality=75)
+        im.save(target.path, "JPEG", quality=95)
     else:
-        im.save(target.path, "PNG", optimize=True)
+        im.save(target.path, "PNG")
     return Thumb(path, width=im.size[0], height=im.size[1])
 
 
@@ -184,7 +180,8 @@ class ImageFixerPlugin(Plugin):
                     )
                 ),
                 opaque=False,
-                interactive=svg.find(".//{http://www.w3.org/2000/svg}script") is not None,
+                interactive=svg.find(".//{http://www.w3.org/2000/svg}script")
+                is not None,
             )
         if image.source_file.kind in {"m3u8"}:
             with open(image.path) as f:
@@ -295,9 +292,9 @@ class ImageFixerPlugin(Plugin):
         )
         File(destination).parent.make()
         if source.endswith(".jpg"):
-            im.save(destination, "JPEG", optimize=True, quality=95)
+            im.save(destination, "JPEG", quality=95)
         else:
-            im.save(destination, "PNG", optimize=True)
+            im.save(destination, "PNG")
 
     def text_resource_complete(self, resource, text):
         """
@@ -514,3 +511,249 @@ class ImageFixerPlugin(Plugin):
                 parent.replace_with(lxml.html.tostring(figure[0], encoding="unicode"))
 
         return d
+
+
+class CoverImagePlugin(Plugin):
+    """Generate OG cover images (1200x630) for blog articles.
+
+    Each blog article resource gets a cover_image() method that
+    generates the cover and returns the media-relative path.
+    """
+
+    WIDTH = 1200
+    HEIGHT = 630
+    BG_COLOR = (255, 249, 240)  # #fff9f0
+    AUTHOR_COLOR = (100, 100, 100)
+    icon = None
+    title_font = None
+    author_font = None
+
+    def __init__(self, site):
+        super().__init__(site)
+
+    def begin_site(self):
+        media_path = str(self.site.config.media_root_path)
+        icon_path = os.path.join(media_path, "images", "favicon.png")
+        font_path = "/usr/share/fonts/truetype/noto/NotoSansDisplay-SemiBold.ttf"
+        CoverImagePlugin.icon = Image.open(icon_path).convert("RGBA")
+        CoverImagePlugin.title_font = ImageFont.truetype(font_path, 54)
+        CoverImagePlugin.author_font = ImageFont.truetype(font_path, 32)
+        cover_fn = partial(CoverImagePlugin.generate, plugin=self)
+
+        for node in self.site.content.walk():
+            for resource in node.resources:
+                if resource.source_file.kind != "html":
+                    continue
+                if not resource.meta.title:
+                    continue
+                self.logger.debug("Adding cover_image function to [%s]" % resource)
+                resource.cover_image = types.MethodType(cover_fn, resource)
+
+    @staticmethod
+    @cache
+    def _render_author(author, color):
+        """Return a cached RGBA image of the author text."""
+        cls = CoverImagePlugin
+        tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        bbox = tmp.textbbox((0, 0), author, font=cls.author_font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text(
+            (-bbox[0], -bbox[1]), author, fill=color, font=cls.author_font
+        )
+        return img
+
+    @staticmethod
+    def _wrap_text(text, font, max_width, draw):
+        """Word-wrap text to fit within max_width, then balance line widths."""
+        words = text.split()
+        if not words:
+            return []
+
+        def line_width(s):
+            bbox = draw.textbbox((0, 0), s, font=font)
+            return bbox[2] - bbox[0]
+
+        # Greedy wrap to determine number of lines
+        lines = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if line_width(test) <= max_width:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+
+        n = len(lines)
+        if n <= 1:
+            return lines
+
+        # Balance: try to minimize max line width across n lines
+        # Binary search for the smallest target width that fits in n lines
+        lo, hi = max(line_width(w) for w in words), max_width
+        while lo < hi:
+            mid = (lo + hi) // 2
+            # Try wrapping with mid as target width
+            trial = []
+            cur = ""
+            for word in words:
+                test = f"{cur} {word}".strip()
+                if line_width(test) <= mid:
+                    cur = test
+                else:
+                    if cur:
+                        trial.append(cur)
+                    cur = word
+            if cur:
+                trial.append(cur)
+            if len(trial) <= n:
+                hi = mid
+            else:
+                lo = mid + 1
+
+        # Wrap with the balanced width
+        lines = []
+        current = ""
+        for word in words:
+            test = f"{current} {word}".strip()
+            if line_width(test) <= hi:
+                current = test
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines
+
+    @staticmethod
+    def generate(resource, plugin=None):
+        """Generate a 1200x630 OG cover image for this article."""
+        cls = CoverImagePlugin
+        W, H = cls.WIDTH, cls.HEIGHT
+
+        title = resource.meta.title.split(" | ", 1)[0]
+        has_cover = hasattr(resource.meta, "cover") and resource.meta.cover
+
+        # Output path: media/images/covers/{relative_deploy_path}.jpg
+        rdp = resource.relative_deploy_path
+        media_rel = "images/covers/" + os.path.splitext(rdp)[0] + ".jpg"
+        output_path = os.path.join(
+            str(resource.site.config.deploy_root_path), "media", media_rel
+        )
+
+        font = cls.title_font
+        line_height = int(font.size * 1.2)
+        tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        margin = 40
+        icon_w, icon_h = cls.icon.size
+
+        if has_cover:
+            # Layout: icon left, title + author right, at bottom
+            gap = 20
+            text_x = margin + icon_w + gap
+            max_width = W - text_x - margin
+            lines = cls._wrap_text(title, font, max_width, tmp)
+
+            # Author line dimensions
+            author_img = cls._render_author(resource.meta.author, cls.AUTHOR_COLOR)
+            author_gap = 8
+
+            # Text block = title lines + author
+            text_block_h = len(lines) * line_height + author_gap + author_img.height
+            block_h = max(icon_h, text_block_h)
+
+            # Position block at bottom
+            bottom_margin = 40
+            block_y = H - bottom_margin - block_h
+
+            # Load cover and crop to fill 1200x630
+            cover_path = os.path.join(
+                str(resource.site.config.media_root_path),
+                "images",
+                resource.meta.cover,
+            )
+            cover = Image.open(cover_path).convert("RGB")
+            target_ratio = W / H
+            cover_ratio = cover.width / cover.height
+            if cover_ratio > target_ratio:
+                new_w = int(cover.height * target_ratio)
+                left = (cover.width - new_w) // 2
+                cover = cover.crop((left, 0, left + new_w, cover.height))
+            else:
+                new_h = int(cover.width / target_ratio)
+                top = (cover.height - new_h) // 2
+                cover = cover.crop((0, top, cover.width, top + new_h))
+            img = cover.resize((W, H), Image.Resampling.LANCZOS)
+
+            # Gradient: start depends on block position
+            bg = cls.BG_COLOR
+            gradient_end = block_y
+            gradient_start = max(0, gradient_end - int(H * 0.35))
+            overlay = Image.new("RGBA", (W, H), (*bg, 0))
+            for y in range(gradient_start, H):
+                if y < gradient_end:
+                    alpha = int(
+                        255 * (y - gradient_start) / (gradient_end - gradient_start)
+                    )
+                else:
+                    alpha = 255
+                row = Image.new("RGBA", (W, 1), (*bg, alpha))
+                overlay.paste(row, (0, y))
+            img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
+            draw = ImageDraw.Draw(img)
+
+            # Icon vertically centered with text block
+            icon_y = block_y + (block_h - icon_h) // 2
+            img.paste(cls.icon, (margin, icon_y), cls.icon)
+
+            # Title left-aligned, vertically centered in block
+            text_top = block_y + (block_h - text_block_h) // 2
+            y = text_top
+            for line in lines:
+                draw.text((text_x, y), line, fill=(0, 0, 0), font=font)
+                y += line_height
+
+            # Author below title
+            y += author_gap
+            img.paste(author_img, (text_x, int(y)), author_img)
+        else:
+            # Without cover
+            img = Image.new("RGB", (W, H), cls.BG_COLOR)
+            draw = ImageDraw.Draw(img)
+
+            # Title (almost) centered
+            max_width = W - 120
+            lines = cls._wrap_text(title, font, max_width, tmp)
+            total_title_height = len(lines) * line_height
+            y = (H - total_title_height + line_height) / 2
+            for line in lines:
+                bbox = draw.textbbox((0, 0), line, font=font)
+                text_w = bbox[2] - bbox[0]
+                x = (W - text_w) / 2
+                draw.text((x, y), line, fill=(0, 0, 0), font=font)
+                y += line_height
+
+            # Branding: icon + author in upper left
+            author_img = cls._render_author(
+                resource.meta.author or "???", cls.AUTHOR_COLOR
+            )
+            img.paste(cls.icon, (margin, margin), cls.icon)
+            author_y = margin + (icon_h - author_img.height) // 2
+            img.paste(
+                author_img,
+                (margin + icon_w + margin, author_y),
+                author_img,
+            )
+
+        # Save
+        File(output_path).parent.make()
+        img.save(output_path, "JPEG", quality=95)
+
+        return media_rel
