@@ -2,7 +2,7 @@
    Rhythmic Sizing Module Level 1: https://www.w3.org/TR/css-rhythm-1/ */
 
 luffy.do(() => {
-  const targets = document.querySelectorAll(".lf-media-outer");
+  const targets = document.querySelectorAll(".lf-media-outer, .lf-gallery");
   if (!targets.length) return;
 
   const heights = new Map();
