@@ -9,6 +9,7 @@ import io
 import base64
 import math
 import re
+import unicodedata
 import urllib
 import xml.etree.ElementTree as ET
 import lxml.html
@@ -22,7 +23,8 @@ from hyde.plugin import Plugin
 from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+import skia
 import langcodes
 from PyPDF2 import PdfReader
 
@@ -534,10 +536,15 @@ class CoverImagePlugin(Plugin):
     def begin_site(self):
         media_path = str(self.site.config.media_root_path)
         icon_path = os.path.join(media_path, "images", "favicon.png")
-        font_path = "/usr/share/fonts/truetype/noto/NotoSansDisplay-SemiBold.ttf"
         CoverImagePlugin.icon = Image.open(icon_path).convert("RGBA")
-        CoverImagePlugin.title_font = ImageFont.truetype(font_path, 54)
-        CoverImagePlugin.author_font = ImageFont.truetype(font_path, 32)
+        typeface = skia.Typeface.MakeFromName(
+            "Noto Sans Display",
+            skia.FontStyle(
+                600, skia.FontStyle.kNormal_Width, skia.FontStyle.kUpright_Slant
+            ),
+        )
+        CoverImagePlugin.title_font = skia.Font(typeface, 64)
+        CoverImagePlugin.author_font = skia.Font(typeface, 32)
         cover_fn = partial(CoverImagePlugin.generate, plugin=self)
 
         for node in self.site.content.walk():
@@ -550,30 +557,52 @@ class CoverImagePlugin(Plugin):
                 resource.cover_image = types.MethodType(cover_fn, resource)
 
     @staticmethod
+    def _render_text(text, font, color):
+        """Render text to a PIL RGBA image using skia."""
+        width = int(math.ceil(font.measureText(text))) + 2
+        metrics = font.getMetrics()
+        ascent = math.ceil(-metrics.fAscent)
+        descent = math.ceil(metrics.fDescent)
+        height = ascent + descent
+        if width <= 0 or height <= 0:
+            return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+
+        surface = skia.Surface(width, height)
+        canvas = surface.getCanvas()
+        canvas.clear(skia.ColorTRANSPARENT)
+        r, g, b = color
+        paint = skia.Paint(AntiAlias=True)
+        paint.setColor(skia.Color(r, g, b, 255))
+        canvas.drawString(text, 0, ascent, font, paint)
+
+        sk_img = surface.makeImageSnapshot()
+        info = skia.ImageInfo.Make(
+            width,
+            height,
+            skia.ColorType.kRGBA_8888_ColorType,
+            skia.AlphaType.kUnpremul_AlphaType,
+        )
+        data = bytearray(width * height * 4)
+        sk_img.readPixels(info, data, width * 4)
+        return Image.frombytes("RGBA", (width, height), bytes(data))
+
+    @staticmethod
     @cache
     def _render_author(author, color):
         """Return a cached RGBA image of the author text."""
-        cls = CoverImagePlugin
-        tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-        bbox = tmp.textbbox((0, 0), author, font=cls.author_font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        ImageDraw.Draw(img).text(
-            (-bbox[0], -bbox[1]), author, fill=color, font=cls.author_font
+        return CoverImagePlugin._render_text(
+            author, CoverImagePlugin.author_font, color
         )
-        return img
 
     @staticmethod
-    def _wrap_text(text, font, max_width, draw):
+    def _wrap_text(text, font, max_width):
         """Word-wrap text to fit within max_width, then balance line widths."""
         words = text.split()
         if not words:
             return []
 
         def line_width(s):
-            bbox = draw.textbbox((0, 0), s, font=font)
-            return bbox[2] - bbox[0]
+            return font.measureText(s)
 
         # Greedy wrap to determine number of lines
         lines = []
@@ -637,7 +666,13 @@ class CoverImagePlugin(Plugin):
         cls = CoverImagePlugin
         W, H = cls.WIDTH, cls.HEIGHT
 
-        title = resource.meta.title.split(" | ", 1)[0]
+        typeface = cls.title_font.getTypeface()
+        title = "".join(
+            ch
+            for ch in resource.meta.title.split(" | ", 1)[0]
+            if unicodedata.category(ch) != "Cf"
+            and (typeface.unicharToGlyph(ord(ch)) != 0 or ch == " ")
+        )
         has_cover = hasattr(resource.meta, "cover") and resource.meta.cover
 
         # Output path: media/images/covers/{relative_deploy_path}.jpg
@@ -648,8 +683,7 @@ class CoverImagePlugin(Plugin):
         )
 
         font = cls.title_font
-        line_height = int(font.size * 1.2)
-        tmp = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        line_height = int(font.getSize() * 1.2)
         margin = 40
         icon_w, icon_h = cls.icon.size
 
@@ -658,7 +692,7 @@ class CoverImagePlugin(Plugin):
             gap = 20
             text_x = margin + icon_w + gap
             max_width = W - text_x - margin
-            lines = cls._wrap_text(title, font, max_width, tmp)
+            lines = cls._wrap_text(title, font, max_width)
 
             # Author line dimensions
             author_img = cls._render_author(resource.meta.author, cls.AUTHOR_COLOR)
@@ -707,8 +741,6 @@ class CoverImagePlugin(Plugin):
                 overlay.paste(row, (0, y))
             img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
-            draw = ImageDraw.Draw(img)
-
             # Icon vertically centered with text block
             icon_y = block_y + (block_h - icon_h) // 2
             img.paste(cls.icon, (margin, icon_y), cls.icon)
@@ -717,7 +749,8 @@ class CoverImagePlugin(Plugin):
             text_top = block_y + (block_h - text_block_h) // 2
             y = text_top
             for line in lines:
-                draw.text((text_x, y), line, fill=(0, 0, 0), font=font)
+                line_img = cls._render_text(line, font, (0, 0, 0))
+                img.paste(line_img, (text_x, int(y)), line_img)
                 y += line_height
 
             # Author below title
@@ -725,19 +758,18 @@ class CoverImagePlugin(Plugin):
             img.paste(author_img, (text_x, int(y)), author_img)
         else:
             # Without cover
+            max_width = W - 120
+            lines = cls._wrap_text(title, font, max_width)
+            total_title_height = len(lines) * line_height
+
             img = Image.new("RGB", (W, H), cls.BG_COLOR)
-            draw = ImageDraw.Draw(img)
 
             # Title (almost) centered
-            max_width = W - 120
-            lines = cls._wrap_text(title, font, max_width, tmp)
-            total_title_height = len(lines) * line_height
             y = (H - total_title_height + line_height) / 2
             for line in lines:
-                bbox = draw.textbbox((0, 0), line, font=font)
-                text_w = bbox[2] - bbox[0]
-                x = (W - text_w) / 2
-                draw.text((x, y), line, fill=(0, 0, 0), font=font)
+                line_img = cls._render_text(line, font, (0, 0, 0))
+                x = (W - line_img.width) / 2
+                img.paste(line_img, (int(x), int(y)), line_img)
                 y += line_height
 
             # Branding: icon + author in upper left
