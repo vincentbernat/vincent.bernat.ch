@@ -56,8 +56,8 @@ const rlhUnit = {
     },
 };
 
-// light-dark() fallback: for each rule with declarations using
-// light-dark(a, b), insert a @supports fallback with the light value.
+// light-dark() fallback: for each rule with declarations using light-dark(a,
+// b), insert a @supports fallback with the light value.
 const lightDarkFallback = {
     postcssPlugin: "light-dark-fallback",
     Rule(rule) {
@@ -148,15 +148,15 @@ process.stdin.on("readable", function () {
 });
 process.stdin.on("end", function () {
     postcss([
-        resolveCustomPropsInMediaCalc,
-        postcssCustomMedia,
-        lfFontSize,
-        rlhUnit,
-        postcssMixins,
-        lightDarkFallback,
+        resolveCustomPropsInMediaCalc, /* Not really supported */
+        postcssCustomMedia, /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */
+        lfFontSize, /* could be implemented with round, baseline 2024 */
+        rlhUnit, /* baseline 2023 */
+        postcssMixins, /* https://drafts.csswg.org/css-mixins/ */
+        lightDarkFallback, /* baseline 2024 */
         autoprefixer,
-        postcssNesting,
-        postcssIsPseudoClass,
+        postcssNesting, /* baseline 2023 */
+        postcssIsPseudoClass, /* baseline 2021 */
         cssnano({
             preset: [
                 "default",
