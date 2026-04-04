@@ -684,7 +684,7 @@ class CoverImagePlugin(Plugin):
                 "images",
                 resource.meta.cover,
             )
-            cover = Image.open(cover_path).convert("RGB")
+            cover = Image.open(cover_path).convert("RGBA")
             target_ratio = W / H
             cover_ratio = cover.width / cover.height
             if cover_ratio > target_ratio:
@@ -695,7 +695,9 @@ class CoverImagePlugin(Plugin):
                 new_h = int(cover.width / target_ratio)
                 top = (cover.height - new_h) // 2
                 cover = cover.crop((0, top, cover.width, top + new_h))
-            img = cover.resize((W, H), Image.Resampling.LANCZOS)
+            cover = cover.resize((W, H), Image.Resampling.LANCZOS)
+            img = Image.new("RGB", (W, H), cls.BG_COLOR)
+            img.paste(cover, (0, 0), cover)
 
             # Gradient: start depends on block position
             bg = cls.BG_COLOR
