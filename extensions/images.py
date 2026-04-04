@@ -29,88 +29,60 @@ import langcodes
 from PyPDF2 import PdfReader
 
 
-class Thumb(object):
-    def __init__(self, path, **kwargs):
-        self.path = path
-        for arg in kwargs:
-            setattr(self, arg, kwargs[arg])
+from collections import namedtuple
 
-    def __str__(self):
-        return self.path
-
-
-def thumb(self, defaults={}, width=None, height=None):
-    """
-    Generate a thumbnail for the given image
-    """
-    if width is None and height is None:
-        width, height = defaults["width"], defaults["height"]
-    im = Image.open(self.path)
-    # Convert to a thumbnail
-    width = width or im.size[0] * height // im.size[1] + 1
-    height = height or im.size[1] * width // im.size[0] + 1
-    im.thumbnail((width, height), Image.Resampling.LANCZOS)
-    # Prepare path
-    path = os.path.join(
-        os.path.dirname(self.get_relative_deploy_path()),
-        "%s%s" % (defaults["prefix"], self.name),
-    )
-    target = File(Folder(self.site.config.deploy_root_path).child(path))
-    target.parent.make()
-    if self.name.endswith(".jpg"):
-        im.save(target.path, "JPEG", quality=95)
-    else:
-        im.save(target.path, "PNG")
-    return Thumb(path, width=im.size[0], height=im.size[1])
+Thumb = namedtuple("Thumb", ["path", "width", "height"])
 
 
 class ImageThumbnailsPlugin(Plugin):
-    """
-    Provide a function to get thumbnail for any image resource.
+    """Provide a thumb() method on each JPG/PNG image resource.
 
     Each image resource will get a `thumb()` function. This function
     can take the following keywords:
       - width (int)
       - height (int)
-      - prefix (string): prefix to use for thumbnails
 
-    This plugin can be configured with the exact same keywords to set
-    site defaults. The `thumb()` function will return a path to the
-    thumbnail. This path will have `width` and `height` as an
-    attribute.
+    The `thumb()` function will return a `Thumb` namedtuple with
+    `path`, `width` and `height` attributes.
 
-    Thumbnails are created in the same directory of their image.
-
-    Currently, only supports PNG and JPG.
+    Thumbnails are created in the same directory as their image.
+    Only supports PNG and JPG.
     """
 
     def __init__(self, site):
-        super(ImageThumbnailsPlugin, self).__init__(site)
+        super().__init__(site)
 
     def begin_site(self):
-        """
-        Find any image resource to add them the thumb() function.
-        """
-        # Grab default values from config
         config = self.site.config
-        defaults = {
-            "width": None,
-            "height": 40,
-            "prefix": "thumb_",
-        }
+        defaults = {"width": None, "height": 40, "prefix": "thumb_"}
         if hasattr(config, "thumbnails"):
             defaults.update(config.thumbnails)
-        # Make the thumbnailing function
-        thumbfn = partial(thumb, defaults=defaults)
-        thumbfn.__doc__ = "Create a thumbnail for this image"
-
-        # Add it to any image resource
+        thumb_fn = partial(self._generate, defaults=defaults)
         for node in self.site.content.walk():
             for resource in node.resources:
-                if resource.source_file.kind not in ["jpg", "png"]:
+                if resource.source_file.kind not in ("jpg", "png"):
                     continue
-                self.logger.debug("Adding thumbnail function to [%s]" % resource)
-                resource.thumb = types.MethodType(thumbfn, resource)
+                resource.thumb = types.MethodType(thumb_fn, resource)
+
+    @staticmethod
+    def _generate(resource, defaults, width=None, height=None):
+        if width is None and height is None:
+            width, height = defaults["width"], defaults["height"]
+        im = Image.open(resource.path)
+        width = width or im.size[0] * height // im.size[1] + 1
+        height = height or im.size[1] * width // im.size[0] + 1
+        im.thumbnail((width, height), Image.Resampling.LANCZOS)
+        path = os.path.join(
+            os.path.dirname(resource.get_relative_deploy_path()),
+            f"{defaults['prefix']}{resource.name}",
+        )
+        target = File(Folder(resource.site.config.deploy_root_path).child(path))
+        target.parent.make()
+        if resource.name.endswith(".jpg"):
+            im.save(target.path, "JPEG", quality=95)
+        else:
+            im.save(target.path, "PNG")
+        return Thumb(path, im.size[0], im.size[1])
 
 
 class ImageFixerPlugin(Plugin):
