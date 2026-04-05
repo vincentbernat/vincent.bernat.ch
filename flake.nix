@@ -62,10 +62,12 @@
                 )
                 overrides;
             moreOverrides = final: prev: {
-              cairocffi = prev.cairocffi.overrideAttrs (old: {
+              wand = prev.wand.overrideAttrs (old: {
                 postInstall = (old.postInstall or "") + ''
-                  substituteInPlace $out/lib/python*/site-packages/cairocffi/__init__.py \
-                    --replace-fail "libcairo.so.2" "${pkgs.cairo}/lib/libcairo.so.2"
+                  substituteInPlace $out/lib/python*/site-packages/wand/api.py \
+                    --replace-fail \
+                    "magick_home = os.environ.get('MAGICK_HOME')" \
+                    "magick_home = os.environ.get('MAGICK_HOME', '${pkgs.imagemagick}')"
                 '';
               });
               markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs (old: {

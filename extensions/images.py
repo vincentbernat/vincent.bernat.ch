@@ -25,11 +25,11 @@ from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
 from PIL import Image
-import cairosvg
 import diskcache
 import skia
 import langcodes
 from PyPDF2 import PdfReader
+from wand.image import Image as WandImage
 
 from collections import namedtuple
 
@@ -494,6 +494,9 @@ class CoverImagePlugin(Plugin):
 
     Each blog article resource gets a cover_image() method that
     generates the cover and returns the media-relative path.
+
+    At some point, we should use self.site_content.add_resource to register the
+    image as a resource (and add the original cover to .depends).
     """
 
     WIDTH = 1200
@@ -575,7 +578,9 @@ class CoverImagePlugin(Plugin):
     def _load_cover(cover_path, width):
         """Load a cover image (SVG or raster) and return as RGBA."""
         if cover_path.endswith(".svg"):
-            png_data = cairosvg.svg2png(url=cover_path, output_width=width * 2)
+            with WandImage(filename=cover_path) as wimg:
+                wimg.resize(width * 2, int(wimg.height * width * 2 / wimg.width))
+                png_data = wimg.make_blob("png")
             return Image.open(io.BytesIO(png_data)).convert("RGBA")
         return Image.open(cover_path).convert("RGBA")
 
