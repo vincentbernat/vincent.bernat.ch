@@ -507,6 +507,7 @@ class CoverImagePlugin(Plugin):
     title_font = None
     author_font = None
     _cache = None
+    _self_hash = None
 
     def __init__(self, site):
         super().__init__(site)
@@ -526,12 +527,10 @@ class CoverImagePlugin(Plugin):
 
         # Disk cache, invalidated when this file changes
         with open(__file__, "rb") as f:
-            self_hash = hashlib.sha256(f.read()).hexdigest()
+            CoverImagePlugin._self_hash = hashlib.sha256(f.read()).hexdigest()
         cache_dir = os.path.join(str(self.site.sitepath), ".cache", "covers")
-        CoverImagePlugin._cache = diskcache.Cache(cache_dir)
-        if CoverImagePlugin._cache.get("__self_hash__") != self_hash:
-            CoverImagePlugin._cache.clear()
-            CoverImagePlugin._cache.set("__self_hash__", self_hash)
+        CoverImagePlugin._cache = diskcache.Cache(cache_dir, eviction_policy="none")
+        CoverImagePlugin._cache.expire()
 
         cover_fn = partial(CoverImagePlugin.generate, plugin=self)
 
@@ -690,7 +689,7 @@ class CoverImagePlugin(Plugin):
             )
             with open(cover_path, "rb") as f:
                 cover_hash = hashlib.sha256(f.read()).hexdigest()
-        cache_key = (title, resource.meta.author, cover_hash)
+        cache_key = (title, resource.meta.author, cover_hash, cls._self_hash)
         cached = cls._cache.get(cache_key, read=True)
         if cached is not None:
             File(output_path).parent.make()
