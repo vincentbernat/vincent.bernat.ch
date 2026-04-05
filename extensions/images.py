@@ -1,9 +1,10 @@
 """
-Contains classes to handle images related things
+Contains classes to handle images related things.
 
 # Requires PIL/Pillow
 """
 
+import hashlib
 import os
 import io
 import base64
@@ -24,10 +25,11 @@ from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
 from PIL import Image
+import cairosvg
+import diskcache
 import skia
 import langcodes
 from PyPDF2 import PdfReader
-
 
 from collections import namedtuple
 
@@ -501,6 +503,7 @@ class CoverImagePlugin(Plugin):
     icon = None
     title_font = None
     author_font = None
+    _cache = None
 
     def __init__(self, site):
         super().__init__(site)
@@ -517,6 +520,16 @@ class CoverImagePlugin(Plugin):
         )
         CoverImagePlugin.title_font = skia.Font(typeface, 64)
         CoverImagePlugin.author_font = skia.Font(typeface, 32)
+
+        # Disk cache, invalidated when this file changes
+        with open(__file__, "rb") as f:
+            self_hash = hashlib.sha256(f.read()).hexdigest()
+        cache_dir = os.path.join(str(self.site.sitepath), ".cache", "covers")
+        CoverImagePlugin._cache = diskcache.Cache(cache_dir)
+        if CoverImagePlugin._cache.get("__self_hash__") != self_hash:
+            CoverImagePlugin._cache.clear()
+            CoverImagePlugin._cache.set("__self_hash__", self_hash)
+
         cover_fn = partial(CoverImagePlugin.generate, plugin=self)
 
         for node in self.site.content.walk():
@@ -559,31 +572,11 @@ class CoverImagePlugin(Plugin):
         return Image.frombytes("RGBA", (width, height), bytes(data))
 
     @staticmethod
-    @cache
     def _load_cover(cover_path, width):
         """Load a cover image (SVG or raster) and return as RGBA."""
         if cover_path.endswith(".svg"):
-            with open(cover_path, "rb") as f:
-                svg_data = f.read()
-            svg = skia.SVGDOM.MakeFromStream(skia.MemoryStream(svg_data))
-            w, h = svg.containerSize().fWidth, svg.containerSize().fHeight
-            scale = (width * 2) / w if w > 0 else 1
-            out_w, out_h = int(w * scale), int(h * scale)
-            surface = skia.Surface(out_w, out_h)
-            canvas = surface.getCanvas()
-            canvas.clear(skia.ColorTRANSPARENT)
-            canvas.scale(scale, scale)
-            svg.render(canvas)
-            sk_img = surface.makeImageSnapshot()
-            info = skia.ImageInfo.Make(
-                out_w,
-                out_h,
-                skia.ColorType.kRGBA_8888_ColorType,
-                skia.AlphaType.kUnpremul_AlphaType,
-            )
-            data = bytearray(out_w * out_h * 4)
-            sk_img.readPixels(info, data, out_w * 4)
-            return Image.frombytes("RGBA", (out_w, out_h), bytes(data))
+            png_data = cairosvg.svg2png(url=cover_path, output_width=width * 2)
+            return Image.open(io.BytesIO(png_data)).convert("RGBA")
         return Image.open(cover_path).convert("RGBA")
 
     @staticmethod
@@ -681,6 +674,24 @@ class CoverImagePlugin(Plugin):
         output_path = os.path.join(
             str(resource.site.config.deploy_root_path), "media", media_rel
         )
+
+        # Check disk cache
+        cover_hash = ""
+        if has_cover:
+            cover_path = os.path.join(
+                str(resource.site.config.media_root_path),
+                "images",
+                resource.meta.cover,
+            )
+            with open(cover_path, "rb") as f:
+                cover_hash = hashlib.sha256(f.read()).hexdigest()
+        cache_key = (title, resource.meta.author, cover_hash)
+        cached = cls._cache.get(cache_key, read=True)
+        if cached is not None:
+            File(output_path).parent.make()
+            with open(output_path, "wb") as f:
+                f.write(cached.read())
+            return media_rel
 
         font = cls.title_font
         line_height = int(font.getSize() * 1.2)
@@ -786,8 +797,10 @@ class CoverImagePlugin(Plugin):
                 author_img,
             )
 
-        # Save
+        # Save and cache
         File(output_path).parent.make()
         img.save(output_path, "JPEG", quality=95)
+        with open(output_path, "rb") as f:
+            cls._cache.set(cache_key, f, read=True, expire=30 * 86400)
 
         return media_rel

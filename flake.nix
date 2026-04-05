@@ -62,6 +62,12 @@
                 )
                 overrides;
             moreOverrides = final: prev: {
+              cairocffi = prev.cairocffi.overrideAttrs (old: {
+                postInstall = (old.postInstall or "") + ''
+                  substituteInPlace $out/lib/python*/site-packages/cairocffi/__init__.py \
+                    --replace-fail "libcairo.so.2" "${pkgs.cairo}/lib/libcairo.so.2"
+                '';
+              });
               markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
                   (pkgs.writeText "Markdown-py312.patch" ''
