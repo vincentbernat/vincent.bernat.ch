@@ -560,6 +560,34 @@ class CoverImagePlugin(Plugin):
 
     @staticmethod
     @cache
+    def _load_cover(cover_path, width):
+        """Load a cover image (SVG or raster) and return as RGBA."""
+        if cover_path.endswith(".svg"):
+            with open(cover_path, "rb") as f:
+                svg_data = f.read()
+            svg = skia.SVGDOM.MakeFromStream(skia.MemoryStream(svg_data))
+            w, h = svg.containerSize().fWidth, svg.containerSize().fHeight
+            scale = (width * 2) / w if w > 0 else 1
+            out_w, out_h = int(w * scale), int(h * scale)
+            surface = skia.Surface(out_w, out_h)
+            canvas = surface.getCanvas()
+            canvas.clear(skia.ColorTRANSPARENT)
+            canvas.scale(scale, scale)
+            svg.render(canvas)
+            sk_img = surface.makeImageSnapshot()
+            info = skia.ImageInfo.Make(
+                out_w,
+                out_h,
+                skia.ColorType.kRGBA_8888_ColorType,
+                skia.AlphaType.kUnpremul_AlphaType,
+            )
+            data = bytearray(out_w * out_h * 4)
+            sk_img.readPixels(info, data, out_w * 4)
+            return Image.frombytes("RGBA", (out_w, out_h), bytes(data))
+        return Image.open(cover_path).convert("RGBA")
+
+    @staticmethod
+    @cache
     def _render_author(author, color):
         """Return a cached RGBA image of the author text."""
         return CoverImagePlugin._render_text(
@@ -684,7 +712,7 @@ class CoverImagePlugin(Plugin):
                 "images",
                 resource.meta.cover,
             )
-            cover = Image.open(cover_path).convert("RGBA")
+            cover = cls._load_cover(cover_path, W)
             target_ratio = W / H
             cover_ratio = cover.width / cover.height
             if cover_ratio > target_ratio:
