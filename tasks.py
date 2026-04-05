@@ -23,6 +23,14 @@ hosts = [
     "web05.luffy.cx",
     "web06.luffy.cx",
 ]
+bwrap = (
+    "bwrap "
+    "--ro-bind / / --dev /dev --proc /proc "
+    "--tmpfs /run --tmpfs /tmp --tmpfs /var/tmp --tmpfs $HOME "
+    "--bind $PWD $PWD "
+    "--unshare-all --die-with-parent "
+    "--"
+)
 
 
 def confirm(question, default=False):
@@ -60,7 +68,7 @@ def step(what):
 @task
 def gen(c):
     """Generate dev content"""
-    c.run("hyde -x gen")
+    c.run(f"{bwrap} hyde -x gen")
 
 
 @task(post=[gen])
@@ -72,7 +80,7 @@ def regen(c):
 @task
 def serve(c):
     """Serve dev content"""
-    c.run("hyde -x serve -a 0.0.0.0", pty=True, hide=False)
+    c.run(f"{bwrap} hyde -x serve -a 0.0.0.0", pty=True, hide=False)
 
 
 @task
@@ -383,7 +391,7 @@ def build(c):
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
     c.run("rm -rf .final/*")
     with step("run Hyde"):
-        c.run("hyde -x gen -c %s" % conf)
+        c.run(f"{bwrap} hyde -x gen -c %s" % conf)
     with c.cd(".final"):
         # Fix HTML (<source> is an empty tag)
         with step("fix HTML"):
