@@ -1,8 +1,10 @@
 # vincent.bernat.ch
 
 This is the source code of my website. You can find the result at
-<http://vincent.bernat.ch>. I am using [Hyde][hyde], an unmaintained
-static website generator written in Python.
+<http://vincent.bernat.ch>. I am using [Hyde][hyde], an unmaintained static
+website generator written in Python. Likely, I would need to switch to another
+project, either [Nikola](https://getnikola.com/) or [doit](https://pydoit.org/),
+which is used by Nikola to build a SSG.
 
 Licensing is described in `content/en/licenses.html`.
 
