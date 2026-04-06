@@ -473,7 +473,7 @@ rm ../result
                         continue
                     root, ext = os.path.splitext(f)
                     newname = "%s.%s%s" % (root, md5[f], ext)
-                    c.run("mv media/%s media/%s" % (f, newname))
+                    os.rename(f".final/media/{f}", f".final/media/{newname}")
                     # Fix CSS
                     sed_css.append(f"s+{f})+{newname})+g")
                     # Fix HTML
