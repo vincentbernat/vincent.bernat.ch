@@ -15,7 +15,7 @@ const pagefind = await import(pageFindScript.src);
 await pagefind.options({
   noWorker: true,
   baseUrl: "/",
-  basePath: "/media/pagefind",
+  basePath: form.dataset.pagefindBundle,
 });
 
 async function search(query) {
