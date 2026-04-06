@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const autoprefixer = require("autoprefixer");
 const cssnano = require("cssnano");
 const postcss = require("postcss");
@@ -6,6 +8,25 @@ const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc: resolveCalc } = require("@csstools/css-calc");
+
+// Pre-parse :root variables from the root CSS file so they are available
+// when processing any CSS file (not just the one containing :root).
+const rootCssPath = path.join(
+    __dirname,
+    "..",
+    "content",
+    "media",
+    "css",
+    "luffy.01-root.css",
+);
+const rootVars = {};
+postcss
+    .parse(fs.readFileSync(rootCssPath, "utf8"))
+    .walkRules(":root", (rule) => {
+        rule.walkDecls(/^--/, (decl) => {
+            rootVars[decl.prop] = decl.value.trim();
+        });
+    });
 
 // Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
 // The line-height is computed to maintain vertical rhythm:
@@ -17,7 +38,9 @@ const { calc: resolveCalc } = require("@csstools/css-calc");
 const lfFontSize = {
     postcssPlugin: "lf-font-size",
     Once(root) {
-        let lineHeight = 0;
+        let lineHeight = rootVars["--lf-line-height"]
+            ? parseFloat(rootVars["--lf-line-height"])
+            : 0;
         root.walkRules(":root", (rule) => {
             rule.walkDecls("--lf-line-height", (decl) => {
                 lineHeight = parseFloat(decl.value);
@@ -100,7 +123,7 @@ const lightDarkFallback = {
 const resolveCustomPropsInMediaCalc = {
     postcssPlugin: "resolve-custom-props-in-media-calc",
     Once(root) {
-        const vars = {};
+        const vars = { ...rootVars };
         root.walkRules(":root", (rule) => {
             rule.walkDecls(/^--/, (decl) => {
                 vars[decl.prop] = decl.value.trim();
