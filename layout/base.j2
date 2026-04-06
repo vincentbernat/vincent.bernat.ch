@@ -17,7 +17,7 @@
 {% endfor %}
   <title>{{ resource.meta.title|e }}</title>
 {% if resource.meta.author %}
-  <meta name="author" content="{{ resource.meta.author|e }}">
+  <meta name="author" data-pagefind-meta="author[content]" content="{{ resource.meta.author|e }}">
 {% endif %}
   <meta name="viewport" content="width=device-width,initial-scale=1">
 {% if resource.meta.noindex %}
@@ -34,7 +34,7 @@
 {%- endfilter %}">
   <meta property="og:image" content="{{ media_url(resource.cover_image()) }}">
 {% if resource.meta.created != None %}
-  <meta property="article:published_time" content="{{ resource.meta.created|xmldatetime }}">
+  <meta property="article:published_time" data-pagefind-meta="date[content]" content="{{ resource.meta.created|xmldatetime }}">
 {% if resource.meta.modified != None and resource.meta.modified != resource.meta.created %}
   <meta property="article:modified_time" content="{{ resource.meta.modified|xmldatetime }}">
 {% endif %}
@@ -52,11 +52,11 @@
 </head>
 <body>
   <main class="lf-main">
-    <article>
-{% block header %}
+    <article{% if not resource.meta.noindex and resource.name != "index.html" %} data-pagefind-body{% endif %}>
+{% if not resource.meta.notitle %}
       <header>
         <h1>{{resource.meta.title.split("|")[0]|typogrify}}</h1>
-        <div id="lf-sideblock">
+        <div id="lf-sideblock"  data-pagefind-ignore>
 {% from "macros.j2" import resource_date with context %}
           <h2>
             {{resource.meta.author|default("", true)|e}}
@@ -66,7 +66,7 @@
 
         </div>
       </header>
-{% endblock %}
+{% endif %}
       <div id="lf-text">
 
 {% mark article %}{{ formatted_article }}{% endmark %}
@@ -78,6 +78,7 @@
 {# Navigation bar #}
   <nav id="lf-navbar">
     {% filter indent(4) %}{% include "menu.j2" %}{% endfilter %}
+{% if resource.name != "search.html" %}
     <form id="lf-search" action="https://duckduckgo.com/" role="search">
       <input type="hidden" name="kf" value="-1">{# no favicons #}
       <input type="hidden" name="kaf" value="1">{# full URLs #}
@@ -86,6 +87,7 @@
       <input type="submit" value="🔎">
       <input id="lf-search-query" type="text" name="q" value="" autocomplete="off" aria-label="{{ resource.meta.l10n.search|e }}">
     </form>
+{% endif %}
   </nav>
 
 {# Footer #}
@@ -151,7 +153,7 @@
 {% endif %}
   <script src="{{ media_url('js/luffy.js') }}" type="module" async></script>
 {% for js in resource.meta.js %}
-  <script src="{{ media_url('js/' + js) }}" type="module" async></script>
+  <script src="{{ media_url('js/' + js) }}" data-name="{{ js }}" type="module" async></script>
 {% endfor %}
 </body>
 </html>

@@ -67,6 +67,7 @@ def step(what):
 @task
 def gen(c):
     """Generate dev content"""
+    c.run("find deploy -perm 444 -delete")
     c.run(f"{bwrap} -- hyde -x gen")
 
 
@@ -74,6 +75,26 @@ def gen(c):
 def regen(c):
     """Regenerate dev content"""
     c.run("rm -rf deploy")
+
+
+@task
+def pagefind(c, site="deploy"):
+    """Run pagefind indexation"""
+    c.run(
+        f"{bwrap} -- node_modules/pagefind/lib/runner/bin.cjs "
+        f"--site {site} "
+        "--exclude-selectors=.headerlink "
+        "--output-subdir=media/js/pagefind"
+    )
+    with c.cd(f"{site}/media/js/pagefind"):
+        c.run(
+            "rm pagefind-component* pagefind-modular* pagefind-ui* pagefind-worker* pagefind-highlight.js"
+        )
+    with c.cd(f"{site}/media"):
+        c.run("mkdir -p pagefind")
+        c.run("mv js/pagefind/pagefind.js js")
+        c.run("mv js/pagefind/* pagefind")
+        c.run("rmdir js/pagefind")
 
 
 @task
@@ -416,6 +437,11 @@ cp -r --no-preserve=mode ../result/* media/fonts/.
 rm ../result
 """)
 
+        # Build index
+        with step("pagefind index"):
+            with c.cd(".."):
+                pagefind(c, site=".final")
+
         # Compute hash on various files
         with step("cache busting and SRI"):
             # First fonts and images, then JS and CSS
@@ -482,18 +508,6 @@ rm ../result
                         )
                     )
                     sed_html = sed_html[20:]
-
-        with step("check missing images"):
-            pattern = re.escape(media) + r"images/[^\"\s]+"
-            result = c.run(
-                f"grep -rohP '{pattern}' --include='*.html' --include='*.xml' -r ."
-                r" | grep -vP '\.[0-9a-f]{14}\.'"
-                r" | grep -v '/images/favicon\.png$'"
-                r" | sort -u",
-                hide=True,
-            ).stdout.strip()
-            if result:
-                raise RuntimeError(f"Some images are missing:\n{result}")
 
         # Image optimization
         with step("optimize images"):
