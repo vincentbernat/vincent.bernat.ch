@@ -67,7 +67,7 @@ def step(what):
 @task
 def gen(c):
     """Generate dev content"""
-    c.run("find deploy -perm 444 -delete")
+    c.run("[ ! -d deploy ] || find deploy -perm 444 -delete")
     c.run(f"{bwrap} -- hyde -x gen")
 
 
