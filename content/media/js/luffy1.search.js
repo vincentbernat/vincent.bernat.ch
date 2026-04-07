@@ -64,7 +64,6 @@ async function search(query) {
   try {
     // Trigger search
     const { results: hits } = await pagefind.search(query);
-    await new Promise(r => setTimeout(r, 2000));
 
     // Display results if any
     clearResults();
