@@ -2,18 +2,28 @@
 const form = document.getElementById("lf-search-form");
 const input = document.getElementById("lf-search-input");
 const results = document.getElementById("lf-search-results");
+const noresultsEl = document.getElementById("lf-search-noresults");
+const fallbackEl = document.getElementById("lf-search-fallback");
+const fallbackLink = document.getElementById("lf-search-fallback-link");
 const spinner = `
   <div class="lf-search-spinner">
     <div class="bounce1"></div>
     <div class="bounce2"></div>
     <div class="bounce3"></div></div>`;
 const devMode = location.pathname.endsWith(".html");
-let pagefind;
 const pageFindScript = document.querySelector(
   'script[data-name="pagefind.js"]',
 );
+let pagefind;
+
+function clearResults() {
+  results.querySelectorAll(".lf-search-result").forEach((el) => el.remove());
+  noresultsEl.hidden = true;
+  fallbackEl.hidden = true;
+}
 
 function showFallback(query) {
+  clearResults();
   const lang = document.documentElement.lang;
   const params = new URLSearchParams({
     kf: "-1",
@@ -22,8 +32,8 @@ function showFallback(query) {
     sites: `${location.hostname}/${lang}/`,
     q: query,
   });
-  const url = `https://duckduckgo.com/?${params}`;
-  results.innerHTML = `<p>Search is not available. <a href="${url}">Try with DuckDuckGo</a>.</p>`;
+  fallbackLink.href = `https://duckduckgo.com/?${params}`;
+  fallbackEl.hidden = false;
 }
 
 try {
@@ -38,8 +48,8 @@ try {
 }
 
 async function search(query) {
+  clearResults();
   if (!query) {
-    results.innerHTML = "";
     return;
   }
 
@@ -48,30 +58,34 @@ async function search(query) {
     return;
   }
 
-  // Trigger search
-  results.innerHTML = spinner;
+  results.insertAdjacentHTML("beforeend", spinner);
   try {
+    // Trigger search
     const { results: hits } = await pagefind.search(query);
 
     // Display results if any
+    clearResults();
     if (hits.length === 0) {
-      results.innerHTML = "<p>No results found.</p>";
+      noresultsEl.hidden = false;
       return;
     }
     const data = await Promise.all(hits.map((h) => h.data()));
-    results.innerHTML = data
-      .map((d) => {
-        const url = devMode ? d.url.replace(/\.html$/, "") : d.url;
-        const date = d.meta.date ? d.meta.date.split("T")[0] : "";
-        const author = d.meta.author || "";
-        const meta = [date, author].filter(Boolean).join(" — ");
-        return `<div class="lf-search-result">
+    results.insertAdjacentHTML(
+      "beforeend",
+      data
+        .map((d) => {
+          const url = devMode ? d.url.replace(/\.html$/, "") : d.url;
+          const date = d.meta.date ? d.meta.date.split("T")[0] : "";
+          const author = d.meta.author || "";
+          const meta = [date, author].filter(Boolean).join(" — ");
+          return `<div class="lf-search-result">
 <h3><a href="${url}">${d.meta.title}</a></h3>
 ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
 <p class="lf-search-excerpt">${d.excerpt}</p>
 </div>`;
-      })
-      .join("");
+        })
+        .join(""),
+    );
   } catch (e) {
     console.error("Pagefind search failed:", e);
     showFallback(query);
