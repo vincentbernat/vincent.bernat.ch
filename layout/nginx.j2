@@ -2,9 +2,9 @@
 {% macro domain(url) -%}
   {{ url.split("://")[- 1].split("/")[0] }}
 {%- endmacro %}
-{% macro csp() %}
+{% macro csp(wasm=False) %}
 default-src     'self' blob:;
-script-src      'self' blob: {{ domain(media_url('js/')) }} 'sha256-Yv7kZY+BkmpZYTujeN0YNmI0uRKpS5CY7E4enn1TRL0=';
+script-src      'self' blob:{% if wasm %} wasm-unsafe-eval{% endif %} {{ domain(media_url('js/')) }} 'sha256-Yv7kZY+BkmpZYTujeN0YNmI0uRKpS5CY7E4enn1TRL0=';
 style-src       'self' 'unsafe-inline' data: {{ domain(media_url('css/')) }};
 font-src        'self' data: {{ domain(media_url('fonts/')) }};
 object-src      'self' {{ domain(media_url('images/')) }} {{ domain(media_url('files/')) }};
@@ -105,11 +105,11 @@ location = {{ content_url(res.url) }} {
 
 {# Search: not compatible to CSP because of WebAssembly... #}
 location = /en/search {
-  add_header "X-Content-Type-Options" "nosniff";
+  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
   try_files $uri.html =404;
 }
 location = /fr/search {
-  add_header "X-Content-Type-Options" "nosniff";
+  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
   try_files $uri.html =404;
 }
 {# Misc #}
