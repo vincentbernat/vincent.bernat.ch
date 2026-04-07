@@ -5,25 +5,39 @@ const results = document.getElementById("lf-search-results");
 const noresultsEl = document.getElementById("lf-search-noresults");
 const fallbackEl = document.getElementById("lf-search-fallback");
 const fallbackLink = document.getElementById("lf-search-fallback-link");
-const spinner = `
-  <div class="lf-search-spinner">
-    <div class="bounce1"></div>
-    <div class="bounce2"></div>
-    <div class="bounce3"></div></div>`;
 const devMode = location.pathname.endsWith(".html");
 const pageFindScript = document.querySelector(
   'script[data-name="pagefind.js"]',
 );
+const BATCH_SIZE = 5; // number of elements to load from search
+let observer = null; // observer to check for sentinel element
 let pagefind;
 
+// Try to load pagefind. This may fail because of CSP and/or lack of webassembly
+// support. In this case, pagefind stays null.
+try {
+  pagefind = await import(pageFindScript.src);
+  await pagefind.options({
+    noWorker: true,
+    baseUrl: "/",
+    basePath: form.dataset.pagefindBundle,
+  });
+} catch (e) {
+  console.error("Pagefind failed to load:", e);
+}
+
+// Clear the result area.
 function clearResults() {
   results
-    .querySelectorAll(".lf-search-result, .lf-search-spinner")
+    .querySelectorAll(
+      ".lf-search-result, .lf-search-spinner, .lf-search-sentinel",
+    )
     .forEach((el) => el.remove());
   noresultsEl.hidden = true;
   fallbackEl.hidden = true;
 }
 
+// Display a DDG fallback link instead of search results.
 function showFallback(query) {
   clearResults();
   const lang = document.documentElement.lang;
@@ -38,56 +52,79 @@ function showFallback(query) {
   fallbackEl.hidden = false;
 }
 
-try {
-  pagefind = await import(pageFindScript.src);
-  await pagefind.options({
-    noWorker: true,
-    baseUrl: "/",
-    basePath: form.dataset.pagefindBundle,
-  });
-} catch (e) {
-  console.error("Pagefind failed to load:", e);
+// Display a spinner during the execution of an async function.
+async function withSpinner(fn) {
+  const spinner = `
+    <div class="lf-search-spinner">
+      <div class="bounce1"></div>
+      <div class="bounce2"></div>
+      <div class="bounce3"></div>
+  </div>`;
+  results.insertAdjacentHTML("beforeend", spinner);
+  try {
+    return await fn();
+  } finally {
+    results.querySelector(".lf-search-spinner")?.remove();
+  }
 }
 
+// Render HTML for one result.
+function renderResult(d) {
+  const url = devMode ? d.url.replace(/\.html$/, "") : d.url;
+  const date = d.meta.date ? d.meta.date.split("T")[0] : "";
+  const author = d.meta.author || "";
+  const meta = [date, author].filter(Boolean).join(" — ");
+  return `<div class="lf-search-result">
+<h3><a href="${url}">${d.meta.title}</a></h3>
+${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
+<p class="lf-search-excerpt">${d.excerpt}</p>
+</div>`;
+}
+
+// Render a batch of results and add it to the result area.
+async function renderBatch(hits, offset) {
+  const batch = hits.slice(offset, offset + BATCH_SIZE);
+  if (batch.length === 0) return;
+  results.querySelector(".lf-search-sentinel")?.remove();
+  const data = await withSpinner(() => Promise.all(batch.map((h) => h.data())));
+  results.insertAdjacentHTML("beforeend", data.map(renderResult).join(""));
+  const nextOffset = offset + BATCH_SIZE;
+  if (nextOffset < hits.length) {
+    const sentinel = document.createElement("div");
+    sentinel.className = "lf-search-sentinel";
+    results.appendChild(sentinel);
+    observer.observe(sentinel);
+  }
+}
+
+// Execute a search and display results by batch.
 async function search(query) {
   clearResults();
-  if (!query) {
-    return;
-  }
-
+  if (observer) observer.disconnect();
+  if (!query) return;
   if (!pagefind) {
     showFallback(query);
     return;
   }
 
-  results.insertAdjacentHTML("beforeend", spinner);
   try {
-    // Trigger search
-    const { results: hits } = await pagefind.search(query);
+    // Run a search
+    const { results: hits } = await withSpinner(() => pagefind.search(query));
 
-    // Display results if any
-    clearResults();
+    // Display results by batch
     if (hits.length === 0) {
       noresultsEl.hidden = false;
       return;
     }
-    const data = await Promise.all(hits.map((h) => h.data()));
-    results.insertAdjacentHTML(
-      "beforeend",
-      data
-        .map((d) => {
-          const url = devMode ? d.url.replace(/\.html$/, "") : d.url;
-          const date = d.meta.date ? d.meta.date.split("T")[0] : "";
-          const author = d.meta.author || "";
-          const meta = [date, author].filter(Boolean).join(" — ");
-          return `<div class="lf-search-result">
-<h3><a href="${url}">${d.meta.title}</a></h3>
-${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
-<p class="lf-search-excerpt">${d.excerpt}</p>
-</div>`;
-        })
-        .join(""),
-    );
+    observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        const loaded = results.querySelectorAll(".lf-search-result").length;
+        renderBatch(hits, loaded);
+      }
+    });
+    await renderBatch(hits, 0);
   } catch (e) {
     console.error("Pagefind search failed:", e);
     showFallback(query);
