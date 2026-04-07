@@ -17,7 +17,9 @@ const pageFindScript = document.querySelector(
 let pagefind;
 
 function clearResults() {
-  results.querySelectorAll(".lf-search-result").forEach((el) => el.remove());
+  results
+    .querySelectorAll(".lf-search-result, .lf-search-spinner")
+    .forEach((el) => el.remove());
   noresultsEl.hidden = true;
   fallbackEl.hidden = true;
 }
@@ -62,6 +64,7 @@ async function search(query) {
   try {
     // Trigger search
     const { results: hits } = await pagefind.search(query);
+    await new Promise(r => setTimeout(r, 2000));
 
     // Display results if any
     clearResults();
