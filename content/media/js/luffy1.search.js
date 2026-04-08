@@ -70,7 +70,7 @@ async function withSpinner(fn) {
 
 // Render HTML for one result.
 function renderResult(d) {
-  const url = devMode ? d.url.replace(/\.html$/, "") : d.url;
+  const url = devMode ? d.url : d.url.replace(/\.html$/, "");
   const date = d.meta.date ? d.meta.date.split("T")[0] : "";
   const author = d.meta.author || "";
   const meta = [date, author].filter(Boolean).join(" — ");
