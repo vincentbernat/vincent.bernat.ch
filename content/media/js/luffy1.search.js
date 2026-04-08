@@ -131,6 +131,33 @@ async function search(query) {
   }
 }
 
+// Scroll to show as many elements as possible, in priority order.
+function scrollToShow(elements) {
+  const els = elements.filter(Boolean);
+  if (els.length === 0) return;
+  console.log(els);
+  let top = Infinity,
+    bottom = -Infinity;
+  for (const el of els) {
+    const rect = el.getBoundingClientRect();
+    const absTop = window.scrollY + rect.top;
+    const absBottom = window.scrollY + rect.bottom;
+    const newTop = Math.min(top, absTop);
+    const newBottom = Math.max(bottom, absBottom);
+    if (newBottom - newTop > window.innerHeight) break;
+    top = newTop;
+    bottom = newBottom;
+  }
+  const viewTop = window.scrollY;
+  const viewBottom = viewTop + window.innerHeight;
+  if (top >= viewTop && bottom <= viewBottom) return;
+  if (top < viewTop) {
+    window.scrollTo({ top, behavior: "smooth" });
+  } else {
+    window.scrollTo({ top: bottom - window.innerHeight, behavior: "smooth" });
+  }
+}
+
 // Navigate results with arrow keys
 document.addEventListener("keydown", (e) => {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -138,28 +165,49 @@ document.addEventListener("keydown", (e) => {
   const links = [...results.querySelectorAll(".lf-search-result a")];
   const active = document.activeElement;
   const idx = links.indexOf(active);
+  const resultEl = (i) =>
+    i < 0
+      ? form
+      : links[i]?.closest(".lf-search-result") ||
+        results.querySelector(".lf-search-sentinel");
+  if (links.length === 0) return;
 
   if (e.key === "ArrowDown") {
+    // Going down.
+    let newIdx;
     if (active === input) {
-      // Input box active, focus the first result.
-      e.preventDefault();
-      links[0]?.focus();
+      newIdx = 0;
+    } else if (idx >= 0 && idx < links.length - 1) {
+      newIdx = idx + 1;
     } else {
-      // Focus the next result.
-      if (idx >= 0 && idx < links.length - 1) {
-        e.preventDefault();
-        links[idx + 1].focus();
-      }
+      return;
     }
+    e.preventDefault();
+    links[newIdx].focus();
+    // Priority: current element, next one, previous one, the second next one.
+    scrollToShow([
+      resultEl(newIdx),
+      resultEl(newIdx + 1),
+      resultEl(newIdx - 1),
+      resultEl(newIdx + 2),
+    ]);
   } else {
+    // Going up.
     if (idx === 0) {
-      // First link active, focus the input box.
       e.preventDefault();
       input.focus();
+      scrollToShow([form]);
     } else if (idx > 0) {
-      // Focus the previous result.
+      const newIdx = idx - 1;
       e.preventDefault();
-      links[idx - 1].focus();
+      links[newIdx].focus();
+      // Priority: current element, previous one, next one, the second previous one.
+      scrollToShow([
+        resultEl(newIdx),
+        resultEl(newIdx - 1),
+        resultEl(newIdx + 1),
+        resultEl(newIdx - 2),
+      ]);
     }
   }
 });
