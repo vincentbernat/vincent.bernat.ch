@@ -131,6 +131,39 @@ async function search(query) {
   }
 }
 
+// Navigate results with arrow keys
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+  const links = [...results.querySelectorAll(".lf-search-result a")];
+  const active = document.activeElement;
+  const idx = links.indexOf(active);
+
+  if (e.key === "ArrowDown") {
+    if (active === input) {
+      // Input box active, focus the first result.
+      e.preventDefault();
+      links[0]?.focus();
+    } else {
+      // Focus the next result.
+      if (idx >= 0 && idx < links.length - 1) {
+        e.preventDefault();
+        links[idx + 1].focus();
+      }
+    }
+  } else {
+    if (idx === 0) {
+      // First link active, focus the input box.
+      e.preventDefault();
+      input.focus();
+    } else if (idx > 0) {
+      // Focus the previous result.
+      e.preventDefault();
+      links[idx - 1].focus();
+    }
+  }
+});
+
 // On submit, run the search
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -153,6 +186,4 @@ const q = new URLSearchParams(location.search).get("q") || "";
 if (q) {
   input.value = q;
   search(q);
-} else {
-  input.focus();
 }
