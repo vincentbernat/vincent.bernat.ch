@@ -161,6 +161,10 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
     }
   }
 
+  input.addEventListener("focus", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
   // Navigate results with arrow keys
   document.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
@@ -199,7 +203,6 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
       if (idx === 0) {
         e.preventDefault();
         input.focus();
-        scrollToShow([form]);
       } else if (idx > 0) {
         const newIdx = idx - 1;
         e.preventDefault();
