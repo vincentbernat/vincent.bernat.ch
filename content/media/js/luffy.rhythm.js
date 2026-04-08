@@ -7,9 +7,10 @@ luffy.do(() => {
 
   const heights = new Map();
   const getRlh = () => parseFloat(getComputedStyle(document.documentElement).lineHeight);
-  let lastRlh = getRlh();
+  let lastRlh = 0;
 
   const adjust = (el, height) => {
+    if (!lastRlh) lastRlh = getRlh();
     const minPad = lastRlh / 4;
     const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
     el.style.padding = `${padding / 2}px 0`;
