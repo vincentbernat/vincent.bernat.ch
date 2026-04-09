@@ -22,6 +22,13 @@
       noWorker: true,
       baseUrl: "/",
       basePath: form.dataset.pagefindBundle,
+      ranking: {
+        metaWeights: {
+          author: 2.0,
+          date: 0.0,
+          tags: 0.0,
+        },
+      },
     });
   } catch (e) {
     console.error("Pagefind failed to load:", e);
@@ -74,10 +81,15 @@
     const url = devMode ? d.url : d.url.replace(/\.html$/, "");
     const date = d.meta.date ? d.meta.date.split("T")[0] : "";
     const author = d.meta.author || "";
+    const tags = d.meta.tags
+      ?.replace(/\. /g, ", ")
+      ?.replace(/\.$/, "")
+      ?.replace(/^/, d.meta.tags?.length > 1 ? "Tags: " : "Tag: ");
     const meta = [date, author].filter(Boolean).join(" — ");
     return `<div class="lf-search-result">
 <h3><a href="${url}">${d.meta.title}</a></h3>
 ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
+${tags ? `<p class="lf-search-meta">${tags}</p>` : ""}
 <p class="lf-search-excerpt">${d.excerpt}</p>
 </div>`;
   }
