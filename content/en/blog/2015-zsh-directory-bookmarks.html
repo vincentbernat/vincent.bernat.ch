@@ -5,20 +5,18 @@ tags:
   - programming-shell
 ---
 
-There [are][1] [numerous][2] [projects][3] to implement directory
-bookmarks in your favorite shell. An inherent limitation of these
-implementations is that they are only an "enhanced" `cd` command: you
+Several [projects][1] [implement][2] [directory bookmarks][3] for your favorite
+shell. But they all share a limitation: they only enhance the `cd` command. You
 cannot use a bookmark in an arbitrary command.
 
 [1]: https://github.com/flavio/jump "jump: a bookmarking system for the bash shell"
 [2]: https://web.archive.org/web/2015/http://www.huyng.com/projects/bashmarks/ "Bashmarks - directory bookmarks for the shell"
 [3]: man://apparix.1 "Apparix: augmenting the command-line with directory bookmarks, distant listing, and distant editing"
 
-!!! "Update (2015-02)" My initial implementation with *Zsh* was using
-*dynamic named directories*. I have been pointed [on][4] [Twitter][5]
-that there is a simpler way to implement bookmarks. The article has
-been updated to reflect that. As a side note, it is also possible to
-just use shell variables.[^variables]
+!!! "Update (2015-02)" My initial implementation with *Zsh* used *dynamic named
+directories*. People [on][4] [Twitter][5] pointed out a simpler approach. The
+article has been updated to reflect that. As a side note, you can also use shell
+variables.[^variables]
 
 [^variables]: For example:
 
@@ -29,13 +27,16 @@ just use shell variables.[^variables]
         $ head -n1 $lldpd/README.md
         lldpd: implementation of IEEE 802.1ab (LLDP)
 
-    The drawback is that you do not have a separate namespace for your
-    bookmarks. You can still use a special prefix for that. Also, no
-    prompt expansion.
+    The drawback is the lack of a separate namespace for your
+    bookmarks. You can still use a special prefix. Also, no prompt
+    expansion.
 
-[Zsh][] comes with a not well-known feature called **static named
-directories**. They are declared with the `hash` builtin and can be
-referred by prepending `~` to them:
+[TOC]
+
+# Static named directories
+
+[Zsh][] comes with a lesser-known feature called **static named directories**.
+You declare them with the `hash` builtin and refer to them by prepending `~`:
 
     ::console
     $ hash -d -- -lldpd=/home/bernat/code/deezer/lldpd
@@ -44,23 +45,21 @@ referred by prepending `~` to them:
     $ head -n1 ~-lldpd/README.md
     lldpd: implementation of IEEE 802.1ab (LLDP)
 
-Because `~-lldpd` is substituted during file name expansion, it is
-possible to use it in any command like a regular directory, like shown
-above. The `-` prefix is only here to avoid collision with home
-directories.
+Because `~-lldpd` is substituted during filename expansion, you can use it in
+any command like a regular directory, as shown above. The `-` prefix avoids
+collisions with home directories.
 
-Bookmarks are kept into a dedicated directory, `$MARKPATH`. Each
-bookmark is a symbolic link to the target directory: for example,
-`~-lldpd` should be expanded to `$MARKPATH/lldpd` which points to the
-appropriate directory. Assuming that you have populated `$MARKPATH`
-with some links, here is how bookmarks are registered:
+Bookmarks live in a dedicated directory, `$MARKPATH`. Each bookmark is a
+symbolic link to the target directory: for example, `~-lldpd` expands to
+`$MARKPATH/lldpd`, which points to the appropriate directory. Assuming you have
+populated `$MARKPATH` with some links, here is how to register bookmarks:
 
     ::sh
     for link ($MARKPATH/*(N@)) {
         hash -d -- -${link:t}=${link:A}
     }
 
-You also automatically get completion and prompt expansion:
+You also get completion and prompt expansion for free:
 
     ::console
     $ pwd
@@ -68,11 +67,10 @@ You also automatically get completion and prompt expansion:
     $ echo ${(%):-%~}
     ~-lldpd/src/lib
 
-The last step is to manage bookmarks without adding or removing
-symbolic links manually. The following `bookmark()` function will display the
-existing bookmarks when called without arguments, will remove a
-bookmark when called with `-d` or add the current directory as a
-bookmark otherwise.
+The last step is to manage bookmarks without manually adding or removing
+symbolic links. The following `bookmark()` function displays existing bookmarks
+when called without arguments, removes a bookmark when called with `-d`, or adds
+the current directory as a bookmark otherwise.
 
     ::sh
     bookmark() {
@@ -110,20 +108,16 @@ Find the [complete version][] on *GitHub*.
 [4]: https://twitter.com/vinc17/status/563131744761937922
 [5]: https://twitter.com/martinkrafft/status/563224385952428032
 
-[TOC]
-
 # Dynamic named directories
 
-Another (more complex) way to achieve the same thing is using
-**dynamic named directories**. I was initially using this solution but
-it is far more complex. This section is only here for historical
-reasons. You can find the complete implementation in my
-[Git repository][].
+Another, more complex, way to achieve the same result is **dynamic named
+directories**. I initially used this solution but it is far more complex. This
+section exists for historical reasons only. You can find the complete
+implementation in my [Git repository][].
 
-During file name expansion, a `~` followed by a string in square
-brackets is provided to the `zsh_directory_name()` function which will
-eventually reply with a directory name. This feature can be used to
-implement directory bookmarks:
+During filename expansion, *Zsh* passes a `~` followed by a string in square
+brackets to the `zsh_directory_name()` function, which replies with a directory
+name. This feature can implement directory bookmarks:
 
     ::console
     $ cd ~[@lldpd]
@@ -134,14 +128,13 @@ implement directory bookmarks:
     $ head -n1 ~[@lldpd]/README.md
     lldpd: implementation of IEEE 802.1ab (LLDP)
 
-Like for *static named directories*, because `~[@lldpd]` is
-substituted during file name expansion, it is possible to use it in
-any command like a regular directory.
+Like *static named directories*, because `~[@lldpd]` is substituted during
+filename expansion, you can use it in any command like a regular directory.
 
 ## Basic implementation
 
-Bookmarks are still kept into a dedicated directory, `$MARKPATH` and
-are still symbolic links. Here is how the core feature is implemented:
+Bookmarks still live in a dedicated directory, `$MARKPATH`, as symbolic links.
+Here is the core implementation:
 
     ::sh
     _bookmark_directory_name() {
@@ -163,41 +156,36 @@ are still symbolic links. Here is how the core feature is implemented:
 
     add-zsh-hook zsh_directory_name _bookmark_directory_name
 
-`zsh_directory_name()` is a function accepting hooks:[^hooks] instead of
-defining it directly, we define another function and register it as a hook
-with `add-zsh-hook`.
+`zsh_directory_name()` accepts hooks:[^hooks] instead of defining it directly,
+we define another function and register it as a hook with `add-zsh-hook`.
 
 [^hooks]: Other functions accepting hooks are `chpwd()` or `precmd()`.
 
-The hook is expected to handle different situations. The first one is
-to be able to transform **a dynamic name into a regular directory
-name**. In this case, the first parameter of the function is `n` and the
-second one is the dynamic name.
+The hook handles different situations. The first is transforming **a dynamic
+name into a regular directory name**. In this case, the first parameter is `n`
+and the second is the dynamic name.
 
-In ❶, the call to `emulate` will restore the pristine behavior of
-*Zsh* and also ensure that any option set in the scope of the function
-will not have an impact outside. The function can then be reused
+In ❶, `emulate` restores the pristine behavior of *Zsh* and ensures that options
+set within the function do not leak outside. The function can then be reused
 safely in another environment.
 
-In ❷, we check that the dynamic name starts with `@` followed by at
-least one character. Otherwise, we declare we don't know how to handle
-it. Another hook will get the chance to do something. `(#b)` is a
-*globbing flag*. It activates backreferences for parenthesised
-groups. When a match is found, it is stored as an array, `$match`.
+In ❷, we check that the dynamic name starts with `@` followed by at least one
+character. Otherwise, we declare we don't know how to handle it and another hook
+gets a chance to act. `(#b)` is a *globbing flag* that activates backreferences
+for parenthesized groups. When a match is found, it is stored in the `$match`
+array.
 
-In ❸, we build the reply. We could have just returned
-`$MARKPATH/$match[1]` but to hide the symbolic link mechanism, we use
-the `A` modifier to ask *Zsh* to resolve symbolic links if
-possible. *Zsh* allows nested substitutions. It is therefore possible
-to use modifiers and flags on anything. `${:-$MARKPATH/$match[1]}` is
-a common trick to turn `$MARKPATH/$match[1]` into a parameter
-substitution and be able to apply the `A` modifier on it.
+In ❸, we build the reply. We could have returned `$MARKPATH/$match[1]`, but to
+hide the symbolic link mechanism, we use the `A` modifier to resolve symbolic
+links. *Zsh* allows nested substitutions, so you can apply modifiers and flags
+on anything. `${:-$MARKPATH/$match[1]}` is a common trick to turn
+`$MARKPATH/$match[1]` into a parameter substitution and apply the `A` modifier
+on it.
 
 ## Completion
 
-*Zsh* is also able to ask for **completion of a dynamic directory
-name**. In this case, the completion system calls the hook function with
-`c` as the first argument.
+*Zsh* can also **complete dynamic directory names**. The completion system calls
+the hook function with `c` as the first argument.
 
     ::sh
     _bookmark_directory_name() {
@@ -217,25 +205,23 @@ name**. In this case, the completion system calls the hook function with
         # […]
     }
 
-First, in ❶, we create a list of possible bookmarks. In `*(N@:t)`,
-`N@` is a *glob qualifier*. `N` allows us to return nothing if
-there is no match (otherwise, we would get an error) while `@` only
-returns symbolic links. `t` is a *modifier* which will remove all
-leading pathname components. This is equivalent to use `basename` or
-`${something##*/}` in POSIX shells but it plays nice with glob
-expressions.
+First, in ❶, we build a list of possible bookmarks. In `*(N@:t)`, `N@` is a
+*glob qualifier*: `N` returns nothing if there is no match (instead of an error)
+while `@` only returns symbolic links. `t` is a *modifier* that removes all
+leading pathname components. This is equivalent to `basename` or
+`${something##*/}` in POSIX shells but plays nicely with glob expressions.
 
-In ❷, we just add `@` before each bookmark name. If we have `b1`, `b2`
-and `b3` as bookmarks, `${^dirs}` expands to `{b1,b2,b3}` and
-therefore `"@"${^dirs}` expands to the `(@b1 @b2 @b3)` array.
+In ❷, we just add `@` before each bookmark name. If we have `b1`, `b2` and `b3`
+as bookmarks, `${^dirs}` expands to `{b1,b2,b3}` and therefore `"@"${^dirs}`
+expands to the `(@b1 @b2 @b3)` array.
 
-The result is then fed into the completion system.
+The result then feeds into the completion system.
 
 ## Prompt expansion
 
-Many people put the name of the current directory in their prompt. It
-would be nice to have the bookmark name instead of the full name when
-we are below a bookmarked directory. That's also possible!
+Many people display the current directory name in their prompt. It would be nice
+to show the bookmark name instead of the full path when inside a bookmarked
+directory. That's also possible!
 
     ::console
     $ pwd
@@ -243,8 +229,8 @@ we are below a bookmarked directory. That's also possible!
     $ echo ${(%):-%~}
     ~[@lldpd]/src/lib
 
-The prompt expansion system calls the hook function with `d` as first
-argument and the file name to transform.
+The prompt expansion system calls the hook function with `d` as the first
+argument and the filename to transform.
 
     ::sh
     _bookmark_directory_name() {
@@ -271,46 +257,39 @@ argument and the file name to transform.
         # […]
     }
 
-Okay. This is some black *Zsh* wizardry. Feel free to skip the
-explanation. This is a bit complex because we want to substitute the
-most specific bookmark, hence the need to sort bookmarks by their
-target lengths.
+Okay. This is black *Zsh* wizardry. Feel free to skip the explanation. It is
+complex because we want to substitute the most specific bookmark, hence the need
+to sort bookmarks by target path length.
 
-In ❶, the associative array `$links` is created by iterating on each
-symbolic link (`$link`) in the `$MARKPATH` directory. The goal is to
-map a target directory with the matching bookmark name. However, we
-need to iterate on this map from the longest to the shortest key. To
+In ❶, we build the associative array `$links` by iterating over each symbolic
+link (`$link`) in `$MARKPATH`. The goal is to map a target directory to its
+bookmark name. But we need to iterate from the longest to the shortest key. To
 achieve that, we prepend each key with its length.
 
-Remember, `${link:A}` is the absolute path with symbolic links
-resolved. `${​#link:A}` is the length of this path. We concatenate
-the length of the target directory with the target directory name and
-use `$'\0'` as a separator because this is the only safe character for
-this purpose. The result is mapped to the bookmark name.
+Remember, `${link:A}` is the absolute path with symbolic links resolved.
+`${​#link:A}` is the length of this path. We concatenate the length with the
+directory name, using `$'\0'` as a separator because it is the only safe
+character for this purpose. The result maps to the bookmark name.
 
-The second loop is an iteration on the keys of the associative array
-`$links` (thanks to the use of the `k` parameter flag in
-`${(k)links}`). These keys are turned into an array (`@` parameter
-flag) and sorted numerically in descending order (`On` parameter
-flag). Since the keys are directory names prefixed by their lengths,
-the first match will be the longest one.
+The second loop iterates over the keys of `$links` (using the `k` parameter flag
+in `${(k)links}`). These keys are turned into an array (`@` parameter flag) and
+sorted numerically in descending order (`On` parameter flag). Since the keys are
+directory names prefixed by their lengths, the first match is the longest one.
 
-In ❷, we extract the directory name from the key by removing the
-length and the null character at the beginning. Then, we check if the
-extracted directory name matches the file name we have been
-provided. Again, `(#b)` just activates backreferences. With extended
+In ❷, we extract the directory name from the key by stripping the length and
+null character prefix. Then, we check if the extracted directory name matches
+the provided filename. Again, `(#b)` activates backreferences. With extended
 globbing, we can use the "or" operator, `|`.
 
-When either the file name matches exactly the directory name or is
-somewhere deeper, we create the reply which is an array whose first
-member is the bookmark name and the second member is the untranslated
-part of the file name.
+When the filename matches the directory name exactly or is somewhere deeper, we
+build the reply: an array whose first element is the bookmark name and the
+second is the untranslated part of the filename.
 
 ## Easy typing
 
-Typing `~[@` is cumbersome. Fortunately, the *Zsh* line editor can be extended
-with additional bindings. The following snippet will substitute `@@`
-(if typed without a pause) by `~[@`:
+Typing `~[@` is cumbersome. Fortunately, the *Zsh* line editor supports custom
+bindings. The following snippet substitutes `@@` (if typed without a pause) with
+`~[@`:
 
     ::sh
     vbe-insert-bookmark() {
@@ -320,7 +299,8 @@ with additional bindings. The following snippet will substitute `@@`
     zle -N vbe-insert-bookmark
     bindkey '@@' vbe-insert-bookmark
 
-In combination with the `autocd` option and completion, it is quite easy to jump to a bookmarked directory.
+Combined with the `autocd` option and completion, jumping to a bookmarked
+directory becomes effortless.
 
 [Zsh]: https://www.zsh.org/ "Zsh: a shell with a lot of features"
 [Git repository]: https://github.com/vincentbernat/zshrc/blob/495702a581e3833e7a8cc08baa3e397033e879d2/rc/bookmarks.zsh
