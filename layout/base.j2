@@ -8,9 +8,14 @@
 <html lang="{{ resource.meta.language }}" class="nojs">
 <head>
   <meta charset="utf-8">
-{% for font in "merriweather merriweather-italic iosevka-custom-regular".split() %}
-  <link rel="preload" href="{{ media_url('fonts/{}.woff2'.format(font)) }}" as="font" type="font/woff2" crossorigin>
-{% endfor %}
+{% macro preload_font(name) %}
+<link rel="preload" href="{{ media_url('fonts/{}.woff2'.format(name)) }}" as="font" type="font/woff2" crossorigin>
+{%- endmacro %}
+  {{ preload_font('merriweather') }}
+  {{ preload_font('merriweather-italic') }}
+{% if '</code>' in formatted_article or '</pre>' in formatted_article %}
+  {{ preload_font('iosevka-custom-regular') }}
+{% endif %}
   <link rel="stylesheet" href="{{ media_url('css/luffy.css') }}">
 {% for css in resource.meta.css %}
   <link rel="stylesheet" href="{{ media_url('css/' + css) }}">
