@@ -1,20 +1,17 @@
 /* Keyboard shortcuts and back to top */
 
 luffy.do(() => {
-  const backToTop = document.querySelector(".lf-backtotop a");
-  if (backToTop) {
-    backToTop.addEventListener("click", (event) => {
-      event.preventDefault();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
-  }
+  document.querySelector(".lf-backtotop a")?.addEventListener("click", (event) => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    event.preventDefault();
+  });
 
   const searchForm = document.querySelector("#lf-search-query") || document.querySelector("#lf-search-input");
   document.addEventListener("keydown", (event) => {
     if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key === "k") {
       if (document.activeElement !== searchForm) {
-        event.preventDefault();
         searchForm.focus();
+        event.preventDefault();
       }
     }
     if (event.ctrlKey && event.altKey && !event.shiftKey && !event.metaKey && event.key === "g") {

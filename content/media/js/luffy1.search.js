@@ -195,7 +195,6 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
       } else {
         return;
       }
-      e.preventDefault();
       links[newIdx].focus();
       // Priority: current element, next one, previous one, the second next one.
       scrollToShow([
@@ -204,14 +203,14 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
         resultEl(newIdx - 1),
         resultEl(newIdx + 2),
       ]);
+      e.preventDefault();
     } else {
       // Going up.
       if (idx === 0) {
-        e.preventDefault();
         input.focus();
+        e.preventDefault();
       } else if (idx > 0) {
         const newIdx = idx - 1;
-        e.preventDefault();
         links[newIdx].focus();
         // Priority: current element, previous one, next one, the second previous one.
         scrollToShow([
@@ -220,18 +219,19 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
           resultEl(newIdx + 1),
           resultEl(newIdx - 2),
         ]);
+        e.preventDefault();
       }
     }
   });
 
   // On submit, run the search
   form.addEventListener("submit", (e) => {
-    e.preventDefault();
     const q = input.value.trim();
     const url = new URL(location);
     url.searchParams.set("q", q);
     history.pushState({}, "", url);
     search(q);
+    e.preventDefault();
   });
 
   // On history event, run the search
