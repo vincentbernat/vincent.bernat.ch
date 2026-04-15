@@ -1,6 +1,14 @@
-/* Keyboard shortcuts */
+/* Keyboard shortcuts and back to top */
 
 luffy.do(() => {
+  const backToTop = document.querySelector(".lf-backtotop a");
+  if (backToTop) {
+    backToTop.addEventListener("click", (event) => {
+      event.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
   const searchForm = document.querySelector("#lf-search-query") || document.querySelector("#lf-search-input");
   document.addEventListener("keydown", (event) => {
     if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key === "k") {
