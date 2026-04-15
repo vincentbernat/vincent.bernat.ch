@@ -2,7 +2,7 @@
 
 luffy.do(() => {
   document.querySelector(".lf-backtotop a")?.addEventListener("click", (event) => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo(0);
     event.preventDefault();
   });
 
