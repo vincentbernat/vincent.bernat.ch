@@ -50,7 +50,8 @@ const lfFontSize = {
             const match = atRule.params.match(/^--lf-font-size\(([^)]+)\)$/);
             if (!match) return;
             const fontFactor = parseFloat(match[1]);
-            const lh = Math.ceil(fontFactor / lineHeight) * (lineHeight / fontFactor);
+            const lh =
+                Math.ceil(fontFactor / lineHeight) * (lineHeight / fontFactor);
             atRule.replaceWith(
                 postcss.decl({
                     prop: "font-size",
@@ -58,9 +59,7 @@ const lfFontSize = {
                 }),
                 postcss.decl({
                     prop: "line-height",
-                    value: String(
-                        Math.round(lh * 10000) / 10000,
-                    ),
+                    value: String(Math.round(lh * 10000) / 10000),
                 }),
             );
         });
@@ -159,6 +158,24 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
+// Inject --lf-baseline-offset into :root (computed from font metrics at build time).
+const baselineOffset = {
+    postcssPlugin: "baseline-offset",
+    Once(root) {
+        const offset = process.env.CSS_BASELINE_OFFSET;
+        if (!offset) return;
+        root.walkRules(":root", (rule) => {
+            rule.append(
+                postcss.decl({
+                    prop: "--lf-baseline-offset",
+                    value: `calc(0.5rlh + ${offset}rem)`,
+                }),
+            );
+            return false;
+        });
+    },
+};
+
 const minify = process.env.CSS_MINIFY === "true";
 let input = "";
 
@@ -171,15 +188,16 @@ process.stdin.on("readable", function () {
 });
 process.stdin.on("end", function () {
     postcss([
-        resolveCustomPropsInMediaCalc, /* Not really supported */
-        postcssCustomMedia, /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */
-        lfFontSize, /* could be implemented with round, baseline 2024 */
-        rlhUnit, /* baseline 2023 */
-        postcssMixins, /* https://drafts.csswg.org/css-mixins/ */
-        lightDarkFallback, /* baseline 2024 */
+        resolveCustomPropsInMediaCalc /* Not really supported */,
+        postcssCustomMedia /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */,
+        lfFontSize /* could be implemented with round, baseline 2024 */,
+        baselineOffset,
+        rlhUnit /* baseline 2023 */,
+        postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
+        lightDarkFallback /* baseline 2024 */,
         autoprefixer,
-        postcssNesting, /* baseline 2023 */
-        postcssIsPseudoClass, /* baseline 2021 */
+        postcssNesting /* baseline 2023 */,
+        postcssIsPseudoClass /* baseline 2021 */,
         cssnano({
             preset: [
                 "default",
