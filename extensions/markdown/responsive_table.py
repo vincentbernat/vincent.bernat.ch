@@ -1,7 +1,8 @@
 """Turn tables into responsive tables.
 
-This is just a matter of wrapping them into a container.
-
+This is just a matter of wrapping them into a container. This enables us to
+scroll them (while keeping display: table) and center them (while keeping them
+overflow in margins if needed).
 """
 
 from markdown import Extension
