@@ -16,8 +16,8 @@ luffy.do(() => {
   const adjust = (el, height) => {
     if (!lastRlh) lastRlh = getRlh();
     if (el.matches(".lf-table")) {
-      const margin = Math.ceil((height + lastRlh) / lastRlh) * lastRlh - height;
-      el.style.marginBottom = `${margin}px`;
+      const padding = Math.ceil(height / lastRlh) * lastRlh - height;
+      el.style.paddingBottom = `${padding}px`;
     } else {
       const minPad = el.matches("figure > .lf-media-outer") ? lastRlh / 4 : 0;
       const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
