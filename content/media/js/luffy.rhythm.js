@@ -3,18 +3,26 @@
 
 luffy.do(() => {
   if (!window.ResizeObserver) return;
-  const targets = document.querySelectorAll(".lf-media-outer, .lf-gallery");
+  const targets = document.querySelectorAll(
+    ".lf-media-outer, .lf-gallery, .lf-table",
+  );
   if (!targets.length) return;
 
   const heights = new Map();
-  const getRlh = () => parseFloat(getComputedStyle(document.documentElement).lineHeight);
+  const getRlh = () =>
+    parseFloat(getComputedStyle(document.documentElement).lineHeight);
   let lastRlh = 0;
 
   const adjust = (el, height) => {
     if (!lastRlh) lastRlh = getRlh();
-    const minPad = lastRlh / 4;
-    const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
-    el.style.padding = `${padding / 2}px 0`;
+    if (el.matches(".lf-table")) {
+      const margin = Math.ceil((height + lastRlh) / lastRlh) * lastRlh - height;
+      el.style.marginBottom = `${margin}px`;
+    } else {
+      const minPad = el.matches("figure > .lf-media-outer") ? lastRlh / 4 : 0;
+      const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
+      el.style.padding = `${padding / 2}px 0`;
+    }
   };
 
   /* React to the change of dimension of a media element. */
