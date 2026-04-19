@@ -69,7 +69,10 @@ class FootnotesPlugin(Plugin):
             sidenote.html(
                 '<sup class="lf-refmark">{}</sup>{}'.format(ref.text(), fn.html())
             )
-            sidenote("a.sidenote-backref").remove()
+            for backref in sidenote("a.sidenote-backref").items():
+                backref[0].tag = "span"
+                backref[0].attrib.clear()
+                backref[0].set("class", "sidenote-end")
             ref("a.sidenote-ref").attr.href = "#sidenote-{}".format(name)
             insert_point = parent
             # Skip past following siblings without margin-top
