@@ -3,9 +3,7 @@
 
 luffy.do(() => {
   if (!window.ResizeObserver) return;
-  const targets = document.querySelectorAll(
-    ".lf-media-outer, .lf-gallery, .lf-table",
-  );
+  const targets = document.querySelectorAll(".lf-media-outer, .lf-gallery");
   if (!targets.length) return;
 
   const heights = new Map();
@@ -15,14 +13,9 @@ luffy.do(() => {
 
   const adjust = (el, height) => {
     if (!lastRlh) lastRlh = getRlh();
-    if (el.matches(".lf-table")) {
-      const padding = Math.ceil(height / lastRlh) * lastRlh - height;
-      el.style.paddingBottom = `${padding}px`;
-    } else {
-      const minPad = el.matches("figure > .lf-media-outer") ? lastRlh / 4 : 0;
-      const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
-      el.style.padding = `${padding / 2}px 0`;
-    }
+    const minPad = el.matches("figure > .lf-media-outer") ? lastRlh / 4 : 0;
+    const padding = Math.ceil((height + minPad) / lastRlh) * lastRlh - height;
+    el.style.padding = `${padding / 2}px 0`;
   };
 
   /* React to the change of dimension of a media element. */
