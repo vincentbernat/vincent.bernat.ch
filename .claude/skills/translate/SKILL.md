@@ -24,7 +24,8 @@ currently editing.
 3. Translate the article content following the rules below.
 4. If a French article already exists, update its content. Otherwise, create a
    new file with an appropriate French slug.
-5. Do not summarize anything.
+5. Disclose AI usage.
+6. Do not summarize anything.
 
 ## Translation rules
 
@@ -38,3 +39,9 @@ currently editing.
 - Avoid "on" as a pronoun.
 - Translate the `title` and `description` front matter fields.
 - Keep `uuid`, `tags`, `cover`, and `attachments` fields unchanged.
+
+## Disclose AI usage
+
+To disclose AI usage in the frontmatter, add an `ai-usage` key with `Translated
+from French` or `Traduit de l'anglais` with your model name between parentheses,
+e.g. `(Claude Opus 4.7)`. If the key already exists, ask what to do.

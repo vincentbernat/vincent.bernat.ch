@@ -20,7 +20,8 @@ some hints on the target audience and goals as HTML comments at the beginning.
 1. Read the article.
 2. Edit the content following the rules below. Do not modify code blocks.
 3. Apply the edits directly to the file.
-4. Only summarize notable changes.
+4. Disclose AI usage in the frontmatter.
+5. Only summarize notable changes.
 
 ## Editing rules
 
@@ -68,3 +69,10 @@ principles to rewrite the introduction.
 
 [the craft of writing effectively]: https://www.youtube.com/watch?v=vtIzMaLkCaM
 [h1]: https://ldmce.wordpress.com/wp-content/uploads/2020/09/emerg-leaders-acad-14.pdf
+
+## Disclose AI usage
+
+To disclose AI usage in the frontmatter, add an `ai-usage` key with
+`Copyediting` or `Révision` (depending on the language of the document) with
+your model name between parentheses, e.g. `(Claude Opus 4.7)`. If the key
+already exists, update it only if it's not a translation.
