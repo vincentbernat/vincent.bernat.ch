@@ -1,0 +1,241 @@
+---
+title: "CSS & rythme vertical pour le texte, les images et les tableaux"
+description: |
+  Maintenir le rythme vertical avec l'unité CSS rlh pour le texte, un peu de
+  JavaScript pour les images et une bidouille CSS pour les tableaux.
+uuid: 20175f72-9209-4baa-a86e-d4d98859cdb2
+tags:
+ - web
+cover: vertical-rhythm/text@2x.png
+ai-usage: Traduit de l'anglais (Claude Opus 4.7)
+---
+
+Le rythme vertical structure les lignes selon un espacement régulier de haut en
+bas. Il permet de guider l'œil de manière fluide et prévisible. Grâce à l'unité
+CSS `rlh`, ce rythme est simple à mettre en place pour le texte[^pawel]. Mais
+les illustrations et les tableaux peuvent perturber la mise en page. Le
+typographe amateur en moi aspire à suivre la sagesse de Bringhurst :
+
+> Les titres, intertitres, citations, notes de bas de page, illustrations,
+> légendes et autres intrusions dans le texte créent des syncopes et des
+> variations par rapport au rythme de base d'un interlignage régulier. Ces
+> variations peuvent et doivent animer la page, mais le texte principal doit
+> également reprendre, après chaque variation, précisément la mesure et la
+> phase.
+>
+> ― _Robert Bringhurst_, [The Elements of Typographic Style][]
+
+[^pawel]: Voir « [Vertical rhythm using CSS `lh` and `rlh` units][pawel] » par
+    Paweł Grzybek.
+
+[pawel]: https://pawelgrzybek.com/vertical-rhythm-using-css-lh-and-rlh-units/ "Vertical rhythm using CSS lh and rlh units"
+[the elements of typographic style]: https://en.wikipedia.org/wiki/The_Elements_of_Typographic_Style "The Elements of Typographic Style sur Wikipédia"
+
+[TOC]
+
+# Pour le texte
+
+Trois facteurs régissent le rythme vertical : la **taille de police**, la
+**hauteur de ligne** et la **marge ou le remplissage**. Posons la base avec une
+police de 18 pixels et une hauteur de ligne de 1,5 :
+
+```css
+html {
+  font-size: 112.5%;
+  line-height: 1.5;
+}
+h1, h2, h3, h4 {
+  font-size: 100%;
+}
+html, body,
+h1, h2, h3, h4,
+p, blockquote,
+dl, dt, dd, ol, ul, li {
+  margin: 0;
+  padding: 0;
+}
+```
+
+Le [CSS Values and Units Module Level 4][] définit l'unité `rlh`, égale à la
+hauteur de ligne de l'élément racine. Tous les navigateurs la gèrent [depuis
+2023][since 2023][^postcss]. Utilisez-la pour insérer des espaces verticaux ou
+corriger la hauteur de ligne quand la taille de police change[^calc] :
+
+```css
+h1, h2, h3, h4 {
+  margin-top: 2rlh;
+  margin-bottom: 1rlh;
+}
+h1 {
+  font-size: 2.4rem;
+  line-height: 2rlh;
+}
+h2 {
+  font-size: 1.5rem;
+  line-height: 1rlh;
+}
+h3 {
+  font-size: 1.2rem;
+  line-height: 1rlh;
+}
+p, blockquote, pre {
+  margin-top: 1rlh;
+}
+aside {
+  font-size: 0.875rem;
+  line-height: 1rlh;
+}
+```
+
+[^postcss]: Pour une meilleure compatibilité, remplacez `2rlh` par
+    `calc(var(--line-height) * 2rem)` et définissez la propriété `--line-height`
+    dans la pseudo-classe `:root`. J'ai écrit un [petit greffon
+    PostCSS][rlhUnit] à cet effet.
+
+[^calc]: Il aurait été plus élégant de calculer la hauteur de ligne avec
+    `calc(round(up, calc(2.4rem / 1rlh), 0) * 1rlh)`. Cependant, l'arithmétique
+    typée n'est [pas encore implémentée par Firefox][not supported by Firefox
+    yet]. De plus, les navigateurs ne gèrent `round()` que [depuis 2024][since
+    2024]. J'ai donc codé un [autre greffon PostCSS][lfFontSize] pour cela.
+
+Vérifions le résultat en superposant une grille[^grid] au-dessus du texte :
+
+![Capture d'écran de mon site avec une grille en superposition et chaque ligne
+de texte alignée sur la grille]([[!!images/vertical-rhythm/text@2x.png]]
+"L'unité CSS <code>rlh</code> fonctionne bien pour régler les espaces verticaux
+du texte. Vous pouvez afficher la grille avec
+<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>.")
+
+[^grid]: Ce code CSS définit une grille qui suit la hauteur de ligne :
+
+        ::css
+        body::after {
+          content: "";
+          z-index: 9999;
+          background: linear-gradient(180deg, #c8e1ff99 1px, transparent 1px);
+          background-size: 20px 1rlh;
+          pointer-events: none;
+        }
+
+Si un sous-élément utilise une police aux métriques intrinsèques plus hautes, il
+peut étirer la boîte de la ligne au-delà de la hauteur configurée[^line-height].
+Une astuce consiste à ramener la hauteur de ligne à 1. Les glyphes débordent
+mais ne poussent pas la ligne plus haut.
+
+```css
+code, kbd {
+  line-height: 1;
+}
+```
+
+[^line-height]: Voir « [Deep dive CSS: font metrics, line-height and vertical-align][1] » par Vincent De Oliveira.
+
+[1]: https://iamvdo.me/en/blog/css-font-metrics-line-height-and-vertical-align
+[css values and units module level 4]: https://www.w3.org/TR/css-values-4/ "CSS Values and Units Module Level 4, W3C Working Draft"
+[since 2023]: https://webstatus.dev/features/rlh "L'unité rlh sur Web Platform Status"
+[since 2024]: https://webstatus.dev/features/round-mod-rem "La fonction round() sur Web Platform Status"
+[rlhUnit]: https://github.com/vincentbernat/vincent.bernat.ch/blob/95f29793faad50a94fe4199a1774d59d409d3755/extensions/css.js#L69-L79
+[lfFontSize]: https://github.com/vincentbernat/vincent.bernat.ch/blob/95f29793faad50a94fe4199a1774d59d409d3755/extensions/css.js#L31-L67
+[not supported by Firefox yet]: https://bugzilla.mozilla.org/show_bug.cgi?id=1264520 "Support mixed number, unit value, and percent for calc() parser including type checking"
+
+# Pour les images adaptatives
+
+Les images adaptatives, dont la taille s'ajuste à la largeur de l'affichage,
+sont difficiles à aligner sur la grille car leur hauteur nous est inconnue. Le
+[CSS Rhythmic Sizing Module Level 1][] introduit la propriété `block-step` pour
+ajuster la hauteur d'un élément à un multiple d'une unité de pas. Cependant, la
+plupart des navigateurs ne la gèrent pas encore.
+
+Avec JavaScript, nous pouvons ajouter un remplissage autour de l'image pour
+qu'elle ne perturbe pas le rythme vertical :
+
+```js
+const targets = document.querySelectorAll(".lf-media-outer");
+const adjust = (el, height) => {
+  const rlh = parseFloat(getComputedStyle(document.documentElement).lineHeight);
+  const padding = Math.ceil(height / rlh) * rlh - height;
+  el.style.padding = `${padding / 2}px 0`;
+};
+
+targets.forEach((el) => adjust(el, el.clientHeight));
+```
+
+![Capture d'écran de mon site avec une grille en superposition et une image qui
+ne rompt pas le rythme vertical. Un remplissage supplémentaire est visible avant
+et après l'image. La hauteur de l'image avec son remplissage est de
+216.]([[!!images/vertical-rhythm/images@2x.png]] "L'image s'aligne sur la grille
+grâce au remplissage calculé par JavaScript. 216 est divisible par 27, notre
+hauteur de ligne dans cet exemple.")
+
+Comme l'image est adaptative, sa hauteur peut varier. Il faut appeler la
+fonction `adjust()` dans un observateur :
+
+```js
+const ro = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const height = entry.contentBoxSize[0].blockSize;
+    adjust(entry.target, height);
+  }
+});
+for (const target of targets) {
+  ro.observe(target);
+}
+```
+
+[css rhythmic sizing module level 1]: https://www.w3.org/TR/css-rhythm-1/ "CSS Rhythmic Sizing Module Level 1"
+
+# Pour les tableaux
+
+Les cellules d'un tableau pourraient fixer leur hauteur à `1rlh` mais
+paraîtraient à l'étroit. Passer à `2rlh` gaspille trop d'espace. À la place,
+nous utilisons l'[interligne incrémental][incremental leading] : une ligne sur
+cinq est alignée sur la grille.
+
+```css
+table {
+  border-spacing: 2px 0;
+  border-collapse: separate;
+  th {
+    padding: 0.4rlh 1em;
+  }
+  td {
+    padding: 0.2rlh 0.5em;
+  }
+}
+```
+
+Pour aligner les éléments après le tableau, il faut ajouter un peu de
+remplissage. Nous pouvons soit réutiliser le code JavaScript des images, soit
+utiliser quelques lignes de CSS qui comptent les lignes régulières et calculent
+le remplissage vertical manquant :
+
+```css
+table:has(tbody tr:nth-child(5n):last-child)   { padding-bottom: 0.2rlh; }
+table:has(tbody tr:nth-child(5n+1):last-child) { padding-bottom: 0.8rlh; }
+table:has(tbody tr:nth-child(5n+2):last-child) { padding-bottom: 0.4rlh; }
+table:has(tbody tr:nth-child(5n+3):last-child) { padding-bottom: 0 }
+table:has(tbody tr:nth-child(5n+4):last-child) { padding-bottom: 0.6rlh; }
+```
+
+Une cellule d'en-tête a deux fois le remplissage d'une cellule régulière. Avec
+deux lignes régulières, le remplissage total vaut 2×2×0,2+2×0,4=1,6. Il faut
+ajouter `0.4rlh` pour atteindre `2rlh` de remplissage vertical supplémentaire
+autour du tableau.
+
+![Capture d'écran de mon site avec une grille en superposition et un tableau
+suivant le rythme vertical. Un remplissage supplémentaire est visible après le
+tableau. La hauteur du tableau avec son remplissage est de
+405.]([[!!images/vertical-rhythm/tables@2x.png]] "Une ligne sur cinq est alignée
+sur la grille. Un remplissage supplémentaire est ajouté après le tableau pour ne
+pas rompre le rythme vertical. 405 est divisible par 27, notre hauteur de ligne
+dans cet exemple.")
+
+[incremental leading]: https://markboulton.co.uk/journal/incremental-leading/ "Incremental leading"
+
+---
+
+Rien de tout cela n'est indispensable, mais une fois l'œil entraîné, il devient
+difficile de ne plus le remarquer. En attendant que les navigateurs implémentent
+le [CSS Rhythmic Sizing][CSS Rhythmic Sizing Module Level 1], un mélange de de
+bidouilles CSS et d'un peu de JavaScript suffit. Le texte principal reprend
+désormais après chaque intrusion « précisément la mesure et la phase ». 🎼

@@ -1,0 +1,241 @@
+---
+title: "CSS & vertical rhythm for text, images, and tables"
+description: |
+  Hold vertical rhythm with the rlh CSS unit for text, a bit of
+  JavaScript for images, some CSS wizardry for tables.
+uuid: 20175f72-9209-4baa-a86e-d4d98859cdb2
+tags:
+ - web
+cover: vertical-rhythm/text@2x.png
+ai-usage: Copyediting (Claude Opus 4.7)
+---
+
+<!-- Target audience are web developers interested in CSS, but also people
+interested in typography. The former population could learn about vertical
+rhythm and how it is easy to do it for text and difficult with images. The later
+may just appreciate typography-related articles and curious to discover how to
+do this on the web. -->
+
+Vertical rhythm aligns lines to a consistent spacing cadence down the page. It
+creates a predictable flow for the eye to follow. Thanks to the `rlh` CSS unit,
+vertical rhythm is now easier to implement for text.[^pawel] But illustrations
+and tables can disrupt the layout. The amateur typographer in me wants to follow
+Bringhurst's wisdom:
+
+> Headings, subheads, block quotations, footnotes, illustrations, captions and
+> other intrusions into the text create syncopations and variations against the
+> base rhythm of regularly leaded lines. These variations can and should add
+> life to the page, but the main text should also return after each variation
+> precisely on beat and in phase.
+>
+> ― _Robert Bringhurst_, [The Elements of Typographic Style][]
+
+<!-- Quote from 2.2 Vertical mention, page 38 in the 3.2 edition -->
+
+[^pawel]: See “[Vertical rhythm using CSS `lh` and `rlh` units][pawel]” by Paweł
+    Grzybek.
+
+[pawel]: https://pawelgrzybek.com/vertical-rhythm-using-css-lh-and-rlh-units/ "Vertical rhythm using CSS lh and rlh units"
+[the elements of typographic style]: https://en.wikipedia.org/wiki/The_Elements_of_Typographic_Style "The Elements of Typographic Style on Wikipedia"
+
+[TOC]
+
+# Text
+
+Three factors govern vertical rhythm: **font size**, **line height** and
+**margin or padding**. Let's set our baseline with an 18-pixel font and a 1.5
+line height:
+
+```css
+html {
+  font-size: 112.5%;
+  line-height: 1.5;
+}
+h1, h2, h3, h4 {
+  font-size: 100%;
+}
+html, body,
+h1, h2, h3, h4,
+p, blockquote,
+dl, dt, dd, ol, ul, li {
+  margin: 0;
+  padding: 0;
+}
+```
+
+[CSS Values and Units Module Level 4][] defines the `rlh` unit, equal to the
+computed line height of the root element. All browsers support it [since
+2023][].[^postcss] Use it to insert vertical spaces or to fix the line height
+when altering font size:[^calc]
+
+```css
+h1, h2, h3, h4 {
+  margin-top: 2rlh;
+  margin-bottom: 1rlh;
+}
+h1 {
+  font-size: 2.4rem;
+  line-height: 2rlh;
+}
+h2 {
+  font-size: 1.5rem;
+  line-height: 1rlh;
+}
+h3 {
+  font-size: 1.2rem;
+  line-height: 1rlh;
+}
+p, blockquote, pre {
+  margin-top: 1rlh;
+}
+aside {
+  font-size: 0.875rem;
+  line-height: 1rlh;
+}
+```
+
+[^postcss]: For broader compatibility, you can replace `2rlh` with
+    `calc(var(--line-height) * 2rem)` and set the `--line-height` custom
+    property in the `:root` pseudo-class. I wrote a [simple PostCSS
+    plugin][rlhUnit] for this purpose.
+
+[^calc]: It would have been nicer to compute the line height with
+    `calc(round(up, calc(2.4rem / 1rlh), 0) * 1rlh)`. Unfortunately, typed
+    arithmetic is [not supported by Firefox yet][]. Moreover, browsers support
+    `round()` only [since 2024][]. Instead, I coded a [PostCSS
+    plugin][lfFontSize] for this as well.
+
+We can check the result by overlaying a grid[^grid] on the content:
+
+![Screenshot of my website with a grid as an overlay and each line of text
+fitting on the grid]([[!!images/vertical-rhythm/text@2x.png]] "Using CSS
+<code>rlh</code> unit to set vertical space works well for text. You can display
+the grid using <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>G</kbd>.")
+
+[^grid]: The following CSS code defines a grid tracking the line height:
+
+        ::css
+        body::after {
+          content: "";
+          z-index: 9999;
+          background: linear-gradient(180deg, #c8e1ff99 1px, transparent 1px);
+          background-size: 20px 1rlh;
+          pointer-events: none;
+        }
+
+If a child element uses a font with taller intrinsic metrics, it may stretch
+the line's box beyond the configured line height.[^line-height] A workaround
+is to reduce the line height to 1. The glyphs overflow but don't push the line
+taller.
+
+```css
+code, kbd {
+  line-height: 1;
+}
+```
+
+[^line-height]: See “[Deep dive CSS: font metrics, line-height and vertical-align][1]” by Vincent De Oliveira.
+
+[1]: https://iamvdo.me/en/blog/css-font-metrics-line-height-and-vertical-align
+[css values and units module level 4]: https://www.w3.org/TR/css-values-4/ "CSS Values and Units Module Level 4, W3C Working Draft"
+[since 2023]: https://webstatus.dev/features/rlh "rlh unit on Web Platform Status"
+[since 2024]: https://webstatus.dev/features/round-mod-rem "round() function on Web Platform Status"
+[rlhUnit]: https://github.com/vincentbernat/vincent.bernat.ch/blob/95f29793faad50a94fe4199a1774d59d409d3755/extensions/css.js#L69-L79
+[lfFontSize]: https://github.com/vincentbernat/vincent.bernat.ch/blob/95f29793faad50a94fe4199a1774d59d409d3755/extensions/css.js#L31-L67
+[not supported by Firefox yet]: https://bugzilla.mozilla.org/show_bug.cgi?id=1264520 "Support mixed number, unit value, and percent for calc() parser including type checking"
+
+# Responsive images
+
+Responsive images are difficult to align on the grid because we don't know their
+height. [CSS Rhythmic Sizing Module Level 1][] introduces the `block-step`
+property to adjust the height of an element to a multiple of a step unit. But
+most browsers don't support it yet.
+
+With JavaScript, we can add padding around the image so it does not disturb
+the vertical rhythm:
+
+```js
+const targets = document.querySelectorAll(".lf-media-outer");
+const adjust = (el, height) => {
+  const rlh = parseFloat(getComputedStyle(document.documentElement).lineHeight);
+  const padding = Math.ceil(height / rlh) * rlh - height;
+  el.style.padding = `${padding / 2}px 0`;
+};
+
+targets.forEach((el) => adjust(el, el.clientHeight));
+```
+
+![Screenshot of my website with a grid as an overlay and an image not breaking
+the vertical rhythm. Additional padding is visible before and after the image.
+The height of the image with padding is
+216.]([[!!images/vertical-rhythm/images@2x.png]] "The image is snapped to the
+grid thanks to the additional padding computed with JavaScript. 216 is divisible
+by 27, our line height in this example.")
+
+As the image is responsive, its height can change. We need to wrap a resize
+observer around the `adjust()` function:
+
+```js
+const ro = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const height = entry.contentBoxSize[0].blockSize;
+    adjust(entry.target, height);
+  }
+});
+for (const target of targets) {
+  ro.observe(target);
+}
+```
+
+[css rhythmic sizing module level 1]: https://www.w3.org/TR/css-rhythm-1/ "CSS Rhythmic Sizing Module Level 1"
+
+# Tables
+
+Table cells could set `1rlh` as their height but they would feel constricted.
+Using `2rlh` wastes too much space. Instead, we use [incremental leading][]: we
+align one in every five lines.
+
+```css
+table {
+  border-spacing: 2px 0;
+  border-collapse: separate;
+  th {
+    padding: 0.4rlh 1em;
+  }
+  td {
+    padding: 0.2rlh 0.5em;
+  }
+}
+```
+
+To align the elements after the table, we need to add some padding. We can
+either reuse the JavaScript code from images or use a few lines of CSS that
+count the regular rows and compute the missing vertical padding:
+
+```css
+table:has(tbody tr:nth-child(5n):last-child)   { padding-bottom: 0.2rlh; }
+table:has(tbody tr:nth-child(5n+1):last-child) { padding-bottom: 0.8rlh; }
+table:has(tbody tr:nth-child(5n+2):last-child) { padding-bottom: 0.4rlh; }
+table:has(tbody tr:nth-child(5n+3):last-child) { padding-bottom: 0 }
+table:has(tbody tr:nth-child(5n+4):last-child) { padding-bottom: 0.6rlh; }
+```
+
+A header cell has twice the padding of a regular cell. With two regular rows,
+the total padding is 2×2×0.2+2×0.4=1.6. We need to add `0.4rlh` to reach
+`2rlh` of extra vertical padding across the table.
+
+![Screenshot of my website with a grid as an overlay and a table following the
+vertical rhythm. Additional padding is visible after the table. The height of
+the table with padding is 405.]([[!!images/vertical-rhythm/tables@2x.png]] "One
+line out of five is aligned to the grid. Additional padding is added after the
+table to not break the vertical rhythm. 405 is divisible by 27, our line height
+in this example.")
+
+[incremental leading]: https://markboulton.co.uk/journal/incremental-leading/ "Incremental leading"
+
+---
+
+None of this is necessary. But once you start looking, you can't unsee it. Until
+browsers implement [CSS Rhythmic Sizing][CSS Rhythmic Sizing Module Level 1], a
+bit of CSS wizardry and a touch of JavaScript is enough to pull it off. The main
+text now returns after each intrusion “precisely on beat and in phase.” 🎼
