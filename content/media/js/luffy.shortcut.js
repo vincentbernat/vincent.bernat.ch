@@ -21,10 +21,9 @@ luffy.do(() => {
 
   document.addEventListener("keydown", (event) => {
     if (
-      event.ctrlKey &&
+      (event.ctrlKey || event.metaKey) &&
       !event.altKey &&
       !event.shiftKey &&
-      !event.metaKey &&
       event.key === "k"
     ) {
       // Focus the search form.
@@ -35,10 +34,10 @@ luffy.do(() => {
     }
     if (
       event.ctrlKey &&
-      event.altKey &&
-      !event.shiftKey &&
+      !event.altKey &&
+      event.shiftKey &&
       !event.metaKey &&
-      event.key === "g"
+      event.key === "G"
     ) {
       // Ctrl+Alt+G: cycle debug grid (off → grid → grid on baseline → off).
       // --lf-baseline-offset is precomputed at build time in :root.
