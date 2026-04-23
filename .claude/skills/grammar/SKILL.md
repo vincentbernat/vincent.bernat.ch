@@ -25,8 +25,8 @@ Do not modify code blocks. For French, we follow “Lexique des règles
 typographiques en usage à l'Imprimerie nationale.” For English, this is “The
 Chicago Manual of Style” but keep contractions.
 
-To disclose AI usage in the frontmatter, add an `ai-usage` key with `Grammar
-check` or `Vérification grammaticale` (depending on the language of the
+To disclose AI usage in the frontmatter, add an `ai-usage` key with `Grammatical
+edits` or `Corrections grammaticales` (depending on the language of the
 document) with your model name between parentheses, e.g. `(Claude Opus 4.7)`. If
 the key already exists, update it only if it's already a grammar check,
 otherwise leave it untouched.
