@@ -620,10 +620,17 @@ def push(c, clean=False):
         # Restore timestamps (this relies on us not truncating
         # history too often)
         with step("restore timestamps"):
-            c.run("""
-for f in $(git ls-tree -r -t --full-name --name-only HEAD); do
-    touch -d $(git log --pretty=format:%cI -1 HEAD -- "$f") -h "$f";
-done""")
+            c.run(r"""
+git log --name-only --pretty=format:'%x00%cI' HEAD |
+awk 'BEGIN { RS = "\0"; FS = "\n" }
+     NR > 1 {
+       for (i = 2; i <= NF; i++)
+         if ($i != "" && !seen[$i]++) print $1, $i
+     }' |
+while read ts file; do
+    [ -e "$file" ] || [ -L "$file" ] && touch -d "$ts" -h "$file"
+done
+""")
 
     # media
     for host in hosts:
