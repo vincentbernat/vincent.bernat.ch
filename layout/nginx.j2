@@ -15,7 +15,7 @@ media-src       'self' blob: about: {{ domain(media_url('videos/')) }} {{ domain
 connect-src     'self' {{ domain(media_url('videos/')) }} comments.luffy.cx;
 base-uri        'none';
 frame-ancestors 'none';
-form-action     'self' duckduckgo.com;
+form-action     'self';
 {% endmacro %}
 
 index         index.html;
@@ -117,4 +117,7 @@ location /ip {
   default_type text/plain;
   expires epoch;
   return 200 $remote_addr;
+}
+location /redirect-ddg {
+  return 302 https://html.duckduckgo.com/html?q=site:{{base|replace("https://","")}}/$arg_lang+$arg_q+;
 }
