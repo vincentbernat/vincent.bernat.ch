@@ -82,10 +82,6 @@ class FootnotesPlugin(Plugin):
                 next_el = next_el.getnext()
             sidenote.insert_after(insert_point)
 
-        # Mark the body if there are sidenotes
-        if d(".lf-sidenote"):
-            d("body").addClass("lf-has-sidenotes")
-
         # Remove footnote section
         d(".footnote").remove()
 
