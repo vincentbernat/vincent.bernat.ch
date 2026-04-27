@@ -73,6 +73,6 @@ principles to rewrite the introduction.
 ## Disclose AI usage
 
 To disclose AI usage in the frontmatter, add an `ai-usage` key with
-`Copyediting` or `Révision` (depending on the language of the document) with
-your model name between parentheses, e.g. `(Claude Opus 4.7)`. If the key
-already exists, update it only if it's not a translation.
+`Copyediting` or `Édition de contenu` (depending on the language of the
+document) with your model name between parentheses, e.g. `(Claude Opus 4.7)`. If
+the key already exists, update it only if it's not a translation.
