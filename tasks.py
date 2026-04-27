@@ -413,6 +413,8 @@ def build(c):
     with step("run Hyde"):
         c.run(f"{bwrap} -- hyde -x gen -c %s" % conf)
     with c.cd(".final"):
+        # Remove some files
+        c.run("rm media/css/common.css media/css/root.css")
         # Fix HTML (<source> is an empty tag)
         with step("fix HTML"):
             c.run(

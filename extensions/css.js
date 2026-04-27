@@ -3,30 +3,17 @@ const path = require("path");
 const autoprefixer = require("autoprefixer");
 const cssnano = require("cssnano");
 const postcss = require("postcss");
+const postcssCustomProperties = require("postcss-custom-properties");
 const postcssCustomMedia = require("postcss-custom-media");
+const postcssGlobalData = require("@csstools/postcss-global-data");
 const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc: resolveCalc } = require("@csstools/css-calc");
 
-// Pre-parse :root variables from the root CSS file so they are available
-// when processing any CSS file (not just the one containing :root).
-const rootCssPath = path.join(
-    __dirname,
-    "..",
-    "content",
-    "media",
-    "css",
-    "luffy.01-root.css",
-);
-const rootVars = {};
-postcss
-    .parse(fs.readFileSync(rootCssPath, "utf8"))
-    .walkRules(":root", (rule) => {
-        rule.walkDecls(/^--/, (decl) => {
-            rootVars[decl.prop] = decl.value.trim();
-        });
-    });
+const rootVars = {
+    "--lf-baseline-offset": `calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem)`,
+};
 
 // Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
 // The line-height is computed to maintain vertical rhythm:
@@ -86,31 +73,13 @@ const lightDarkFallback = {
         const fallbackDecls = [];
         rule.each((node) => {
             if (node.type !== "decl") return;
-            if (!node.value.includes("light-dark(")) return;
             const fallback = node.value.replace(
                 /light-dark\(\s*([^,]+?)\s*,\s*[^)]+?\)/g,
                 "$1",
             );
-            if (fallback !== node.value) {
-                fallbackDecls.push(node.clone({ value: fallback }));
-            }
+            if (fallback === node.value) return;
+            rule.insertBefore(node, node.clone({ value: fallback }));
         });
-        if (fallbackDecls.length > 0) {
-            const supportsRule = postcss.atRule({
-                name: "supports",
-                params: "not (color: light-dark(red, red))",
-            });
-            const clonedRule = rule.clone();
-            clonedRule.removeAll();
-            clonedRule.append({
-                prop: "color-scheme",
-                value: "light",
-                raws: { before: "\n  " },
-            });
-            fallbackDecls.forEach((d) => clonedRule.append(d));
-            supportsRule.append(clonedRule);
-            rule.parent.insertAfter(rule, supportsRule);
-        }
     },
 };
 
@@ -122,7 +91,7 @@ const lightDarkFallback = {
 const resolveCustomPropsInMediaCalc = {
     postcssPlugin: "resolve-custom-props-in-media-calc",
     Once(root) {
-        const vars = { ...rootVars };
+        const vars = {};
         root.walkRules(":root", (rule) => {
             rule.walkDecls(/^--/, (decl) => {
                 vars[decl.prop] = decl.value.trim();
@@ -158,25 +127,8 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
-// Inject --lf-baseline-offset into :root (computed from font metrics at build time).
-const baselineOffset = {
-    postcssPlugin: "baseline-offset",
-    Once(root) {
-        const offset = process.env.CSS_BASELINE_OFFSET;
-        if (!offset) return;
-        root.walkRules(":root", (rule) => {
-            rule.append(
-                postcss.decl({
-                    prop: "--lf-baseline-offset",
-                    value: `calc(0.5rlh + ${offset}rem)`,
-                }),
-            );
-            return false;
-        });
-    },
-};
-
 const minify = process.env.CSS_MINIFY === "true";
+const cssDirectory = path.join(__dirname, "..", "content", "media", "css");
 let input = "";
 
 process.stdin.setEncoding("utf8");
@@ -188,12 +140,18 @@ process.stdin.on("readable", function () {
 });
 process.stdin.on("end", function () {
     postcss([
+        postcssGlobalData({
+            files: [
+                path.join(cssDirectory, "common.css"),
+                path.join(cssDirectory, "root.css"),
+            ],
+        }),
         resolveCustomPropsInMediaCalc /* Not really supported */,
         postcssCustomMedia /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */,
         lfFontSize /* could be implemented with round, baseline 2024 */,
-        baselineOffset,
         rlhUnit /* baseline 2023 */,
         postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
+        postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
         lightDarkFallback /* baseline 2024 */,
         autoprefixer,
         postcssNesting /* baseline 2023 */,
