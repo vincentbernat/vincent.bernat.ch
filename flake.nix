@@ -197,9 +197,24 @@
                 }
                 mkdir $out
                 subset iosevka-custom-regular ${monospace} --desubroutinize --no-hinting
-                subset merriweather ${regular} --layout-features+=ss01,onum,tnum
-                subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum
+                subset merriweather ${regular} --layout-features+=ss01,onum,tnum,mark,mkmk,ccmp
+                subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum,mark,mkmk,ccmp
               '';
+              # Features we miss:
+              # - kern for kerning (+2KB)
+              # - liga for ligatures
+              # - frac for fractions
+              # - sups and subs for superscripts and subscripts
+              # - numr and dnom for numerators and denominators
+              # - locl for local variants
+              # - zero for slashed zero
+              # - case for all caps
+              # - smcp and c2sc for small caps
+              # - ordn for ordinals
+              # - sinf for scientific inferiors
+              # - pnum for proportional figures
+              # - lnum for lining figures
+              # - aalt and salt for alternates (not needed)
               installPhase = "true";
             };
           build.optimizeImages =
