@@ -198,9 +198,11 @@
                 subset iosevka-custom-regular ${monospace} \
                   --layout-features= --desubroutinize --no-hinting
                 subset merriweather ${regular} \
-                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum
+                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum \
+                  --desubroutinize
                 subset merriweather-italic ${regular} \
-                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum
+                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum \
+                  --desubroutinize
               '';
               # For Iosevka, no features needed as there is none except locl,
               # frac, numr, dnom, onum and we don't use them.
