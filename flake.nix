@@ -190,31 +190,27 @@
                   echo Subset $font with $glyphs
                   shift 2
                   ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
-                    --layout-features= \
                     --text-file=$glyphs \
                     --output-file=$out/$font.woff2 \
                     "$@"
                 }
                 mkdir $out
-                subset iosevka-custom-regular ${monospace} --desubroutinize --no-hinting
-                subset merriweather ${regular} --layout-features+=ss01,onum,tnum,mark,mkmk,ccmp
-                subset merriweather-italic ${regular} --layout-features+=ss01,onum,tnum,mark,mkmk,ccmp
+                subset iosevka-custom-regular ${monospace} \
+                  --layout-features= --desubroutinize --no-hinting
+                subset merriweather ${regular} \
+                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum
+                subset merriweather-italic ${regular} \
+                  --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum
               '';
-              # Features we miss:
-              # - kern for kerning (+2KB)
-              # - liga for ligatures
-              # - frac for fractions
-              # - sups and subs for superscripts and subscripts
-              # - numr and dnom for numerators and denominators
-              # - locl for local variants
-              # - zero for slashed zero
-              # - case for all caps
-              # - smcp and c2sc for small caps
-              # - ordn for ordinals
-              # - sinf for scientific inferiors
-              # - pnum for proportional figures
-              # - lnum for lining figures
-              # - aalt and salt for alternates (not needed)
+              # For Iosevka, no features needed as there is none except locl,
+              # frac, numr, dnom, onum and we don't use them.
+
+              # For Merriweather, we keep kern (+2KB and +2.5KB) since it helps with
+              # quality. liga, clig, calt are small. ccmp, mark and mkmk are not
+              # used, but may become useful in the future. ss01, onum, tnum are
+              # explicitely used in CSS. frac, numr, dnom are not used. sups,
+              # subs, sinf not useful with HTML. smcp, c2sc, case, ordn, salt,
+              # zero are not useful (no small caps). aalt is big (8KB).
               installPhase = "true";
             };
           build.optimizeImages =
