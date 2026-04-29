@@ -11,10 +11,6 @@ const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc: resolveCalc } = require("@csstools/css-calc");
 
-const rootVars = {
-    "--lf-baseline-offset": `calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem)`,
-};
-
 // Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
 // The line-height is computed to maintain vertical rhythm:
 //
@@ -25,9 +21,6 @@ const rootVars = {
 const lfFontSize = {
     postcssPlugin: "lf-font-size",
     Once(root) {
-        let lineHeight = rootVars["--lf-line-height"]
-            ? parseFloat(rootVars["--lf-line-height"])
-            : 0;
         root.walkRules(":root", (rule) => {
             rule.walkDecls("--lf-line-height", (decl) => {
                 lineHeight = parseFloat(decl.value);
