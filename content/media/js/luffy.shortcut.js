@@ -14,9 +14,6 @@ luffy.do(() => {
     document.querySelector("#lf-search-input");
 
   // For grid
-  const baselineOffset = getComputedStyle(document.documentElement)
-    .getPropertyValue("--lf-baseline-offset")
-    .trim();
   let gridState = 0;
 
   document.addEventListener("keydown", (event) => {
@@ -42,11 +39,8 @@ luffy.do(() => {
       // Ctrl+Alt+G: cycle debug grid (off → grid → grid on baseline → off).
       // --lf-baseline-offset is precomputed at build time in :root.
       gridState = (gridState + 1) % 3;
-      document.body.classList.toggle("lf-debug-grid", gridState > 0);
-      document.documentElement.style.setProperty(
-        "--lf-baseline-offset",
-        gridState === 2 ? baselineOffset : "0",
-      );
+      document.body.classList.toggle("lf-debug-grid-1", gridState === 1);
+      document.body.classList.toggle("lf-debug-grid-2", gridState === 2);
       event.preventDefault();
     }
   });

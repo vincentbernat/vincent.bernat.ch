@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const autoprefixer = require("autoprefixer");
 const cssnano = require("cssnano");
@@ -11,6 +12,17 @@ const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc: resolveCalc } = require("@csstools/css-calc");
 
+// Get line-height from the root element
+const getLineHeight = (root) => {
+    let lineHeight = 0;
+    root.walkRules(":root", (rule) => {
+        rule.walkDecls("--lf-line-height", (decl) => {
+            lineHeight = parseFloat(decl.value);
+        });
+    });
+    return lineHeight;
+};
+
 // Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
 // The line-height is computed to maintain vertical rhythm:
 //
@@ -21,11 +33,7 @@ const { calc: resolveCalc } = require("@csstools/css-calc");
 const lfFontSize = {
     postcssPlugin: "lf-font-size",
     Once(root) {
-        root.walkRules(":root", (rule) => {
-            rule.walkDecls("--lf-line-height", (decl) => {
-                lineHeight = parseFloat(decl.value);
-            });
-        });
+        const lineHeight = getLineHeight(root);
         root.walkAtRules("apply", (atRule) => {
             const match = atRule.params.match(/^--lf-font-size\(([^)]+)\)$/);
             if (!match) return;
@@ -132,11 +140,22 @@ process.stdin.on("readable", function () {
     }
 });
 process.stdin.on("end", function () {
+    // Computed :root variables that aren't read from a CSS file: written to a
+    // temp file so postcssGlobalData can pick them up alongside the static ones.
+    const computedFile = path.join(
+        fs.mkdtempSync(path.join(os.tmpdir(), "lf-css-")),
+        "computed.css",
+    );
+    fs.writeFileSync(
+        computedFile,
+        `:root { --lf-baseline-offset: calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem); }`,
+    );
     postcss([
         postcssGlobalData({
             files: [
                 path.join(cssDirectory, "common.css"),
                 path.join(cssDirectory, "root.css"),
+                computedFile,
             ],
         }),
         resolveCustomPropsInMediaCalc /* Not really supported */,
@@ -162,5 +181,11 @@ process.stdin.on("end", function () {
         .process(input, { from: undefined })
         .then(function (result) {
             process.stdout.write(result.css.toString());
+        })
+        .finally(function () {
+            fs.rmSync(path.dirname(computedFile), {
+                recursive: true,
+                force: true,
+            });
         });
 });
