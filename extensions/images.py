@@ -237,6 +237,39 @@ class ImageFixerPlugin(Plugin):
             return (int(height) * new_width // new_height, height)
         return (new_width, new_height)
 
+    @cache
+    def _page_width_px(self):
+        """Compute the page width and breakpoint in pixels from CSS variables.
+
+        The breakpoint matches --lf-medium media query: the page width plus
+        twice the minimal margin. Below that viewport, the image fills 100vw;
+        above, it caps at page width.
+
+        To convert to pixel, we assume the normal font size, instead of the one
+        from the small viewport.
+
+        """
+        css_path = os.path.join(
+            str(self.site.config.media_root_path), "css", "root.css"
+        )
+        with open(css_path) as f:
+            css = f.read()
+
+        # We recompute the --lf-medium breakpoint.
+        page_width = float(re.search(r"--lf-page-width:\s*([\d.]+)rem", css).group(1))
+        minimal_margin = float(
+            re.search(r"--lf-minimal-margin:\s*([\d.]+)rem", css).group(1)
+        )
+
+        # Then, convert to pixels
+        font_size = float(re.search(r"--lf-font-size:\s*([\d.]+)%", css).group(1)) / 100
+        px_per_rem = 16 * font_size
+
+        return (
+            int(round(page_width * px_per_rem)),
+            int(round((page_width + 2 * minimal_margin) * px_per_rem)),
+        )
+
     def _resize(self, source, destination, factor):
         """Resize provided image from source to destination with the provided
         factor. Check for latest modification time.
@@ -318,14 +351,28 @@ class ImageFixerPlugin(Plugin):
                 factor = int(mo.group(1))
                 width //= factor
                 height //= factor
-                srcset = ["{} {}x".format(src, factor)]
-                for f in reversed(range(1, factor)):
-                    tname = src.replace("@{}x.".format(factor), "@{}x.".format(f))
-                    self._resize(src, os.path.basename(tname), float(f) / factor)
-                    srcset.append("{} {}x".format(tname, f))
-                srcset = srcset[:-1]
-                img.attr.src = tname
+                versions = []
+                for f in range(1, factor + 1):
+                    if f == factor:
+                        tname = src
+                    else:
+                        tname = src.replace("@{}x.".format(factor), "@{}x.".format(f))
+                        self._resize(src, os.path.basename(tname), float(f) / factor)
+                    versions.append((tname, width * f))
+                # Use the geometric mean of consecutive widths instead of the
+                # real width: avoids downloading a much bigger image for a
+                # few additional pixels.
+                srcset = []
+                for i, (path, w) in enumerate(versions):
+                    if i < len(versions) - 1:
+                        w = int(round(math.sqrt(w * versions[i + 1][1])))
+                    srcset.append("{} {}w".format(path, w))
+                img.attr.src = versions[0][0]
                 img.attr.srcset = ",".join(srcset)
+                page_width_px, breakpoint_px = self._page_width_px()
+                img.attr.sizes = "auto, (max-width: {}px) 100vw, {}px".format(
+                    breakpoint_px, page_width_px
+                )
 
             # Put new width/height
             if width is not None:
