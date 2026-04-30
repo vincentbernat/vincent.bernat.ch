@@ -490,8 +490,8 @@ rm ../result
                     else:
                         sed_html.append(
                             r"s,"
-                            rf"\([a-z-]*=\)\([\"']\){media}{f}\(\2\| \),"
-                            rf"\1\2{media}{newname}\3,"
+                            rf"\([\"',]\){media}{f}\(\1\| \),"
+                            rf"\1{media}{newname}\2,"
                             r"g"
                         )
                 while sed_css:
