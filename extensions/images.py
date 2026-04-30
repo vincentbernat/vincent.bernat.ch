@@ -359,13 +359,14 @@ class ImageFixerPlugin(Plugin):
                         tname = src.replace("@{}x.".format(factor), "@{}x.".format(f))
                         self._resize(src, os.path.basename(tname), float(f) / factor)
                     versions.append((tname, width * f))
-                # Use the geometric mean of consecutive widths instead of the
-                # real width: avoids downloading a much bigger image for a
-                # few additional pixels.
+                # Use weighted geometric mean of consecutive widths instead of
+                # the real width: bias toward the smaller value so the browser
+                # upgrades sooner to the bigger image.
+                weight = 0.33  # lower values make the upgrade to the next size sooner
                 srcset = []
                 for i, (path, w) in enumerate(versions):
                     if i < len(versions) - 1:
-                        w = int(round(math.sqrt(w * versions[i + 1][1])))
+                        w = int(round(w ** (1 - weight) * versions[i + 1][1] ** weight))
                     srcset.append("{} {}w".format(path, w))
                 img.attr.src = versions[0][0]
                 img.attr.srcset = ",".join(srcset)
