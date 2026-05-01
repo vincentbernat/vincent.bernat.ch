@@ -33,7 +33,7 @@ some hints on the target audience and goals as HTML comments at the beginning.
 - Suppress passive voice where possible.
 - Break long sentences into shorter ones.
 - Prefer the present tense.
-- Fix common non-native mistakes, notably simple past vs. past perfect.
+- Do not water down a sentence.
 - Remove superfluous words and filler phrases. Be suspicious of adverbs and
   adjectives when they bring nothing to the verb and the noun. Be cautious when
   there are too many prepositions.
