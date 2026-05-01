@@ -4,7 +4,7 @@ luffy.do(() => {
   document
     .querySelector(".lf-backtotop a")
     ?.addEventListener("click", (event) => {
-      window.scrollTo(0);
+      window.scrollTo(0, 0);
       event.preventDefault();
     });
 

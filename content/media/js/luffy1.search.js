@@ -161,14 +161,14 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
     const viewBottom = viewTop + window.innerHeight;
     if (top >= viewTop && bottom <= viewBottom) return;
     if (top < viewTop) {
-      window.scrollTo(top);
+      window.scrollTo(0, top);
     } else {
-      window.scrollTo(bottom - window.innerHeight);
+      window.scrollTo(0, bottom - window.innerHeight);
     }
   }
 
   input.addEventListener("focus", () => {
-    window.scrollTo(0);
+    window.scrollTo(0, 0);
   });
 
   // Navigate results with arrow keys
