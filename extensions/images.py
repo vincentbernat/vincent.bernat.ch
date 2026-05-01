@@ -371,6 +371,9 @@ class ImageFixerPlugin(Plugin):
                 img.attr.src = versions[0][0]
                 img.attr.srcset = ",".join(srcset)
                 page_width_px, breakpoint_px = self._page_width_px()
+                # The image cannot display wider than its intrinsic width.
+                page_width_px = min(page_width_px, width)
+                breakpoint_px = min(breakpoint_px, width)
                 img.attr.sizes = "auto, (max-width: {}px) 100vw, {}px".format(
                     breakpoint_px, page_width_px
                 )
