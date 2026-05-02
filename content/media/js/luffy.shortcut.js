@@ -39,8 +39,14 @@ luffy.do(() => {
       // Ctrl+Alt+G: cycle debug grid (off → grid → grid on baseline → off).
       // --lf-baseline-offset is precomputed at build time in :root.
       gridState = (gridState + 1) % 3;
-      document.body.classList.toggle("lf-debug-grid-1", gridState === 1);
-      document.body.classList.toggle("lf-debug-grid-2", gridState === 2);
+      document.documentElement.classList.toggle(
+        "lf-debug-grid-1",
+        gridState === 1,
+      );
+      document.documentElement.classList.toggle(
+        "lf-debug-grid-2",
+        gridState === 2,
+      );
       event.preventDefault();
     }
   });
