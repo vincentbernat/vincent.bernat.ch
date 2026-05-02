@@ -18,7 +18,7 @@ luffy.do(() => {
       let parent = links.parentNode;
       while (parent && parent.tagName !== "LI") parent = parent.parentNode;
       if (parent) {
-        parent.style.visibility = "hidden";
+        parent.style.display = "none";
       }
 
       luffy.load("isso.css");
