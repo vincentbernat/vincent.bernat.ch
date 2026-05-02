@@ -23,24 +23,42 @@ const getLineHeight = (root) => {
     return lineHeight;
 };
 
-// Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
-// The line-height is computed to maintain vertical rhythm:
+// Get --lf-font-size from the root element as a unitless number (e.g. 112.5% → 1.125).
+const getFontSize = (root) => {
+    let fontSize = 1;
+    root.walkRules(":root", (rule) => {
+        rule.walkDecls("--lf-font-size", (decl) => {
+            const pct = decl.value.trim().match(/^(\d*\.?\d+)%$/);
+            fontSize = pct ? parseFloat(pct[1]) / 100 : parseFloat(decl.value);
+        });
+    });
+    return fontSize;
+};
+
+// Resolve @apply --lf-font-size(X) into font-size, line-height and
+// letter-spacing declarations. The line-height is computed to maintain vertical
+// rhythm:
 //
 //   ceil(fontFactor / lineHeight) * lineHeight / fontFactor
 //
 // The idea is to be have the first multiple of lineHeight / fontFactor which is
 // >= 1.
+//
+// Letter-spacing is decreased linearly by 1% per 30px of font size above 25px,
+// capped at -4%.
 const lfFontSize = {
     postcssPlugin: "lf-font-size",
     Once(root) {
         const lineHeight = getLineHeight(root);
+        const fontSize = getFontSize(root);
         root.walkAtRules("apply", (atRule) => {
             const match = atRule.params.match(/^--lf-font-size\(([^)]+)\)$/);
             if (!match) return;
             const fontFactor = parseFloat(match[1]);
             const lh =
                 Math.ceil(fontFactor / lineHeight) * (lineHeight / fontFactor);
-            atRule.replaceWith(
+            const pxValue = fontFactor * 16 * fontSize;
+            const decls = [
                 postcss.decl({
                     prop: "font-size",
                     value: `${fontFactor}rem`,
@@ -49,7 +67,17 @@ const lfFontSize = {
                     prop: "line-height",
                     value: String(Math.round(lh * 10000) / 10000),
                 }),
-            );
+            ];
+            if (pxValue > 25) {
+                const ls = Math.max(-((pxValue - 25) / 30) / 100, -0.04);
+                decls.push(
+                    postcss.decl({
+                        prop: "letter-spacing",
+                        value: `${Math.round(ls * 10000) / 10000}em`,
+                    }),
+                );
+            }
+            atRule.replaceWith(...decls);
         });
     },
 };
