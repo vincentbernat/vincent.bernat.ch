@@ -6,6 +6,7 @@ const cssnano = require("cssnano");
 const postcss = require("postcss");
 const postcssCustomProperties = require("postcss-custom-properties");
 const postcssCustomMedia = require("postcss-custom-media");
+const postcssLogical = require("postcss-logical");
 const postcssGlobalData = require("@csstools/postcss-global-data");
 const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
@@ -164,6 +165,7 @@ process.stdin.on("end", function () {
         rlhUnit /* baseline 2023 */,
         postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
         postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
+        postcssLogical /* baseline 2021 */,
         lightDarkFallback /* baseline 2024 */,
         autoprefixer,
         postcssNesting /* baseline 2023 */,
