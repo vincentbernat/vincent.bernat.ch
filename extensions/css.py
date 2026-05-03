@@ -11,7 +11,6 @@ from hyde.plugin import Plugin
 
 def font_baseline_offset(font_path):
     """Compute baseline position as (ascent - descent) / (2 * upm) from OS/2 table."""
-
     xml = subprocess.check_output(
         ["ttx", "-t", "OS/2", "-t", "head", "-o", "/dev/stdout", font_path],
         stderr=subprocess.DEVNULL,
@@ -23,8 +22,8 @@ def font_baseline_offset(font_path):
     return (ascent - descent) / (2 * upm)
 
 
-class CSSPrefixerPlugin(Plugin):
-    """Run CSS prefixer"""
+class PostCSSPlugin(Plugin):
+    """Run PostCSS on CSS files."""
 
     def begin_site(self):
         depends = ["media/css/root.css", "media/css/common.css"]
