@@ -26,6 +26,18 @@ def font_baseline_offset(font_path):
 class CSSPrefixerPlugin(Plugin):
     """Run CSS prefixer"""
 
+    def begin_site(self):
+        depends = ["media/css/root.css", "media/css/common.css"]
+        for resource in self.site.content.walk_resources():
+            if resource.source_file.kind == "css":
+                if resource.relative_path in depends:
+                    continue
+                print(resource)
+                if not hasattr(resource, "depends") or not resource.depends:
+                    resource.depends = []
+                resource.depends.extend(depends)
+                resource.depends = list(set(resource.depends))
+
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind != "css":
             return
