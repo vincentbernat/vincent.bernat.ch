@@ -31,7 +31,6 @@ class PostCSSPlugin(Plugin):
             if resource.source_file.kind == "css":
                 if resource.relative_path in depends:
                     continue
-                print(resource)
                 if not hasattr(resource, "depends") or not resource.depends:
                     resource.depends = []
                 resource.depends.extend(depends)
