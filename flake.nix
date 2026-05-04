@@ -401,6 +401,7 @@
               nodejs
 
               # Build support
+              esbuild
               yarn
               uv
 

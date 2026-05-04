@@ -1,0 +1,49 @@
+# -*- coding: utf-8 -*-
+"""
+JavaScript plugins
+"""
+
+from hyde.plugin import CLTransformer
+from fswrap import File
+
+
+class EsbuildPlugin(CLTransformer):
+    """
+    esbuild plugin
+    """
+
+    @property
+    def executable_name(self):
+        return "esbuild"
+
+    @property
+    def plugin_name(self):
+        return "esbuild"
+
+    def text_resource_complete(self, resource, text):
+        """
+        If the site is in development mode, just return.
+        Otherwise, save the file to a temporary place
+        and run the uglify app. Read the generated file
+        and return the text as output.
+        """
+
+        mode = self.site.config.mode
+        if not resource.source_file.kind == "js":
+            return
+
+        esbuild = self.app
+        source = File.make_temp(text)
+        target = File.make_temp("")
+        args = [
+            str(esbuild),
+            str(source),
+            "--target=es2015",
+            f"--outfile={target}",
+            "--log-level=warning",
+        ]
+        if mode == "production":
+            args.append("--minify")
+        self.call_app(args)
+        out = target.read_all()
+        return out
