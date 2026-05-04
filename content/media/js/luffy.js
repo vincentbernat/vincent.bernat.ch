@@ -6,7 +6,7 @@ combine:
     remove: yes
 ---
 
-var luffy = luffy || {
+window.luffy = {
   do(fn) {
     try {
       fn();
@@ -27,5 +27,3 @@ var luffy = luffy || {
     }
   }
 };
-
-window.luffy = luffy;
