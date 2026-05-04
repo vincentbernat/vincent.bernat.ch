@@ -15,12 +15,7 @@ luffy.do(() => {
       if (done || !links) return;
       done = true; // Don't want to load twice.
 
-      let parent = links.parentNode;
-      while (parent && parent.tagName !== "LI") parent = parent.parentNode;
-      if (parent) {
-        parent.remove();
-      }
-
+      links.closest("li")?.remove();
       luffy.load("isso.css");
       luffy.load("isso.js");
     };
