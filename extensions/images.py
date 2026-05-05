@@ -316,7 +316,7 @@ class ImageFixerPlugin(Plugin):
                 "atom:entry/atom:content", {"atom": "http://www.w3.org/2005/Atom"}
             ):
                 d = self._process(resource, "<div>{}</div>".format(c.text), ratio=False)
-                c.text = d.html()
+                c.text = d.html(method="html")
             return '<?xml version="1.0" encoding="UTF-8"?>\n{}'.format(
                 ET.tostring(root, encoding="unicode")
             )
