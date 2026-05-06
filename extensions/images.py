@@ -5,6 +5,7 @@ Contains classes to handle images related things.
 """
 
 import hashlib
+import inspect
 import os
 import io
 import base64
@@ -588,9 +589,10 @@ class CoverImagePlugin(Plugin):
         CoverImagePlugin.title_font = skia.Font(typeface, 64)
         CoverImagePlugin.author_font = skia.Font(typeface, 32)
 
-        # Disk cache, invalidated when this file changes
-        with open(__file__, "rb") as f:
-            CoverImagePlugin._self_hash = hashlib.sha256(f.read()).hexdigest()
+        # Disk cache, invalidated when CoverImagePlugin's source changes
+        CoverImagePlugin._self_hash = hashlib.sha256(
+            inspect.getsource(CoverImagePlugin).encode("utf-8")
+        ).hexdigest()
         cache_dir = os.path.join(str(self.site.sitepath), ".cache", "covers")
         CoverImagePlugin._cache = diskcache.Cache(cache_dir, eviction_policy="none")
         CoverImagePlugin._cache.expire()
