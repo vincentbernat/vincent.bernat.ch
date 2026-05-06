@@ -504,7 +504,9 @@ rm ../result
                     sed_css = sed_css[20:]
                 while sed_html:
                     c.run(
-                        "(find . -name '*.html' -type f -print0 ; find . -name 'atom.xml' -print0 ; find . -name 'atom.xslt' -print0) | "
+                        "(find . -name '*.html'      -print0 ; "
+                        " find . -name 'atom.xml'    -print0 ; "
+                        " find . -name 'atom.*.xslt' -print0) | "
                         "xargs -r0 -n10 -P5 sed -i {}".format(
                             " ".join(('-e "{}"'.format(x) for x in sed_html[:20]))
                         )
