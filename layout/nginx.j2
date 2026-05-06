@@ -88,8 +88,7 @@ location ~ ^(?<canonical>.*)\.html$ {
 
 {% for res in resource.node.walk_resources() %}
 {# handle exceptions #}
-{% if res.meta.nolog or res.meta.mime %}
-location = {{ content_url(res.url) }} {
+{% set specific %}
 {% if res.meta.nolog %}
   access_log off;
   log_not_found off;
@@ -98,20 +97,18 @@ location = {{ content_url(res.url) }} {
   types { }
   default_type {{ res.meta.mime }};
 {% endif %}
+{% if res.meta.wasm %}
+  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
+{% endif %}
+{% endset %}
+{% if specific %}
+location = {{ content_url(res.url) }} {
+{{ specific }}
   try_files $uri.html $uri $uri/index.html =404;
 }
 {% endif %}
 {% endfor %}
 
-{# Search: not compatible to CSP because of WebAssembly... #}
-location = /en/search {
-  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
-  try_files $uri.html =404;
-}
-location = /fr/search {
-  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
-  try_files $uri.html =404;
-}
 {# Misc #}
 location /ip {
   default_type text/plain;
