@@ -8,7 +8,7 @@ extends: false
   xmlns:xhtml="http://www.w3.org/1999/xhtml" version="1.0">
   <xsl:output method="html" encoding="UTF-8" indent="no"/>
   <xsl:template match="/atom:feed">
-    <html>
+    <html class="nojs rss">
       <xsl:attribute name="lang">
         <xsl:value-of select="@xml:lang"/>
       </xsl:attribute>
