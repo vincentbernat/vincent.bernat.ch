@@ -111,4 +111,6 @@ def clean_rss(ctx, html):
     doc(".when-js").remove()
     doc(".when-nojs").remove()
     doc("a").filter(lambda i, el: pq(el).text() == "#").remove()
-    return doc.html(method="html")
+    # Markup so the XHTML markup is inserted into the atom feed as
+    # structure rather than autoescaped to entity-encoded text.
+    return jinja2.Markup(doc.html())

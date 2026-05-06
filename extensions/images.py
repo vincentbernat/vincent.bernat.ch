@@ -312,11 +312,23 @@ class ImageFixerPlugin(Plugin):
         """
         if resource.source_file.name == "atom.xml":
             root = lxml.etree.fromstring(text.encode("utf-8"))
-            for c in root.findall(
-                "atom:entry/atom:content", {"atom": "http://www.w3.org/2005/Atom"}
-            ):
-                d = self._process(resource, "<div>{}</div>".format(c.text), ratio=False)
-                c.text = d.html(method="html")
+            ns = {
+                "atom": "http://www.w3.org/2005/Atom",
+                "xhtml": "http://www.w3.org/1999/xhtml",
+            }
+            for c in root.findall("atom:entry/atom:content", ns):
+                div = c.find("xhtml:div", ns)
+                inner = "".join(
+                    lxml.etree.tostring(child, encoding="unicode") for child in div
+                )
+                d = self._process(resource, "<div>{}</div>".format(inner))
+                new_div = lxml.etree.fromstring(
+                    '<div xmlns="http://www.w3.org/1999/xhtml">{}</div>'.format(
+                        d.html()
+                    )
+                )
+                c.remove(div)
+                c.append(new_div)
             return lxml.etree.tostring(
                 root.getroottree(), xml_declaration=True, encoding="UTF-8"
             ).decode("utf-8")
@@ -326,7 +338,7 @@ class ImageFixerPlugin(Plugin):
         d = self._process(resource, text)
         return "<!DOCTYPE html>\n" + d.outer_html()
 
-    def _process(self, resource, text, ratio=True):
+    def _process(self, resource, text):
         d = pq(text, parser="html")
         for img in d.items("img"):
             width = img.attr.width
@@ -500,7 +512,7 @@ class ImageFixerPlugin(Plugin):
                 outer = pq("<div />")
                 inner.addClass("lf-media-inner")
                 outer.addClass("lf-media-outer")
-                if width is not None and ratio:
+                if width is not None:
                     inner.css.padding_bottom = "{:.3f}%".format(
                         float(height) * 100.0 / width
                     )
