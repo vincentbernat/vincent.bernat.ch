@@ -479,7 +479,7 @@ rm ../result
                     # Fix CSS
                     sed_css.append(f"s+{f})+{newname})+g")
                     # Fix HTML
-                    if not f.startswith("images/") and not f.endswith(".xslt"):
+                    if not f.startswith("images/"):
                         sed_html.append(
                             r"s,"
                             rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
@@ -504,9 +504,9 @@ rm ../result
                     sed_css = sed_css[20:]
                 while sed_html:
                     c.run(
-                        "(find . -name '*.html'      -print0 ; "
-                        " find . -name 'atom.xml'    -print0 ; "
-                        " find . -name 'atom.*.xslt' -print0) | "
+                        "(find . -name '*.html'    -print0 ; "
+                        " find . -name 'atom.xml'  -print0 ; "
+                        " find . -name 'atom.xslt' -print0) | "
                         "xargs -r0 -n10 -P5 sed -i {}".format(
                             " ".join(('-e "{}"'.format(x) for x in sed_html[:20]))
                         )

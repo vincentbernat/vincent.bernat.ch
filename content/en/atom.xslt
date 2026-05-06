@@ -1,3 +1,6 @@
+---
+extends: false
+---
 <?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet
   xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
@@ -27,6 +30,14 @@
         <main class="lf-main">
           <xsl:apply-templates select="atom:entry"/>
         </main>
+        <nav id="lf-navbar" xml:space="preserve">
+          {% filter indent(10) %}{% include "menu.j2" %}{% endfilter %}
+
+        </nav>
+        <footer xml:space="preserve">
+          {% filter indent(10) %}{% include "footer.j2" %}{% endfilter %}
+
+        </footer>
       </body>
     </html>
   </xsl:template>

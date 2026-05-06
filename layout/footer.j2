@@ -1,0 +1,29 @@
+{% if resource.meta.l10n.otherlinks %}
+<div>
+  <h2>{{ resource.meta.l10n.otherlinks|e }}</h2>
+  <ul>
+    <li><a href="https://github.com/{{ resource.meta.github }}">GitHub</a></li>
+{% if resource.meta.mastodon %}
+    <li><a href="{{ resource.meta.mastodon|mastodon_href }}">Mastodon</a></li>
+{% endif %}
+{% if resource.meta.bluesky %}
+    <li><a href="https://bsky.app/profile/{{ resource.meta.bluesky }}">Bluesky</a></li>
+{% endif %}
+  </ul>
+</div>
+{% endif %}
+{% if resource.meta.l10n.sources %}
+<div>
+  <h2>{{ resource.meta.l10n.sources|e }}</h2>
+  <ul>
+    <li><a rel="nofollow" href="{{ resource.meta.sources }}">{{ resource.meta.l10n.site|e }}</a></li>
+    <li><a rel="nofollow" href="{{ resource.meta.sources }}/blob/latest/content/{{ resource.relative_path }}">{{ resource.meta.l10n.page|e }}</a></li>
+    <li><a rel="nofollow" href="{{ resource.meta.sources }}/commits/latest/content/{{ resource.relative_path }}">{{ resource.meta.l10n.history|e }}</a></li>
+    <li><a rel="nofollow" href="{{ resource.meta.sources }}/edit/latest/content/{{ resource.relative_path }}">{{ resource.meta.l10n.edit|e }}</a></li>
+  </ul>
+</div>
+{% endif %}
+<address>
+{% from "macros.j2" import ai_usage_emoji with context %}
+  <a href="{{ content_url('en/licenses.html') }}" title="Licenses">© {% if resource.meta.created != None %}{% if resource.meta.created|date_format("%Y") != resource.meta.modified|date_format("%Y") %}{{ resource.meta.created|date_format("%Y") }}{{ resource.meta.l10n.range }}{% endif %}{{ resource.meta.modified|date_format("%Y") }}{% else %}{{ None|date_format("%Y") }}{% endif %}</a> <a href="mailto:vincent@bernat.ch">Vincent Bernat</a> {{ ai_usage_emoji(resource) }}
+</address>
