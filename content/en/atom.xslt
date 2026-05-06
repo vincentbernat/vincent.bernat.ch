@@ -52,7 +52,7 @@ extends: false
             <xsl:value-of select="atom:title"/>
           </a>
         </h1>
-        <h2>
+        <h2 xml:space="preserve">
           <xsl:value-of select="atom:author/atom:name"/>
           <time>
             <xsl:attribute name="datetime">
