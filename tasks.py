@@ -484,7 +484,7 @@ rm ../result
                             r"s,"
                             rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
                             rf"\1\2\3{media}{newname}\3 \1integrity=\3sha256-{sha256[f]}\3 "
-                            r"crossorigin,"
+                            r"crossorigin=\3anonymous\3,"
                             r"g"
                         )
                     else:
