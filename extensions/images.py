@@ -13,6 +13,7 @@ import re
 import unicodedata
 import urllib
 import xml.etree.ElementTree as ET
+import lxml.etree
 import lxml.html
 import types
 import subprocess
@@ -310,16 +311,15 @@ class ImageFixerPlugin(Plugin):
         When the resource is generated, search for img tag and fix them.
         """
         if resource.source_file.name == "atom.xml":
-            root = ET.fromstring(text.encode("utf-8"))
-            ET.register_namespace("", "http://www.w3.org/2005/Atom")
+            root = lxml.etree.fromstring(text.encode("utf-8"))
             for c in root.findall(
                 "atom:entry/atom:content", {"atom": "http://www.w3.org/2005/Atom"}
             ):
                 d = self._process(resource, "<div>{}</div>".format(c.text), ratio=False)
                 c.text = d.html(method="html")
-            return '<?xml version="1.0" encoding="UTF-8"?>\n{}'.format(
-                ET.tostring(root, encoding="unicode")
-            )
+            return lxml.etree.tostring(
+                root.getroottree(), xml_declaration=True, encoding="UTF-8"
+            ).decode("utf-8")
         if not resource.source_file.kind == "html":
             return
 
