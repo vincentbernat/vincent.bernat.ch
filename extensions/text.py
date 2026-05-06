@@ -58,7 +58,7 @@ class FootnotesPlugin(Plugin):
             assert fn
             parents = ref.parents()
             for i in range(len(parents) - 1):
-                if parents.eq(i).attr.id == "lf-text":
+                if parents.eq(i).has_class("lf-text"):
                     parent = parents.eq(i + 1)
             sidenote = pq("<aside>")
             sidenote.attr.role = "note"

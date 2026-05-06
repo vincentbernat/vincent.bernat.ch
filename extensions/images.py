@@ -478,7 +478,7 @@ class ImageFixerPlugin(Plugin):
 
             # Lazy load
             if img[0].tag == "img" and width:
-                lftext = img.parents("#lf-text")
+                lftext = img.parents(".lf-text")
                 if lftext:
                     parents = img.parents()
                     rootEl = pq(parents[parents.index(lftext[0]) + 1])
