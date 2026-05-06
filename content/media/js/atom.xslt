@@ -16,6 +16,7 @@ uses_template: true
           <xsl:value-of select="atom:title"/>
         </title>
         <link rel="stylesheet" href="{{ media_url('css/luffy.css') }}"/>
+        <link rel="stylesheet" href="{{ media_url('css/luffy1.atom.css') }}"/>
         <link rel="alternate" type="application/atom+xml">
           <xsl:attribute name="href">
             <xsl:value-of select="atom:link[@rel='self']/@href"/>
