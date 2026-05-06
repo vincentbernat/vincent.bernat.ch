@@ -479,7 +479,7 @@ rm ../result
                     # Fix CSS
                     sed_css.append(f"s+{f})+{newname})+g")
                     # Fix HTML
-                    if not f.startswith("images/"):
+                    if not f.startswith("images/") and not f.endswith(".xslt"):
                         sed_html.append(
                             r"s,"
                             rf"\(data-\|\)\([a-z]*=\)\([\"']\){media}{f}\3,"
