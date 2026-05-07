@@ -31,7 +31,6 @@ import diskcache
 import skia
 import langcodes
 from PyPDF2 import PdfReader
-from wand.image import Image as WandImage
 
 from collections import namedtuple
 
@@ -642,10 +641,27 @@ class CoverImagePlugin(Plugin):
     def _load_cover(cover_path, width):
         """Load a cover image (SVG or raster) and return as RGBA."""
         if cover_path.endswith(".svg"):
-            with WandImage(filename=cover_path) as wimg:
-                wimg.resize(width * 2, int(wimg.height * width * 2 / wimg.width))
-                png_data = wimg.make_blob("png")
-            return Image.open(io.BytesIO(png_data)).convert("RGBA")
+            p = subprocess.run(
+                [
+                    "resvg",
+                    "--quiet",
+                    "--font-family",
+                    "Liberation Sans",
+                    "--sans-serif-family",
+                    "Liberation Sans",
+                    "--serif-family",
+                    "Liberation Serif",
+                    "--monospace-family",
+                    "Liberation Mono",
+                    "--width",
+                    str(width * 2),
+                    cover_path,
+                    "-c",
+                ],
+                check=True,
+                capture_output=True,
+            )
+            return Image.open(io.BytesIO(p.stdout)).convert("RGBA")
         return Image.open(cover_path).convert("RGBA")
 
     @staticmethod
