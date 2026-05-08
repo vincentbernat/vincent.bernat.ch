@@ -2,20 +2,25 @@
 {% macro domain(url) -%}
   {{ url.split("://")[- 1].split("/")[0] }}
 {%- endmacro %}
-{% macro csp(wasm=False) %}
-default-src     'self' blob:;
-script-src      'self' blob:{% if wasm %} 'wasm-unsafe-eval'{% endif %} {{ domain(media_url('js/')) }} 'sha256-AN5MljpALMzWNoPcfUugXonRm0INnyCCCqVRwMlp22A=';
-style-src       'self' 'unsafe-inline' data: {{ domain(media_url('css/')) }};
-font-src        'self' data: {{ domain(media_url('fonts/')) }};
-object-src      'self' {{ domain(media_url('images/')) }} {{ domain(media_url('files/')) }};
-img-src         'self' data: {{ domain(media_url('images/')) }};
-frame-src       {{ domain(media_url('images/')) }} {{ domain(media_url('files/')) }};
-worker-src      blob:;
-media-src       'self' blob: about: {{ domain(media_url('videos/')) }} {{ domain(media_url('images/')) }};
-connect-src     'self' {{ domain(media_url('videos/')) }} comments.luffy.cx;
-base-uri        'none';
-frame-ancestors 'none';
-form-action     'self';
+{% macro csp(extra={}) %}
+{% set directives = {
+  "default-src": "'self' blob:",
+  "script-src": "'self' blob: " + domain(media_url('js/')) + " 'sha256-AN5MljpALMzWNoPcfUugXonRm0INnyCCCqVRwMlp22A='",
+  "style-src": "'self' 'unsafe-inline' data: " + domain(media_url('css/')),
+  "font-src": "'self' data: " + domain(media_url('fonts/')),
+  "object-src": "'self' " + domain(media_url('images/')) + " " + domain(media_url('files/')),
+  "img-src": "'self' data: " + domain(media_url('images/')),
+  "frame-src": domain(media_url('images/')) + " " + domain(media_url('files/')),
+  "worker-src": "blob:",
+  "media-src": "'self' blob: about: " + domain(media_url('videos/')) + " " + domain(media_url('images/')),
+  "connect-src": "'self' comments.luffy.cx " + domain(media_url('videos/')),
+  "base-uri": "'none'",
+  "frame-ancestors": "'none'",
+  "form-action": "'self'",
+} %}
+{% for name, value in directives.items() %}
+{{ "{:15}".format(name) }} {{ value }}{% if extra[name] is defined %} {{ extra[name] }}{% endif %};
+{% endfor %}
 {% endmacro %}
 {% macro add_headers(extra={}) %}
 {% set headers = {
@@ -106,8 +111,8 @@ location ~ ^(?<canonical>.*)\.html$ {
   default_type {{ res.meta.mime }};
 {% endif %}
 {% set extra_headers = res.meta.headers|default({}) %}
-{% if res.meta.wasm %}
-{% do extra_headers.update({"Content-Security-Policy": csp(wasm=True)|striptags}) %}
+{% if res.meta.csp %}
+{% do extra_headers.update({"Content-Security-Policy": csp(res.meta.csp)|striptags}) %}
 {% endif %}
 {% if extra_headers %}
   {{ add_headers(extra_headers)|indent(2) }}
