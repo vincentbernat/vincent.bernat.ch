@@ -17,16 +17,25 @@ base-uri        'none';
 frame-ancestors 'none';
 form-action     'self';
 {% endmacro %}
+{% macro add_header(extra={}) %}
+{% set headers = {
+  "X-Content-Type-Options": "nosniff",
+  "Strict-Transport-Security": "max-age=31536000",
+  "Content-Security-Policy": csp()|striptags,
+} %}
+{% do headers.update(extra) %}
+{% for name, value in headers.items() %}
+add_header "{{ name }}" "{{ value }}";
+{% endfor %}
+{% endmacro %}
 
-index         index.html;
-error_page    404 {{ content_url('/en/404.html') }};
-expires       6h;
-add_header    "X-Content-Type-Options" "nosniff";
-add_header    "Strict-Transport-Security" "max-age=31536000; includeSubDomains; preload";
-add_header    "Content-Security-Policy" "{{ csp()|striptags }}";
+index      index.html;
+error_page 404 {{ content_url('/en/404.html') }};
+expires    6h;
+{{ add_header() }}
 
 location = /nginx.conf {
-  return      404;
+  return 404;
 }
 
 {# language selection #}
@@ -44,8 +53,7 @@ location = / {
   access_log off;
   log_not_found off;
   set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
-  add_header  Vary Accept-Language;
-  add_header  "Strict-Transport-Security" "max-age=31536000";
+  {{ add_header({"Vary": "Accept-Language"})|indent(2) }}
   return 301  /$lang;
 }
 
@@ -98,7 +106,7 @@ location ~ ^(?<canonical>.*)\.html$ {
   default_type {{ res.meta.mime }};
 {% endif %}
 {% if res.meta.wasm %}
-  add_header "Content-Security-Policy" "{{ csp(wasm=True)|striptags }}";
+  {{ add_header({"Content-Security-Policy": csp(wasm=True)|striptags})|indent(2) }}
 {% endif %}
 {% endset %}
 {% if specific %}
