@@ -17,7 +17,7 @@ base-uri        'none';
 frame-ancestors 'none';
 form-action     'self';
 {% endmacro %}
-{% macro add_header(extra={}) %}
+{% macro add_headers(extra={}) %}
 {% set headers = {
   "X-Content-Type-Options": "nosniff",
   "Strict-Transport-Security": "max-age=31536000",
@@ -32,7 +32,7 @@ add_header "{{ name }}" "{{ value }}";
 index      index.html;
 error_page 404 {{ content_url('/en/404.html') }};
 expires    6h;
-{{ add_header() }}
+{{ add_headers() }}
 
 location = /nginx.conf {
   return 404;
@@ -53,7 +53,7 @@ location = / {
   access_log off;
   log_not_found off;
   set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
-  {{ add_header({"Vary": "Accept-Language"})|indent(2) }}
+  {{ add_headers({"Vary": "Accept-Language"})|indent(2) }}
   return 301  /$lang;
 }
 
@@ -105,8 +105,12 @@ location ~ ^(?<canonical>.*)\.html$ {
   types { }
   default_type {{ res.meta.mime }};
 {% endif %}
+{% set extra_headers = res.meta.headers|default({}) %}
 {% if res.meta.wasm %}
-  {{ add_header({"Content-Security-Policy": csp(wasm=True)|striptags})|indent(2) }}
+{% do extra_headers.update({"Content-Security-Policy": csp(wasm=True)|striptags}) %}
+{% endif %}
+{% if extra_headers %}
+  {{ add_headers(extra_headers)|indent(2) }}
 {% endif %}
 {% endset %}
 {% if specific %}
