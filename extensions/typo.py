@@ -35,7 +35,7 @@ class TypographyPlugin(Plugin):
 
     def owntypo(self, text):
         tag_pattern = (
-            "</?\w+((\s+\w+(\s*=\s*(?:\".*?\"|'.*?'|[^'\">\s]+))?)+\s*|\s*)/?>"
+            r"</?\w+((\s+\w+(\s*=\s*(?:\".*?\"|'.*?'|[^'\">\s]+))?)+\s*|\s*)/?>"
         )
 
         fix_closing_double_quote = re.compile(r"""^&#8220;([,:;!\?])""")
