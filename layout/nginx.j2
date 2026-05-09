@@ -4,19 +4,19 @@
 {%- endmacro %}
 {% macro csp(extra={}) %}
 {% set directives = {
-  "default-src": "'self' blob:",
-  "script-src": "'self' blob: " + domain(media_url('js/')) + " 'sha256-AN5MljpALMzWNoPcfUugXonRm0INnyCCCqVRwMlp22A='",
-  "style-src": "'self' 'unsafe-inline' data: " + domain(media_url('css/')),
-  "font-src": "'self' data: " + domain(media_url('fonts/')),
-  "object-src": "'self' " + domain(media_url('images/')) + " " + domain(media_url('files/')),
-  "img-src": "'self' data: " + domain(media_url('images/')),
-  "frame-src": domain(media_url('images/')) + " " + domain(media_url('files/')),
-  "worker-src": "blob:",
-  "media-src": "'self' blob: about: " + domain(media_url('videos/')) + " " + domain(media_url('images/')),
-  "connect-src": "'self' comments.luffy.cx " + domain(media_url('videos/')),
-  "base-uri": "'none'",
+  "default-src":     "'self' blob:",
+  "script-src":      "blob: " + domain(media_url('js/')) + " 'sha256-AN5MljpALMzWNoPcfUugXonRm0INnyCCCqVRwMlp22A='",
+  "style-src":       "'unsafe-inline' data: " + domain(media_url('css/')),
+  "font-src":        "data: " + domain(media_url('fonts/')),
+  "img-src":         "data: " + domain(media_url('images/')),
+  "object-src":      domain(media_url('images/')) + " " + domain(media_url('files/')),
+  "frame-src":       domain(media_url('images/')) + " " + domain(media_url('files/')),
+  "worker-src":      "blob:",
+  "media-src":       "blob: about: " + domain(media_url('videos/')) + " " + domain(media_url('images/')),
+  "connect-src":     "comments.luffy.cx " + domain(media_url('videos/')),
+  "base-uri":        "'none'",
   "frame-ancestors": "'none'",
-  "form-action": "'self'",
+  "form-action":     "'self'",
 } %}
 {% for name, value in directives.items() %}
 {{ "{:15}".format(name) }} {{ value }}{% if extra[name] is defined %} {{ extra[name] }}{% endif %};
