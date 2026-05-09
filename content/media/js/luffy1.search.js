@@ -144,7 +144,6 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
   function scrollToShow(elements) {
     const els = elements.filter(Boolean);
     if (els.length === 0) return;
-    console.log(els);
     let top = Infinity,
       bottom = -Infinity;
     for (const el of els) {
