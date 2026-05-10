@@ -4,7 +4,7 @@
    the class lf-toc-past applies. */
 luffy.do(() => {
   const toc = document.querySelector(".lf-main .toc");
-  if (!window.IntersectionObserver || !window.ResizeObserver || !toc) return;
+  if (!window.ResizeObserver || !toc) return;
 
   /* Build a list of entries. Each entry contains a Hx element (heading), the
      matching A element in TOC (link), the depth of this TOC entry, and the
@@ -60,8 +60,17 @@ luffy.do(() => {
     }
   };
 
-  const io = new IntersectionObserver(apply);
-  const ro = new ResizeObserver(apply);
-  for (const e of entries) io.observe(e.heading);
-  ro.observe(document.body);
+  /* Throttle updates to once per frame update. */
+  let pending = false;
+  const schedule = () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      pending = false;
+      apply();
+    });
+  };
+
+  new ResizeObserver(schedule).observe(document.body);
+  addEventListener("scroll", schedule, { passive: true });
 });
