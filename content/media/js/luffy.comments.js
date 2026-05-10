@@ -31,7 +31,7 @@ luffy.do(() => {
   onHashChange();
 
   // Load when it becomes visible
-  if ("IntersectionObserver" in window && links) {
+  if (window.IntersectionObserver && links) {
     const footer = document.querySelector("footer");
     const observer = new window.IntersectionObserver((entries, observer) => {
       for (let i = 0; i < entries.length; i++) {
