@@ -61,7 +61,7 @@ const rlhUnit = {
     Declaration(decl) {
         if (!decl.value.includes("rlh")) return;
         decl.value = decl.value.replace(
-            /(\d*\.?\d+)rlh\b/g,
+            /(-?\d*\.?\d+)rlh\b/g,
             (_, n) => `calc(var(--lf-line-height)*${n}rem)`,
         );
     },
