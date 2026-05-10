@@ -18,7 +18,7 @@ luffy.do(() => {
     let depth = 0;
     for (
       let p = link.parentElement.parentElement;
-      p && p !== toc;
+      p !== toc;
       p = p.parentElement
     ) {
       if (p.tagName === "UL") depth++;
@@ -36,14 +36,12 @@ luffy.do(() => {
     }
   }
 
-  /* Compute the current state of a heading from its geometry. */
+  /* Compute the current state of a heading from its top edge: "above" as soon
+     as it reaches the top of the viewport (so its predecessor becomes past
+     the moment the next section starts). */
   const stateOf = (heading) => {
-    const rect = heading.getBoundingClientRect();
-    return rect.bottom <= 0
-      ? "above"
-      : rect.top >= innerHeight
-        ? "below"
-        : "in";
+    const top = heading.getBoundingClientRect().top;
+    return top <= 0 ? "above" : top >= innerHeight ? "below" : "in";
   };
 
   /* Update the classes for each element in the TOC. */
