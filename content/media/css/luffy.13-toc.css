@@ -1,0 +1,110 @@
+.lf-main {
+  .toc {
+    margin: 1rlh 0;
+    font-family: var(--lf-font-heading);
+    text-wrap: balance;
+    position: relative;
+    &::before {
+      content: "📑";
+      position: absolute;
+      right: 100%;
+      margin-right: 0.5em;
+      color: var(--lf-color-low);
+    }
+    ul,
+    li {
+      display: inline;
+      hyphens: none;
+    }
+    ul li a {
+      font-weight: bold;
+    }
+    ul li li a {
+      font-weight: normal;
+    }
+    ul li li li {
+      font-weight: lighter;
+    }
+    li {
+      list-style-type: none;
+      &::after {
+        content: " · ";
+        color: var(--lf-color-low);
+      }
+      &:last-child::after,
+      &:last-child > ul::after,
+      &:has(ul)::after {
+        content: "";
+      }
+      ul {
+        &::before,
+        &::after {
+          color: var(--lf-color-low);
+        }
+        &::before {
+          content: " ⇢ ";
+        }
+        &::after {
+          content: " ·· ";
+        }
+      }
+    }
+  }
+}
+
+/* Right-side TOC for wide enough viewports. */
+@media (--lf-extra-wide) {
+  .lf-main {
+    .lf-text {
+      position: relative;
+    }
+    .toc {
+      position: absolute;
+      top: -1rlh;
+      bottom: 0;
+      left: calc(-1 * (var(--lf-toc-width) + 2 * var(--lf-minimal-margin)));
+      width: var(--lf-toc-width);
+      margin: 0;
+      margin-inline: var(--lf-minimal-margin);
+      &::before,
+      li::after,
+      li:has(ul)::after,
+      li ul::before,
+      li ul::after {
+        content: none;
+      }
+      ul,
+      li {
+        display: revert;
+      }
+      & > ul {
+        position: sticky;
+        top: 0;
+        box-sizing: border-box;
+        max-height: 100vh;
+        max-height: calc(100vh - 1rlh);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: none;
+        scroll-behavior: smooth;
+        padding-top: 1rlh;
+        padding-left: 0;
+      }
+      a {
+        transition: opacity 0.5s;
+        &.lf-toc-active {
+          opacity: 1;
+        }
+        &.lf-toc-future {
+          opacity: 0.6;
+        }
+        &.lf-toc-past {
+          opacity: 0.2;
+        }
+      }
+      ul ul {
+        padding-left: 0.8em;
+      }
+    }
+  }
+}

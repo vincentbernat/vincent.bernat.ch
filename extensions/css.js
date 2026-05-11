@@ -176,6 +176,8 @@ process.stdin.on("end", function () {
                 {
                     reduceIdents: false,
                     normalizeWhitespace: minify,
+                    /* Sometimes, fallback values are killed. */
+                    mergeLonghand: false,
                 },
             ],
         }),
