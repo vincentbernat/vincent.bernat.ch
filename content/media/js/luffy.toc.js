@@ -45,8 +45,10 @@ luffy.do(() => {
   };
 
   /* Update the classes for each element in the TOC. */
+  const scrollEl = toc.firstElementChild;
   const apply = () => {
     const states = entries.map((e) => stateOf(e.heading));
+    let lastActive = null;
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       const term = e.terminator >= 0 ? states[e.terminator] : null;
@@ -55,6 +57,14 @@ luffy.do(() => {
       e.link.classList.toggle("lf-toc-active", active);
       e.link.classList.toggle("lf-toc-past", past);
       e.link.classList.toggle("lf-toc-future", !past && !active);
+      if (active) lastActive = e.link;
+    }
+    if (lastActive) {
+      const elTop =
+        lastActive.getBoundingClientRect().top -
+        scrollEl.getBoundingClientRect().top +
+        scrollEl.scrollTop;
+      scrollEl.scrollTop = elTop - (scrollEl.clientHeight * 2) / 3;
     }
   };
 
