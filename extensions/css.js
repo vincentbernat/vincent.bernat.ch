@@ -123,7 +123,7 @@ const resolveCustomPropsInMediaCalc = {
             // Resolve calc() expressions, floor, and convert rem to em
             atRule.params = resolveCalc(params).replace(
                 /(\d*\.?\d+)rem\b/g,
-                (_, n) => `${Math.floor(parseFloat(n))}em`,
+                (_, n) => `${Math.ceil(parseFloat(n))}em`,
             );
         });
     },
