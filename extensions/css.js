@@ -90,11 +90,6 @@ const lightDarkFallback = {
 // unitless numbers (e.g. 112.5% → 1.125) so that @csstools/css-calc can reduce
 // the expression. The result is floored and rem is converted to em (equivalent
 // in media queries, it seems safer).
-//
-// In addition, when a --x-fallback companion variable exists for some --x,
-// every declaration referencing var(--x) is duplicated with var(--x-fallback)
-// inserted just before it, so the browser uses --x when it can parse the value
-// and degrades to --x-fallback otherwise.
 const resolveCustomPropsInMediaCalc = {
     postcssPlugin: "resolve-custom-props-in-media-calc",
     Once(root) {
@@ -130,25 +125,6 @@ const resolveCustomPropsInMediaCalc = {
                 /(\d*\.?\d+)rem\b/g,
                 (_, n) => `${Math.ceil(parseFloat(n))}em`,
             );
-        });
-        root.walkDecls((decl) => {
-            if (decl.prop.startsWith("--")) return;
-            if (!decl.value.includes("var(")) return;
-            const names = new Set();
-            decl.value.replace(/var\(\s*(--[\w-]+)\s*\)/g, (_, name) => {
-                if (vars[`${name}-fallback`] !== undefined) names.add(name);
-                return "";
-            });
-            if (names.size === 0) return;
-            let fallbackValue = decl.value;
-            for (const name of names) {
-                const re = new RegExp(`var\\(\\s*${name}\\s*\\)`, "g");
-                fallbackValue = fallbackValue.replace(
-                    re,
-                    `var(${name}-fallback)`,
-                );
-            }
-            decl.cloneBefore({ value: fallbackValue });
         });
     },
 };
@@ -200,10 +176,7 @@ process.stdin.on("end", function () {
                 {
                     reduceIdents: false,
                     normalizeWhitespace: minify,
-                    // mergeLonghand drops earlier declarations that share a
-                    // property with a later one, which kills (sometimes?) the
-                    // fallback patterns inserted by
-                    // resolve-custom-props-in-media-calc.
+                    /* Sometimes, fallback values are killed. */
                     mergeLonghand: false,
                 },
             ],
