@@ -20,6 +20,8 @@ extends: false
         </title>
         <link rel="icon" href="{{ media_url('images/favicon.png') }}"/>
         <link rel="stylesheet" href="{{ media_url('css/luffy.css') }}"/>
+        <link rel="stylesheet" href="{{ media_url('css/luffy1.code.css') }}"/>
+        <link rel="stylesheet" href="{{ media_url('css/luffy1.toc.css') }}"/>
         <link rel="stylesheet" href="{{ media_url('css/luffy1.atom.css') }}"/>
         <link rel="alternate" type="application/atom+xml">
           <xsl:attribute name="href">
