@@ -132,6 +132,14 @@
           version = "1.0.0";
           packageJSON = ./package.json;
           yarnLock = ./yarn.lock;
+          # baguetteBox's UMD wrapper uses `this` as the global, which is
+          # undefined when loaded as an ES module. Fall back to `self`.
+          postBuild = ''
+            substituteInPlace $out/node_modules/baguettebox.js/dist/baguetteBox.js \
+              --replace-fail \
+              '}(this, function () {' \
+              '}(typeof self !== "undefined" ? self : this, function () {'
+          '';
         };
         fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
           dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
