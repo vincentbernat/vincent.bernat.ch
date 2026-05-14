@@ -21,13 +21,6 @@ class EsbuildPlugin(CLTransformer):
         return "esbuild"
 
     def text_resource_complete(self, resource, text):
-        """
-        If the site is in development mode, just return.
-        Otherwise, save the file to a temporary place
-        and run the uglify app. Read the generated file
-        and return the text as output.
-        """
-
         mode = self.site.config.mode
         if not resource.source_file.kind == "js":
             return
