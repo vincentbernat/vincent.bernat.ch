@@ -1,6 +1,6 @@
 /* Add a copy to clipboard button for code blocks */
 
-luffy.do(() => {
+(() => {
   if (!window.getSelection) {
     return;
   }
@@ -58,4 +58,4 @@ luffy.do(() => {
       }
     }
   }
-});
+})();
