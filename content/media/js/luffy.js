@@ -8,6 +8,7 @@ combine:
 
 window.luffy = {
   do(fn) {
+    // Don't make everything fails when concatenating files.
     try {
       fn();
     } catch (e) {
