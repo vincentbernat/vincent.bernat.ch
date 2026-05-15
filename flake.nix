@@ -21,6 +21,10 @@
       url = "github:SorkinType/Merriweather";
       flake = false;
     };
+    # hyde = {
+    #   url = "path:/home/bernat/code/perso/hyde";
+    #   flake = false;
+    # };
   };
   outputs = { self, flake-utils, ... }@inputs:
     flake-utils.lib.eachDefaultSystem (system:
@@ -61,7 +65,7 @@
                   })
                 )
                 overrides;
-            moreOverrides = final: prev: {
+            moreOverrides = final: prev:  {
               wand = prev.wand.overrideAttrs (old: {
                 postInstall = (old.postInstall or "") + ''
                   substituteInPlace $out/lib/python*/site-packages/wand/api.py \
@@ -70,49 +74,54 @@
                     "magick_home = os.environ.get('MAGICK_HOME', '${pkgs.imagemagick}')"
                 '';
               });
-              markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
-                patches = (old.patches or [ ]) ++ [
-                  (pkgs.writeText "Markdown-py312.patch" ''
-                    --- a/setup.py     2018-01-04 01:01:27.000000000 +0100
-                    +++ b/setup.py 2025-04-21 00:43:30.571001925 +0200
-                    @@ -2,17 +2,16 @@
+              markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs
+                (old: {
+                  patches = (old.patches or [ ]) ++ [
+                    (pkgs.writeText "Markdown-py312.patch" ''
+                      --- a/setup.py     2018-01-04 01:01:27.000000000 +0100
+                      +++ b/setup.py 2025-04-21 00:43:30.571001925 +0200
+                      @@ -2,17 +2,16 @@
 
-                     from setuptools import setup
-                     import os
-                    -import imp
-                    +import importlib.util
+                       from setuptools import setup
+                       import os
+                      -import imp
+                      +import importlib.util
 
 
-                     def get_version():
-                         " Get version & version_info without importing markdown.__init__ "
-                         path = os.path.join(os.path.dirname(__file__), 'markdown')
-                    -    fp, pathname, desc = imp.find_module('__version__', [path])
-                    -    try:
-                    -        v = imp.load_module('__version__', fp, pathname, desc)
-                    -    finally:
-                    -        fp.close()
-                    +    version_path = os.path.join(path, '__version__.py')
-                    +    spec = importlib.util.spec_from_file_location('__version__', version_path)
-                    +    v = importlib.util.module_from_spec(spec)
-                    +    spec.loader.exec_module(v)
+                       def get_version():
+                           " Get version & version_info without importing markdown.__init__ "
+                           path = os.path.join(os.path.dirname(__file__), 'markdown')
+                      -    fp, pathname, desc = imp.find_module('__version__', [path])
+                      -    try:
+                      -        v = imp.load_module('__version__', fp, pathname, desc)
+                      -    finally:
+                      -        fp.close()
+                      +    version_path = os.path.join(path, '__version__.py')
+                      +    spec = importlib.util.spec_from_file_location('__version__', version_path)
+                      +    v = importlib.util.module_from_spec(spec)
+                      +    spec.loader.exec_module(v)
 
-                         dev_status_map = {
-                             'alpha': '3 - Alpha',
-                  '')
-                  (pkgs.writeText "Markdown-warn-undefined-links.patch" ''
-                    --- a/markdown/inlinepatterns.py	2026-02-19 21:30:11.497154428 +0100
-                    +++ b/markdown/inlinepatterns.py	2026-02-19 21:32:51.763929988 +0100
-                    @@ -467,6 +467,8 @@
-                             # Clean up linebreaks in id
-                             id = self.NEWLINE_CLEANUP_RE.sub(' ', id)
-                             if id not in self.markdown.references:  # ignore undefined refs
-                    +            import logging
-                    +            logging.getLogger('MARKDOWN').warn("Unknown reference: %r" % id) if id not in ['toc', '…'] else 0
-                                 return None
-                             href, title = self.markdown.references[id]
+                           dev_status_map = {
+                               'alpha': '3 - Alpha',
+                    '')
+                    (pkgs.writeText "Markdown-warn-undefined-links.patch" ''
+                      --- a/markdown/inlinepatterns.py	2026-02-19 21:30:11.497154428 +0100
+                      +++ b/markdown/inlinepatterns.py	2026-02-19 21:32:51.763929988 +0100
+                      @@ -467,6 +467,8 @@
+                               # Clean up linebreaks in id
+                               id = self.NEWLINE_CLEANUP_RE.sub(' ', id)
+                               if id not in self.markdown.references:  # ignore undefined refs
+                      +            import logging
+                      +            logging.getLogger('MARKDOWN').warn("Unknown reference: %r" % id) if id not in ['toc', '…'] else 0
+                                   return None
+                               href, title = self.markdown.references[id]
 
-                  '')
-                ];
+                    '')
+                  ];
+                });
+            } // l.optionalAttrs (inputs ? hyde) {
+              hyde = prev.hyde.overrideAttrs (_: {
+                src = inputs.hyde;
               });
             };
             pythonSet = pythonBase.overrideScope (
