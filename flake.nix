@@ -65,15 +65,7 @@
                   })
                 )
                 overrides;
-            moreOverrides = final: prev:  {
-              wand = prev.wand.overrideAttrs (old: {
-                postInstall = (old.postInstall or "") + ''
-                  substituteInPlace $out/lib/python*/site-packages/wand/api.py \
-                    --replace-fail \
-                    "magick_home = os.environ.get('MAGICK_HOME')" \
-                    "magick_home = os.environ.get('MAGICK_HOME', '${pkgs.imagemagick}')"
-                '';
-              });
+            moreOverrides = final: prev: {
               markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs
                 (old: {
                   patches = (old.patches or [ ]) ++ [
