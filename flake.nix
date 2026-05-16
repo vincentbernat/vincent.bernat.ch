@@ -333,33 +333,32 @@
             '';
             installPhase = "true";
           };
-          build.playfair = pkgs.stdenvNoCC.mkDerivation {
-            name = "custom-playfair";
+          build.baskerville = pkgs.stdenvNoCC.mkDerivation {
+            name = "custom-baskerville";
             dontUnpack = true;
-            # "Playfair Display" on Google Fonts is a wght-only VF, distinct
-            # from the unified clauseggers/Playfair redesign. Fetch the
-            # canonical file directly from the google/fonts repo.
+            # Fetch the canonical italic file from google/fonts. Libre
+            # Baskerville is a wght-only VF.
             buildPhase =
               let
-                playfairDisplay = pkgs.fetchurl {
-                  url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic%5Bwght%5D.ttf";
-                  hash = "sha256-peJtxeLnf7KAOgvwL9T4HuE27I3qhjzNsMWaJjshN4s=";
+                baskervilleItalic = pkgs.fetchurl {
+                  url = "https://github.com/google/fonts/raw/main/ofl/librebaskerville/LibreBaskerville-Italic%5Bwght%5D.ttf";
+                  hash = "sha256-IjlZaD3HPsRDe9Yfq6pLPyIgniKFX/067ja6YaURbpc=";
                 };
               in
               ''
                 mkdir -p $out
-                # Slice wght to 400 (normal) .. 700 (bold). No wdth or opsz axes here.
+                # Slice wght to 400 (normal) .. 700 (bold).
                 ${fonttools}/bin/fonttools varLib.instancer \
-                  -o playfair-vf.ttf \
-                  ${playfairDisplay} \
+                  -o baskerville-vf.ttf \
+                  ${baskervilleItalic} \
                   wght=400:700
                 # Keep only U+0026 (ampersand)
-                ${fonttools}/bin/pyftsubset playfair-vf.ttf \
+                ${fonttools}/bin/pyftsubset baskerville-vf.ttf \
                   --flavor=woff2 \
                   --no-hinting \
                   --unicodes=U+0026 \
                   --layout-features= \
-                  --output-file=$out/playfair-custom.woff2
+                  --output-file=$out/baskerville-custom.woff2
               '';
             installPhase = "true";
           };

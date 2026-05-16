@@ -272,8 +272,8 @@ def update_fonts(c):
         c.run("nix build .#build.merriweather")
         c.run("install -m 0644 result/*.woff2 content/media/fonts/")
         c.run("rm result")
-    with step("building Playfair"):
-        c.run("nix build .#build.playfair")
+    with step("building Baskerville"):
+        c.run("nix build .#build.baskerville")
         c.run("install -m 0644 result/*.woff2 content/media/fonts/")
         c.run("rm result")
 
