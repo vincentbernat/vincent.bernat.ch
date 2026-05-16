@@ -24,21 +24,34 @@ const getLineHeight = (root) => {
     return lineHeight;
 };
 
-// Resolve @apply --lf-font-size(X) into font-size and line-height declarations.
-// The line-height is computed to maintain vertical rhythm:
+// Resolve @apply --lf-font-scale(scale) into font-size and line-height
+// declarations. The scale is an integer mapped to a font factor via a lookup
+// table. The line-height is computed to maintain vertical rhythm:
 //
 //   ceil(fontFactor / lineHeight) * lineHeight / fontFactor
 //
 // The idea is to be have the first multiple of lineHeight / fontFactor which is
 // >= 1.
-const lfFontSize = {
-    postcssPlugin: "lf-font-size",
+const fontScaleTable = {
+    "-1": 0.75,
+    0: 1,
+    1: 1.25,
+    2: 1.5,
+    3: 2.5,
+    4: 3,
+};
+const lfFontScale = {
+    postcssPlugin: "lf-font-scale",
     Once(root) {
         const lineHeight = getLineHeight(root);
         root.walkAtRules("apply", (atRule) => {
-            const match = atRule.params.match(/^--lf-font-size\(([^)]+)\)$/);
+            const match = atRule.params.match(/^--lf-font-scale\(([^)]+)\)$/);
             if (!match) return;
-            const fontFactor = parseFloat(match[1]);
+            const scale = match[1].trim();
+            const fontFactor = fontScaleTable[scale];
+            if (fontFactor === undefined) {
+                throw atRule.error(`Unknown --lf-font-scale: ${scale}`);
+            }
             const lh =
                 Math.ceil(fontFactor / lineHeight) * (lineHeight / fontFactor);
             atRule.replaceWith(
@@ -161,7 +174,7 @@ process.stdin.on("end", function () {
         }),
         resolveCustomPropsInMediaCalc /* Not really supported */,
         postcssCustomMedia /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */,
-        lfFontSize /* could be implemented with round, baseline 2024 */,
+        lfFontScale /* could be implemented with round, baseline 2024 */,
         rlhUnit /* baseline 2023 */,
         postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
         postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
