@@ -165,6 +165,7 @@
       </select>
     </label>
     <label><input type="checkbox" id="italic"> italic</label>
+    <label><input type="checkbox" id="variable"> variable</label>
     <label>size <input type="range" id="size" min="120" max="320" value="170"></label>
     <button id="reset" type="button" style="background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.6rem;font:inherit;cursor:pointer;">reset</button>
   </div>
@@ -272,6 +273,7 @@
     cell.title = `${f.family} · ${f.category}`;
     cell.dataset.category = f.category;
     cell.dataset.italic = f.styles.includes("italic") ? "1" : "0";
+    cell.dataset.variable = f.variable ? "1" : "0";
     cell.dataset.idx = i;
     cell._font = f;
     const fam = f.family.replace(/'/g, "\\'");
@@ -284,22 +286,29 @@
   });
 
   // Controls
+  const categorySel = document.getElementById("category");
+  const variableChk = document.getElementById("variable");
+  const applyFilters = () => {
+    const cat = categorySel.value;
+    const onlyVar = variableChk.checked;
+    visible = 0;
+    for (const cell of grid.children) {
+      const match =
+        (!cat || cell.dataset.category === cat) &&
+        (!onlyVar || cell.dataset.variable === "1");
+      cell.style.display = match ? "" : "none";
+      if (match) visible++;
+    }
+    updateCount();
+  };
   document.getElementById("italic").addEventListener("change", e => {
     document.body.classList.toggle("italic", e.target.checked);
   });
   document.getElementById("size").addEventListener("input", e => {
     document.documentElement.style.setProperty("--cell-min", e.target.value + "px");
   });
-  document.getElementById("category").addEventListener("change", e => {
-    const cat = e.target.value;
-    visible = 0;
-    for (const cell of grid.children) {
-      const match = !cat || cell.dataset.category === cat;
-      cell.style.display = match ? "" : "none";
-      if (match) visible++;
-    }
-    updateCount();
-  });
+  categorySel.addEventListener("change", applyFilters);
+  variableChk.addEventListener("change", applyFilters);
   document.getElementById("reset").addEventListener("click", () => location.reload());
 })();
 </script>

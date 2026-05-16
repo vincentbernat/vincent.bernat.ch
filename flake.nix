@@ -342,8 +342,8 @@
             buildPhase =
               let
                 playfairDisplay = pkgs.fetchurl {
-                  url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf";
-                  sha256 = "1mnq2wcij7d35vz95rydrfvwr924z0p537nf1k3knl3afs9j43y4";
+                  url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic%5Bwght%5D.ttf";
+                  hash = "sha256-peJtxeLnf7KAOgvwL9T4HuE27I3qhjzNsMWaJjshN4s=";
                 };
               in
               ''
