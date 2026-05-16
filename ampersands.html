@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Google Fonts — Ampersands</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fafaf7;
+    --fg: #1a1a1a;
+    --muted: #888;
+    --card: #ffffff;
+    --border: #e6e3dc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14130f;
+      --fg: #f0ece4;
+      --muted: #8a8780;
+      --card: #1d1c18;
+      --border: #2c2a25;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 1.5rem 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    max-width: 1500px;
+    margin: 0 auto 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem 2rem;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  h1 {
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0;
+  }
+  h1 .amp-title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 1.6em;
+    font-weight: 400;
+    vertical-align: -0.08em;
+    margin: 0 0.1em;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .controls {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+  .controls input[type="range"] { width: 120px; }
+  .controls select {
+    background: var(--card);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+    font: inherit;
+  }
+  .grid {
+    max-width: 1500px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--cell-min, 170px), 1fr));
+    gap: 0.6rem;
+  }
+  .cell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.6rem;
+    cursor: pointer;
+    container-type: inline-size;
+    transition: transform 100ms ease, opacity 200ms ease;
+    user-select: none;
+  }
+  .cell:hover { transform: translateY(-2px); }
+  .cell.pinned {
+    background: hsl(var(--pin-hue) 70% 90%);
+    border-color: hsl(var(--pin-hue) 55% 78%);
+    color: #1a1a1a;
+  }
+  @media (prefers-color-scheme: dark) {
+    .cell.pinned {
+      background: hsl(var(--pin-hue) 32% 24%);
+      border-color: hsl(var(--pin-hue) 35% 38%);
+      color: #f0ece4;
+    }
+  }
+  .cell.pinned .name { color: inherit; opacity: 0.65; }
+  .amp {
+    font-size: clamp(3rem, 50cqi, 7rem);
+    line-height: 1;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+  }
+  .name {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 0.02em;
+    margin-top: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+  body.italic .cell[data-italic="1"] .amp { font-style: italic; }
+  #status {
+    text-align: center;
+    color: var(--muted);
+    padding: 4rem 1rem;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Google Fonts <span class="amp-title">&amp;</span> Ampersands
+    <span class="meta" id="meta"></span>
+  </h1>
+  <div class="controls">
+    <label>
+      filter
+      <select id="category">
+        <option value="">all</option>
+        <option value="serif">serif</option>
+        <option value="sans-serif">sans-serif</option>
+        <option value="display">display</option>
+        <option value="handwriting">handwriting</option>
+        <option value="monospace">monospace</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="italic"> italic</label>
+    <label>size <input type="range" id="size" min="120" max="320" value="170"></label>
+    <button id="reset" type="button" style="background:var(--card);color:var(--fg);border:1px solid var(--border);border-radius:4px;padding:0.25rem 0.6rem;font:inherit;cursor:pointer;">reset</button>
+  </div>
+</header>
+<div id="status">Loading font list…</div>
+<div class="grid" id="grid" hidden></div>
+
+<script>
+(async function () {
+  const status = document.getElementById("status");
+  const grid = document.getElementById("grid");
+  const meta = document.getElementById("meta");
+
+  let fonts;
+  try {
+    const res = await fetch("https://api.fontsource.org/v1/fonts");
+    const all = await res.json();
+    fonts = all
+      .filter(f => f.type === "google")
+      .sort((a, b) => a.family.localeCompare(b.family));
+  } catch (e) {
+    status.textContent = "Failed to load font list: " + e.message;
+    return;
+  }
+
+  status.hidden = true;
+  grid.hidden = false;
+
+  let visible = fonts.length;
+  const updateCount = () => { meta.textContent = `${visible} / ${fonts.length}`; };
+  updateCount();
+
+  // Batched font loading: queue families discovered by IntersectionObserver,
+  // flush as a single CSS2 request every ~120ms or once the batch hits 40.
+  const loaded = new Set();
+  let queue = [];
+  let timer = null;
+
+  const flush = () => {
+    timer = null;
+    if (!queue.length) return;
+    const batch = queue.splice(0, queue.length);
+    const params = batch.map(f => {
+      const name = encodeURIComponent(f.family).replace(/%20/g, "+");
+      return f.styles.includes("italic")
+        ? `family=${name}:ital@0;1`
+        : `family=${name}`;
+    }).join("&");
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = `https://fonts.googleapis.com/css2?${params}&display=swap`;
+    document.head.appendChild(link);
+  };
+
+  const enqueue = f => {
+    if (loaded.has(f.family)) return;
+    loaded.add(f.family);
+    queue.push(f);
+    if (queue.length >= 40) {
+      clearTimeout(timer);
+      flush();
+    } else if (!timer) {
+      timer = setTimeout(flush, 120);
+    }
+  };
+
+  const io = new IntersectionObserver(entries => {
+    for (const e of entries) {
+      if (e.isIntersecting) {
+        enqueue(e.target._font);
+        io.unobserve(e.target);
+      }
+    }
+  }, { rootMargin: "400px 0px" });
+
+  const fallbackFor = c =>
+    c === "monospace" ? "monospace"
+    : c === "handwriting" ? "cursive"
+    : c === "display" ? "fantasy"
+    : c === "sans-serif" ? "sans-serif"
+    : "serif";
+
+  const pinCell = cell => {
+    if (cell.classList.contains("pinned")) {
+      // unpin: drop pastel, restore alphabetical slot among unpinned tiles
+      cell.classList.remove("pinned");
+      cell.style.removeProperty("--pin-hue");
+      const idx = +cell.dataset.idx;
+      let anchor = null;
+      for (const c of grid.children) {
+        if (c === cell || c.classList.contains("pinned")) continue;
+        if (+c.dataset.idx > idx) { anchor = c; break; }
+      }
+      grid.insertBefore(cell, anchor); // null anchor = appendChild
+    } else {
+      cell.style.setProperty("--pin-hue", Math.floor(Math.random() * 360));
+      cell.classList.add("pinned");
+      grid.insertBefore(cell, grid.firstChild);
+    }
+  };
+
+  fonts.forEach((f, i) => {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    cell.title = `${f.family} · ${f.category}`;
+    cell.dataset.category = f.category;
+    cell.dataset.italic = f.styles.includes("italic") ? "1" : "0";
+    cell.dataset.idx = i;
+    cell._font = f;
+    const fam = f.family.replace(/'/g, "\\'");
+    cell.innerHTML =
+      `<div class="amp" style="font-family:'${fam}',${fallbackFor(f.category)};">&amp;</div>` +
+      `<div class="name">${f.family}</div>`;
+    cell.addEventListener("click", () => pinCell(cell));
+    grid.appendChild(cell);
+    io.observe(cell);
+  });
+
+  // Controls
+  document.getElementById("italic").addEventListener("change", e => {
+    document.body.classList.toggle("italic", e.target.checked);
+  });
+  document.getElementById("size").addEventListener("input", e => {
+    document.documentElement.style.setProperty("--cell-min", e.target.value + "px");
+  });
+  document.getElementById("category").addEventListener("change", e => {
+    const cat = e.target.value;
+    visible = 0;
+    for (const cell of grid.children) {
+      const match = !cat || cell.dataset.category === cat;
+      cell.style.display = match ? "" : "none";
+      if (match) visible++;
+    }
+    updateCount();
+  });
+  document.getElementById("reset").addEventListener("click", () => location.reload());
+})();
+</script>
+</body>
+</html>

@@ -272,6 +272,10 @@ def update_fonts(c):
         c.run("nix build .#build.merriweather")
         c.run("install -m 0644 result/*.woff2 content/media/fonts/")
         c.run("rm result")
+    with step("building Playfair"):
+        c.run("nix build .#build.playfair")
+        c.run("install -m 0644 result/*.woff2 content/media/fonts/")
+        c.run("rm result")
 
 
 @task

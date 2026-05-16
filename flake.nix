@@ -333,6 +333,36 @@
             '';
             installPhase = "true";
           };
+          build.playfair = pkgs.stdenvNoCC.mkDerivation {
+            name = "custom-playfair";
+            dontUnpack = true;
+            # "Playfair Display" on Google Fonts is a wght-only VF, distinct
+            # from the unified clauseggers/Playfair redesign. Fetch the
+            # canonical file directly from the google/fonts repo.
+            buildPhase =
+              let
+                playfairDisplay = pkgs.fetchurl {
+                  url = "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf";
+                  sha256 = "1mnq2wcij7d35vz95rydrfvwr924z0p537nf1k3knl3afs9j43y4";
+                };
+              in
+              ''
+                mkdir -p $out
+                # Slice wght to 400 (normal) .. 700 (bold). No wdth or opsz axes here.
+                ${fonttools}/bin/fonttools varLib.instancer \
+                  -o playfair-vf.ttf \
+                  ${playfairDisplay} \
+                  wght=400:700
+                # Keep only U+0026 (ampersand)
+                ${fonttools}/bin/pyftsubset playfair-vf.ttf \
+                  --flavor=woff2 \
+                  --no-hinting \
+                  --unicodes=U+0026 \
+                  --layout-features= \
+                  --output-file=$out/playfair-custom.woff2
+              '';
+            installPhase = "true";
+          };
           build.iosevka = pkgs.stdenvNoCC.mkDerivation {
             name = "custom-iosevka";
             dontUnpack = true;
