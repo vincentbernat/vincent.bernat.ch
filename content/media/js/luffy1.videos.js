@@ -37,29 +37,19 @@ luffy.do(() => {
       // Remove all sources from clone. Keep tracks.
       allSources.forEach((source) => source.remove());
 
-      // Add an empty source (enable play event on Chromium 72+)
-      newVideo.src =
-        "data:video/mp4;base64,AAAAHGZ0eXBpc29tAAACAGlzb21pc28ybXA0MQAAAcdtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAAPoAAAAAAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAABU3RyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAO9tZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAAAPoAAAAAAAAAAAAAAAtaGRscgAAAAAAAAAAdmlkZQAAAAAAAAAAAAAAAFZpZGVvSGFuZGxlcgAAAACabWluZgAAABJ2bWhkAAAAAQAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAFxzdGJsAAAAEHN0c2QAAAAAAAAAAAAAABBzdHRzAAAAAAAAAAAAAAAQc3RzYwAAAAAAAAAAAAAAFHN0c3oAAAAAAAAAAAAAAAAAAAAQc3RjbwAAAAAAAAAA";
+      // Enable HLS on the video
+      const hls = new Hls({
+        autoStartLoad: false,
+        capLevelToPlayerSize: true,
+        maxMaxBufferLength: 90,
+      });
+      hls.loadSource(m3u8);
+      hls.attachMedia(newVideo);
+      newVideo.addEventListener("play", () => hls.startLoad(), false);
+      pauseOthersWhenPlaying(newVideo);
 
       // Replace video tag with our clone.
       oldVideo.parentNode.replaceChild(newVideo, oldVideo);
-
-      // Pass control to hls.js
-      const play = () => {
-        if (once) return;
-        const hls = new Hls({
-          capLevelToPlayerSize: true,
-          maxMaxBufferLength: 90,
-        });
-        hls.loadSource(m3u8);
-        hls.attachMedia(newVideo);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          newVideo.play();
-        });
-        once = true;
-      };
-      newVideo.addEventListener("play", play, false);
-      pauseOthersWhenPlaying(newVideo);
     });
   });
 });

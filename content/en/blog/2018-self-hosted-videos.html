@@ -234,45 +234,38 @@ fall back to the progressive MP4 version. However, with the help of
 [hls.js][], we can ensure most browsers benefit from the HLS version
 too:
 
-    ::html
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <script>
-        if(Hls.isSupported()) {
-            var selector = "video source[type='application/vnd.apple.mpegurl']",
-                videoSources = document.querySelectorAll(selector);
-            videoSources.forEach(function(videoSource) {
-                var m3u8 = videoSource.src,
-                    once = false;
+```html
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+    if(Hls.isSupported()) {
+        var selector = "video source[type='application/vnd.apple.mpegurl']",
+            videoSources = document.querySelectorAll(selector);
+        videoSources.forEach(function(videoSource) {
+            var m3u8 = videoSource.src,
+                once = false;
 
-                // Clone the video to remove any source
-                var oldVideo = videoSource.parentNode,
-                    newVideo = oldVideo.cloneNode(false);
+            // Clone the video to remove any source
+            var oldVideo = videoSource.parentNode,
+                newVideo = oldVideo.cloneNode(false);
 
-                // Replace video tag with our clone.
-                oldVideo.parentNode.replaceChild(newVideo, oldVideo);
-
-                // Add an empty source (enable play event on Chromium 72+)
-                newVideo.src = "about:blank";
-
-                // On play, initialize hls.js, once.
-                newVideo.addEventListener('play',function() {
-                    if (once) return;
-                    once = true;
-
-                    var hls = new Hls({ capLevelToPlayerSize: true });
-                    hls.loadSource(m3u8);
-                    hls.attachMedia(newVideo);
-                    hls.on(Hls.Events.MANIFEST_PARSED, function() {
-                        newVideo.play();
-                    });
-                }, false);
+            // Enable HLS on the video
+            const hls = new Hls({
+              autoStartLoad: false,
+              capLevelToPlayerSize: true,
+              maxMaxBufferLength: 90,
             });
-        }
-    </script>
+            hls.loadSource(m3u8);
+            hls.attachMedia(newVideo);
+            newVideo.addEventListener("play", () => hls.startLoad(), false);
 
-!!! "Update (2018-12)" Starting from Chromium 72, a video without a
-source (like built with the snippet above) cannot trigger a play event
-anymore. Therefore, we use a dummy source using `about:blank`.
+            // Replace video tag with our clone.
+            oldVideo.parentNode.replaceChild(newVideo, oldVideo);
+        });
+    }
+</script>
+```
+
+!!! "Update (2026-05)" The snippet above was simplified.
 
 Here is the result, featuring [*Caminandes 3: Llamigos*][video], a
 video created by Pablo Vasquez, produced by the [Blender Foundation][]
