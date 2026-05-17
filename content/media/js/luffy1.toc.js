@@ -68,15 +68,15 @@ luffy.do(() => {
     }
   };
 
-  /* Throttle updates to once per frame update. */
+  /* Throttle updates to once every 500ms. */
   let pending = false;
   const schedule = () => {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       pending = false;
       apply();
-    });
+    }, 500);
   };
 
   new ResizeObserver(schedule).observe(document.body);
