@@ -81,11 +81,30 @@ const rlhUnit = {
 };
 
 // light-dark() fallback: for each rule with declarations using light-dark(a,
-// b), insert a @supports fallback with the light value.
+// b), insert a fallback with the light value before. Also wrap the body of any
+// @media (prefers-color-scheme: dark) in an @supports (color: light-dark())
+// gate so that browsers without light-dark() support fall back to the light
+// scheme instead of mixing it with dark-mode overrides.
 const lightDarkFallback = {
     postcssPlugin: "light-dark-fallback",
+    Once(root) {
+        const targets = [];
+        root.walkAtRules("media", (atRule) => {
+            if (/prefers-color-scheme\s*:\s*dark/.test(atRule.params)) {
+                targets.push(atRule);
+            }
+        });
+        targets.forEach((atRule) => {
+            const supports = postcss.atRule({
+                name: "supports",
+                params: "(color: light-dark(red, red))",
+            });
+            atRule.nodes.forEach((node) => supports.append(node.clone()));
+            atRule.removeAll();
+            atRule.append(supports);
+        });
+    },
     Rule(rule) {
-        const fallbackDecls = [];
         rule.each((node) => {
             if (node.type !== "decl") return;
             const fallback = node.value.replace(
