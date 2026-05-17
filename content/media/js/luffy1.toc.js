@@ -2,7 +2,7 @@
    link is lf-toc-active from the moment its heading is in the viewport until
    the next heading at the same or shallower TOC depth has scrolled above. Then,
    the class lf-toc-past applies. */
-(() => {
+luffy.do(() => {
   const toc = document.querySelector(".lf-main .toc");
   if (!window.ResizeObserver || !toc) return;
 
@@ -81,4 +81,4 @@
 
   new ResizeObserver(schedule).observe(document.body);
   addEventListener("scroll", schedule, { passive: true });
-})();
+});

@@ -1,7 +1,7 @@
 /* Keep vertical rhythm around media. One day, this could be done with CSS
    Rhythmic Sizing Module Level 1: https://www.w3.org/TR/css-rhythm-1/ */
 
-(() => {
+luffy.do(() => {
   const targets = document.querySelectorAll(".lf-media-outer, .lf-gallery");
   if (!window.ResizeObserver || !targets.length) return;
 
@@ -38,4 +38,4 @@
       adjust(el, height);
     }
   }).observe(document.documentElement);
-})();
+});
