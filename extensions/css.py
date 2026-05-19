@@ -60,5 +60,5 @@ class PostCSSPlugin(Plugin):
             env=env,
         )
         stdout, _ = p.communicate(text.encode("utf-8"))
-        assert p.returncode == 0
+        assert p.returncode == 0, f"error while processing CSS resource {resource}"
         return stdout.decode("utf-8")
