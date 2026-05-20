@@ -62,6 +62,15 @@ def localname(tag):
     return tag.rsplit("}", 1)[-1]
 
 
+def replace_attr(el, name):
+    """Rewrite an attribute holding a font name list (font-family, face)."""
+    value = el.get(name)
+    if value:
+        stack = replacement_for(value)
+        if stack:
+            el.set(name, stack)
+
+
 class SVGFontsPlugin(Plugin):
     """Normalize font-family declarations in SVG files."""
 
@@ -70,11 +79,10 @@ class SVGFontsPlugin(Plugin):
             return
         root = lxml.etree.fromstring(text.encode("utf-8"))
         for el in root.iter():
-            family = el.get("font-family")
-            if family:
-                stack = replacement_for(family)
-                if stack:
-                    el.set("font-family", stack)
+            replace_attr(el, "font-family")
+            # Deprecated XHTML <font face="..."> inside <foreignObject>.
+            if localname(el.tag) == "font":
+                replace_attr(el, "face")
             style = el.get("style")
             if style:
                 el.set("style", rewrite_css(style))
