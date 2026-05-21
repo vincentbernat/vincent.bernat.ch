@@ -340,10 +340,18 @@
             # Baskerville is a wght-only VF.
             buildPhase =
               let
-                baskervilleItalic = pkgs.fetchurl {
-                  url = "https://github.com/google/fonts/raw/main/ofl/librebaskerville/LibreBaskerville-Italic%5Bwght%5D.ttf";
-                  hash = "sha256-IjlZaD3HPsRDe9Yfq6pLPyIgniKFX/067ja6YaURbpc=";
-                };
+                baskervilleItalic = pkgs.fetchurl (
+                  let
+                    commit = "9e63336c5ec724faa1e1e394745b33dcbb58a9c9";
+                    hash = "sha256-IjlZaD3HPsRDe9Yfq6pLPyIgniKFX/067ja6YaURbpc=";
+                    font = "librebaskerville/LibreBaskerville-Italic%5Bwght%5D.ttf";
+                  in
+                  {
+                    inherit hash;
+
+                    url = "https://github.com/google/fonts/raw/${commit}/ofl/${font}";
+                  }
+                );
               in
               ''
                 mkdir -p $out
