@@ -1,8 +1,9 @@
 ---
-title: "Mise à l'échelle de la RIB BMP d'Akvorado avec le sharding"
+title: "Augmentation des performances de la RIB d'Akvorado grâce au sharding"
 description: |
-  Comment le composant BMP d'Akvorado passe à l'échelle de dizaines de millions
-  de routes grâce au sharding de la RIB et aux lectures sans verrou.
+  Comment le composant BMP d'Akvorado gère des dizaines de millions
+  de routes grâce au partitionnement des routes et aux lectures sans
+  verrouillage.
 uuid: df3049ca-6b1d-4fff-8c35-66f5ac03cd5e
 cover: akvorado/sharding-step2.svg
 tags:
@@ -11,25 +12,25 @@ tags:
 ai-usage: Traduit de l'anglais (Claude Opus 4.7)
 ---
 
-Pour associer des informations de routage — comme les chemins AS ou les
-communautés BGP — aux flux, [Akvorado][] peut importer des routes via le [BGP
+Pour associer des informations de routage, telles que les chemins d'AS ou les
+communautés BGP, aux flux, [Akvorado][] peut importer des routes via le [BGP
 Monitoring Protocol][] (BMP). Comme la table de routage Internet contient plus
-d'[un million de routes][1 million routes], Akvorado doit **passer à l'échelle
-de dizaines de millions de routes**[^optimize]. C'est un défi de longue
-date[^past], mais je pense que ce problème est désormais résolu grâce au
-**sharding de la RIB**, une méthode qui découpe la base de routage en plusieurs
-parties afin d'autoriser des mises à jour concurrentes.
+d'[un million de routes][1 million routes], Akvorado doit **gérer des dizaines
+de millions de routes**[^optimize]. C'est un défi de longue date[^past], mais je
+pense que ce problème est désormais résolu grâce au **sharding de la RIB**, une
+méthode qui découpe la base de routage en plusieurs parties afin de permettre
+les mises à jour concurrentes.
 
 [^optimize]: Chaque routeur exportant des flux n'a pas besoin d'envoyer ses
     routes. Quand Akvorado ne trouve pas de route pour un équipement donné, il
     se rabat sur une route envoyée par un autre équipement. C'est à l'opérateur
     de juger si cette approximation est acceptable.
 
-[^past]: J'ai effectué de nombreuses tentatives pour faire monter en charge le
-    composant BMP. Voir par exemple [PR #254][], [PR #255][], [PR #278][],
-    [PR #2244][] et [PR #2245][]. Malgré ces efforts, ce composant est resté
-    problématique pour la plupart des utilisateurs. Voir la [discussion
-    #2287][discussion #2287] comme exemple le plus récent.
+[^past]: J'ai effectué de nombreuses tentatives pour augmenter l'efficacité du
+    composant BMP. Voir par exemple les [PR #254][], [PR #255][], [PR #278][],
+    [PR #2244][] et [PR #2245][]. Malgré ces efforts, ce composant est resté
+    problématique pour certains utilisateurs. Voir la
+    [discussion #2287][discussion #2287] comme exemple le plus récent.
 
 [akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
 [bgp monitoring protocol]: rfc://7854 "BGP Monitoring Protocol (BMP)"
@@ -62,12 +63,11 @@ mémoire de chaque structure et un unique verrou.]([[!!images/akvorado/sharding-
 Dans le diagramme ci-dessus, la RIB stocke cinq préfixes IPv4 et deux préfixes
 IPv6. L'un d'eux, `2001:db8:1::/48`, contient trois routes :
 
-- depuis le pair 3, prochain saut `2001:db8::3:1`, AS 65402, chemin AS `65402`,
-  communauté `65402:31` ;
-- depuis le pair 4, prochain saut `2001:db8::4:1`, mêmes ASN, chemin AS et
-  communauté ;
-- depuis le pair 5, prochain saut `2001:db8::5:1`, mêmes ASN, chemin AS
-  `65401 65402`, communauté `65402:31`.
+- depuis le pair 3, via `2001:db8::3:1`, AS 65402, chemin d'AS `65402`, communauté
+  `65402:31` ;
+- depuis le pair 4, via `2001:db8::4:1`, mêmes ASN, chemin d'AS et communauté ;
+- depuis le pair 5, via `2001:db8::5:1`, AS 65402, chemin d'AS `65401 65402`,
+  communauté `65402:31`.
 
 La structure `rib` est définie en Go de la manière suivante :
 
@@ -85,40 +85,40 @@ type rib struct {
 
 L'arbre de préfixes s'appuie sur le paquet [bart][], une adaptation de
 l'[algorithme ART][art algorithm] de Donald Knuth. Les [benchmarks][] montrent
-qu'il surpasse les autres paquets pour les recherches, les insertions et la
-consommation mémoire[^performance]. De plus, l'auteur est très réactif.
+qu'il surpasse les autres implémentations pour les recherches, les insertions et
+la consommation mémoire[^performance]. De plus, l'auteur est d'une grande aide.
 
 [^performance]: Cela continue de s'améliorer : [bart 0.28.0][] introduit une
-    nouvelle implémentation qui troque un peu de mémoire contre de meilleures
-    performances en recherche. Je ne l'ai pas encore essayée car cela fait
-    déjà quelques mois que je prépare ce billet.
+    implémentation alternative qui troque un peu de mémoire contre de meilleures
+    performances en recherche. Je ne l'ai pas encore essayée car cela fait déjà
+    quelques mois que je prépare ce billet.
 
 [art algorithm]: https://www.hariguchi.org/art/art.pdf "ART: A Fast Free Multibit Trie Based Routing Table"
 [benchmarks]: https://github.com/gaissmai/iprbench
 [bart 0.28.0]: https://github.com/gaissmai/bart/releases/tag/v0.28.0 "bart release v0.28.0: New FastNode implementation"
 
-## Stocker les routes dans une table
-
+## Stocker les routes dans une table associative
 
 La liste des routes de chaque préfixe n'est pas stockée directement dans
 l'arbre de préfixes : cela mettrait trop de pression sur le ramasse-miettes en
 allouant un tableau par préfixe.
 
-À la place, la RIB attribue un identifiant 32 bits unique à chaque préfixe,
+À la place, la RIB attribue un identifiant de 32 bits unique à chaque préfixe,
 soit en prenant le dernier identifiant disponible dans le tableau
-`freePrefixIDs` s'il y en a un, soit en utilisant la valeur `nextPrefixID`
-avant de l'incrémenter. Les routes sont ensuite stockées dans la table
-`routes`, qui s'appuie sur la [Swiss table optimisée][swiss] de Go. Pour
-récupérer les routes attachées à un préfixe, nous combinons l'index 32 bits du
-préfixe avec un index 32 bits de route, ce qui donne une clé 64 bits servant à
-rechercher la route cible dans la table `routes`. Akvorado parcourt les routes
-de la première à la dernière pour trouver la meilleure[^scan]. Il sait qu'il
-n'y a plus de route lorsque la clé ne renvoie aucun résultat.
+`freePrefixIDs`, soit en utilisant la valeur `nextPrefixID` avant de
+l'incrémenter. Les routes sont ensuite stockées dans la table associative
+`routes`, qui s'appuie en Go sur une [structure particulièrement
+optimisée][swiss]. Pour récupérer les routes attachées à un préfixe, nous les
+cherchons un par un dans la table `routes` via une clef de 64 bits qui combine
+l'index de 32 bits du préfixe avec l'index de 32 bits représentant la position
+de la route dans la liste. Akvorado parcourt les routes de la première à la
+dernière pour trouver la meilleure[^scan]. Il sait qu'il n'y a plus de route
+lorsque la clé ne renvoie aucun résultat.
 
 [^scan]: Akvorado préfère la route dont le prochain saut correspond exactement.
     Sinon, il se rabat sur n'importe quelle autre route. C'est une
     approximation. Une alternative consisterait à maintenir un arbre de
-    préfixes par pair, mais il faudrait alors configurer tous les routeurs pour
+    préfixes par pair BGP, mais il faudrait alors configurer tous les routeurs pour
     qu'ils exportent leurs routes. Le démon BMP de [pmacct][] adopte cette
     approche.
 
@@ -132,9 +132,9 @@ type routeKey uint64
 [swiss]: https://go.dev/blog/swisstable "Faster Go maps with Swiss Tables"
 [pmacct]: http://www.pmacct.net/
 
-## Interner les routes
+## Canonisation des routes
 
-Une route contient un identifiant de pair, un NLRI partiel[^nlri], le prochain
+Une route contient un identifiant de pair BGP, un NLRI partiel[^nlri], le prochain
 saut et les attributs.
 
 [^nlri]: Si nous considérons la RIB BGP comme une base de données, le NLRI
@@ -172,25 +172,24 @@ type routeAttributes struct {
 ```
 
 Pour économiser la mémoire et les allocations, les NLRI, les prochains sauts et
-les attributs de route sont « internés » : un entier 32 bits remplace la valeur
-réelle. Ce mécanisme est antérieur au [paquet `unique` de Go][unique],
-introduit dans Go 1.23. Nous conservons le paquet `intern` car ses compromis
-sont différents :
+les attributs de route sont canonisés : un entier de 32 bits remplace la valeur
+réelle. Ce mécanisme est antérieur au [paquet `unique`][unique] introduit dans
+Go 1.23. Nous le conservons car ses compromis sont différents :
 
 - il utilise un **comptage de références explicite** plutôt que des pointeurs
   faibles ;
 - il fonctionne avec des **valeurs non comparables** implémentant les méthodes
   `Hash()` et `Equal()`[^hash] ;
-- il utilise des **instances de pool explicites**, ce qui se révèle utile pour
+- il utilise des **instances explicites pour la canonisation**, ce qui se révèlera utile pour
   le sharding ;
 - il offre de **meilleures performances**. Voir par exemple ce [benchmark][] ;
-- il consomme **deux fois moins de mémoire** grâce à des références 32 bits non
-  signées plutôt qu'à des pointeurs ;
+- il consomme **deux fois moins de mémoire** grâce à des références 32 bits
+  plutôt que des pointeurs ;
 - mais il **n'est pas utilisable de manière concurrente**.
 
 [^hash]: Les méthodes `Hash()` s'appuient sur les paquets
-    [`hash/maphash`][hash/maphash] et [`unsafe`][unsafe] pour éviter les copies
-    en mémoire. Voir par exemple la [fonction `Hash()` de la structure
+    [`hash/maphash`][hash/maphash] et [`unsafe`][unsafe] pour une meilleure
+    performance. Voir par exemple la [fonction `Hash()` de la structure
     `nlri`][nlri.Hash()].
 
 [ADD-PATH]: rfc://7911 "Advertisement of Multiple Paths in BGP"
@@ -201,58 +200,55 @@ sont différents :
 [benchmark]: https://github.com/akvorado/akvorado/pull/2244/changes/682b6063af50780dcd64e46b39d5e66c5074d9ab "outlet/routing: use Go's unique instead of intern"
 *[NLRI]: Network Layer Reachability Information
 
-## Pourquoi cela ne passe-t-il pas à l'échelle ?
+## Qu'est-ce qui pose problème ?
 
-!!! "Note" À l'[AS 12322][free], nous n'utilisons pas encore BMP[^cisco]. Mais
+!!! "Note" Pour l'[AS 12322][free], nous n'utilisons pas encore BMP[^cisco]. Mais
 [Gerhard Bogner][] a eu la patience, la disponibilité et les compétences
 techniques pour m'aider à [déboguer ce problème][discussion #2287].
 
-[^cisco]: Bien qu'auteur ou co-auteur des premiers RFC liés à BMP depuis 2016
-    ([RFC 7854][], [RFC 8671][], [RFC 9069][]), Cisco n'a pas proposé
+[^cisco]: Bien qu'auteur ou co-auteur des premières RFC liées à BMP depuis 2016
+    ([RFC 7854][], [RFC 8671][], [RFC 9069][]), Cisco n'a pas fourni
     d'implémentation utilisable dans IOS XR avant la version 24.2.1. Il nous
     reste encore quelques routeurs à mettre à jour pour activer cette
     fonctionnalité.
 
 Le verrou global en lecture/écriture est le goulot d'étranglement de cette
-implémentation. Mais comment ? Plusieurs composants utilisent la RIB, chacun
+implémentation. Mais pourquoi ? Plusieurs composants utilisent la RIB, chacun
 avec ses propres contraintes :
 
-- Les **workers Kafka** consultent la RIB pour enrichir les flux avec des
-  informations de routage. Leur nombre est borné par le nombre de partitions
+- Les **consommateurs Kafka** consultent la RIB pour enrichir les flux avec des
+  informations de routage. Leur nombre est bornée par la somme des partitions
   Kafka[^KIP-932]. Akvorado ajuste également ce nombre afin de garantir un
-  envoi groupé efficace vers ClickHouse. Sur notre installation, le nombre de
-  workers oscille entre 8 et 16. Comme nous voulons observer les données les
-  plus récentes, nous ne pouvons pas nous permettre que les workers Kafka
-  prennent trop de retard.
+  export groupé efficace des flux vers ClickHouse. Sur notre installation, la
+  quantité de consommateurs oscille entre 8 et 16. Comme nous voulons observer les
+  données récentes le plus tôt possible, nous ne pouvons pas nous permettre que
+  les consommateurs Kafka prennent trop de retard.
 
-- Les **routeurs surveillés** envoient les mises à jour de routes via le
-  protocole BMP. À la connexion, ils peuvent envoyer des millions de
-  routes[^bmpconfig]. Après la synchronisation initiale, les mises à jour
-  arrivent en continu et peuvent connaître des pics ponctuels. Le routeur
-  surveillé détecte une station BMP bloquée lorsque sa fenêtre TCP est saturée
-  et réinitialise la session dans ce cas. Bien qu'Akvorado dispose d'un grand
-  tampon d'entrée, il doit néanmoins appliquer les routes reçues avec le
-  verrou en écriture suffisamment vite pour ne pas être considéré comme
-  bloqué.
+- Les **routeurs surveillés** envoient leurs routes via le protocole BMP. À la
+  connexion, ils peuvent envoyer des millions de routes[^bmpconfig]. Après la
+  synchronisation initiale, les mises à jour arrivent en continu et peuvent
+  connaître des pics ponctuels. Le routeur détecte une station BMP bloquée
+  lorsque sa fenêtre TCP est pleine. Dans ce cas, il réinitialise la session.
+  Bien qu'Akvorado dispose d'un important tampon en entrée, il doit appliquer
+  les routes reçues suffisamment vite pour ne pas être considéré comme bloqué.
 
-- Quand un **pair distant tombe**, Akvorado purge les routes associées en
-  parcourant la RIB, verrou en écriture maintenu. Quand un **routeur surveillé
-  tombe**, Akvorado patiente un peu, mais finit par purger toutes les routes
-  associées.
+- Quand un **pair BGP distant tombe**, Akvorado purge les routes associées en
+  parcourant la RIB. Quand un **routeur surveillé tombe**, Akvorado patiente un
+  peu, mais finit par purger toutes les routes associées.
 
 En résumé : sur une installation chargée, la contention sur le verrou est
 forte autant pour les lecteurs que pour les écrivains, et aucun des deux ne
 peut prendre trop de retard.
 
-[^KIP-932]: [KIP-932][] introduit, dans Kafka 4.2, la notion de *share groups*
-    pour permettre la consommation coopérative d'une même partition par
-    plusieurs consommateurs. Akvorado ne la prend pas encore en charge.
+[^KIP-932]: La [KIP-932][] introduit, dans Kafka 4.2, la notion de *groupes
+    partagés* pour permettre la consommation coopérative d'une même partition.
+    Akvorado ne la prend pas encore en charge.
 
-[^bmpconfig]: BMP peut être configuré pour envoyer les routes de chaque pair
-    avant ou après l'application des politiques entrantes. Dans ce dernier
-    cas, plus d'un million de routes peuvent arriver par pair de transit. BMP
-    peut aussi être configuré pour envoyer la RIB locale, qui ne contient que
-    le meilleur chemin pour chaque préfixe.
+[^bmpconfig]: BMP peut être configuré pour envoyer les routes de chaque pair BGP
+    avant ou après l'application des politiques entrantes. Dans ce dernier cas,
+    plus d'un million de routes peuvent arriver par transit. BMP peut aussi être
+    configuré pour envoyer la RIB locale, qui ne contient que le meilleur chemin
+    pour chaque préfixe.
 
 [RFC 7854]: rfc://7854 "BGP Monitoring Protocol (BMP)"
 [RFC 8671]: rfc://8671 "Support for Adj-RIB-Out in the BGP Monitoring Protocol (BMP)"
@@ -266,43 +262,42 @@ peut prendre trop de retard.
 
 # Sharding de la RIB
 
-## Première étape : sharding de base
+## Première étape
 
 Pour supprimer le verrou global, la RIB est découpée en plusieurs « shards »,
 chacun gérant un sous-ensemble des préfixes :
 
 ![Implémentation de la RIB BMP d'Akvorado après le sharding, avec la disposition
-mémoire de chaque structure et un verrou par shard.]([[!!images/akvorado/sharding-step1.svg]]
-"Implémentation de la RIB BMP d'Akvorado avec sharding")
+mémoire de chaque structure et un verrou par partition.]([[!!images/akvorado/sharding-step1.svg]]
+"Implémentation de la RIB BMP d'Akvorado avec sharding.")
 
-L'arbre de préfixes reste global et reste protégé par un unique verrou. Chaque
-shard dispose de son propre verrou en lecture/écriture, de sa table de routes
-et de ses pools d'internement pour stocker les NLRI, les prochains sauts et
-les attributs de route — ce qui n'aurait pas été possible avec le [paquet
-`unique` de Go][unique]. Les index de préfixes sont eux aussi shardés : les 8
-bits de poids fort correspondent à l'index du shard et les 24 bits restants à
-l'index local du préfixe.
+L'arbre de préfixes reste global et protégé par un unique verrou. Chaque
+partition dispose de son propre verrou en lecture/écriture, de sa table de
+routes et de ses blocs de canonisation pour stocker les NLRI, les prochains
+sauts et les attributs de route, ce qui n'aurait pas été possible avec le
+[paquet `unique` de Go][unique]. Les index de préfixes sont eux aussi
+partitionnés : les 8 bits de poids fort correspondent à l'index de la partition
+et les 24 bits de poids faible à l'index local du préfixe.
 
-Gerhard [a confirmé][confirmation] qu'après [ce changement à
-l'aveugle][7e6bbf2210fd], le récepteur BMP tournait régulièrement. 🎉
+Gerhard [a confirmé][confirmation] que suite à [ce changement à
+l'aveugle][7e6bbf2210fd], le composant BMP a commencé à ronronner. 🎉
 
-J'ai ensuite écrit un [benchmark concurrent][concurrent benchmark] portant sur
-un demi-million de routes synthétiques mais plausibles[^plausible], réparties
-entre 0 et 8 écrivains qui modifient les routes aussi vite que possible, tandis
-que 1 à 16 lecteurs consultent en boucle un ensemble de 10 000 routes.
+J'ai ensuite écrit un [benchmark][concurrent benchmark] portant sur un
+demi-million de routes synthétiques mais plausibles[^plausible], réparties entre
+0 et 8 écrivains qui modifient les routes aussi vite que possible, tandis que 1
+à 16 lecteurs consultent en boucle un ensemble de 10 000 routes. J'ignore si ce
+benchmark est réaliste, mais il confirme les améliorations à la fois sur les
+latences en lecture et en écriture :
 
-[^plausible]: Les préfixes sont aléatoires, mais la distribution de leur taille
+[^plausible]: Les préfixes sont aléatoires, mais la distribution de leurs tailles
     et celle des longueurs de chemin AS suivent les [données fournies par
     Geoff Huston][data provided by Geoff Huston].
-
-J'ignore si ce benchmark est réaliste, mais il confirme les améliorations à la
-fois sur les latences en lecture et en écriture :
 
 ![Deux cartes de chaleur. L'une pour le ratio de latence en lecture, l'autre
 pour celui de la latence en écriture. Toutes deux comparent l'accélération
 entre le code avant et après le sharding via des cases colorées. La plupart des
 cases sont vertes.]([[!!images/akvorado/sharding-heatmap.svg]] "Amélioration des
-performances de latence en lecture et en écriture après le sharding")
+performances de latence en lecture et en écriture après le sharding.")
 
 Il montre également qu'un grand nombre d'écrivains dégrade la latence en
 lecture.
@@ -312,24 +307,20 @@ lecture.
 [data provided by Geoff Huston]: https://bgp.potaroo.net/as2.0/ "AS65000 BGP Routing Table Analysis Report"
 [7e6bbf2210fd]: http://github.com/akvorado/akvorado/commit/7e6bbf2210fdf7116d2ee168b307b9906cc223c0 "outlet/routing: implement RIB sharding for BMP"
 
-<!-- Commit before sharding but with benchmark: 87a11d72a990 -->
+## Deuxième étape
 
-
-## Deuxième étape : lectures sans verrou
-
-L'unique verrou en lecture/écriture protégeant l'arbre de préfixes constitue
-la cible suivante. Le paquet [bart][] propose des méthodes de mutation
-alternatives qui renvoient un arbre mis à jour par copie sur écriture. Les
-lecteurs n'ont plus besoin du verrou global, qui ne sert plus qu'à
-synchroniser les écrivains. L'arbre de préfixes est encapsulé dans un pointeur
-atomique.
+L'unique verrou en lecture/écriture protégeant l'arbre de préfixes constitue la
+cible suivante. Le paquet [bart][] propose des méthodes alternatives pour les
+mutations. Elles renvoient un arbre mis à jour via une copie partielle. Les
+lecteurs n'ont plus besoin du verrou global, qui ne sert plus qu'à synchroniser
+les écrivains. L'arbre de préfixes est encapsulé dans un pointeur atomique.
 
 ![Implémentation de la RIB BMP d'Akvorado pour le sharding avec lectures sans
 verrou, avec la disposition mémoire de chaque structure.]([[!!images/akvorado/sharding-step2.svg]]
-"Implémentation de la RIB BMP d'Akvorado avec sharding et lectures sans verrou")
+"Implémentation de la RIB BMP d'Akvorado avec sharding et lectures sans verrou.")
 
 Sans verrou, un lecteur peut désormais récupérer un index de préfixe périmé en
-parcourant sa copie de l'arbre, si un écrivain concurrent supprime la dernière
+parcourant sa copie de l'arbre, lorsqu'un écrivain concurrent supprime la dernière
 route attachée à cet index et le recycle pour un autre préfixe. Pour éviter ce
 problème, nous combinons l'index de préfixe avec un numéro de génération que
 nous stockons dans l'arbre :
@@ -347,19 +338,23 @@ type rib struct {
 }
 ```
 
-Chaque shard stocke le numéro de génération de chaque index de préfixe local.
-Ce numéro est incrémenté quand l'index de préfixe associé est libéré. Lors de
-la recherche des routes attachées à un index de préfixe, le lecteur vérifie
-que le numéro de génération correspond. Sinon, il considère que l'index a été
-recyclé et que la liste de routes est vide. Le diagramme ci-dessus illustre ce
-cas pour l'index de préfixe 5, stocké avec un numéro de génération de 3, alors
-que la valeur actuelle dans le tableau `[]generations` est 4. Le numéro de
-génération peut déborder, mais ce n'est pas un problème car les recherches
-sont rapides.
+Chaque partition stocke le numéro de génération de chaque index de préfixe
+local. Ce numéro est incrémenté quand l'index de préfixe associé est libéré.
+Lors de la recherche des routes attachées à un index de préfixe, le lecteur
+vérifie que le numéro de génération correspond. Sinon, il considère que l'index
+a été recyclé et que la liste de routes est vide[^retry]. Le schéma précédent
+illustre ce cas pour l'index de préfixe 5, stocké avec un numéro de génération
+de 3, alors que la valeur actuelle dans le tableau `[]generations` est 4. Le
+numéro de génération peut boucler, mais ce n'est pas un problème car les
+recherches sont rapides.
 
-L'exécution du benchmark concurrent sur cette nouvelle implémentation montre
-les améliorations sur la latence en lecture dès que le coût de la copie sur
-écriture de l'arbre de préfixes est amorti.
+[^retry]: Une alternative aurait été de réessayer la recherche, mais cela
+    n'aurait pas de sens : la RIB est une structure [cohérente à terme][] et
+    une liste de routes vide est bien un état qui s'est produit récemment.
+
+L'exécution du benchmark sur cette nouvelle implémentation montre les
+améliorations sur la latence en lecture ainsi qu'en écriture dès que le coût de
+la copie partielle de l'arbre de préfixes est amorti.
 
 ![Six cartes de chaleur. Trois pour le ratio de latence en lecture, trois
 autres pour celui de la latence en écriture. Elles comparent par paires les
@@ -371,6 +366,8 @@ lecteurs.]([[!!images/akvorado/sharding-heatmap2.svg]] "Amélioration des
 performances de latence en lecture et en écriture après les lectures sans
 verrou. La colonne centrale montre les améliorations cumulées des deux
 étapes.")
+
+[cohérente à terme]: https://fr.wikipedia.org/wiki/Mod%C3%A8le_de_coh%C3%A9rence#Coh%C3%A9rence_%C3%A0_terme "Modèle de coherence sur Wikipedia"
 
 ---
 
