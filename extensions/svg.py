@@ -78,6 +78,13 @@ class SVGFontsPlugin(Plugin):
         if resource.source_file.kind != "svg":
             return
         root = lxml.etree.fromstring(text.encode("utf-8"))
+
+        # Remove draw.io/excalidraw original diagrams
+        root.attrib.pop("content", None)
+        for child in list(root):
+            if localname(child.tag) == "metadata":
+                root.remove(child)
+
         for el in root.iter():
             replace_attr(el, "font-family")
             # Deprecated XHTML <font face="..."> inside <foreignObject>.
