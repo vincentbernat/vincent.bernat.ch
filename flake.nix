@@ -243,6 +243,16 @@
                      import colors from 'picocolors';
                      import { program } from 'commander';
                      import makeProgram from '../lib/svgo/coa.js';
+                    --- a/lib/parser.js 2025-04-21 00:43:30.571001925 +0200
+                    +++ b/lib/parser.js 2025-04-21 00:43:30.571001925 +0200
+                    @@ -68,6 +68,7 @@
+                       xmlns: true,
+                       position: true,
+                       unparsedEntities: true,
+                    +  maxEntityCount: 4096,
+                     };
+
+                     /**
                   '')
                 ];
               });
