@@ -34,6 +34,52 @@ FONT_FAMILY_RE = re.compile(r"font-family\s*:\s*([^;}]+)")
 INKSCAPE_RE = re.compile(
     r"\s*-inkscape-font-specification\s*:\s*[^;}]*;?", re.IGNORECASE
 )
+COLOR_SCHEME_RE = re.compile(r"\s*color-scheme\s*:\s*[^;}]*;?", re.IGNORECASE)
+LIGHT_DARK_RE = re.compile(r"light-dark\s*\(", re.IGNORECASE)
+
+# SVG presentation attributes that take a <color> value.
+COLOR_ATTRS = frozenset(
+    {
+        "fill",
+        "stroke",
+        "color",
+        "stop-color",
+        "flood-color",
+        "lighting-color",
+        "solid-color",
+        "viewport-fill",
+    }
+)
+
+
+def flatten_light_dark(value):
+    """Replace light-dark(A, B) calls with their first argument."""
+    out = []
+    pos = 0
+    while True:
+        match = LIGHT_DARK_RE.search(value, pos)
+        if not match:
+            out.append(value[pos:])
+            return "".join(out)
+        out.append(value[pos : match.start()])
+        depth = 1
+        comma = -1
+        i = match.end()
+        while i < len(value) and depth:
+            c = value[i]
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            elif c == "," and depth == 1 and comma < 0:
+                comma = i
+            i += 1
+        if depth == 0 and comma >= 0:
+            out.append(value[match.end() : comma].strip())
+            pos = i
+        else:
+            out.append(value[match.start() : i])
+            pos = i
 
 
 def replacement_for(value):
@@ -46,13 +92,17 @@ def replacement_for(value):
 
 
 def rewrite_css(css):
-    """Rewrite font-family declarations and drop -inkscape-font-specification."""
+    """Rewrite font-family, drop -inkscape-font-specification and color-scheme,
+    flatten light-dark()."""
 
     def sub(match):
         stack = replacement_for(match.group(1))
         return f"font-family:{stack}" if stack else match.group(0)
 
-    return INKSCAPE_RE.sub("", FONT_FAMILY_RE.sub(sub, css))
+    css = INKSCAPE_RE.sub("", css)
+    css = COLOR_SCHEME_RE.sub("", css)
+    css = FONT_FAMILY_RE.sub(sub, css)
+    return flatten_light_dark(css)
 
 
 def localname(tag):
@@ -87,9 +137,13 @@ class SVGFontsPlugin(Plugin):
 
         for el in root.iter():
             replace_attr(el, "font-family")
-            # Deprecated XHTML <font face="..."> inside <foreignObject>.
             if localname(el.tag) == "font":
+                # Deprecated XHTML <font face="..."> inside <foreignObject>.
                 replace_attr(el, "face")
+            for name in COLOR_ATTRS.intersection(el.attrib):
+                value = el.get(name)
+                if "light-dark" in value.lower():
+                    el.set(name, flatten_light_dark(value))
             style = el.get("style")
             if style:
                 el.set("style", rewrite_css(style))

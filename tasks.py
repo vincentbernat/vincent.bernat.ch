@@ -419,6 +419,8 @@ def build(c):
     with c.cd(".final"):
         # Remove some files
         c.run("rm media/css/common.css media/css/root.css")
+        # Ensure no light-dark() is remaining in SVG files
+        c.run("! find . -name '*.svg' -print0 | xargs -0 grep -qF 'light-dark('")
         # Fix HTML (<source> is an empty tag)
         with step("fix HTML"):
             c.run(
