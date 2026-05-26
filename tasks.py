@@ -692,6 +692,7 @@ done \
     | LANG=en_US.utf8 nix run .#goaccess -- \
           --ignore-crawlers \
           --unknowns-as-crawlers \
+          --keep-last=30 \
           --http-protocol=no \
           --no-term-resolver \
           --no-ip-validation \
