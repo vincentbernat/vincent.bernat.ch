@@ -8,7 +8,7 @@
   "script-src":      "blob: " + domain(media_url('js/')) + " 'sha256-AN5MljpALMzWNoPcfUugXonRm0INnyCCCqVRwMlp22A='",
   "style-src":       "'unsafe-inline' data: " + domain(media_url('css/')),
   "font-src":        "data: " + domain(media_url('fonts/')),
-  "img-src":         "data: " + domain(media_url('images/')),
+  "img-src":         "'self' data: " + domain(media_url('images/')),
   "object-src":      domain(media_url('images/')) + " " + domain(media_url('files/')),
   "frame-src":       domain(media_url('images/')) + " " + domain(media_url('files/')),
   "worker-src":      "blob:",
@@ -131,6 +131,10 @@ location /ip {
   default_type text/plain;
   expires epoch;
   return 200 $remote_addr;
+}
+location ~ ^/hit/.*$ {
+  default_type image/svg+xml;
+  return 200 '<svg xmlns="http://www.w3.org/2000/svg"/>';
 }
 location /redirect-ddg {
   return 302 https://html.duckduckgo.com/html?q=site:{{base|replace("https://","")}}/$arg_lang+$arg_q;
