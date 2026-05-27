@@ -120,8 +120,10 @@ const lightDarkFallback = {
 // Resolve CSS custom properties within calc() in media queries. Only :root
 // variables are resolved. Percentage values from variables are converted to
 // unitless numbers (e.g. 112.5% → 1.125) so that @csstools/css-calc can reduce
-// the expression. The result is floored and rem is converted to em (equivalent
-// in media queries, it seems safer).
+// the expression. The result is ceiled and rem is converted to px (1rem = 16px,
+// the UA default).
+//
+// Reason to prefer pixels: https://keithjgrant.com/posts/2023/05/px-vs-em-in-media-queries/
 const resolveCustomPropsInMediaCalc = {
     postcssPlugin: "resolve-custom-props-in-media-calc",
     Once(root) {
@@ -152,10 +154,9 @@ const resolveCustomPropsInMediaCalc = {
                 );
             }
             if (params.includes("var(")) return;
-            // Resolve calc() expressions, floor, and convert rem to em
             atRule.params = resolveCalc(params).replace(
                 /(\d*\.?\d+)rem\b/g,
-                (_, n) => `${Math.ceil(parseFloat(n))}em`,
+                (_, n) => `${Math.ceil(parseFloat(n)) * 16}px`,
             );
         });
     },
