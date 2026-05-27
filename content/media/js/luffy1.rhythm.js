@@ -19,11 +19,13 @@ luffy.do(() => {
 
   /* React to the change of dimension of a media element. */
   const ro = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const height = entry.contentBoxSize[0].blockSize;
-      heights.set(entry.target, height);
-      adjust(entry.target, height);
-    }
+    requestAnimationFrame(() => {
+      for (const entry of entries) {
+        const height = entry.contentBoxSize[0].blockSize;
+        heights.set(entry.target, height);
+        adjust(entry.target, height);
+      }
+    });
   });
   for (const target of targets) {
     ro.observe(target);
@@ -34,8 +36,10 @@ luffy.do(() => {
     const rlh = getRlh();
     if (rlh === lastRlh) return;
     lastRlh = rlh;
-    for (const [el, height] of heights) {
-      adjust(el, height);
-    }
+    requestAnimationFrame(() => {
+      for (const [el, height] of heights) {
+        adjust(el, height);
+      }
+    });
   }).observe(document.documentElement);
 });
