@@ -99,15 +99,20 @@ const lfFontScale = {
     },
 };
 
-// Replace rlh units with calc(var(--lf-line-height)*Xrem).
+// Replace rlh units with their rem equivalent and fold the result.
+let rootLineHeight = 0;
 const rlhUnit = {
     postcssPlugin: "rlh-unit",
+    Once(root) {
+        rootLineHeight = getLineHeight(root);
+    },
     Declaration(decl) {
         if (!decl.value.includes("rlh")) return;
-        decl.value = decl.value.replace(
-            /(-?\d*\.?\d+)rlh\b/g,
-            (_, n) => `calc(var(--lf-line-height)*${n}rem)`,
-        );
+        decl.value = decl.value.replace(/(-?\d*\.?\d+)rlh\b/g, (_, n) => {
+            const rem =
+                Math.round(parseFloat(n) * rootLineHeight * 10000) / 10000;
+            return `${rem}rem`;
+        });
     },
 };
 
