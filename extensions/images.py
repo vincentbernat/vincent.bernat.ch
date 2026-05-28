@@ -238,37 +238,41 @@ class ImageFixerPlugin(Plugin):
             return (int(height) * new_width // new_height, height)
         return (new_width, new_height)
 
+    def _resolve_css_em(self, expression):
+        """Resolve a calc() expression against root.css variables to a rem
+        value, delegating to @csstools/css-calc via node.
+
+        """
+        script = os.path.join(os.path.dirname(__file__), "css.js")
+        css_path = os.path.join(
+            str(self.site.config.media_root_path), "css", "root.css"
+        )
+        out = subprocess.run(
+            ["node", script, "calc", css_path, expression],
+            check=True,
+            capture_output=True,
+        ).stdout.decode("ascii")
+        return float(re.match(r"[\d.]+", out.strip()).group(0))
+
     @cache
     def _page_width_px(self):
         """Compute the page width and breakpoint in pixels from CSS variables.
 
-        The breakpoint matches --lf-medium media query: the page width plus
-        twice the minimal margin. Below that viewport, the image fills 100vw;
+        The breakpoint matches the --lf-medium media query (--lf-vp-medium
+        scaled by --lf-font-size). Below that viewport, the image fills 100vw;
         above, it caps at page width.
 
-        To convert to pixel, we assume the normal font size, instead of the one
-        from the small viewport.
-
         """
-        css_path = os.path.join(
-            str(self.site.config.media_root_path), "css", "root.css"
+        px_per_em = 16
+        page_width = self._resolve_css_em(
+            "calc(var(--lf-page-width) * var(--lf-font-size))"
         )
-        with open(css_path) as f:
-            css = f.read()
-
-        # We recompute the --lf-medium breakpoint.
-        page_width = float(re.search(r"--lf-page-width:\s*([\d.]+)rem", css).group(1))
-        minimal_margin = float(
-            re.search(r"--lf-minimal-margin:\s*([\d.]+)rem", css).group(1)
+        breakpoint = self._resolve_css_em(
+            "calc(var(--lf-vp-medium) * var(--lf-font-size))"
         )
-
-        # Then, convert to pixels
-        font_size = float(re.search(r"--lf-font-size:\s*([\d.]+)%", css).group(1)) / 100
-        px_per_rem = 16 * font_size
-
         return (
-            int(round(page_width * px_per_rem)),
-            int(round((page_width + 2 * minimal_margin) * px_per_rem)),
+            int(round(page_width * px_per_em)),
+            int(round(breakpoint * px_per_em)),
         )
 
     def _resize(self, source, destination, factor):

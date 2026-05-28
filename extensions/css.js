@@ -11,7 +11,38 @@ const postcssGlobalData = require("@csstools/postcss-global-data");
 const postcssNesting = require("postcss-nesting");
 const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
-const { calc: resolveCalc } = require("@csstools/css-calc");
+const { calc } = require("@csstools/css-calc");
+
+// Collect custom properties declared in :root.
+function collectRootVars(root) {
+    const vars = {};
+    root.walkRules(":root", (rule) => {
+        rule.walkDecls(/^--/, (decl) => {
+            vars[decl.prop] = decl.value.trim();
+        });
+    });
+    return vars;
+}
+
+// Substitute var() references recursively against vars, then reduce with
+// calc(). Returns the reduced value, or null if some var() reference could not
+// be resolved.
+function resolveValue(vars, input) {
+    let out = input;
+    let changed = true;
+    while (changed) {
+        changed = false;
+        out = out.replace(/var\(\s*(--[\w-]+)\s*\)/g, (match, name) => {
+            if (vars[name] === undefined) return match;
+            changed = true;
+            const pct = vars[name].match(/^(\d*\.?\d+)%$/);
+            if (pct) return String(parseFloat(pct[1]) / 100);
+            return vars[name];
+        });
+    }
+    if (out.includes("var(")) return null;
+    return calc(out);
+}
 
 // Get line-height from the root element
 const getLineHeight = (root) => {
@@ -127,34 +158,14 @@ const lightDarkFallback = {
 const resolveCustomPropsInMediaCalc = {
     postcssPlugin: "resolve-custom-props-in-media-calc",
     Once(root) {
-        const vars = {};
-        root.walkRules(":root", (rule) => {
-            rule.walkDecls(/^--/, (decl) => {
-                vars[decl.prop] = decl.value.trim();
-            });
-        });
+        const vars = collectRootVars(root);
         root.walkAtRules((atRule) => {
             if (atRule.name !== "media" && atRule.name !== "custom-media")
                 return;
             if (!atRule.params.includes("var(")) return;
-            let params = atRule.params;
-            let changed = true;
-            while (changed) {
-                changed = false;
-                params = params.replace(
-                    /var\(\s*(--[\w-]+)\s*\)/g,
-                    (match, name) => {
-                        if (vars[name] === undefined) return match;
-                        changed = true;
-                        // Convert percentage to unitless for calc compatibility
-                        const pct = vars[name].match(/^(\d*\.?\d+)%$/);
-                        if (pct) return String(parseFloat(pct[1]) / 100);
-                        return vars[name];
-                    },
-                );
-            }
-            if (params.includes("var(")) return;
-            atRule.params = resolveCalc(params).replace(
+            const resolved = resolveValue(vars, atRule.params);
+            if (resolved === null) return;
+            atRule.params = resolved.replace(
                 /(\d*\.?\d+)rem\b/g,
                 (_, n) => `${Math.ceil(parseFloat(n)) * 16}px`,
             );
@@ -164,65 +175,89 @@ const resolveCustomPropsInMediaCalc = {
 
 const minify = process.env.CSS_MINIFY === "true";
 const cssDirectory = path.join(__dirname, "..", "content", "media", "css");
-let input = "";
 
-process.stdin.setEncoding("utf8");
-process.stdin.on("readable", function () {
-    const chunk = process.stdin.read();
-    if (chunk) {
-        input += chunk;
-    }
-});
-process.stdin.on("end", function () {
-    // Computed :root variables that aren't read from a CSS file: written to a
-    // temp file so postcssGlobalData can pick them up alongside the static ones.
-    const computedFile = path.join(
-        fs.mkdtempSync(path.join(os.tmpdir(), "lf-css-")),
-        "computed.css",
-    );
-    fs.writeFileSync(
-        computedFile,
-        `:root { --lf-baseline-offset: calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem); }`,
-    );
-    postcss([
-        postcssGlobalData({
-            files: [
-                path.join(cssDirectory, "common.css"),
-                path.join(cssDirectory, "root.css"),
-                computedFile,
-            ],
-        }),
-        resolveCustomPropsInMediaCalc /* Not really supported */,
-        postcssCustomMedia /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */,
-        lfFontScale /* could be implemented with round, baseline 2024 */,
-        rlhUnit /* baseline 2023 */,
-        postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
-        postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
-        postcssLogical /* baseline 2021 */,
-        lightDarkFallback /* baseline 2024 */,
-        autoprefixer,
-        postcssNesting /* baseline 2023 */,
-        postcssIsPseudoClass /* baseline 2021 */,
-        cssnano({
-            preset: [
-                "default",
-                {
-                    reduceIdents: false,
-                    normalizeWhitespace: minify,
-                    /* Sometimes, fallback values are killed. */
-                    mergeLonghand: false,
-                },
-            ],
-        }),
-    ])
-        .process(input, { from: undefined })
-        .then(function (result) {
-            process.stdout.write(result.css.toString());
-        })
-        .finally(function () {
-            fs.rmSync(path.dirname(computedFile), {
-                recursive: true,
-                force: true,
+// "calc" mode: resolve a single calc() expression against a stylesheet's :root
+// variables and print the result. Used by the image plugin to recompute
+// breakpoints in pixels.
+function runCalc(cssPath, expression) {
+    const css = fs.readFileSync(cssPath, "utf8");
+    const vars = collectRootVars(postcss.parse(css));
+    process.stdout.write(resolveValue(vars, expression) ?? "");
+}
+
+// "process" mode: run the full PostCSS pipeline over CSS read from stdin and
+// write the result to stdout.
+function runProcess() {
+    let input = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("readable", function () {
+        const chunk = process.stdin.read();
+        if (chunk) {
+            input += chunk;
+        }
+    });
+    process.stdin.on("end", function () {
+        // Computed :root variables that aren't read from a CSS file: written
+        // to a temp file so postcssGlobalData picks them up alongside the
+        // static ones.
+        const computedFile = path.join(
+            fs.mkdtempSync(path.join(os.tmpdir(), "lf-css-")),
+            "computed.css",
+        );
+        fs.writeFileSync(
+            computedFile,
+            `:root { --lf-baseline-offset: calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem); }`,
+        );
+        postcss([
+            postcssGlobalData({
+                files: [
+                    path.join(cssDirectory, "common.css"),
+                    path.join(cssDirectory, "root.css"),
+                    computedFile,
+                ],
+            }),
+            resolveCustomPropsInMediaCalc /* Not really supported */,
+            postcssCustomMedia /* https://drafts.csswg.org/mediaqueries-5/#at-ruledef-custom-media */,
+            lfFontScale /* could be implemented with round, baseline 2024 */,
+            rlhUnit /* baseline 2023 */,
+            postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
+            postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
+            postcssLogical /* baseline 2021 */,
+            lightDarkFallback /* baseline 2024 */,
+            autoprefixer,
+            postcssNesting /* baseline 2023 */,
+            postcssIsPseudoClass /* baseline 2021 */,
+            cssnano({
+                preset: [
+                    "default",
+                    {
+                        reduceIdents: false,
+                        normalizeWhitespace: minify,
+                        /* Sometimes, fallback values are killed. */
+                        mergeLonghand: false,
+                    },
+                ],
+            }),
+        ])
+            .process(input, { from: undefined })
+            .then(function (result) {
+                process.stdout.write(result.css.toString());
+            })
+            .finally(function () {
+                fs.rmSync(path.dirname(computedFile), {
+                    recursive: true,
+                    force: true,
+                });
             });
-        });
-});
+    });
+}
+
+const command = process.argv[2];
+if (command === "calc") {
+    runCalc(process.argv[3], process.argv[4]);
+} else if (command === "process") {
+    runProcess();
+} else {
+    process.stderr.write("usage: css.js process | css.js calc <file> <expr>\n");
+    process.exit(1);
+}

@@ -54,7 +54,7 @@ class PostCSSPlugin(Plugin):
         env["CSS_BASELINE_OFFSET"] = str(font_baseline_offset(font_path))
         script = os.path.join(os.path.dirname(__file__), "css.js")
         p = subprocess.Popen(
-            ["node", script],
+            ["node", script, "process"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             env=env,
