@@ -39,7 +39,7 @@ class TypographyPlugin(Plugin):
         )
 
         fix_closing_double_quote = re.compile(r"""^&#8220;([,:;!\?])""")
-        fix_possessive_quote = re.compile(r"""^&#8216;(s\s)""")
+        fix_possessive_quote = re.compile(r"""^&#8216;(?=s\s|\W|$)""")
 
         space_before_punct_finder = re.compile(r"""(\s|&nbsp;)([:;!\?%»])""")
         space_after_punct_finder = re.compile(r"""([«])(\s|&nbsp;)""")
@@ -63,7 +63,7 @@ class TypographyPlugin(Plugin):
 
             # Misc fixes
             text = fix_closing_double_quote.sub(r"&#8221;\1", text)
-            text = fix_possessive_quote.sub(r"&#8217;\1", text)
+            text = fix_possessive_quote.sub("&#8217;", text)
 
             # French punctuation
             text = space_before_punct_finder.sub(self.NNBSP + r"\2", text)
