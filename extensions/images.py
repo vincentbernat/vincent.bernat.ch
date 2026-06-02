@@ -116,8 +116,14 @@ class ImageFixerPlugin(Plugin):
 
     def _img_properties(self, image):
         """Get size for an image, and opacity: (w, h), o?."""
+        # Prefer the deployed output: `#!python` resources render to their final
+        # form (e.g. SVG) and are generated first (see PythonPlugin), so their
+        # source isn't usable. Fall back to the source for not-yet-built files.
+        path = self.site.config.deploy_root_path.child(image.relative_deploy_path)
+        if not os.path.exists(path):
+            path = image.path
         if image.source_file.kind in {"png", "jpg", "webp", "gif"}:
-            img = Image.open(image.path)
+            img = Image.open(path)
             if "P" in img.mode and any(
                 idx == img.info.get("transparency", -1) for _, idx in img.getcolors()
             ):
@@ -147,7 +153,7 @@ class ImageFixerPlugin(Plugin):
                 return dict(size=img.size, opaque=True, lqip=lqip)
             return dict(size=img.size, opaque=False)
         if image.source_file.kind in {"svg"}:
-            svg = ET.parse(image.path).getroot()
+            svg = ET.parse(path).getroot()
             return dict(
                 size=tuple(
                     x and self._topx(x) or None
@@ -161,7 +167,7 @@ class ImageFixerPlugin(Plugin):
                 is not None,
             )
         if image.source_file.kind in {"m3u8"}:
-            with open(image.path) as f:
+            with open(path) as f:
                 w, h = max(
                     [
                         (int(w), int(h))
@@ -180,7 +186,7 @@ class ImageFixerPlugin(Plugin):
                     "-print_format",
                     "json",
                     "-show_streams",
-                    image.path,
+                    path,
                 ],
                 check=True,
                 capture_output=True,
@@ -189,7 +195,7 @@ class ImageFixerPlugin(Plugin):
             track = [t for t in streams if t["codec_type"] == "video"][0]
             return dict(size=(track["width"], track["height"]), opaque=True)
         if image.source_file.kind in {"pdf"}:
-            with open(image.path, "rb") as f:
+            with open(path, "rb") as f:
                 pdf = PdfReader(f)
                 box = pdf.pages[0].mediabox
                 # PDF physical sizes may be skewed, notably for
@@ -764,14 +770,25 @@ class CoverImagePlugin(Plugin):
             str(resource.site.config.deploy_root_path), "media", media_rel
         )
 
-        # Check disk cache
-        cover_hash = ""
+        # Resolve the cover.
+        cover_path = None
         if has_cover:
             cover_path = os.path.join(
-                str(resource.site.config.media_root_path),
+                str(resource.site.config.deploy_root_path),
+                "media",
                 "images",
                 resource.meta.cover,
             )
+            if not os.path.exists(cover_path):
+                cover_path = os.path.join(
+                    str(resource.site.config.media_root_path),
+                    "images",
+                    resource.meta.cover,
+                )
+
+        # Check disk cache
+        cover_hash = ""
+        if has_cover:
             with open(cover_path, "rb") as f:
                 cover_hash = hashlib.sha256(f.read()).hexdigest()
         cache_key = (title, resource.meta.author, cover_hash, cls._self_hash)
@@ -807,11 +824,6 @@ class CoverImagePlugin(Plugin):
             block_y = H - bottom_margin - block_h
 
             # Load cover and crop to fill 1200x630
-            cover_path = os.path.join(
-                str(resource.site.config.media_root_path),
-                "images",
-                resource.meta.cover,
-            )
             cover = cls._load_cover(cover_path, W)
             target_ratio = W / H
             cover_ratio = cover.width / cover.height
