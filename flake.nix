@@ -370,11 +370,11 @@
                   -o baskerville-vf.ttf \
                   ${baskervilleItalic} \
                   wght=400:700
-                # Keep only U+0026 (ampersand)
+                # Keep only &, «, and “
                 ${fonttools}/bin/pyftsubset baskerville-vf.ttf \
                   --flavor=woff2 \
                   --no-hinting \
-                  --unicodes=U+0026 \
+                  --unicodes=U+0026,U+00AB,U+201C \
                   --layout-features= \
                   --output-file=$out/baskerville-custom.woff2
               '';
