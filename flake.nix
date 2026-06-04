@@ -66,6 +66,12 @@
                 )
                 overrides;
             moreOverrides = final: prev: {
+              # No need for tools from fonttools (we pull the Nix version for that)
+              fonttools = prev.fonttools.overrideAttrs (old: {
+                postInstall = (old.postInstall or "") + ''
+                  rm -rf "$out/bin"
+                '';
+              });
               markdown = (prev.markdown.override { sourcePreference = "sdist"; }).overrideAttrs
                 (old: {
                   patches = (old.patches or [ ]) ++ [
