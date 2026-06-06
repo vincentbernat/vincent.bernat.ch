@@ -1,6 +1,7 @@
 /* Some browsers support CSS anchor positioning but compute anchored sidenote
-   positions incorrectly, leaving them stacked on top of each other. Detect
-   such overlaps and fall back to inline sidenotes when they happen. */
+   positions incorrectly, leaving them stacked on top of each other. Notably
+   Safari 26.x with x < 5. Detect such overlaps and fall back to inline
+   sidenotes when they happen. */
 
 luffy.do(() => {
   const main = document.querySelector(".lf-main");
