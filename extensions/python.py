@@ -1,4 +1,5 @@
 from hyde.plugin import Plugin
+from fswrap import File
 
 SHEBANG = "#!python\n"
 
@@ -7,40 +8,41 @@ class PythonPlugin(Plugin):
     """Execute resources starting with `#!python` as Python scripts.
 
     Such a resource defines a `run(site, resource)` function whose return value
-    becomes the resource's content (computed in `begin_text_resource`).
+    becomes the resource's content. Generation is done both in `begin_site` (for
+    first time) and in `begin_text_resource` (for updates).
 
-    In `begin_site`, these resources are moved onto the root content node so the
-    generator emits them before any other node: hyde walks nodes sorted by path
-    and yields the root first, completing each node before its children, which
-    guarantees a dynamic resource is built before the pages referencing it (e.g.
-    a generated SVG used as a cover image).
     """
 
+    def render(self, resource, text):
+        namespace = {}
+        exec(text, namespace)
+        return namespace["run"](self.site, resource)
+
     def begin_site(self):
-        root = self.site.content
-        dynamic = []
-        for node in root.walk():
-            if node is root:
-                continue
+        for node in self.site.content.walk():
             for resource in node.resources:
                 source = resource.source_file
                 if source.is_binary:
                     continue
                 try:
                     with open(source.path, encoding="utf-8") as f:
-                        head = f.read(len(SHEBANG))
+                        if f.read(len(SHEBANG)) != SHEBANG:
+                            continue
+                        text = SHEBANG + f.read()
                 except UnicodeDecodeError:
                     continue
-                if head == SHEBANG:
-                    dynamic.append((node, resource))
-        for node, resource in dynamic:
-            node.resources.remove(resource)
-            root.resources.append(resource)
-            resource.node = root
+                target = File(
+                    self.site.config.deploy_root_path.child(
+                        resource.relative_deploy_path
+                    )
+                )
+                target.parent.make()
+                target.write(self.render(resource, text))
 
     def begin_text_resource(self, resource, text):
+        if self.site.config.mode == "production":
+            # It was rendered in begin_site
+            return
         if not text.startswith(SHEBANG):
             return
-        namespace = {}
-        exec(text, namespace)
-        return namespace["run"](self.site, resource)
+        return self.render(resource, text)
