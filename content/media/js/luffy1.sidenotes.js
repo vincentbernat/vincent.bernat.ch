@@ -16,12 +16,10 @@ luffy.do(() => {
     const rects = notes
       .map((n) => n.getBoundingClientRect())
       .sort((a, b) => a.top - b.top);
-    for (let i = 1; i < rects.length; i++) {
-      if (rects[i].top < rects[i - 1].bottom) {
-        console.info("Apply workaround for overlapping sidenotes");
-        main.classList.add("lf-sidenotes-overlap");
-        return;
-      }
+    const overlap = rects.some((r, i) => i && r.top < rects[i - 1].bottom);
+    if (overlap) {
+      console.info("Apply workaround for overlapping sidenotes");
+      main.classList.add("lf-sidenotes-overlap");
     }
   };
 
