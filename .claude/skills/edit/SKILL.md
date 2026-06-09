@@ -49,6 +49,10 @@ The following words are forbidden because what is obvious for someone may not be
 for someone else: "obviously", "basically", "simply", "clearly", and "everyone
 knows".
 
+For French, we follow “Lexique des règles typographiques en usage à l'Imprimerie
+nationale.” For English, this is “The Chicago Manual of Style” but keep
+contractions.
+
 ## About the introduction
 
 The editing should follow these principles from [The Craft of Writing

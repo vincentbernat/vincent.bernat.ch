@@ -1,0 +1,414 @@
+#!python
+# -*- python -*-
+#
+# Generate an interactive stacked area chart of AI usage across the blog. It
+# uses the "ai-usage" metadata. Each category emoji (🧠/✨/🤖) gets a primary
+# color and each distinct description a nuance of that color. Hovering or
+# tapping a band reveals its description in a tooltip.
+
+import colorsys
+import logging
+import re
+import warnings
+import xml.etree.ElementTree as ET
+from collections import defaultdict
+from io import BytesIO
+from typing import NamedTuple
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.patches import Patch
+from matplotlib.ticker import MaxNLocator
+
+matplotlib.use("Agg")
+matplotlib.rcParams["svg.fonttype"] = "none"
+matplotlib.rcParams["font.family"] = "sans-serif"
+matplotlib.rcParams["font.sans-serif"] = ["sans-serif"]
+warnings.filterwarnings("ignore", message="Glyph .* missing from font")
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)
+ET.register_namespace("", "http://www.w3.org/2000/svg")
+
+# Primary color for each category emoji.
+CATEGORY_COLORS = {
+    "🧠": "#5CAA5C",
+    "✨": "#4A90C2",
+    "🤖": "#D45F5F",
+}
+CATEGORY_ORDER = list(CATEGORY_COLORS.keys())
+
+
+class Stream(NamedTuple):
+    emoji: str
+    description: str
+    color: str
+    counts: list[int]  # one count per year
+    total: int
+
+
+def category_for(usage: str, emoji_map: dict[str, str]) -> str:
+    """Reproduce the `ai_usage_emoji` macro: longest matching prefix wins."""
+    emoji = emoji_map.get("default", "🧠")
+    for key, value in emoji_map.items():
+        if key != "default" and usage.startswith(key):
+            emoji = value
+    return emoji
+
+
+def shades(base_hex: str, n: int) -> list[str]:
+    """Return `n` nuances of a base color, from light to dark."""
+    base_hex = base_hex.lstrip("#")
+    r, g, b = (int(base_hex[i : i + 2], 16) / 255 for i in (0, 2, 4))
+    h, l, s = colorsys.rgb_to_hls(r, g, b)
+    lightnesses = (
+        np.array([l])
+        if n == 1
+        else np.linspace(min(l + 0.18, 0.82), max(l - 0.18, 0.2), n)
+    )
+    return [
+        "#{:02X}{:02X}{:02X}".format(
+            *(round(c * 255) for c in colorsys.hls_to_rgb(h, li, s))
+        )
+        for li in lightnesses
+    ]
+
+
+TOOL_RE = re.compile(r"\(([^()]*)\)\s*$")
+
+
+def tool_of(description: str) -> str:
+    """The tool name in parentheses, e.g. `Claude Opus 4.6` in
+    `Corrections grammaticales (Claude Opus 4.6)`. Empty when there is none."""
+    mo = TOOL_RE.search(description)
+    return mo.group(1) if mo else ""
+
+
+def assign_colors(streams: list["Stream"]) -> dict[tuple[str, str], str]:
+    """Map each (category emoji, tool) to a color shade.
+
+    Keyed on the language-independent (emoji, tool) pair so the same tool in the
+    same category gets the same color across subplots. Shades within a category
+    are ordered by combined total, largest first.
+    """
+    totals: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for s in streams:
+        totals[s.emoji][tool_of(s.description)] += s.total
+    color_for = {}
+    for emoji, tools in totals.items():
+        ordered = sorted(tools, key=lambda t: (-tools[t], t))
+        for tool, color in zip(ordered, shades(CATEGORY_COLORS[emoji], len(ordered))):
+            color_for[(emoji, tool)] = color
+    return color_for
+
+
+def pchip(x: np.ndarray, y: np.ndarray, grid: np.ndarray) -> np.ndarray:
+    """Monotone cubic (Fritsch-Carlson) interpolation of (x, y) on `grid`.
+
+    Unlike a Gaussian kernel, this passes exactly through the data points and
+    is monotone within each interval, so it never overshoots: a non-negative
+    series stays non-negative and a zero year stays zero (a stream doesn't
+    bleed into its neighbours), while the curve remains smooth.
+    """
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    n = len(x)
+    h = np.diff(x)
+    delta = np.diff(y) / h
+    m = np.zeros(n)
+    for i in range(1, n - 1):
+        if delta[i - 1] * delta[i] <= 0:
+            m[i] = 0.0
+        else:
+            w1, w2 = 2 * h[i] + h[i - 1], h[i] + 2 * h[i - 1]
+            m[i] = (w1 + w2) / (w1 / delta[i - 1] + w2 / delta[i])
+
+    def end_slope(d0: float, d1: float, h0: float, h1: float) -> float:
+        s = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
+        if s * d0 <= 0:
+            return 0.0
+        if d0 * d1 <= 0 and abs(s) > 3 * abs(d0):
+            return 3 * d0
+        return s
+
+    if n == 2:
+        m[0] = m[1] = delta[0]
+    else:
+        m[0] = end_slope(delta[0], delta[1], h[0], h[1])
+        m[-1] = end_slope(delta[-1], delta[-2], h[-1], h[-2])
+
+    idx = np.clip(np.searchsorted(x, grid) - 1, 0, n - 2)
+    t = (grid - x[idx]) / h[idx]
+    t2, t3 = t * t, t * t * t
+    return (
+        (2 * t3 - 3 * t2 + 1) * y[idx]
+        + (t3 - 2 * t2 + t) * h[idx] * m[idx]
+        + (-2 * t3 + 3 * t2) * y[idx + 1]
+        + (t3 - t2) * h[idx] * m[idx + 1]
+    )
+
+
+def collect(site, language: str) -> tuple[list[int], list[Stream]]:
+    """Gather per-description, per-year article counts for one language.
+
+    Returns (years, streams) where streams is an ordered list of `Stream`
+    tuples.
+    """
+    walk = getattr(site.content, "walk_resources_sorted_by_time_" + language)
+    pages = list(walk())
+    if not pages:
+        return [], []
+
+    # Pull the emoji map and "No AI" label from the pages' metadata.
+    emoji_map = pages[0].meta.ai_usage.to_dict()
+    noai = pages[0].meta.l10n.noai
+
+    # description -> {year -> count}
+    counts: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
+    descriptions: dict[str, str] = {}  # description -> emoji, first-seen order
+    for page in pages:
+        usage = page.meta.get("ai-usage") or noai
+        year = page.meta.created.year
+        counts[usage][year] += 1
+        descriptions.setdefault(usage, category_for(usage, emoji_map))
+
+    # Only keep years that actually have articles; empty years are skipped.
+    years = sorted({y for d in counts.values() for y in d})
+
+    # Order streams by category, then by total (largest first) so nuances of
+    # the same primary color sit next to each other in the stack.
+    def sort_key(item: tuple[str, str]) -> tuple[int, int, str]:
+        desc, emoji = item
+        total = sum(counts[desc].values())
+        return (CATEGORY_ORDER.index(emoji), -total, desc)
+
+    ordered = sorted(descriptions.items(), key=sort_key)
+    streams = []
+    for desc, emoji in ordered:
+        counts_per_year = [counts[desc].get(y, 0) for y in years]
+        streams.append(
+            Stream(
+                emoji=emoji,
+                description=desc,
+                color="",  # assigned globally in run() so subplots match
+                counts=counts_per_year,
+                total=sum(counts_per_year),
+            )
+        )
+    return years, streams
+
+
+def draw_subplot(
+    ax: Axes,
+    years: list[int],
+    streams: list[Stream],
+    title: str,
+    key: str,
+) -> None:
+    data = np.array([s.counts for s in streams], dtype=float)
+    colors = [s.color for s in streams]
+
+    # Use evenly-spaced positions so skipped years don't leave gaps.
+    x = np.arange(len(years))
+
+    # Interpolate each layer on a dense grid so the streams flow instead of
+    # being piecewise-linear, without bleeding into the neighbouring years.
+    grid = np.linspace(0, len(years) - 1, (len(years) - 1) * 40 + 1)
+    data = np.array([pchip(x, row, grid) for row in data])
+    polys = ax.stackplot(grid, data, colors=colors)
+
+    for i, poly in enumerate(polys):
+        poly.set_gid(f"stream_{key}_{i:03d}")
+
+    # Alternating background bands per year (every other year gets a gray band).
+    for i in range(len(years)):
+        if i % 2 == 1:
+            ax.axvspan(i - 0.5, i + 0.5, facecolor="gray", alpha=0.12, zorder=0)
+
+    ax.set_xlim(-0.5, len(years) - 0.5)
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(y) for y in years])
+    ax.tick_params(axis="x", length=0)
+    for label in ax.get_xticklabels():
+        label.set(rotation=45, ha="right", rotation_mode="anchor")
+    ax.set_ylim(bottom=0)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.set_ylabel("articles")
+    for side in ("right", "top", "bottom"):
+        ax.spines[side].set_visible(False)
+    ax.set_title(title, fontsize=13, fontweight="bold", loc="left")
+
+
+def run(site, resource) -> str:
+    """Entry point to generate the SVG."""
+    titles = {"en": "English", "fr": "Français"}
+    languages = list(titles.keys())
+
+    def plural(n: int) -> str:
+        return "articles" if n != 1 else "article"
+
+    collected = [(lang, *collect(site, lang)) for lang in languages]
+    # Color each (category, tool) the same across subplots.
+    color_for = assign_colors([s for _, _, streams in collected for s in streams])
+    collected = [
+        (
+            lang,
+            years,
+            [
+                s._replace(color=color_for[(s.emoji, tool_of(s.description))])
+                for s in streams
+            ],
+        )
+        for lang, years, streams in collected
+    ]
+    fig, axes = plt.subplots(
+        len(collected),
+        1,
+        figsize=(9, 2.8 * len(collected)),
+        squeeze=False,
+        gridspec_kw={"hspace": 0.35},
+    )
+    for ax, (lang, years, streams) in zip(axes[:, 0], collected):
+        draw_subplot(ax, years, streams, titles.get(lang, lang), lang)
+
+    # Legend mapping each primary color to its category.
+    handles = [
+        Patch(facecolor=CATEGORY_COLORS[emoji], label=emoji) for emoji in CATEGORY_ORDER
+    ]
+    axes[0, 0].legend(
+        handles=handles,
+        loc="lower right",
+        bbox_to_anchor=(1.0, 1.0),
+        ncol=len(handles),
+        frameon=False,
+    )
+
+    buf = BytesIO()
+    fig.savefig(buf, format="svg", bbox_inches="tight", transparent=True)
+    plt.close(fig)
+
+    # Post-process: store each stream's text in data attributes, wire hover/tap,
+    # and add a native <title> fallback.
+    tree, xmlid = ET.XMLID(buf.getvalue())
+    tree.set("onload", "init(event)")
+    for lang, years, streams in collected:
+        for i, stream in enumerate(streams):
+            patch = xmlid.get(f"stream_{lang}_{i:03d}")
+            if patch is None:
+                continue
+            total = stream.total
+            line = f"{stream.emoji} {stream.description}"
+            sub = f"{total} {plural(total)}"
+            patch.set("data-tip", line)
+            patch.set("data-sub", sub)
+            patch.set("onmousemove", "ShowTooltip(evt)")
+            patch.set("onmouseout", "HideTooltip()")
+            patch.set("ontouchstart", "ShowTooltip(evt)")
+            patch.set("ontouchend", "HideTooltip()")
+            patch.set("style", patch.get("style", "") + ";cursor:pointer")
+            title_el = ET.SubElement(patch, "title")
+            title_el.text = f"{line} — {sub}"
+
+    # The reusable tooltip skeleton lives in the SVG directly.
+    tooltip = """
+<g xmlns="http://www.w3.org/2000/svg" id="lf-tooltip" class="lf-tooltip">
+<rect id="lf-tip-rect"/>
+<text id="lf-tip-text">
+<tspan id="lf-tip-line" class="lf-tip-line" x="0" dy="1em"></tspan>
+<tspan id="lf-tip-sub" class="lf-tip-sub" x="0" dy="1.3em"></tspan>
+</text>
+</g>
+"""
+    tree.append(ET.XML(tooltip.replace("\n", "")))
+
+    script = """
+<script type="text/ecmascript"><![CDATA[
+  let svgRoot, tipGroup, tipRect, tipText, tipLine, tipSub, active;
+
+  function init(event) {
+    svgRoot = event.target;
+    tipGroup = svgRoot.getElementById('lf-tooltip');
+    tipRect = svgRoot.getElementById('lf-tip-rect');
+    tipText = svgRoot.getElementById('lf-tip-text');
+    tipLine = svgRoot.getElementById('lf-tip-line');
+    tipSub = svgRoot.getElementById('lf-tip-sub');
+    // JS tooltips are active, so drop the native <title> fallbacks.
+    for (const stream of svgRoot.querySelectorAll('[id^="stream_"]')) {
+      const t = stream.getElementsByTagName('title')[0];
+      if (t) { t.remove(); }
+    }
+  }
+
+  const cursorPoint = (evt) => {
+    const pt = svgRoot.createSVGPoint();
+    const src = (evt.touches && evt.touches[0]) || evt;
+    pt.x = src.clientX;
+    pt.y = src.clientY;
+    return pt.matrixTransform(svgRoot.getScreenCTM().inverse());
+  };
+
+  function ShowTooltip(evt) {
+    const obj = evt.currentTarget;
+
+    // Highlight the hovered stream; CSS fades the others in the same subplot.
+    if (active !== obj) {
+      if (active) { active.classList.remove('lf-active'); }
+      active = obj;
+      obj.classList.add('lf-active');
+    }
+    tipLine.textContent = obj.getAttribute('data-tip');
+    tipSub.textContent = obj.getAttribute('data-sub');
+    const pad = 5;
+    const b = tipText.getBBox();
+    tipRect.setAttribute('x', b.x - pad);
+    tipRect.setAttribute('y', b.y - pad);
+    tipRect.setAttribute('width', b.width + 2 * pad);
+    tipRect.setAttribute('height', b.height + 2 * pad);
+
+    // Place the box around the cursor, picking the first candidate position
+    // (top, top-right, top-left, bottom, bottom-right, bottom-left) that fits
+    // entirely inside the image.
+    const p = cursorPoint(evt);
+    const bw = b.width + 2 * pad, bh = b.height + 2 * pad, g = 4;
+    const cands = [
+      [p.x - bw / 2, p.y - g - bh],  // top
+      [p.x + g,      p.y - g - bh],  // top-right
+      [p.x - g - bw, p.y - g - bh],  // top-left
+      [p.x - bw / 2, p.y + g],       // bottom
+      [p.x + g,      p.y + g],       // bottom-right
+      [p.x - g - bw, p.y + g],       // bottom-left
+    ];
+    const vb = svgRoot.viewBox.baseVal;
+    const W = (vb && vb.width) || svgRoot.width.baseVal.value;
+    const H = (vb && vb.height) || svgRoot.height.baseVal.value;
+    const [bx, by] =
+      cands.find(([L, T]) => L >= 0 && T >= 0 && L + bw <= W && T + bh <= H) ||
+      cands[0];
+    tipGroup.setAttribute(
+      'transform', `translate(${bx - (b.x - pad)},${by - (b.y - pad)})`
+    );
+    tipGroup.classList.add('lf-show');
+  }
+
+  function HideTooltip() {
+    tipGroup.classList.remove('lf-show');
+    if (active) { active.classList.remove('lf-active'); active = null; }
+  }
+]]></script>
+"""
+    style = """
+<style xmlns="http://www.w3.org/2000/svg" type="text/css"><![CDATA[
+  .lf-tooltip { pointer-events: none; opacity: 0; transition: opacity 0.35s ease; }
+  .lf-tooltip.lf-show { opacity: 1; }
+  .lf-tooltip rect { fill: #262626cc; rx: 4px; }
+  .lf-tooltip text { fill: #fff; font-family: sans-serif; }
+  .lf-tooltip .lf-tip-line { font-weight: bold; font-size: 12px; }
+  .lf-tooltip .lf-tip-sub { font-size: 11px; }
+  g[id^="stream_"] { transition: opacity 0.5s ease; }
+  g[id^="axes_"]:has(.lf-active) g[id^="stream_"]:not(.lf-active) { opacity: 0.25; }
+]]></style>
+"""
+    tree.insert(0, ET.XML(style))
+    tree.append(ET.XML(script))
+
+    return ET.tostring(tree, encoding="unicode")
