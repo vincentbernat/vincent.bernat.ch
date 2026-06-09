@@ -19,7 +19,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
-from matplotlib.patches import Patch
+from matplotlib.patches import Patch, PathPatch
+from matplotlib.path import Path
 from matplotlib.ticker import MaxNLocator
 
 matplotlib.use("Agg")
@@ -102,17 +103,21 @@ def assign_colors(streams: list["Stream"]) -> dict[tuple[str, str], str]:
     return color_for
 
 
-def pchip(x: np.ndarray, y: np.ndarray, grid: np.ndarray) -> np.ndarray:
-    """Monotone cubic (Fritsch-Carlson) interpolation of (x, y) on `grid`.
+def pchip_slopes(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Monotone cubic (Fritsch-Carlson) tangents at each (x, y) knot.
 
-    Unlike a Gaussian kernel, this passes exactly through the data points and
-    is monotone within each interval, so it never overshoots: a non-negative
-    series stays non-negative and a zero year stays zero (a stream doesn't
-    bleed into its neighbours), while the curve remains smooth.
+    Returns the slope of the monotone piecewise-cubic Hermite interpolant at
+    every knot. Each interval is then an exact cubic, emitted as a single SVG
+    Bézier rather than a flattened polyline. Being monotone within each
+    interval, the curve never overshoots: a non-negative series stays
+    non-negative and a zero year stays zero, so a stream doesn't bleed into its
+    neighbours.
     """
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     n = len(x)
+    if n < 2:
+        return np.zeros(n)
     h = np.diff(x)
     delta = np.diff(y) / h
     m = np.zeros(n)
@@ -136,16 +141,40 @@ def pchip(x: np.ndarray, y: np.ndarray, grid: np.ndarray) -> np.ndarray:
     else:
         m[0] = end_slope(delta[0], delta[1], h[0], h[1])
         m[-1] = end_slope(delta[-1], delta[-2], h[-1], h[-2])
+    return m
 
-    idx = np.clip(np.searchsorted(x, grid) - 1, 0, n - 2)
-    t = (grid - x[idx]) / h[idx]
-    t2, t3 = t * t, t * t * t
-    return (
-        (2 * t3 - 3 * t2 + 1) * y[idx]
-        + (t3 - 2 * t2 + t) * h[idx] * m[idx]
-        + (-2 * t3 + 3 * t2) * y[idx + 1]
-        + (t3 - t2) * h[idx] * m[idx + 1]
-    )
+
+def hermite_band(
+    x: np.ndarray,
+    upper_v: np.ndarray,
+    upper_m: np.ndarray,
+    lower_v: np.ndarray,
+    lower_m: np.ndarray,
+) -> Path:
+    """Build a closed Bézier path filling between two Hermite boundaries.
+
+    Each knot interval of a cubic Hermite (value `v`, slope `m`) maps exactly
+    to a cubic Bézier whose interior control points are offset by a third of
+    the interval along the tangent. The path traces the upper boundary forward
+    and the lower boundary backward.
+    """
+    verts: list[tuple[float, float]] = [(x[0], upper_v[0])]
+    codes: list[np.uint8] = [Path.MOVETO]
+
+    def curve(x0, v0, m0, x1, v1, m1):
+        h = (x1 - x0) / 3.0
+        verts.extend([(x0 + h, v0 + h * m0), (x1 - h, v1 - h * m1), (x1, v1)])
+        codes.extend([Path.CURVE4, Path.CURVE4, Path.CURVE4])
+
+    for j in range(len(x) - 1):
+        curve(x[j], upper_v[j], upper_m[j], x[j + 1], upper_v[j + 1], upper_m[j + 1])
+    verts.append((x[-1], lower_v[-1]))
+    codes.append(Path.LINETO)
+    for j in range(len(x) - 2, -1, -1):
+        curve(x[j + 1], lower_v[j + 1], lower_m[j + 1], x[j], lower_v[j], lower_m[j])
+    verts.append((x[0], lower_v[0]))
+    codes.append(Path.CLOSEPOLY)
+    return Path(verts, codes)
 
 
 def collect(site, language: str) -> tuple[list[int], list[Stream]]:
@@ -209,16 +238,20 @@ def draw_subplot(
     colors = [s.color for s in streams]
 
     # Use evenly-spaced positions so skipped years don't leave gaps.
-    x = np.arange(len(years))
+    x = np.arange(len(years), dtype=float)
 
-    # Interpolate each layer on a dense grid so the streams flow instead of
-    # being piecewise-linear, without bleeding into the neighbouring years.
-    grid = np.linspace(0, len(years) - 1, (len(years) - 1) * 40 + 1)
-    data = np.array([pchip(x, row, grid) for row in data])
-    polys = ax.stackplot(grid, data, colors=colors)
-
-    for i, poly in enumerate(polys):
-        poly.set_gid(f"stream_{key}_{i:03d}")
+    # Smoothing
+    slopes = np.array([pchip_slopes(x, row) for row in data])
+    cum_v = np.cumsum(data, axis=0)
+    cum_m = np.cumsum(slopes, axis=0)
+    zero = np.zeros(len(years))
+    for i in range(len(streams)):
+        lower_v, lower_m = (cum_v[i - 1], cum_m[i - 1]) if i else (zero, zero)
+        path = hermite_band(x, cum_v[i], cum_m[i], lower_v, lower_m)
+        patch = PathPatch(path, facecolor=colors[i], edgecolor="none", linewidth=0)
+        patch.set_gid(f"stream_{key}_{i:03d}")
+        ax.add_patch(patch)
+    top = float(cum_v[-1].max()) * 1.05
 
     # Alternating background bands per year (every other year gets a gray band).
     for i in range(len(years)):
@@ -231,7 +264,7 @@ def draw_subplot(
     ax.tick_params(axis="x", length=0)
     for label in ax.get_xticklabels():
         label.set(rotation=45, ha="right", rotation_mode="anchor")
-    ax.set_ylim(bottom=0)
+    ax.set_ylim(0, top)
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.set_ylabel("articles")
     for side in ("right", "top", "bottom"):
