@@ -23,11 +23,14 @@ hosts = [
     "web05.luffy.cx",
     "web06.luffy.cx",
 ]
+mpl_cache = os.path.expanduser("~/.cache/matplotlib")
+os.makedirs(mpl_cache, exist_ok=True)
 bwrap = (
     "bwrap "
     "--ro-bind / / --dev /dev --proc /proc "
     "--tmpfs /run --tmpfs /tmp --tmpfs /var/tmp --tmpfs $HOME "
     "--bind $PWD $PWD "
+    f"--bind {mpl_cache} {mpl_cache} "
     "--unshare-all --die-with-parent "
 )
 
