@@ -25,8 +25,6 @@ from fractions import Fraction
 from hyde.plugin import Plugin
 from fswrap import File, Folder
 
-from extensions.python import PythonPlugin
-
 from pyquery import PyQuery as pq
 from PIL import Image
 import diskcache
@@ -118,7 +116,9 @@ class ImageFixerPlugin(Plugin):
 
     def _img_properties(self, image):
         """Get size for an image, and opacity: (w, h), o?."""
-        PythonPlugin.ensure_generated(image)
+        # Prefer the deployed output: `#!python` resources render to their final
+        # form (e.g. SVG) and are generated first (see PythonPlugin), so their
+        # source isn't usable. Fall back to the source for not-yet-built files.
         path = self.site.config.deploy_root_path.child(image.relative_deploy_path)
         if not os.path.exists(path):
             path = image.path
@@ -606,8 +606,7 @@ class CoverImagePlugin(Plugin):
         CoverImagePlugin._cache = diskcache.Cache(cache_dir, eviction_policy="none")
         CoverImagePlugin._cache.expire()
 
-        def cover_fn(resource):
-            return CoverImagePlugin.cover_media_path(resource)
+        cover_fn = partial(CoverImagePlugin.generate, plugin=self)
 
         for node in self.site.content.walk():
             for resource in node.resources:
@@ -617,14 +616,6 @@ class CoverImagePlugin(Plugin):
                     continue
                 self.logger.debug("Adding cover_image function to [%s]" % resource)
                 resource.cover_image = types.MethodType(cover_fn, resource)
-
-    def text_resource_complete(self, resource, text):
-        # `cover_image()` only returns the path during the (serial) template
-        # expansion; render the actual image here, in the parallel completion
-        # pool, and only when the page really references its cover.
-        if "images/covers/" not in text:
-            return
-        self.generate(resource)
 
     @staticmethod
     def _render_text(text, font, color):
@@ -758,13 +749,7 @@ class CoverImagePlugin(Plugin):
         return lines
 
     @staticmethod
-    def cover_media_path(resource):
-        """Media-relative path of a resource's OG cover image."""
-        rdp = resource.relative_deploy_path
-        return "images/covers/" + os.path.splitext(rdp)[0] + ".jpg"
-
-    @staticmethod
-    def generate(resource):
+    def generate(resource, plugin=None):
         """Generate a 1200x630 OG cover image for this article."""
         cls = CoverImagePlugin
         W, H = cls.WIDTH, cls.HEIGHT
@@ -779,7 +764,8 @@ class CoverImagePlugin(Plugin):
         has_cover = hasattr(resource.meta, "cover") and resource.meta.cover
 
         # Output path: media/images/covers/{relative_deploy_path}.jpg
-        media_rel = cls.cover_media_path(resource)
+        rdp = resource.relative_deploy_path
+        media_rel = "images/covers/" + os.path.splitext(rdp)[0] + ".jpg"
         output_path = os.path.join(
             str(resource.site.config.deploy_root_path), "media", media_rel
         )
@@ -787,13 +773,6 @@ class CoverImagePlugin(Plugin):
         # Resolve the cover.
         cover_path = None
         if has_cover:
-            cover = resource.site.content.resource_from_relative_deploy_path(
-                resource.site.config.media_root_path.child(
-                    os.path.join("images", resource.meta.cover)
-                )
-            )
-            if cover is not None:
-                PythonPlugin.ensure_generated(cover)
             cover_path = os.path.join(
                 str(resource.site.config.deploy_root_path),
                 "media",
