@@ -565,8 +565,9 @@ class ImageFixerPlugin(Plugin):
 class CoverImagePlugin(Plugin):
     """Generate OG cover images (1200x630) for blog articles.
 
-    Each blog article resource gets a cover_image() method that
-    generates the cover and returns the media-relative path.
+    Each blog article resource gets a cover_image() method that returns the
+    media-relative path of its cover. The covers themselves are generated in
+    begin_text_resource() for every registered resource.
 
     At some point, we should use self.site_content.add_resource to register the
     image as a resource (and add the original cover to .depends).
@@ -606,8 +607,7 @@ class CoverImagePlugin(Plugin):
         CoverImagePlugin._cache = diskcache.Cache(cache_dir, eviction_policy="none")
         CoverImagePlugin._cache.expire()
 
-        cover_fn = partial(CoverImagePlugin.generate, plugin=self)
-
+        self.covers = []
         for node in self.site.content.walk():
             for resource in node.resources:
                 if resource.source_file.kind != "html":
@@ -615,7 +615,21 @@ class CoverImagePlugin(Plugin):
                 if not resource.meta.title:
                     continue
                 self.logger.debug("Adding cover_image function to [%s]" % resource)
-                resource.cover_image = types.MethodType(cover_fn, resource)
+                resource.cover_image = types.MethodType(
+                    CoverImagePlugin.cover_path, resource
+                )
+                self.covers.append(resource)
+
+    def begin_text_resource(self, resource, text):
+        """Generate the cover for a registered resource before it is rendered."""
+        if resource in self.covers:
+            self.generate(resource)
+
+    @staticmethod
+    def cover_path(resource, plugin=None):
+        """Return the media-relative path of this article's cover image."""
+        rdp = resource.relative_deploy_path
+        return "images/covers/" + os.path.splitext(rdp)[0] + ".jpg"
 
     @staticmethod
     def _render_text(text, font, color):
@@ -749,7 +763,7 @@ class CoverImagePlugin(Plugin):
         return lines
 
     @staticmethod
-    def generate(resource, plugin=None):
+    def generate(resource):
         """Generate a 1200x630 OG cover image for this article."""
         cls = CoverImagePlugin
         W, H = cls.WIDTH, cls.HEIGHT
@@ -764,8 +778,7 @@ class CoverImagePlugin(Plugin):
         has_cover = hasattr(resource.meta, "cover") and resource.meta.cover
 
         # Output path: media/images/covers/{relative_deploy_path}.jpg
-        rdp = resource.relative_deploy_path
-        media_rel = "images/covers/" + os.path.splitext(rdp)[0] + ".jpg"
+        media_rel = cls.cover_path(resource)
         output_path = os.path.join(
             str(resource.site.config.deploy_root_path), "media", media_rel
         )
