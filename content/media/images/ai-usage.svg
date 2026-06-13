@@ -41,6 +41,10 @@ CATEGORY_COLORS = {
 CATEGORY_ORDER = list(CATEGORY_COLORS.keys())
 
 
+def plural(n: int) -> str:
+    return "articles" if n != 1 else "article"
+
+
 class Stream(NamedTuple):
     emoji: str
     description: str
@@ -270,16 +274,23 @@ def draw_subplot(
     ax.set_ylabel("articles")
     for side in ("right", "top", "bottom"):
         ax.spines[side].set_visible(False)
+    # Language name on the left, with the article count horizontally centred
+    # above the plot.
     ax.set_title(title, fontsize=13, fontweight="bold", loc="left")
+    count = sum(s.total for s in streams)
+    ax.set_title(
+        f"{count} {plural(count)}",
+        fontsize=10,
+        fontweight="normal",
+        color="#777",
+        loc="center",
+    )
 
 
 def run(site, resource) -> str:
     """Entry point to generate the SVG."""
     titles = {"en": "English", "fr": "Français"}
     languages = list(titles.keys())
-
-    def plural(n: int) -> str:
-        return "articles" if n != 1 else "article"
 
     collected = [(lang, *collect(site, lang)) for lang in languages]
     # Color each (category, tool) the same across subplots.
