@@ -13,7 +13,7 @@
   "frame-src":       domain(media_url('images/')) + " " + domain(media_url('files/')),
   "worker-src":      "blob:",
   "media-src":       "blob: data: " + domain(media_url('videos/')) + " " + domain(media_url('images/')),
-  "connect-src":     "comments.luffy.cx " + domain(media_url('videos/')),
+  "connect-src":     "'self' comments.luffy.cx " + domain(media_url('videos/')),
   "base-uri":        "'none'",
   "frame-ancestors": "https:",
   "form-action":     "'self'",
@@ -132,9 +132,15 @@ location /ip {
   expires epoch;
   return 200 $remote_addr;
 }
-location ~ ^/hit/.*$ {
-  default_type image/svg+xml;
-  return 200 '<svg xmlns="http://www.w3.org/2000/svg"/>';
+location = /hit {
+  access_log off;
+  client_max_body_size 4k;
+  proxy_pass https://vincentbernat.goatcounter.com/api/v0/count;
+  proxy_ssl_server_name on;
+  proxy_set_header Host vincentbernat.goatcounter.com;
+  proxy_set_header Authorization "Bearer {{ secrets.goatcounter_token }}";
+  proxy_set_header X-Forwarded-For $remote_addr;
+  proxy_set_header X-Real-IP $remote_addr;
 }
 location /redirect-ddg {
   return 302 https://html.duckduckgo.com/html?q=site:{{base|replace("https://","")}}/$arg_lang+$arg_q;
