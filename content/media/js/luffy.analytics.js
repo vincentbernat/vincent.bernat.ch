@@ -8,22 +8,19 @@ luffy.do(() => {
     const sendHit = () => {
         if (sent) return;
         sent = true;
-        const data = {
-            hits: [
-                {
-                    path: url.pathname,
-                    title: document.title,
-                    ref: document.referrer,
-                    query: location.search,
-                    size: `${screen.width}`,
-                    user_agent: navigator.userAgent,
-                },
-            ],
+        const hit = {
+            path: url.pathname,
+            title: document.title,
+            ref: document.referrer,
+            query: location.search,
+            user_agent: navigator.userAgent,
+            size: `${screen.width}`,
         };
+        // Drop the enclosing braces: nginx wraps the rest back into the
+        // GoatCounter API body and injects the visitor IP.
         fetch("/hit", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data),
+            body: JSON.stringify(hit).slice(1, -1),
         }).catch(() => {});
     };
     document.addEventListener("touchmove", sendHit, {
