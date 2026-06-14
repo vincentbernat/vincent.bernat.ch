@@ -2,9 +2,14 @@
 
 luffy.do(() => {
     const canonical = document.querySelector('link[rel="canonical"]')?.href;
-    if (navigator.webdriver || !canonical) return;
-    const url = new URL(canonical);
+    if (
+        navigator.webdriver ||
+        !canonical ||
+        (localStorage && localStorage.getItem("skipgc"))
+    )
+        return;
     let sent = false;
+    const url = new URL(canonical);
     const sendHit = () => {
         if (sent) return;
         sent = true;
