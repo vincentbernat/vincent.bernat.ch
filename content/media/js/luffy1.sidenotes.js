@@ -20,6 +20,10 @@ luffy.do(() => {
     if (overlap) {
       console.info("Apply workaround for overlapping sidenotes");
       main.classList.add("lf-sidenotes-overlap");
+      luffy.count?.({
+        event: "sidenote-collision",
+        title: "Workaround for sidenote collision",
+      });
     }
   };
 
