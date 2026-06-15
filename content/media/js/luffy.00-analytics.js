@@ -26,9 +26,24 @@ luffy.do(() => {
     };
 
     let sent = false;
-    const sendHit = () => {
+    const sendHit = async () => {
         if (sent) return;
         sent = true;
+        /* Solve a simple proof-of-work before reporting the hit. */
+        const encoder = new TextEncoder();
+        const prefix = Math.random().toString(36).slice(2);
+        const start = performance.now();
+        for (let nonce = 0; ; nonce++) {
+            const digest = new Uint8Array(
+                await crypto.subtle.digest(
+                    "SHA-256",
+                    encoder.encode(prefix + nonce),
+                ),
+            );
+            // 14-bit complexity.
+            if (digest[0] === 0 && (digest[1] & 0xfc) === 0) break;
+        }
+        console.debug(`PoW solved in ${performance.now() - start}ms`);
         luffy.count();
     };
     ["touchmove", "mousemove", "keydown"].forEach((eventName) =>
