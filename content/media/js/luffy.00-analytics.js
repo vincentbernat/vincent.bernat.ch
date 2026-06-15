@@ -1,4 +1,5 @@
-/* Simple analytics, reported to GoatCounter */
+/* Simple analytics, reported to GoatCounter. Use of touchmove/mousemove to
+   filter bots was stolen from Bear Blog. */
 
 luffy.do(() => {
     const canonical = document.querySelector('link[rel="canonical"]')?.href;
