@@ -31,10 +31,10 @@ luffy.do(() => {
         sent = true;
         luffy.count();
     };
-    document.addEventListener("touchmove", sendHit, {
-        once: true,
-    });
-    document.addEventListener("mousemove", sendHit, {
-        once: true,
-    });
+    ["touchmove", "mousemove", "keydown"].forEach((eventName) =>
+        document.addEventListener(eventName, sendHit, {
+            once: true,
+            passive: true,
+        }),
+    );
 });
