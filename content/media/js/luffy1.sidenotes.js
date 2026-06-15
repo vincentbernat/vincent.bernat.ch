@@ -5,8 +5,9 @@
 
 luffy.do(() => {
   const main = document.querySelector(".lf-main");
-  const notes = [...main.querySelectorAll(".lf-sidenote")];
   if (!main || !CSS.supports("anchor-name: --a")) return;
+  const notes = [...main.querySelectorAll(".lf-sidenote")];
+  if (notes.length < 2) return;
 
   const check = () => {
     /* Wait for sidenotes to be in the margin. Then check if they are
