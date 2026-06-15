@@ -3,14 +3,14 @@
 luffy.do(() => {
     const canonical = document.querySelector('link[rel="canonical"]')?.href;
     if (
-        navigator.webdriver ||
         !canonical ||
+        navigator.webdriver ||
         (localStorage && localStorage.getItem("skipgc"))
     )
         return;
     const url = new URL(canonical);
 
-    /* Send a hit to GoatCounter through the /hit endpoint. It may not exist, use `luffy?.count()`. */
+    /* Send a hit to GoatCounter through the /hit endpoint. It may not exist, use `luffy.count?.()`. */
     luffy.count = (vars = {}) => {
         const params = new URLSearchParams({
             p: vars.event ?? vars.path ?? url.pathname,
@@ -28,7 +28,7 @@ luffy.do(() => {
     const sendHit = () => {
         if (sent) return;
         sent = true;
-        luffy?.count();
+        luffy.count();
     };
     document.addEventListener("touchmove", sendHit, {
         once: true,
