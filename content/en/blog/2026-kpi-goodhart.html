@@ -1,0 +1,155 @@
+---
+title: "Building a Soviet Nail Factory: how KPIs killed efficiency"
+description: |
+  How an obsession with KPIs at Orange led people to game them, slowing service
+  delivery to a crawl. A cautionary tale about Goodhart's law.
+uuid: f43d960b-e941-42ce-8027-b1b9bfe788f9
+ai-usage: Copyediting (Claude Opus 4.8)
+cover: orange-impacts.svg
+---
+
+<!-- Target audience: people who think KPIs are a great tool. I don't want to
+convince them otherwise, but I want to warn them to put safeguards in place so
+people don't game them. I hope they will point colleagues to this article. I
+also target people from my own organization, even if they have heard this
+before. -->
+
+In 2008, I landed my second job, in the network team at _Orange Portails_, the
+division behind the websites and search engine of the French telecom operator
+Orange. The place ran like clockwork: a comprehensive technical setup, a
+dedicated team for every part of the business, and room to focus on what I do
+best. A few years later, none of that mattered: thanks to an obsession with the
+numbers, we could no longer deliver new services on time.
+
+!!! "Disclaimer" This is a story I like to tell to warn people about
+[Goodhart's law][].[^campbell] As these events happened almost 15 years ago, my
+recollection is a bit fuzzy. I left in 2012.
+
+[^campbell]: Goodhart's law often gets the credit, but [Campbell's law][]
+    describes my experience even better: the more you lean on a number to make
+    decisions, the faster people corrupt it.
+
+[goodhart's law]: https://en.wikipedia.org/wiki/Goodhart%27s_law "Goodhart's law on Wikipedia"
+[campbell's law]: https://en.wikipedia.org/wiki/Campbell%27s_law "Campbell's law on Wikipedia"
+
+# The first years
+
+During my first years, the department operated like a startup. Its cradle was
+the French company Echo. They built a search engine. France Télécom bought it
+and renamed it [Voila][]. It was the most visited search engine in France in the
+early 2000s. France Télécom consolidated the portal activities into the _Wanadoo
+Portails_ division, later renamed _Orange Portails_.
+
+The technical environment was excellent. We had many internal tools:[^nocloud] a
+ticket system, an RRD-based graphing tool, an IPAM, a reporting tool, and an
+SNMP-based alerting tool.[^snalert] We deployed our Linux servers with
+[CFEngine][]. We installed systems and applications from internal Debian
+repositories. We documented everything in a private [MediaWiki][] instance.
+Supervision was performed with an ancestor of [Xymon][]. The network
+architecture was clean and scalable with little legacy. We onboarded new people
+in a day.
+
+[^nocloud]: At the time, SaaS was not really a thing. I remember we considered,
+    with a couple of colleagues, selling [Wiremaps][] as a SaaS, with
+    homomorphic encryption for the database. But who would outsource their
+    observability stack?
+
+[^snalert]: *Snalert* was a metacircular alerting tool in Perl. It was able to
+    poll a very large number of SNMP targets in a short timespan. All our
+    monitoring was SNMP-based, including system monitoring.
+
+It was a nurturing environment for me. I developed several tools:
+[lldpd][], an 802.1AB implementation, [Snimpy][], a pythonic binding for
+Net-SNMP, [Wiremaps][], a layer-2 discovery tool with a time machine to know
+which device is connected where, [Kitérő][], a tool to simulate network
+conditions, [QCSS-3][], a controller for load-balancers, and [ipoo][], a service
+available through a Jabber chatbot and a Greasemonkey script to expose
+IP-related information. I added [SNMP support for Keepalived][] and
+[Quagga][]. I also started this blog, with articles like
+"[Anycast DNS][]," TLS-related articles like "[TLS computational DoS
+mitigation][]," SNMP-related articles like "[Integration of Net-SNMP into an
+event loop][]," Linux-related articles like "[Tuning Linux IPv4 route cache][],"
+and an [article about VXLAN][vxlan] long before it was cool.
+
+*[SaaS]: Software as a Service
+
+[voila]: https://fr.wikipedia.org/wiki/Voila
+[cfengine]: https://cfengine.com/
+[lldpd]: https://lldpd.github.io/ "lldpd: implementation of IEEE 802.1AB"
+[snimpy]: [[en/blog/2013-snimpy.html]] "snimpy: SNMP & Python"
+[snmp support for keepalived]: [[en/blog/2011-keepalived-snmp-ipv6.html]] "SNMP support for Keepalived"
+[quagga]: https://github.com/search?q=repo%3AFRRouting%2Ffrr+author%3Avincentbernat+snmp&type=commits "SNMP-related commits for Quagga/FRR"
+[kitérő]: https://github.com/vincentbernat/Kitero
+[qcss-3]: https://github.com/vincentbernat/QCss-3/
+[ipoo]: https://github.com/vincentbernat/ipoo
+[wiremaps]: https://github.com/vincentbernat/wiremaps
+[anycast dns]: [[en/blog/2011-dns-anycast.html]] "Anycast DNS"
+[tls computational dos mitigation]: [[en/blog/2011-ssl-dos-mitigation.html]] "TLS computational DoS mitigation"
+[integration of net-snmp into an event loop]: [[en/blog/2012-snmp-event-loop.html]] "Integration of Net-⁠SNMP into an event loop"
+[tuning linux ipv4 route cache]: [[en/blog/2011-ipv4-route-cache-linux.html]] "Tuning Linux IPv4 route cache"
+[vxlan]: [[en/blog/2012-multicast-vxlan.html]] "Network virtualization with VXLAN"
+[cto]: https://spootnik.org/ "Pierre-Yves Ritschard"
+[exoscale]: https://www.exoscale.com/ "Exoscale: European Cloud Provider"
+[mediawiki]: https://www.mediawiki.org/wiki/MediaWiki "MediaWiki is a collaboration and documentation platform"
+[xymon]: https://www.xymon.com/servers/servers.html "The Xymon Monitor"
+
+# The collapse
+
+When we needed new servers, the on-site team would take a set from the
+inventory, install our base Linux distribution on them, put them in the
+datacenter, and cable them to the top-of-the-rack switches. We opened a ticket
+describing the servers we needed, and one week later, our servers were
+available. 💫
+
+Orange wanted to know if this team was performing well, so they asked for KPIs.
+They decided to use the number of tickets completed in a year. They asked to
+double this number. So instead of one ticket for a new service, we would open
+six tickets—one per server. By the end of the year, the KPIs had more than
+doubled.
+
+Everybody saw it as a success for performance management. So, they asked to do
+the same for the next year. Now, we needed to open a ticket per server and per
+step. Again, the KPIs doubled. Behind the scenes, the tickets went to different
+people and were no longer handled in order. So, for the next year, it was decided to
+have meta-tickets and meetings to follow the progress of these tickets. Of
+course, all these extra steps pushed the KPI even higher.
+
+This performance management method spread to the other teams.[^firewall]
+Everything became slower. Instead of a couple of weeks, a new service now took
+six months. We built a [Soviet nail factory][]. But the KPIs were good, and we
+stopped caring.
+
+[^firewall]: My team also managed the rules of many Linux-based firewalls. To
+    increase our KPIs, we used the same method: rather than accepting one ticket
+    with a flow matrix, we requested one ticket per flow.
+
+Let me give you another example. We had to estimate the impact of each night
+operation. We weren't half bad: we declared most operations "without any
+expected impact." Most of the time, there was no impact. One time out of five,
+there was a 5-second impact. We were told to try harder to meet our expected
+impact. What did we do? We started declaring a 5-second expected impact. One
+day, we got a 30-second impact and were told we failed to match the expected
+impact. In the end, we declared most operations with a 10-minute expected
+impact, and we stopped caring: instead of carefully shifting traffic around, we
+allowed ourselves a 5-minute impact. And our KPIs were never better.
+
+![Graph showing the impact of night operations. Year after year, the impact
+tolerance has been increased. In the final year, the expected impact is 10
+minutes, and all operations remain under this threshold. However, the impacts
+are much more significant than they were in the first
+year.]([[!!images/orange-impacts.svg]] "An artist's rendering of the evolution
+of impacts over the years.")
+
+*[KPIs]: Key Performance Indicators
+*[KPI]: Key Performance Indicator
+
+[soviet nail factory]: https://kyytpress.substack.com/p/the-parable-of-the-soviet-nail-factory "The Parable of the Soviet Nail Factory"
+
+---
+
+KPIs are not bad, but they are easy to break. Use them carefully: let the people
+doing the work help choose the metrics, and tie those metrics to the quality of
+the service—for example, with [service level objectives][]. Otherwise, even
+dedicated people stop caring, game the system, and eventually quit. 📊
+
+[service level objectives]: https://sre.google/sre-book/service-level-objectives/ "Google SRE book: Service Level Objectives"
