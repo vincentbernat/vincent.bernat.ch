@@ -22,7 +22,7 @@ luffy.do(() => {
             e: !!vars.event,
             rnd: Math.random().toString(36).substr(2, 5),
         });
-        fetch(`/hit?${params}`).catch(() => {});
+        fetch(`/hit?${params}`, { keepalive: true }).catch(() => {});
     };
 
     let sent = false;
@@ -31,7 +31,10 @@ luffy.do(() => {
         sent = true;
         luffy.count();
     };
-    ["touchmove", "mousemove", "keydown"].forEach((eventName) =>
+
+    /* Assume we are human if we trigger one of these interactions. pointerdown
+       happen a bit before click and gives more time to send a beacon. */
+    ["touchmove", "mousemove", "keydown", "pointerdown"].forEach((eventName) =>
         document.addEventListener(eventName, sendHit, {
             once: true,
             passive: true,
