@@ -229,6 +229,7 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
     const url = new URL(location);
     url.searchParams.set("q", q);
     history.pushState({}, "", url);
+    luffy.count?.();
     search(q);
     e.preventDefault();
   });
