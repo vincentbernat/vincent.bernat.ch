@@ -69,33 +69,20 @@ location / {
 {# redirections #}
 location = /favicon.ico {
   access_log off;
-  return 301 {{ media_url('images/favicon.png') }};
+  log_not_found off;
+  return 404;
 }
-location = /favicon.png {
-  access_log off;
-  return 301 {{ media_url('images/favicon.png') }};
-}
-location = /apple-touch-icon.png {
-  access_log off;
-  return 301 {{ media_url('images/favicon.png') }};
-}
-location ~ ^/apple-touch-icon-\d+x\d+.png$ {
-  access_log off;
-  return 301 {{ media_url('images/favicon.png') }};
-}
-location = /apple-touch-icon-precomposed.png {
+location ~ ^/apple-touch-icon(-\d+x\d+|precomposed|).png {
   access_log off;
   log_not_found off;
   return 404;
 }
 location ~ ^(?<canonical>.+)/(?:index\.html)?$ {
   access_log off;
-  log_not_found off;
   return 301 $canonical;
 }
 location ~ ^(?<canonical>.*)\.html$ {
   access_log off;
-  log_not_found off;
   return 301 $canonical;
 }
 
