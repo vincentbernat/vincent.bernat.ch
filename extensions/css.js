@@ -117,6 +117,47 @@ const rlhUnit = {
     },
 };
 
+// Replace every light-dark(light, dark) occurrence in a value with its light
+// argument. Returns the rewritten value, unchanged if no light-dark() is
+// present.
+function replaceLightDark(value) {
+    let out = "";
+    let i = 0;
+    while (i < value.length) {
+        const start = value.indexOf("light-dark(", i);
+        if (start === -1) {
+            out += value.slice(i);
+            break;
+        }
+        out += value.slice(i, start);
+        // Scan from the opening paren, tracking depth to find the matching
+        // close and the top-level comma separating the two arguments.
+        let depth = 0;
+        let comma = -1;
+        let j = start + "light-dark".length;
+        for (; j < value.length; j++) {
+            const c = value[j];
+            if (c === "(") depth++;
+            else if (c === ")") {
+                depth--;
+                if (depth === 0) break;
+            } else if (c === "," && depth === 1 && comma === -1) {
+                comma = j;
+            }
+        }
+        if (j >= value.length || comma === -1) {
+            // Malformed light-dark(): leave it untouched and move past it.
+            out += value.slice(start, start + "light-dark(".length);
+            i = start + "light-dark(".length;
+            continue;
+        }
+        const light = value.slice(start + "light-dark(".length, comma).trim();
+        out += replaceLightDark(light);
+        i = j + 1;
+    }
+    return out;
+}
+
 // light-dark() fallback: for each rule with declarations using light-dark(a,
 // b), insert a fallback with the light value before. Also wrap the body of any
 // @media (prefers-color-scheme: dark) in an @supports (color: light-dark())
@@ -144,10 +185,8 @@ const lightDarkFallback = {
     Rule(rule) {
         rule.each((node) => {
             if (node.type !== "decl") return;
-            const fallback = node.value.replace(
-                /light-dark\(\s*([^,]+?)\s*,\s*[^)]+?\)/g,
-                "$1",
-            );
+            if (!node.value.includes("light-dark(")) return;
+            const fallback = replaceLightDark(node.value);
             if (fallback === node.value) return;
             rule.insertBefore(node, node.clone({ value: fallback }));
         });
