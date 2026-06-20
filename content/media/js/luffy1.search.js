@@ -14,8 +14,9 @@
   let observer = null; // observer to check for sentinel element
   let pagefind;
 
-  // Try to load pagefind. This may fail because of CSP and/or lack of webassembly
-  // support. In this case, pagefind stays null.
+  // Try to load pagefind. This may fail because of CSP and/or lack of
+  // webassembly support. In this case, pagefind stays null. SRI is checked
+  // because the module is loaded through <script> with an integrity attribute.
   try {
     pagefind = await import(pageFindScript.src);
     await pagefind.options({
