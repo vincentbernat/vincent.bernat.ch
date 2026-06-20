@@ -7,8 +7,9 @@ const postcss = require("postcss");
 const postcssCustomProperties = require("postcss-custom-properties");
 const postcssCustomMedia = require("postcss-custom-media");
 const postcssLogical = require("postcss-logical");
-const postcssGlobalData = require("@csstools/postcss-global-data");
+const postcssColorHexAlpha = require("postcss-color-hex-alpha");
 const postcssNesting = require("postcss-nesting");
+const postcssGlobalData = require("@csstools/postcss-global-data");
 const postcssMixins = require("@csstools/postcss-mixins");
 const postcssIsPseudoClass = require("@csstools/postcss-is-pseudo-class");
 const { calc } = require("@csstools/css-calc");
@@ -229,6 +230,7 @@ function runProcess() {
             postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
             postcssLogical /* baseline 2021 */,
             lightDarkFallback /* baseline 2024 */,
+            postcssColorHexAlpha /* baseline 2020 */,
             autoprefixer,
             postcssNesting /* baseline 2023 */,
             postcssIsPseudoClass /* baseline 2021 */,
