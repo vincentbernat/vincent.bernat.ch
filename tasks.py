@@ -480,7 +480,7 @@ rm ../result
                 sed_html = []
                 sed_css = []
                 for f in md5:
-                    if f == "images/favicon.png":
+                    if f in ("images/favicon.png", "images/favicon.svg"):
                         continue
                     root, ext = os.path.splitext(f)
                     newname = "%s.%s%s" % (root, md5[f], ext)

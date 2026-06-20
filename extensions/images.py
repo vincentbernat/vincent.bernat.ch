@@ -589,7 +589,11 @@ class CoverImagePlugin(Plugin):
     def begin_site(self):
         media_path = str(self.site.config.media_root_path)
         icon_path = os.path.join(media_path, "images", "favicon.png")
-        CoverImagePlugin.icon = Image.open(icon_path).convert("RGBA")
+        CoverImagePlugin.icon = (
+            Image.open(icon_path)
+            .convert("RGBA")
+            .resize((128, 128), Image.Resampling.NEAREST)
+        )
         typeface = skia.Typeface.MakeFromName(
             "Noto Sans Display",
             skia.FontStyle(
