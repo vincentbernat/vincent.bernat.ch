@@ -1,9 +1,1 @@
----
-combine:
-  files:
-    - gallery-upstream.js
-  remove: yes
-  where: top
----
-
-baguetteBox.run(".lf-gallery");
+../../../node_modules/baguettebox.js/dist/baguetteBox.js

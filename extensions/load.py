@@ -55,10 +55,12 @@ class LoadPlugin(Plugin):
                 else:
                     if lazy:
                         js_tags.append(
-                            f'<script data-src="{src}" data-name="{name}"></script>'
+                            f'<script data-src="{src}" data-name="{name}" type="module"></script>'
                         )
                     else:
-                        js_tags.append(f'<script src="{src}" type="module"></script>')
+                        js_tags.append(
+                            f'<script src="{src}" data-name="{name}" type="module"></script>'
+                        )
 
         self._insert_after(css_anchor, css_tags)
         self._insert_after(js_anchor, js_tags)

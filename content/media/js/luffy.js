@@ -23,7 +23,7 @@ window.luffy = {
     const el = document.querySelector(
       `script[data-name="${what}"], link[data-name="${what}"]`,
     );
-    if (!el) throw `cannot load ${what}`;
+    if (!el) return;
     if (onload) el.onload = onload;
     for (const k of ["integrity", "href", "src"])
       if (el.dataset[k]) el[k] = el.dataset[k];
