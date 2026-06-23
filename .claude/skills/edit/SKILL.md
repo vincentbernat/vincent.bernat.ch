@@ -22,6 +22,7 @@ some hints on the target audience and goals as HTML comments at the beginning.
 3. Apply the edits directly to the file.
 4. Disclose AI usage in the frontmatter.
 5. Only summarize notable changes.
+6. Propose a title
 
 ## Editing rules
 
@@ -73,6 +74,25 @@ principles to rewrite the introduction.
 
 [the craft of writing effectively]: https://www.youtube.com/watch?v=vtIzMaLkCaM
 [h1]: https://ldmce.wordpress.com/wp-content/uploads/2020/09/emerg-leaders-acad-14.pdf
+
+## About the title and description
+
+The title is the strongest part of the hook (see above). Propose a few
+alternatives and recommend one.
+
+- Write for a broad technical audience, such as Hacker News, Lobsters, LinkedIn,
+  not only for people who already know the project. Lead with the universal
+  concept and the techniques that draw curiosity. Push too specific jargon in
+  the description if it is still important.
+- Be concrete and specific. State the technique or the result, not a vague
+  promise.
+- Keep it honest: the title should cover what the article actually delivers, not
+  oversell one part.
+
+The description (used for social networks and as the meta description) must
+complement the title, not repeat it. The reader often sees both together, so the
+description should add what the title leaves out. Keep it short enough to read
+in a link preview.
 
 ## Disclose AI usage
 
