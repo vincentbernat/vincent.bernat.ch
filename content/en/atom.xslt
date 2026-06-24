@@ -57,7 +57,7 @@ ai-usage: disabled
             <xsl:value-of select="atom:title"/>
           </a>
         </h1>
-        <h2 xml:space="preserve">
+        <h2>
           <xsl:value-of select="atom:author/atom:name"/>
           <time>
             <xsl:attribute name="datetime">
