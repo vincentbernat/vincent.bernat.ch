@@ -49,6 +49,9 @@ location /{{ code }} {
   error_page 404 {{ content_url('/' + code + '/404.html') }};
   try_files $uri.html $uri $uri/index.html =404;
 }
+location = /{{ code }}/blog/subscribe {
+  return 301 /{{ code }}/blog/atom.xml;
+}
 location {{ content_url('/' + code + '/404.html') }} {
   internal;
   try_files $uri.html $uri;
@@ -59,7 +62,7 @@ location = / {
   log_not_found off;
   set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
   {{ add_headers({"Vary": "Accept-Language"})|indent(2) }}
-  return 301  /$lang;
+  return 301 /$lang;
 }
 
 location / {

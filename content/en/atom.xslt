@@ -30,9 +30,41 @@ ai-usage: disabled
             <xsl:value-of select="atom:link[@rel='self']/@href"/>
           </xsl:attribute>
         </link>
+        <link rel="canonical">
+          <xsl:attribute name="href">
+            <xsl:value-of select="atom:link[@rel='self']/@href"/>
+          </xsl:attribute>
+        </link>
       </head>
       <body>
         <main class="lf-main">
+          <div class="lf-text">
+{% set feed = base ~ "/" ~ resource.meta.language ~ "/blog/atom.xml" %}
+{% filter markdown|typogrify|clean_rss %}
+{% if resource.meta.language == "fr" %}
+La façon la plus simple d'être averti de la publication de nouveaux articles est
+de [s'abonner à ce flux RSS][rss] dans votre lecteur favori. Si vous ne disposez
+pas encore du lecteur adéquat, il existe de nombreuses applications à cet effet,
+notamment [Miniflux][] ou [NewsBlur][]. Certains services, tels que
+[Blogtrottr][] ou [FeedRabbit][], permettent même de le recevoir par courrier
+électronique. Vous pouvez également me suivre sur [Mastodon][] ou [Bluesky][].
+{% else %}
+To know when I publish new articles, subscribe to [this RSS feed][rss] in your
+favorite reader. If you don't have one yet, many applications exist, including
+[Miniflux][] and [NewsBlur][]. Some services, like [Blogtrottr][] or
+[FeedRabbit][], even deliver it to your inbox. You can also follow me on
+[Mastodon][] or [Bluesky][].
+{% endif %}
+
+[rss]: {{ feed }}
+[FeedRabbit]: https://feedrabbit.com/?url={{ feed }}
+[Blogtrottr]: https://blogtrottr.com/?subscribe={{ feed }}
+[Miniflux]: https://miniflux.app/ "Miniflux"
+[NewsBlur]: https://www.newsblur.com/ "NewsBlur"
+[Bluesky]: https://bsky.app/profile/{{ resource.meta.bluesky }}
+[Mastodon]: {{ resource.meta.mastodon|mastodon_href }}
+{% endfilter %}
+          </div>
           <xsl:apply-templates select="atom:entry"/>
         </main>
         <nav id="lf-navbar" xml:space="preserve">
@@ -43,6 +75,7 @@ ai-usage: disabled
           {% filter indent(10) %}{% include "footer.j2" %}{% endfilter %}
 
         </footer>
+        <script src="{{ media_url('js/luffy.js') }}" type="module"></script>
       </body>
     </html>
   </xsl:template>
