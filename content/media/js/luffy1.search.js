@@ -67,7 +67,7 @@
       <div class="bounce1"></div>
       <div class="bounce2"></div>
       <div class="bounce3"></div>
-  </div>`;
+    </div>`;
     results.insertAdjacentHTML("beforeend", spinner);
     try {
       return await fn();
@@ -79,7 +79,16 @@
   // Render HTML for one result.
   function renderResult(d) {
     const url = devMode ? d.url : d.url.replace(/\.html$/, "");
-    const date = d.meta.date ? d.meta.date.split("T")[0] : "";
+    const date = d.meta.date
+      ? new Date(d.meta.date).toLocaleDateString(
+          document.documentElement.lang,
+          {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          },
+        )
+      : "";
     const author = d.meta.author || "";
     const meta = [date, author].filter(Boolean).join(" — ");
     return `<div class="lf-search-result">
