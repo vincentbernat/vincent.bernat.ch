@@ -18,7 +18,9 @@ luffy.do(() => {
             t: vars.title ?? document.title,
             r: vars.referrer ?? document.referrer,
             q: vars.query ?? location.search,
-            s: vars.screen ?? `${document.documentElement.clientWidth}`,
+            s:
+                vars.screen ??
+                `${Math.floor(document.documentElement.clientWidth / 10) * 10}`,
             e: !!vars.event,
             rnd: Math.random().toString(36).substr(2, 5),
         });
