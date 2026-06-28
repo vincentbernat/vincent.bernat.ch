@@ -46,24 +46,22 @@ Update only one dependency:
 uv lock --upgrade-package lxml
 ```
 
-### Yarn
+### npm
+
+`--package-lock-only` updates `package.json`/`package-lock.json` without
+touching the Nix-managed `node_modules` symlink. Nix rebuilds it on the next
+`nix develop`.
 
 Check oudated dependencies:
 
 ```
-yarn outdated
+npm outdated
 ```
 
-Upgrade a dependency:
+Add or upgrade a dependency:
 
 ```
-yarn upgrade-interactive --modules-folder ~/tmp/node_modules --ignore-scripts --latest
-```
-
-Add a dependency:
-
-```
-yarn add --modules-folder ~/tmp/node_modules --ignore-scripts @eslint/css
+npm install --package-lock-only katex@latest
 ```
 
 ### Nix
