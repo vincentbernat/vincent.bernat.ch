@@ -32,6 +32,14 @@ luffy.do(() => {
         if (sent) return;
         sent = true;
         luffy.count();
+
+        /* Drop utm_* parameters from the displayed URL now that they were sent. */
+        const clean = new URL(location.href);
+        [...clean.searchParams.keys()]
+            .filter((key) => key.startsWith("utm_"))
+            .forEach((key) => clean.searchParams.delete(key));
+        if (clean.href !== location.href)
+            history.replaceState(history.state, "", clean.href);
     };
 
     /* Assume we are human if we trigger one of these interactions. pointerdown
