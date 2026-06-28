@@ -82,7 +82,7 @@ class ImageThumbnailsPlugin(Plugin):
         target = File(Folder(resource.site.config.deploy_root_path).child(path))
         target.parent.make()
         if resource.name.endswith(".jpg"):
-            im.save(target.path, "JPEG", quality=95)
+            im.save(target.path, "JPEG", quality=100)
         else:
             im.save(target.path, "PNG")
         return Thumb(path, im.size[0], im.size[1])
@@ -312,7 +312,7 @@ class ImageFixerPlugin(Plugin):
         )
         File(destination).parent.make()
         if source.endswith(".jpg"):
-            im.save(destination, "JPEG", quality=95)
+            im.save(destination, "JPEG", quality=100)
         else:
             im.save(destination, "PNG")
 
@@ -917,7 +917,7 @@ class CoverImagePlugin(Plugin):
 
         # Save and cache
         File(output_path).parent.make()
-        img.save(output_path, "JPEG", quality=95)
+        img.save(output_path, "JPEG", quality=100)
         with open(output_path, "rb") as f:
             cls._cache.set(cache_key, f, read=True, expire=30 * 86400)
 
