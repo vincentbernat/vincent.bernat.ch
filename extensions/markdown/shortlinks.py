@@ -16,6 +16,8 @@ class ShortLinksPreprocessor(Preprocessor):
     SCHEMAS = {
         "rfc": "https://www.rfc-editor.org/rfc/rfc{}",
         "man": "https://manpages.debian.org/{}.html",
+        "doi": "https://oadoi.org/{}",
+        "sci-hub": "https://sci-hub.fr/{}",
     }
     RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://([\w.~;=:@+-]+)", re.ASCII)
 
