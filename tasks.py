@@ -143,7 +143,6 @@ def screenshots(c):
     """Generate screenshots"""
     now = time.asctime().replace(" ", "-")
     os.makedirs("screenshots/{now}".format(now=now))
-    c.run("firefox -CreateProfile headless")
     for url in [
         "en/",
         "en/blog",
@@ -156,12 +155,15 @@ def screenshots(c):
     ]:
         for width in [320, 600, 1024, 1280, 1900]:
             c.run(
-                "firefox "
-                "-P headless "
+                "chromium "
                 "--headless "
+                "--hide-scrollbars "
+                "--screenshot "
+                "--disable-gpu "
                 "--window-size={width},2000 "
-                "--screenshot screenshots/{now}/{width}px-{slug}.png "
-                "http://localhost:8080/{url}".format(
+                "http://localhost:8080/{url} "
+                "&& mv screenshot.png "
+                "   screenshots/{now}/{width}px-{slug}.png".format(
                     width=width,
                     now=now,
                     url=url,
