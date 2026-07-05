@@ -28,7 +28,6 @@ luffy.do(() => {
     if (!Hls.isSupported()) return;
 
     videoSources.forEach(({ src, parentNode }) => {
-      let once = false;
       const m3u8 = src;
       const oldVideo = parentNode;
       const newVideo = oldVideo.cloneNode(true);
