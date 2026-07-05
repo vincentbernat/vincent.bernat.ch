@@ -44,32 +44,6 @@ luffy.do(() => {
       });
       hls.loadSource(m3u8);
       hls.attachMedia(newVideo);
-
-      // Try to recover from fatal errors
-      let lastRecovery = 0;
-      const recoverMediaError = () => {
-        const now = Date.now();
-        if (now - lastRecovery > 2000) {
-          lastRecovery = now;
-          hls.recoverMediaError();
-        }
-      };
-      hls.on(Hls.Events.ERROR, (event, data) => {
-        if (!data.fatal) return;
-        switch (data.type) {
-          case Hls.ErrorTypes.MEDIA_ERROR: {
-            recoverMediaError();
-            break;
-          }
-        }
-      });
-      newVideo.addEventListener("error", ({ currentTarget: { error } }) => {
-        if (error.code === error.MEDIA_ERR_DECODE) {
-          recoverMediaError();
-        }
-      });
-
-      // Play
       newVideo.addEventListener(
         "play",
         () => hls.startLoad(newVideo.currentTime),
