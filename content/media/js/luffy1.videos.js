@@ -44,7 +44,11 @@ luffy.do(() => {
       });
       hls.loadSource(m3u8);
       hls.attachMedia(newVideo);
-      newVideo.addEventListener("play", () => hls.startLoad(), false);
+      newVideo.addEventListener(
+        "play",
+        () => hls.startLoad(newVideo.currentTime),
+        false,
+      );
       pauseOthersWhenPlaying(newVideo);
 
       // Replace video tag with our clone.
