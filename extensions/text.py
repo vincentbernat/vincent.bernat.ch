@@ -52,9 +52,9 @@ class FootnotesPlugin(Plugin):
                 parent.replace_with(backref)
 
         # Create sidenotes and insert them after their parent.
-        for ref in d.items("sup[id^=fnref-]"):
+        for ref in d.items("sup[id^='fnref:']"):
             name = ref.attr.id[6:]
-            fn = sidenotes("li[id=fn-{}]".format(name))
+            fn = sidenotes("li[id='fn:{}']".format(name))
             assert fn
             parents = ref.parents()
             for i in range(len(parents) - 1):
