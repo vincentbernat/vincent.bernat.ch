@@ -9,7 +9,7 @@ from markdown.extensions import codehilite
 
 
 class CodeHiliteLangExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
         patch()
 

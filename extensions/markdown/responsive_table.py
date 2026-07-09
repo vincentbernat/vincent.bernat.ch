@@ -7,16 +7,15 @@ overflow in margins if needed).
 
 from markdown import Extension
 from markdown.treeprocessors import Treeprocessor
-from markdown.util import etree
+import xml.etree.ElementTree as etree
 
 
 class ResponsiveTableExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
-        self.processor = ResponsiveTableTreeprocessor()
-        self.processor.md = md
+        self.processor = ResponsiveTableTreeprocessor(md)
         self.processor.config = self.getConfigs()
-        md.treeprocessors.add("responsive-table", self.processor, "_end")
+        md.treeprocessors.register(self.processor, "responsive-table", -10)
 
 
 class ResponsiveTableTreeprocessor(Treeprocessor):

@@ -7,9 +7,9 @@ from markdown.preprocessors import Preprocessor
 
 
 class ShortLinksExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
-        md.preprocessors.add("shortlinks", ShortLinksPreprocessor(md), "<reference")
+        md.preprocessors.register(ShortLinksPreprocessor(md), "shortlinks", 12)
 
 
 class ShortLinksPreprocessor(Preprocessor):

@@ -8,11 +8,9 @@ from markdown.util import HTML_PLACEHOLDER
 
 
 class HTMLCommentsExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
-        md.preprocessors.add(
-            "html_comments", HTMLCommentsPreprocessor(md), ">html_block"
-        )
+        md.preprocessors.register(HTMLCommentsPreprocessor(md), "html_comments", 15)
 
 
 class HTMLCommentsPreprocessor(Preprocessor):
@@ -20,9 +18,9 @@ class HTMLCommentsPreprocessor(Preprocessor):
 
     def run(self, lines):
         removed = set()
-        for i, (html, safe) in enumerate(self.markdown.htmlStash.rawHtmlBlocks):
+        for i, html in enumerate(self.md.htmlStash.rawHtmlBlocks):
             if self.COMMENT_RE.match(html):
-                self.markdown.htmlStash.rawHtmlBlocks[i] = ("", safe)
+                self.md.htmlStash.rawHtmlBlocks[i] = ""
                 removed.add(HTML_PLACEHOLDER % i)
         if removed:
             lines = [l for l in lines if l.strip() not in removed]

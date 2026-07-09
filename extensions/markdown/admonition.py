@@ -1,14 +1,14 @@
 from markdown.extensions import Extension
 from markdown.blockprocessors import BlockProcessor
-from markdown.util import etree
+import xml.etree.ElementTree as etree
 import re
 
 
 class AdmonitionExtension(Extension):
-    def extendMarkdown(self, md, md_globals):
+    def extendMarkdown(self, md):
         md.registerExtension(self)
-        md.parser.blockprocessors.add(
-            "shortadmonition", AdmonitionProcessor(md.parser), "_begin"
+        md.parser.blockprocessors.register(
+            AdmonitionProcessor(md.parser), "shortadmonition", 105
         )
 
 
