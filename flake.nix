@@ -281,13 +281,16 @@
           build.merriweather = pkgs.stdenvNoCC.mkDerivation {
             name = "custom-merriweather";
             dontUnpack = true;
+            # The underline thickness of merriweather is too thin. It has a
+            # value of 90. This could be fixed in CSS with
+            # text-decoration-thickness (baseline 2021), but we can also fix
+            # it directly in the font.
             buildPhase = ''
               fix() {
                 original=$1
                 target=$2
                 echo Fix $1 to $2
                 ${fonttools}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
-                  | tr -d '\000' \
                   > $target.ttx
                 ${pkgs.xmlstarlet}/bin/xmlstarlet \
                   ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
