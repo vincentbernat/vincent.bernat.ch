@@ -3,7 +3,7 @@ name: research
 description: >
   Researches the topic of a blog article to verify claims, identify gaps,
   and suggest additional citations. Triggers when the user mentions
-  "research", "verify", "find references", "citations", or asks to
+  "research", "verify", "find references", "citations", "review", or asks to
   strengthen or review the content of an article.
 allowed-tools: WebFetch, WebSearch, Read, Grep, Glob, Bash(man *)
 ---

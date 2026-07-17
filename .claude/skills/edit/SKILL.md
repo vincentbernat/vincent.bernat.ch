@@ -3,8 +3,7 @@ name: edit
 description: >
   Proofreads and lightly edits an English blog article for clarity, style,
   and grammar. Triggers when the user mentions "edit", "proofread",
-  "review writing", or asks to improve the prose of an article in
-  content/en/.
+  or asks to improve the prose of an article in content/en/.
 ---
 
 # Edit an English article
