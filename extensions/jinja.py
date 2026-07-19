@@ -1,6 +1,7 @@
 import os
 import jinja2
 import re
+from markupsafe import Markup
 from babel.dates import format_date
 from distutils.version import LooseVersion
 from pyquery import PyQuery as pq
@@ -74,11 +75,11 @@ def mastodon_href(handle):
     return f"https://{mo.group(2)}/@{mo.group(1)}"
 
 
-@jinja2.contextfunction
+@jinja2.pass_context
 def include_file(ctx, name):
     target = os.path.join(str(ctx.parent["node"]), name)
     with open(target, "r") as f:
-        return jinja2.Markup(f.read())
+        return Markup(f.read())
 
 
 class ReadingTime(int):
@@ -105,7 +106,7 @@ def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
     return ReadingTime(max(1, minutes), words)
 
 
-@jinja2.contextfilter
+@jinja2.pass_context
 def clean_rss(ctx, html):
     doc = pq(html)
     doc(".when-js").remove()
@@ -114,4 +115,4 @@ def clean_rss(ctx, html):
     doc(".footnote-backref").text("↩")
     # Markup so the XHTML markup is inserted into the atom feed as
     # structure rather than autoescaped to entity-encoded text.
-    return jinja2.Markup(doc.html())
+    return Markup(doc.html())
