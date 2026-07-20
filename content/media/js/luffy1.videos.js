@@ -59,7 +59,7 @@ luffy.do(() => {
 
 // Make seek-to links work
 luffy.do(() => {
-  const seekLinks = document.querySelectorAll("a[href^='#video-seek-']");
+  const seekLinks = document.querySelectorAll("a[href^='#video:seek-']");
   seekLinks.forEach((seekLink) => {
     seekLink.addEventListener("click", (event) => {
       event.preventDefault();
