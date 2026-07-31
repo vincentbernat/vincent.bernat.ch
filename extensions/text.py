@@ -131,13 +131,20 @@ process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(
 
 
 class TOCPlugin(Plugin):
-    """Remove whitespaces inside UL"""
+    """Remove whitespaces inside UL and add a disclosure to expand the TOC"""
 
     def text_resource_complete(self, resource, text):
         if not resource.source_file.kind == "html":
             return
         d = pq(text, parser="html")
         for toc in d.items(".toc"):
+            # The empty details element is only a switch: CSS uses its state to
+            # display the TOC collapsed or expanded. It never hides anything.
+            toc.prepend(
+                '<details><summary aria-label="{}"></summary></details>'.format(
+                    resource.meta.l10n.toc
+                )
+            )
             html = toc.outer_html()
             html = re.sub(r"</li>\s+</ul>", "</li></ul>", html)
             toc.replace_with(html)

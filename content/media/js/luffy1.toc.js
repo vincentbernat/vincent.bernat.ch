@@ -45,7 +45,7 @@ luffy.do(() => {
   };
 
   /* Update the classes for each element in the TOC. */
-  const scrollEl = toc.firstElementChild;
+  const scrollEl = toc.querySelector("ul");
   const apply = () => {
     const states = entries.map((e) => stateOf(e.heading));
     let lastActive = null;

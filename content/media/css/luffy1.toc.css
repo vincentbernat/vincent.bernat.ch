@@ -1,15 +1,62 @@
+/* Expanded TOC: a nested list. This is the layout of the side TOC and the one
+   used for the inline TOC once the reader has opened it. */
+@mixin --lf-toc-expanded() {
+  ul,
+  li {
+    display: revert;
+  }
+  li::after,
+  li:has(ul)::after,
+  li ul::before,
+  li ul::after {
+    content: none;
+  }
+  ul ul {
+    padding-left: 0.8em;
+  }
+}
+
 .lf-main {
   .toc {
     margin: 1rlh 0;
     font-family: var(--lf-font-heading);
     text-wrap: balance;
     position: relative;
-    &::before {
-      content: "📑";
+    /* The disclosure icon is in the left margin. Opening it does not reveal
+       anything: it only switches the TOC to the expanded layout. */
+    > details {
+      display: none;
+    }
+    @supports selector(:has(*)) and (clip-path: polygon(0 0)) {
+      > details {
+        display: revert;
+      }
+    }
+    > details > summary {
       position: absolute;
       right: 100%;
       margin-right: 0.5em;
-      color: var(--lf-color-low);
+      width: 1.2em;
+      height: 1rlh;
+      text-align: right;
+      list-style: none;
+      cursor: pointer;
+      &::-webkit-details-marker {
+        /* Older Safari versions (< 17) do not respect list-style: none. */
+        display: none;
+      }
+      &::before {
+        content: "";
+        display: inline-block;
+        vertical-align: 0.1em;
+        width: 0.5em;
+        height: 0.5em;
+        background-color: var(--lf-color-low);
+        clip-path: polygon(10% 0%, 90% 50%, 10% 100%);
+      }
+    }
+    > details[open] > summary::before {
+      clip-path: polygon(0% 10%, 100% 10%, 50% 90%);
     }
     ul,
     li {
@@ -49,6 +96,9 @@
         }
       }
     }
+    &:has(> details[open]) {
+      @apply --lf-toc-expanded;
+    }
   }
 }
 
@@ -66,16 +116,9 @@
       width: var(--lf-toc-width);
       margin: 0;
       margin-inline: var(--lf-minimal-margin);
-      &::before,
-      li::after,
-      li:has(ul)::after,
-      li ul::before,
-      li ul::after {
-        content: none;
-      }
-      ul,
-      li {
-        display: revert;
+      @apply --lf-toc-expanded;
+      > details {
+        display: none;
       }
       & > ul {
         position: sticky;
@@ -102,9 +145,6 @@
         &:active {
           opacity: 1;
         }
-      }
-      ul ul {
-        padding-left: 0.8em;
       }
     }
   }
