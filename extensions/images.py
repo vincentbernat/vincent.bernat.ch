@@ -542,6 +542,7 @@ class ImageFixerPlugin(Plugin):
 
                 # If we have a title, also enclose in a figure
                 figure = pq("<figure />")
+                figure.addClass("lf-fullbleed")
                 if img.attr.title:
                     figcaption = pq("<figcaption />")
                     figcaption.html(img.attr.title)
