@@ -4,6 +4,10 @@ luffy.do(() => {
   document
     .querySelector(".lf-backtotop a")
     ?.addEventListener("click", (event) => {
+      luffy.count?.({
+        event: "back-to-top",
+        title: "Click on back to top link",
+      });
       window.scrollTo(0, 0);
       event.preventDefault();
     });
