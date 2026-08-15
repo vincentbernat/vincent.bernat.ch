@@ -64,6 +64,12 @@ Add or upgrade a dependency:
 npm install --package-lock-only katex@latest
 ```
 
+Update all dependencies:
+
+```
+npm update --package-lock-onlyx
+```
+
 ### Nix
 
 Update nixpkgs:
