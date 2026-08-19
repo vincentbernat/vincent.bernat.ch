@@ -31,12 +31,24 @@ currently editing.
 
 - Keep all Markdown markup intact.
 - Keep original link reference names and URLs unchanged.
-- Do not translate code blocks or command examples.
+- Point internal links (`[[en/blog/…]]`) to the French counterpart when it
+  exists and translate their title attribute.
+- Do not translate code blocks or command examples, but translate the comments
+  inside them.
+- Drop the HTML comment describing the target audience at the top of the
+  article: it is a note for the author.
 - In French, footnote marks go **before** the punctuation.
 - Avoid word-for-word translation: use idiomatic French and assume the reader is
   a native speaker.
 - Avoid "anglicismes" when a proper French equivalent exists.
+- Put the English words kept in the French text in italics, including inside
+  guillemets, like « *edge port* ». Proper nouns, acronyms, and titles of works
+  do not need italics. A term already in bold stays in bold: never combine bold
+  and italics.
 - Avoid "on" as a pronoun.
+- Use « guillemets » with a plain space inside
+- Use a plain space as thousands separator.
+- Avoid em dashes: French prose uses a colon, a comma, or even parentheses.
 - Translate the `title` and `description` front matter fields.
 - Keep `uuid`, `tags`, `cover`, and `attachments` fields unchanged.
 
