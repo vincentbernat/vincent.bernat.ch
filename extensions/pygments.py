@@ -99,10 +99,18 @@ class WiresharkLexer(RegexLexer):
     aliases = ["wireshark"]
 
     tokens = {
-        "root": [(r"^\S.+\n", Name.Class, "fields")],
-        "fields": [
+        "root": [
+            # Protocol names are not indented
+            (r"^\S.*$", Name.Class),
+            # [Time shift for this packet: 0.0 seconds]
+            (r"^\s*(\[[^\]]+\])$", Comment),
+            # "    .... ..0. .... .... = LG bit: value"
+            (
+                r"^(\s+)([.01 ]+)(= )([^:]+)(?=:)",
+                bygroups(Text, Name.Constant, Operator, String.Symbol),
+            ),
             # Labels
-            (r"^\s+([^:]+)(?=:)", String.Symbol),
+            (r"^[^\S\n]+([^:\n]+)(?=:)", String.Symbol),
             # Numbers
             (
                 r"(\()(\d+|0x[a-fA-F0-9]+)(\))",

@@ -104,6 +104,7 @@
               '}(typeof self !== "undefined" ? self : this, function () {'
           '';
         };
+        jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
         fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
           dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
         });
@@ -190,8 +191,8 @@
             # Impure!
             # Optimize SVG, JPG and PNG
             let
-              jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
               inherit (pkgs) libwebp libavif pngquant lcms gifsicle;
+              inherit jpegoptim;
               svgo = pkgs.svgo.overrideAttrs (old: {
                 patches = (old.patches or [ ]) ++ [
                   (pkgs.writeText "sax.patch" ''
@@ -429,6 +430,7 @@
               mp4v2 # video2hls
               resvg # SVG to PNG
               fonttools
+              jpegoptim
             ];
             shellHook = ''
               unset PYTHONPATH

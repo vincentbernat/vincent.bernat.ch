@@ -1,0 +1,1784 @@
+WEBVTT
+
+1
+00:00:00.400 --> 00:00:03.240
+Imagine you rent office
+space for a three-day event.
+
+2
+00:00:03.240 --> 00:00:06.160
+You quickly set up a few
+Ethernet switches and tape
+
+3
+00:00:06.160 --> 00:00:09.920
+some cables on the floor
+to get everyone online.
+
+4
+00:00:09.920 --> 00:00:12.980
+Unfortunately, Stan,
+your clumsiest coworker,
+
+5
+00:00:12.980 --> 00:00:16.080
+kicks out a cable every
+time he gets up for coffee.
+
+6
+00:00:16.080 --> 00:00:20.100
+You could add extra cables,
+but then you'd get a broadcast storm:
+
+7
+00:00:20.100 --> 00:00:24.050
+Ethernet packets that loop and multiply
+until nothing else gets through.
+
+8
+00:00:24.720 --> 00:00:29.220
+That’s where the spanning
+tree protocol (STP) comes in.
+
+9
+00:00:29.220 --> 00:00:33.840
+STP blocks just enough of your spare
+cables to leave a loop-free tree.
+
+10
+00:00:33.840 --> 00:00:38.340
+When Stan strikes again, it rebuilds
+the tree in a second, leaving some time
+
+11
+00:00:38.340 --> 00:00:42.820
+for Blobby, your one-person support
+crew, to reconnect the cable.
+
+12
+00:00:42.820 --> 00:00:46.917
+See for yourself: this diagram
+runs a real STP implementation.
+
+13
+00:00:47.727 --> 00:00:51.007
+Designed in the ’80s,
+the spanning tree protocol has evolved
+
+14
+00:00:51.007 --> 00:00:57.267
+into a "rapid" flavor (RSTP) and
+a "VLAN-aware" variation (MSTP).
+
+15
+00:00:57.267 --> 00:00:59.887
+Any sound-minded network
+engineer knows there
+
+16
+00:00:59.887 --> 00:01:04.647
+are better alternatives,
+like BGP EVPN VXLAN.
+
+17
+00:01:04.647 --> 00:01:07.687
+Yet, because any switch
+speaks it, the venerable
+
+18
+00:01:07.687 --> 00:01:09.921
+spanning tree protocol still fills a niche.
+
+19
+00:01:10.571 --> 00:01:16.171
+We focus on RSTP: it replaced
+the original protocol in 2004.
+
+20
+00:01:16.171 --> 00:01:20.791
+To eliminate network loops, RSTP
+implements a complex state machine.
+
+21
+00:01:20.791 --> 00:01:24.891
+Timers, link state changes,
+and the link-local control frames
+
+22
+00:01:24.891 --> 00:01:29.031
+a bridge receives from its
+neighbors drive its transitions.
+
+23
+00:01:29.031 --> 00:01:33.281
+These Ethernet frames are the
+Bridge Protocol Data Units (BPDUs).
+
+24
+00:01:33.931 --> 00:01:35.081
+You can watch them here.
+
+25
+00:01:35.891 --> 00:01:39.431
+After some time,
+the topology converges to a tree:
+
+26
+00:01:39.431 --> 00:01:44.291
+from the root C11, there is a
+path to each bridge and no loop.
+
+27
+00:01:44.291 --> 00:01:47.491
+In the upper right corner,
+the interface displays a tree
+
+28
+00:01:47.491 --> 00:01:50.714
+icon 🌳 followed by the time
+it took to reach this state.
+
+29
+00:01:51.364 --> 00:01:53.664
+Let's cut a link and see
+how the protocol finds
+
+30
+00:01:53.664 --> 00:01:57.364
+an alternate path to reach
+C12 in less than a second.
+
+31
+00:01:57.364 --> 00:02:00.814
+Don't worry about all the displayed
+information: I explain it later.
+
+32
+00:02:01.504 --> 00:02:05.964
+All examples run in a browser,
+powered by MSTPD—an
+
+33
+00:02:05.964 --> 00:02:08.914
+open-source user-space
+implementation of RSTP.
+
+34
+00:02:12.051 --> 00:02:16.951
+Radia Perlman, an inductee of the
+Internet Hall of Fame in 2014,
+
+35
+00:02:16.951 --> 00:02:21.351
+summarized the ancestor of STP she
+invented at DEC with this poem,
+
+36
+00:02:21.351 --> 00:02:23.584
+later included in a US patent:
+
+37
+00:02:24.034 --> 00:02:25.284
+I think that I shall never see
+
+38
+00:02:25.284 --> 00:02:27.524
+A graph more lovely than a tree.
+
+39
+00:02:27.524 --> 00:02:29.804
+A tree whose crucial property
+
+40
+00:02:29.804 --> 00:02:31.864
+Is loop-free connectivity.
+
+41
+00:02:31.864 --> 00:02:34.584
+A tree which must be sure to span
+
+42
+00:02:34.584 --> 00:02:36.984
+So packets can reach every LAN.
+
+43
+00:02:36.984 --> 00:02:39.024
+First, the root must be selected.
+
+44
+00:02:39.024 --> 00:02:41.224
+By ID, it is elected.
+
+45
+00:02:41.224 --> 00:02:44.884
+Least cost paths from root are traced.
+
+46
+00:02:44.884 --> 00:02:47.304
+In the tree, these paths are placed.
+
+47
+00:02:47.304 --> 00:02:49.264
+A mesh is made by folks like me,
+
+48
+00:02:49.264 --> 00:02:51.484
+Then bridges find a spanning tree.
+
+49
+00:02:54.600 --> 00:02:57.620
+To build a tree, RSTP
+first elects the bridge
+
+50
+00:02:57.620 --> 00:03:00.900
+with the lowest bridge
+identifier as the root bridge.
+
+51
+00:03:00.900 --> 00:03:03.480
+The bridge identifier combines the priority
+
+52
+00:03:03.480 --> 00:03:05.040
+and the MAC address:
+
+53
+00:03:05.040 --> 00:03:11.017
+8192.6e:2b:10:a0:5f:29.
+
+54
+00:03:11.687 --> 00:03:15.667
+In this example, S1 and S2
+have priorities of 4,096
+
+55
+00:03:15.667 --> 00:03:19.167
+and 8,192: S1 becomes root.
+
+56
+00:03:19.167 --> 00:03:22.707
+S4 has a priority of 12,288, while S3 keeps
+
+57
+00:03:22.707 --> 00:03:27.607
+the default priority of
+32,768: S4 becomes root.
+
+58
+00:03:27.607 --> 00:03:30.207
+S5 and S6 don't have a specific priority,
+
+59
+00:03:30.207 --> 00:03:33.300
+so the lowest MAC address
+wins and S5 becomes root.
+
+60
+00:03:34.250 --> 00:03:36.933
+Initially, each bridge
+advertises itself as root:
+
+61
+00:03:42.650 --> 00:03:45.830
+Once a bridge receives a BPDU
+advertising a better root
+
+62
+00:03:45.830 --> 00:03:48.867
+bridge, it propagates this new
+information to its neighbors.
+
+63
+00:03:56.950 --> 00:03:59.930
+The second step is to
+assign a role to each port.
+
+64
+00:03:59.930 --> 00:04:03.367
+RSTP defines five roles,
+each denoted by a letter:
+
+65
+00:04:04.217 --> 00:04:09.975
+root (R), designated (D), alternate
+(A), disabled (X), or backup (B).
+
+66
+00:04:10.745 --> 00:04:13.485
+Each non-root bridge chooses its root port,
+
+67
+00:04:13.485 --> 00:04:16.345
+the one with the lowest-cost
+path to the root.
+
+68
+00:04:16.345 --> 00:04:18.865
+Unless you override it, each bridge derives
+
+69
+00:04:18.865 --> 00:04:23.985
+the link cost from the
+speed: 20,000 for 1 Gbps.
+
+70
+00:04:23.985 --> 00:04:27.678
+In case of equality,
+the lowest port identifier wins.
+
+71
+00:04:28.428 --> 00:04:30.908
+Each remaining port becomes
+a designated port if
+
+72
+00:04:30.908 --> 00:04:35.608
+the BPDU it sends is "better"
+than the BPDU it receives.
+
+73
+00:04:35.608 --> 00:04:38.488
+Otherwise, it becomes an alternate port.
+
+74
+00:04:38.488 --> 00:04:41.648
+Later, if the root port
+goes down, the "best"
+
+75
+00:04:41.648 --> 00:04:44.728
+alternate port becomes the new root port.
+
+76
+00:04:44.728 --> 00:04:47.411
+The tiebreakers for the best BPDU are:
+
+77
+00:04:48.161 --> 00:04:53.021
+1. the lowest root bridge identifier,
+2. the lowest accumulated cost to
+
+78
+00:04:53.021 --> 00:04:59.060
+the root, 3. the lowest bridge identifier,
+and 4. the lowest port identifier.
+
+79
+00:04:59.710 --> 00:05:03.930
+In this example, after convergence,
+S1 is the root bridge because it has
+
+80
+00:05:03.930 --> 00:05:10.430
+a priority of 4,096, while the other
+bridges have a priority of 32,768.
+
+81
+00:05:10.430 --> 00:05:14.893
+All its ports are designated ports because
+the accumulated cost to the root is 0.
+
+82
+00:05:15.603 --> 00:05:19.323
+S2's port facing S1 becomes
+a root port because it has
+
+83
+00:05:19.323 --> 00:05:25.123
+the lowest accumulated cost
+to the root—20,000 vs 40,000.
+
+84
+00:05:25.123 --> 00:05:28.663
+S3 has two ports facing S1,
+and the one with the lowest
+
+85
+00:05:28.663 --> 00:05:33.803
+port identifier becomes the root
+
+86
+00:05:33.803 --> 00:05:36.123
+port—0x8000 vs 0x8001.
+
+87
+00:05:36.123 --> 00:05:39.003
+The other candidate is an alternate
+port because the remote port
+
+88
+00:05:39.003 --> 00:05:43.803
+on the link sends a better BPDU,
+with an accumulated cost of 0.
+
+89
+00:05:43.803 --> 00:05:49.563
+On the segment between S2 and S3,
+S2's port wins: while both bridges have
+
+90
+00:05:49.563 --> 00:05:54.343
+the same accumulated cost to the
+root (20,000), S2's bridge identifier
+
+91
+00:05:54.343 --> 00:05:59.323
+is smaller—32768.02:00:00:00:00:01
+
+92
+00:05:59.323 --> 00:06:03.126
+vs 32768.02:00:00:00:00:02.
+
+93
+00:06:09.783 --> 00:06:12.683
+If you cut the active
+link between S1 and S3,
+
+94
+00:06:12.683 --> 00:06:15.897
+S3 promotes the "best"
+alternate port to root port.
+
+95
+00:06:16.567 --> 00:06:19.347
+If you also disable the
+second link, S3 chooses
+
+96
+00:06:19.347 --> 00:06:21.634
+the remaining alternate port as a root port.
+
+97
+00:06:22.284 --> 00:06:26.764
+But if you disable the link between
+S1 and S2, S2 needs a bit more work
+
+98
+00:06:26.764 --> 00:06:30.601
+to elect a new root port because
+it does not have an alternate port.
+
+99
+00:06:31.391 --> 00:06:37.451
+Unless a specific event happens,
+designated ports send BPDUs every 2 seconds.
+
+100
+00:06:37.451 --> 00:06:41.971
+If a bridge does not receive BPDUs from
+its neighbor for 3 consecutive hello
+
+101
+00:06:41.971 --> 00:06:46.201
+periods, it considers the neighbor
+dead and removes the port information.
+
+102
+00:06:49.377 --> 00:06:51.617
+Each port can have one of three states.
+
+103
+00:06:51.617 --> 00:06:54.767
+The diagram displays a
+background color for each state:
+
+104
+00:06:55.477 --> 00:06:59.067
+discarding (red), learning
+(yellow), or forwarding (green).
+
+105
+00:06:59.737 --> 00:07:03.557
+A root port transitions automatically
+to the forwarding state.
+
+106
+00:07:03.557 --> 00:07:06.757
+An alternate port stays
+in the discarding state.
+
+107
+00:07:06.757 --> 00:07:09.737
+A designated port has
+two options to transition
+
+108
+00:07:09.737 --> 00:07:12.405
+from the discarding state
+to the forwarding state:
+
+109
+00:07:13.095 --> 00:07:16.895
+If the port is an edge port,
+either through configuration or because
+
+110
+00:07:16.895 --> 00:07:21.275
+the remote device does not speak any
+flavor of STP, the bridge assumes it
+
+111
+00:07:21.275 --> 00:07:25.115
+won't participate in the protocol
+and cannot create a loop.
+
+112
+00:07:25.115 --> 00:07:30.039
+In this case, the designated port immediately
+transitions to the forwarding state.
+
+113
+00:07:30.949 --> 00:07:34.449
+Otherwise, it sends a proposal
+to its downstream neighbor.
+
+114
+00:07:34.449 --> 00:07:38.469
+If the remote bridge agrees that the
+received BPDU is "better" than any
+
+115
+00:07:38.469 --> 00:07:43.189
+other BPDU stored for other ports,
+it elects the receiving port as its root
+
+116
+00:07:43.189 --> 00:07:48.169
+port and starts the synchronization
+process: it transitions all non-edge
+
+117
+00:07:48.169 --> 00:07:52.749
+non-synced designated ports to the
+discarding state to avoid a loop.
+
+118
+00:07:52.749 --> 00:07:55.129
+Then, it sends back an agreement.
+
+119
+00:07:55.129 --> 00:07:57.629
+Upon receiving the agreement,
+the peer designated
+
+120
+00:07:57.629 --> 00:07:59.860
+port transitions to the forwarding state.
+
+121
+00:08:00.550 --> 00:08:05.030
+In this topology, H1, H2, H3, and H4 are end
+
+122
+00:08:05.030 --> 00:08:07.710
+devices not participating in the protocol.
+
+123
+00:08:07.710 --> 00:08:10.570
+We configure the ports they
+connect to as edge ports,
+
+124
+00:08:10.570 --> 00:08:13.405
+so these ports immediately
+move to the forwarding state.
+
+125
+00:08:14.055 --> 00:08:18.655
+We step again and S1 and S2
+send a proposal to each other.
+
+126
+00:08:18.655 --> 00:08:20.572
+Here is the proposal from S2:
+
+127
+00:08:27.289 --> 00:08:31.289
+S1 ignores it: its own
+root identifier is lower.
+
+128
+00:08:31.289 --> 00:08:36.649
+When S2 receives a similar proposal from
+S1, it accepts S1 as its root bridge.
+
+129
+00:08:36.649 --> 00:08:39.069
+It also elects the port to S1 as the root
+
+130
+00:08:39.069 --> 00:08:42.289
+port and starts the synchronization process.
+
+131
+00:08:42.289 --> 00:08:46.305
+The two designated ports are already
+discarding, so no change here.
+
+132
+00:08:46.935 --> 00:08:50.855
+We step again and S2 sends two BPDUs to S1.
+
+133
+00:08:50.855 --> 00:08:55.635
+In one of them, the agreement bit
+is 1 and the proposal bit is 0.
+
+134
+00:08:55.635 --> 00:08:59.235
+It also shows that S2
+accepted S1 as the root bridge
+
+135
+00:08:59.235 --> 00:09:02.075
+and its root port is now
+in the forwarding state.
+
+136
+00:09:02.075 --> 00:09:05.515
+When receiving this BPDU,
+S1 transitions its own
+
+137
+00:09:05.515 --> 00:09:07.895
+designated port to the forwarding state.
+
+138
+00:09:07.895 --> 00:09:11.839
+From this point, the link between
+S1 and S2 forwards user traffic.
+
+139
+00:09:20.455 --> 00:09:22.635
+Let's look at what happened to S5.
+
+140
+00:09:22.635 --> 00:09:25.775
+We reset the simulation and step twice.
+
+141
+00:09:25.775 --> 00:09:30.455
+S5 exchanges BPDUs with both S3 and S6.
+
+142
+00:09:30.455 --> 00:09:35.575
+Since S5 has a lower root identifier
+than S3 and S6, it stays the root
+
+143
+00:09:35.575 --> 00:09:40.835
+bridge, while S3 and S6 accept the
+proposal and elect their root ports.
+
+144
+00:09:40.835 --> 00:09:44.215
+S3 and S6 start the synchronization process.
+
+145
+00:09:44.215 --> 00:09:47.872
+S6's port to H4 stays up
+because this is an edge port.
+
+146
+00:09:48.322 --> 00:09:50.242
+We move one step.
+
+147
+00:09:50.242 --> 00:09:54.442
+Both S3 and S6 send an agreement
+back to S5, which transitions
+
+148
+00:09:54.442 --> 00:09:57.422
+both designated ports
+to the forwarding state.
+
+149
+00:09:57.422 --> 00:10:02.402
+Yet, the link between S5 and S3
+keeps discarding user traffic!
+
+150
+00:10:02.402 --> 00:10:05.682
+If you look carefully, S3's port toward S5
+
+151
+00:10:05.682 --> 00:10:08.605
+is now a designated port, not a root port.
+
+152
+00:10:09.315 --> 00:10:12.015
+During the same step,
+S3 also receives a better
+
+153
+00:10:12.015 --> 00:10:15.675
+BPDU from S2 with S1 as the root bridge.
+
+154
+00:10:15.675 --> 00:10:19.355
+It elects its port to S2 as the
+root port and downgrades the port
+
+155
+00:10:19.355 --> 00:10:23.539
+to S5 to a designated port,
+which stays in the discarding state.
+
+156
+00:10:24.209 --> 00:10:26.929
+On the next step, things get a bit tricky.
+
+157
+00:10:26.929 --> 00:10:29.205
+S3 sends a proposal to S5:
+
+158
+00:10:34.902 --> 00:10:40.502
+S5 elects S1 as its root bridge and
+the port toward S3 as its root port.
+
+159
+00:10:40.502 --> 00:10:43.962
+It starts its synchronization
+process, but the designated
+
+160
+00:10:43.962 --> 00:10:47.502
+port to S6 does not move
+into the discarding state.
+
+161
+00:10:47.502 --> 00:10:48.342
+Why?
+
+162
+00:10:48.342 --> 00:10:51.962
+That port stays a designated port
+and its neighbor S6 had already
+
+163
+00:10:51.962 --> 00:10:55.680
+sent an agreement on the link,
+so the port keeps its synced status.
+
+164
+00:10:56.350 --> 00:10:58.990
+Now, let's step back to
+look at what happens to S6.
+
+165
+00:10:58.990 --> 00:11:02.113
+At this point, S6 believes
+S5 is the root bridge.
+
+166
+00:11:02.763 --> 00:11:06.983
+We step once and S4 sends
+a new proposal to S6.
+
+167
+00:11:06.983 --> 00:11:10.603
+S6 accepts the proposal,
+elects S1 as the root
+
+168
+00:11:10.603 --> 00:11:13.963
+bridge and the port to S4 as its root port.
+
+169
+00:11:13.963 --> 00:11:16.883
+The role of the port facing S5 changes:
+
+170
+00:11:16.883 --> 00:11:20.443
+from a root port,
+it becomes a designated port.
+
+171
+00:11:20.443 --> 00:11:24.723
+Because its peer keeps advertising
+an inferior BPDU on the link,
+
+172
+00:11:24.723 --> 00:11:28.843
+this port becomes disputed and
+moves to the discarding state.
+
+173
+00:11:28.843 --> 00:11:33.383
+The root port transitions to the forwarding
+state and the link starts forwarding
+
+174
+00:11:33.383 --> 00:11:37.980
+immediately because S4's designated
+port is already in the forwarding state.
+
+175
+00:11:38.670 --> 00:11:43.370
+If we step one more time,
+S5 and S6 exchange two BPDUs.
+
+176
+00:11:43.370 --> 00:11:47.330
+The one from S5 is better because
+of its lower bridge identifier.
+
+177
+00:11:47.330 --> 00:11:50.510
+S5's port stays a designated port, while S6
+
+178
+00:11:50.510 --> 00:11:52.747
+downgrades its own port
+to an alternate port.
+
+179
+00:11:53.397 --> 00:11:56.617
+Let's rewind one last time
+from the start: we cut the link
+
+180
+00:11:56.617 --> 00:12:01.177
+between S1 and S2, run the simulation
+until the topology is stable,
+
+181
+00:12:01.177 --> 00:12:05.213
+stop the simulation, and restore
+the link between S1 and S2.
+
+182
+00:12:05.923 --> 00:12:09.763
+During the first step,
+S1 and S2 exchange proposals.
+
+183
+00:12:09.763 --> 00:12:15.843
+S2 elects S1 as the root bridge instead
+of S5 and the port to S1 as the root port.
+
+184
+00:12:15.843 --> 00:12:18.483
+It downgrades the previous
+root port to a designated
+
+185
+00:12:18.483 --> 00:12:21.483
+port and moves it into the discarding state.
+
+186
+00:12:21.483 --> 00:12:24.680
+The other designated port stays
+synced and keeps its forwarding state.
+
+187
+00:12:25.370 --> 00:12:28.830
+At the next step, S2 sends
+an agreement to S1 and
+
+188
+00:12:28.830 --> 00:12:31.547
+the link between them starts
+forwarding user traffic.
+
+189
+00:12:32.197 --> 00:12:34.880
+It also sends a proposal
+to S3, but not to S4.
+
+190
+00:12:35.790 --> 00:12:39.470
+Instead, it sends a regular BPDU to S4.
+
+191
+00:12:39.470 --> 00:12:45.410
+S4 still elects S1 as its root bridge
+and the port to S2 as its root port.
+
+192
+00:12:45.410 --> 00:12:50.470
+It demotes its previous root port,
+the one to S3, to a designated port,
+
+193
+00:12:50.470 --> 00:12:55.170
+which transitions to the discarding
+state because of the root port change.
+
+194
+00:12:55.170 --> 00:12:57.890
+The other alternate port,
+to S6, also becomes
+
+195
+00:12:57.890 --> 00:13:01.250
+a designated port and stays
+in the discarding state.
+
+196
+00:13:01.250 --> 00:13:03.780
+The new root port moves
+to the forwarding state.
+
+197
+00:13:04.450 --> 00:13:08.230
+On the next step, S4's port
+to S3 settles as an alternate
+
+198
+00:13:08.230 --> 00:13:11.380
+port after receiving a
+"better" BPDU from S3.
+
+199
+00:13:12.090 --> 00:13:17.450
+RSTP is a giant state machine split
+into smaller ones: bridge detection,
+
+200
+00:13:17.450 --> 00:13:22.090
+port information, port protocol
+migration, port role selection,
+
+201
+00:13:22.090 --> 00:13:26.690
+port role transitions, port
+receive, port state transitions,
+
+202
+00:13:26.690 --> 00:13:31.110
+port timers, port transmit,
+and topology change.
+
+203
+00:13:31.110 --> 00:13:33.690
+Some of them are per bridge, some per port.
+
+204
+00:13:33.690 --> 00:13:35.870
+Each bridge runs an instance.
+
+205
+00:13:35.870 --> 00:13:39.830
+Time, operational port state
+changes, and the BPDUs it
+
+206
+00:13:39.830 --> 00:13:43.270
+receives from other instances
+drive the transitions.
+
+207
+00:13:43.270 --> 00:13:48.617
+Being event-driven makes RSTP more efficient
+but also more difficult to understand.
+
+208
+00:13:51.754 --> 00:13:55.894
+A bridge populates a MAC address
+table: it associates each
+
+209
+00:13:55.894 --> 00:13:59.434
+source MAC address with the
+port that last received it.
+
+210
+00:13:59.434 --> 00:14:04.474
+When forwarding an Ethernet frame, it looks
+up this table to choose the right port.
+
+211
+00:14:04.474 --> 00:14:07.714
+When a link fails, a connected
+fridge reachable through
+
+212
+00:14:07.714 --> 00:14:10.654
+one port may become reachable
+through another one.
+
+213
+00:14:10.654 --> 00:14:13.114
+The affected bridges should
+flush the MAC addresses
+
+214
+00:14:13.114 --> 00:14:16.284
+they learned, because these
+entries may now be wrong.
+
+215
+00:14:16.934 --> 00:14:19.814
+For this purpose, RSTP implements topology
+
+216
+00:14:19.814 --> 00:14:23.754
+change notifications using
+a flooding mechanism.
+
+217
+00:14:23.754 --> 00:14:26.934
+When a non-edge port transitions
+to the forwarding state,
+
+218
+00:14:26.934 --> 00:14:32.494
+a bridge generates BPDUs with
+the topology change (TC) bit set.
+
+219
+00:14:32.494 --> 00:14:37.014
+It sends them to all the non-edge
+designated ports and to the root port.
+
+220
+00:14:37.014 --> 00:14:40.674
+It also flushes the MAC
+address table on these ports.
+
+221
+00:14:40.674 --> 00:14:45.814
+When a bridge receives such a BPDU,
+it propagates the notification to all non-edge
+
+222
+00:14:45.814 --> 00:14:51.094
+designated ports and the root port,
+except the one the notification came from.
+
+223
+00:14:51.094 --> 00:14:54.494
+It also flushes the MAC
+address table on these ports.
+
+224
+00:14:54.494 --> 00:14:59.517
+In the examples, the BPDUs with the
+TC bit set to 1 have a red circle.
+
+225
+00:15:00.167 --> 00:15:04.117
+We start the simulation and wait a few
+seconds for the topology to settle.
+
+226
+00:15:04.767 --> 00:15:09.127
+We stop the simulation and disable
+the link between S2 and S5.
+
+227
+00:15:09.127 --> 00:15:12.727
+S5 elects the port facing
+S4 as the root port,
+
+228
+00:15:12.727 --> 00:15:15.550
+which transitions immediately
+to the forwarding state.
+
+229
+00:15:16.200 --> 00:15:20.583
+We step once and S5 emits a
+BPDU with the TC bit set to 1:
+
+230
+00:15:25.280 --> 00:15:27.680
+S4 receives this BPDU.
+
+231
+00:15:27.680 --> 00:15:33.240
+It flushes the MAC address table on the
+port facing S1: while LPT was previously
+
+232
+00:15:33.240 --> 00:15:37.325
+reachable through this port, it is
+now reachable through S5 instead.
+
+233
+00:15:37.975 --> 00:15:39.415
+We step once.
+
+234
+00:15:39.415 --> 00:15:43.715
+S4 sends S1 a BPDU with the TC bit set to 1.
+
+235
+00:15:43.715 --> 00:15:46.715
+When S1 receives this BPDU,
+it flushes the MAC
+
+236
+00:15:46.715 --> 00:15:49.925
+address table on the ports facing S2 and S3.
+
+237
+00:15:50.575 --> 00:15:53.958
+We step once and S1 sends a
+notification to S2 and S3.
+
+238
+00:15:54.608 --> 00:15:58.168
+We step once again and S2
+sends a notification to S3,
+
+239
+00:15:58.168 --> 00:16:02.348
+while S3 does nothing because the
+port toward S2 is an alternate port.
+
+240
+00:16:02.348 --> 00:16:05.068
+S3 does not flush any MAC address table:
+
+241
+00:16:05.068 --> 00:16:07.992
+LPT is still reachable
+through its port to S1.
+
+242
+00:16:08.662 --> 00:16:10.902
+If you step a bit more,
+you will see that some
+
+243
+00:16:10.902 --> 00:16:14.742
+of the periodic BPDUs
+keep the TC bit set to 1.
+
+244
+00:16:14.742 --> 00:16:19.142
+Each port runs a timer equal to
+the hello timer plus one second.
+
+245
+00:16:19.142 --> 00:16:22.642
+The timer starts when the
+port emits a notification.
+
+246
+00:16:22.642 --> 00:16:28.192
+Until it expires, the port sets the
+TC bit to 1 in every BPDU it sends.
+
+247
+00:16:28.842 --> 00:16:33.282
+You can also see some periodic BPDUs
+without the TC bit: they originate from
+
+248
+00:16:33.282 --> 00:16:37.458
+a port that only received a notification
+and therefore did not arm its timer.
+
+249
+00:16:40.635 --> 00:16:45.275
+RSTP is weak against configuration
+errors and malicious actors.
+
+250
+00:16:45.275 --> 00:16:48.655
+A bridge not talking RSTP can create a loop.
+
+251
+00:16:48.655 --> 00:16:51.935
+An attacker can insert themselves
+into the topology to disrupt
+
+252
+00:16:51.935 --> 00:16:55.092
+the service, spy on the
+traffic, or alter it.
+
+253
+00:16:55.762 --> 00:17:00.082
+To mitigate such problems,
+you need to identify the edge ports.
+
+254
+00:17:00.082 --> 00:17:04.402
+An edge port connects to an end
+device, like a PC or a printer.
+
+255
+00:17:04.402 --> 00:17:08.782
+Such devices do not generate
+BPDUs and cannot create a loop.
+
+256
+00:17:08.782 --> 00:17:11.412
+RSTP defines two related flags:
+
+257
+00:17:12.102 --> 00:17:15.882
+When true, AdminEdge initializes
+a port as an edge port.
+
+258
+00:17:15.882 --> 00:17:17.822
+It defaults to false.
+
+259
+00:17:17.822 --> 00:17:20.502
+When true, AutoEdge lets
+a port become an edge
+
+260
+00:17:20.502 --> 00:17:23.982
+port when it does not
+receive BPDUs for 3 seconds.
+
+261
+00:17:23.982 --> 00:17:25.312
+It defaults to true.
+
+262
+00:17:26.042 --> 00:17:29.382
+If an edge port receives a BPDU,
+regardless of the values
+
+263
+00:17:29.382 --> 00:17:32.712
+of these two flags,
+it reverts to a non-edge port.
+
+264
+00:17:33.362 --> 00:17:38.702
+In this topology, S1, S2, S3,
+S4, S5, and S6 act as bridges,
+
+265
+00:17:38.702 --> 00:17:43.407
+while H1, H2, H3, H4, H5,
+and H6 act as end devices:
+
+266
+00:17:44.137 --> 00:17:49.437
+S1 and H1 are on a port without a
+specific configuration: AutoEdge is true,
+
+267
+00:17:49.437 --> 00:17:54.273
+AdminEdge is false, S2 and H2 are
+on a port where AdminEdge is true,
+
+268
+00:17:55.023 --> 00:17:58.503
+S3 and H3 are on a port where
+AutoEdge is false and AdminEdge
+
+269
+00:17:58.503 --> 00:18:02.608
+is true, S4 and H4 are on a
+port where AutoEdge is false.
+
+270
+00:18:03.278 --> 00:18:07.558
+If you start the topology and wait
+about 20 seconds, links to S1,
+
+271
+00:18:07.558 --> 00:18:11.178
+S2, S3, S4, H1, H2,
+
+272
+00:18:11.178 --> 00:18:14.658
+H3, and H4 eventually forward user traffic:
+
+273
+00:18:14.658 --> 00:18:15.975
+none of the flags matter.
+
+274
+00:18:16.625 --> 00:18:19.025
+But what about the two remaining pairs?
+
+275
+00:18:19.025 --> 00:18:22.405
+S5 and H5 connect to a network port.
+
+276
+00:18:22.405 --> 00:18:26.565
+Such a port enables a non-standard
+feature: bridge assurance.
+
+277
+00:18:26.565 --> 00:18:30.285
+The port transmits BPDUs
+regardless of its role.
+
+278
+00:18:30.285 --> 00:18:33.825
+If it does not receive BPDUs
+for 3 consecutive hello
+
+279
+00:18:33.825 --> 00:18:37.052
+periods, it transitions
+to the discarding state.
+
+280
+00:18:37.762 --> 00:18:42.502
+On the link between R0 and S5,
+you can see BPDUs traveling in both
+
+281
+00:18:42.502 --> 00:18:47.152
+directions, unlike the other links,
+where only designated ports send BPDUs.
+
+282
+00:18:47.842 --> 00:18:52.789
+S6 and H6 connect to a port where AdminEdge
+is true and BPDU guard is enabled.
+
+283
+00:18:53.459 --> 00:18:57.956
+This is another non-standard feature that
+shuts down a port if it receives a BPDU.
+
+284
+00:18:58.626 --> 00:19:01.666
+In summary, if you expect
+a port to be an edge port,
+
+285
+00:19:01.666 --> 00:19:05.906
+you should set AdminEdge to
+true and enable BPDU guard.
+
+286
+00:19:05.906 --> 00:19:08.022
+Otherwise, declare it as a network port.
+
+287
+00:19:11.739 --> 00:19:15.519
+A compelling use case for RSTP
+today is an out-of-band network for
+
+288
+00:19:15.519 --> 00:19:19.759
+a datacenter, since you can
+tolerate an outage of a few seconds.
+
+289
+00:19:19.759 --> 00:19:26.019
+The configuration is minimal and you can
+use cheap switches, like a Cisco 2960X.
+
+290
+00:19:26.019 --> 00:19:29.059
+You need two switches acting
+as root bridges, and you build
+
+291
+00:19:29.059 --> 00:19:32.619
+several loops to connect OOB
+switches in each cabinet.
+
+292
+00:19:32.619 --> 00:19:35.922
+This simple design survives
+one failure on each loop.
+
+293
+00:19:36.672 --> 00:19:39.912
+This topology converges in about 6 seconds.
+
+294
+00:19:39.912 --> 00:19:44.672
+Each loop should stay small (around
+16 bridges) to reduce the probability
+
+295
+00:19:44.672 --> 00:19:49.592
+of a double failure and to avoid
+sharing too much bandwidth.
+
+296
+00:19:49.592 --> 00:19:52.672
+The design can evolve a
+bit without adding too much
+
+297
+00:19:52.672 --> 00:19:57.156
+complexity: one VLAN per loop
+or one bridge domain per loop.
+
+298
+00:20:00.252 --> 00:20:03.412
+The maximum age, whose default value is 20,
+
+299
+00:20:03.412 --> 00:20:06.432
+governs the maximum distance
+of a node from the root.
+
+300
+00:20:06.432 --> 00:20:10.722
+This topology is too big for
+BPDUs from R1 to reach beyond S20.
+
+301
+00:20:11.492 --> 00:20:14.472
+Once the topology settles,
+part of the network
+
+302
+00:20:14.472 --> 00:20:18.232
+considers R1 the root,
+while the other votes for R2.
+
+303
+00:20:18.232 --> 00:20:21.512
+At the boundary, S20 tries
+to start a synchronization
+
+304
+00:20:21.512 --> 00:20:26.572
+with S21 to move its designated
+port to the forwarding state.
+
+305
+00:20:26.572 --> 00:20:28.389
+The BPDU looks like this:
+
+306
+00:20:34.026 --> 00:20:38.586
+S21 rejects it because the message
+age equals the maximum age.
+
+307
+00:20:38.586 --> 00:20:43.429
+On the other hand, the BPDU S21
+sends to S20 looks like this:
+
+308
+00:20:50.065 --> 00:20:53.685
+This is not enough to change S20's
+root port because S20 has a lower
+
+309
+00:20:53.685 --> 00:21:00.062
+root identifier—4096.02:00:00:00:00:00
+vs 4096.02:00:00:00:00:01.
+
+310
+00:21:00.792 --> 00:21:04.172
+Fixing the link between R1
+and R2 resolves the issue.
+
+311
+00:21:04.172 --> 00:21:06.692
+The maximum message age any packet carries
+
+312
+00:21:06.692 --> 00:21:10.152
+is now 18, below the configured maximum age.
+
+313
+00:21:10.152 --> 00:21:12.832
+But it only works until another link breaks.
+
+314
+00:21:12.832 --> 00:21:16.362
+A plausible fix is to increase
+the maximum age to 40.
+
+315
+00:21:19.539 --> 00:21:23.279
+RSTP usually converges in a
+couple of seconds at startup.
+
+316
+00:21:23.279 --> 00:21:26.319
+It often repairs a tree
+in less than a second.
+
+317
+00:21:26.319 --> 00:21:30.739
+Even the 38-bridge topology takes
+less than 10 seconds to converge.
+
+318
+00:21:30.739 --> 00:21:33.679
+Some topologies can take
+a bit more time to recover
+
+319
+00:21:33.679 --> 00:21:35.762
+when the root bridge becomes unavailable.
+
+320
+00:21:36.472 --> 00:21:41.672
+In this topology, once it has converged,
+we cut the link between R0 and S1.
+
+321
+00:21:41.672 --> 00:21:46.462
+The topology is already optimal,
+but RSTP has a hard time converging again.
+
+322
+00:21:47.372 --> 00:21:49.912
+First, S1 loses its root port.
+
+323
+00:21:49.912 --> 00:21:54.892
+It has no more information about R0
+and elects itself as the root bridge.
+
+324
+00:21:54.892 --> 00:21:59.838
+It keeps its ports to S2 and S3 as
+designated ports in the forwarding state.
+
+325
+00:22:00.488 --> 00:22:03.608
+We step once and it sends a BPDU to both S2
+
+326
+00:22:03.608 --> 00:22:06.468
+and S3 to let them know
+about the root change.
+
+327
+00:22:06.468 --> 00:22:09.988
+When receiving it,
+S2 accepts S1 as its root because
+
+328
+00:22:09.988 --> 00:22:12.688
+it does not have a better
+root on another port.
+
+329
+00:22:12.688 --> 00:22:15.688
+It elects the port to S1 as its root port.
+
+330
+00:22:15.688 --> 00:22:18.248
+The other port stays a designated port.
+
+331
+00:22:18.248 --> 00:22:19.738
+Both ports keep forwarding.
+
+332
+00:22:20.408 --> 00:22:24.628
+When receiving the BPDU from
+S1, S3 behaves differently:
+
+333
+00:22:24.628 --> 00:22:29.388
+it knows R0 as a better root than
+S1 through its alternate port to S2.
+
+334
+00:22:29.388 --> 00:22:32.548
+It promotes this port to a
+root port and demotes the port
+
+335
+00:22:32.548 --> 00:22:36.972
+facing S1 to a designated port,
+which requires a new agreement.
+
+336
+00:22:37.622 --> 00:22:42.822
+We step once and S3 sends a proposal
+to S1 with R0 as the root bridge.
+
+337
+00:22:42.822 --> 00:22:48.138
+S1 elects R0 as the root bridge and
+promotes its port to S3 as a root port.
+
+338
+00:22:48.868 --> 00:22:52.188
+During the same step,
+S3 also receives a BPDU
+
+339
+00:22:52.188 --> 00:22:55.208
+from S2 stating that S1 is the root bridge.
+
+340
+00:22:55.208 --> 00:22:59.168
+Therefore, S3 has no port left
+with R0 as the root bridge:
+
+341
+00:22:59.168 --> 00:23:03.805
+it elects S1 as the root bridge and
+its port to S2 as the root port.
+
+342
+00:23:04.475 --> 00:23:07.615
+We step once and its
+next BPDU to S1 includes
+
+343
+00:23:07.615 --> 00:23:12.038
+this information: S1 elects
+itself again as the root bridge.
+
+344
+00:23:12.708 --> 00:23:18.008
+But during the same wave, S1 sends a
+proposal to S2 with R0 as the root bridge.
+
+345
+00:23:18.008 --> 00:23:22.938
+While S1 and S3 agree that S1 is the
+root bridge, S2 now believes this is R0!
+
+346
+00:23:23.648 --> 00:23:27.728
+In turn, S2 again convinces
+S3 that R0 is the root bridge,
+
+347
+00:23:27.728 --> 00:23:32.772
+S3 convinces S1, S1 convinces
+S2, and S2 convinces S3.
+
+348
+00:23:33.462 --> 00:23:36.082
+This could go on forever, but it does not.
+
+349
+00:23:36.082 --> 00:23:39.202
+The BPDUs saying "R0 is
+root" eventually age out
+
+350
+00:23:39.202 --> 00:23:41.772
+when the message age goes
+past the maximum age.
+
+351
+00:23:42.442 --> 00:23:47.782
+In this example, at the eleventh second,
+S2 sends a BPDU to S3 with R0
+
+352
+00:23:47.782 --> 00:23:52.462
+as root, but S3 drops it because
+its message age reached the maximum.
+
+353
+00:23:52.462 --> 00:23:55.742
+With some luck, the topology
+can also converge faster if
+
+354
+00:23:55.742 --> 00:23:59.042
+a port stops transmitting
+new BPDUs after tripping
+
+355
+00:23:59.042 --> 00:24:02.572
+the transmit hold count, whose
+default value is 6 per second.
+
+356
+00:24:06.268 --> 00:24:09.108
+The interactive examples
+run MSTPD directly in
+
+357
+00:24:09.108 --> 00:24:12.188
+the browser, compiled to
+WebAssembly with emscripten.
+
+358
+00:24:12.188 --> 00:24:17.868
+A C API replaces the code talking to
+the Linux kernel: it manages bridges
+
+359
+00:24:17.868 --> 00:24:23.328
+and ports, exports state as JSON,
+and drives time deterministically.
+
+360
+00:24:23.328 --> 00:24:26.475
+A JavaScript wrapper makes
+it more user-friendly:
+
+361
+00:24:27.345 --> 00:24:30.765
+Several dozen unit tests
+explore the features of MSTPD
+
+362
+00:24:30.765 --> 00:24:33.475
+and check that they work
+correctly in this environment:
+
+363
+00:24:34.465 --> 00:24:37.685
+Additional JavaScript code looks
+for specific blocks containing
+
+364
+00:24:37.685 --> 00:24:41.905
+a topology definition and turns
+them into the interactive widget.
+
+365
+00:24:41.905 --> 00:24:45.509
+The definition can be inspected and
+modified with the “edit” button.
+
+366
+00:24:46.159 --> 00:24:49.999
+There is also a cool trick to tell
+whether the topology has converged.
+
+367
+00:24:49.999 --> 00:24:53.819
+After each step, we save a
+snapshot of the simulation memory,
+
+368
+00:24:53.819 --> 00:24:57.359
+play 50 seconds' worth of
+simulation to check if the topology
+
+369
+00:24:57.359 --> 00:25:01.593
+is stable, and travel back in time
+by restoring that snapshot. 🕰️
+
+370
+00:25:02.243 --> 00:25:04.523
+The complete code lives on GitHub.
+
+371
+00:25:04.523 --> 00:25:06.443
+I am happy with the result.
+
+372
+00:25:06.443 --> 00:25:08.943
+It can be difficult to follow
+everything happening during
+
+373
+00:25:08.943 --> 00:25:12.823
+a single step, but stepping
+forward and backward helps.
+
+374
+00:25:12.823 --> 00:25:17.263
+I plan to use the same approach in future
+blog posts about networking features.
+
+375
+00:25:17.263 --> 00:25:18.459
+Thank you for watching!

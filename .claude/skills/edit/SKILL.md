@@ -30,7 +30,8 @@ some hints on the target audience and goals as HTML comments at the beginning.
   (CEFR B2 level).
 - Apply light stylistic edits only. Do not rewrite or restructure.
 - Keep a casual, conversational tone.
-- Suppress passive voice where possible.
+- Suppress passive voice where possible, notably when the actor doing the action
+  is known.
 - Break long sentences into shorter ones.
 - Prefer the present tense.
 - Do not water down a sentence.

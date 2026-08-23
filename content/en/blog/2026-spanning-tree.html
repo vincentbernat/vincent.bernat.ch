@@ -1,0 +1,1237 @@
+---
+title: "An interactive introduction to the spanning tree protocol"
+description: |
+  Root election, port roles, proposals and agreements, topology changes:
+  explore RSTP through simulations powered by MSTPD compiled to WebAssembly.
+uuid: c38aa2ee-7f9f-41a9-a47b-380ad8232a45
+cover: stp-dragonblood@2x.jpg
+created: !!timestamp 2026-08-24 15:00:00
+ai-usage: Copyediting (Claude Opus 5)
+csp:
+  script-src: "'wasm-unsafe-eval'"
+css:
+  - 2026-spanning-tree.css
+js:
+  - 2026-spanning-tree-mstpd.js
+  - 2026-spanning-tree.js
+tags:
+  - network
+---
+
+<!-- Target audiences are network engineers. They fall into three categories:
+the ones that have to use STP and they want to understand more how it works, the
+ones that would never think of using it because it is outdated and/or does not
+scale, and the ones that don't know this protocol at all. We focus on the first
+category that should get a clear view on how it works by the end of the article
+(but the protocol is honestly too complex, so we miss a bit here). The second
+category should see that this protocol still fits in some limited use cases
+today. The last category should get a basic understanding and if they see a use
+case that fits their need may join the first category.
+
+Due to the interactive examples, there is another audience: educators and web
+enthusiasts that may discover a cool technique to reuse opensource software to
+build demos.
+
+As this is an intro, the article tries to stay accessible to developers as well.
+The interactive examples should help keeping them hooked and the post does not
+require prior network knowledge. -->
+
+!!! "Warning" This post contains interactive examples. To visualize and interact
+with them, you need to [leave your RSS reader][].
+{.when-rss}
+
+!!! "Warning" This post contains interactive examples. To visualize and interact
+with them, you need to enable JavaScript.
+{.when-nojs}
+
+Imagine you rent office space for a three-day event. You quickly set up a few
+Ethernet switches and tape some cables on the floor to get everyone online.
+Unfortunately, Stan, your clumsiest coworker, kicks out a cable every time he
+gets up for coffee. You could add extra cables, but then you'd get a broadcast
+storm: Ethernet packets that loop and multiply until nothing else gets through.
+
+That’s where the *spanning tree protocol* (STP) comes in. STP blocks just enough
+of your spare cables to leave a loop-free tree. When Stan strikes again, it
+rebuilds the tree in a second, leaving some time for Blobby, your one-person
+support crew, to reconnect the cable. See for yourself: the diagram below runs a
+real STP implementation in your browser!
+
+``` { .text .mstp-topology }
+:demo
+
+A1 @0,0 prio=4096
+A2 @0,1
+A3 @0,2
+A4 @0,3
+
+B1 @1,0 prio=8192
+B2 @1,1
+B3 @1,2
+B4 @1,3
+
+C1 @2,0 prio=8192
+C2 @2,1
+C3 @2,2
+C4 @2,3
+
+A1 -- A2 hazard=0
+A2 -- A3 hazard=0
+A3 -- A4 hazard=0
+B1 -- B2
+B2 -- B3
+B3 -- B4
+C1 -- C2 hazard=0
+C2 -- C3 hazard=0
+C3 -- C4 hazard=0
+
+A1 -- B1 cost=10
+B1 -- C1 cost=10
+A4 -- B4 cost=20
+B4 -- C4 cost=20
+
+Leo @-0.3,0.7 proto=none icon=👦🏻
+Mia @-0.3,1.3 proto=none icon=👧🏽
+Joy @0.3,0.7  proto=none icon=👱🏻‍♀️
+Roy @0.3,1.3  proto=none icon=👨🏾
+A2 -- Leo hazard=0 A2:edge
+A2 -- Mia hazard=0 A2:edge
+A2 -- Joy hazard=0 A2:edge
+A2 -- Roy hazard=0 A2:edge
+
+Max @-0.3,1.7 proto=none icon=👨🏽
+Zoe @-0.3,2.3 proto=none icon=👩🏾
+Ada @0.3,1.7  proto=none icon=👵🏾
+Amy @0.3,2.3  proto=none icon=👩🏼
+A3 -- Max hazard=0 A3:edge
+A3 -- Zoe hazard=0 A3:edge
+A3 -- Ada hazard=0 A3:edge
+A3 -- Amy hazard=0 A3:edge
+
+Eli @0.7,0.7 proto=none icon=👦🏼
+Jay @0.7,1.3 proto=none icon=👨🏻
+Kai @1.3,0.7  proto=none icon=🧑🏽
+Ben @1.3,1.3  proto=none icon=👱🏼
+B2 -- Eli hazard=0.2 B2:edge
+B2 -- Jay hazard=0.2 B2:edge
+B2 -- Kai hazard=0.2 B2:edge
+B2 -- Ben hazard=0.2 B2:edge
+
+Ava @0.7,1.7 proto=none icon=👩🏻
+Lea @0.7,2.3 proto=none icon=🧑🏾‍🦱
+Ivy @1.3,1.7  proto=none icon=🧕🏽
+Rex @1.3,2.3  proto=none icon=👴🏿
+B3 -- Ava hazard=0.2 B3:edge
+B3 -- Lea hazard=0.2 B3:edge
+B3 -- Ivy hazard=0.2 B3:edge
+B3 -- Rex hazard=0.2 B3:edge
+
+Ana @1.7,0.7 proto=none icon=👩🏿
+Eve @1.7,1.3 proto=none icon=👧🏼
+Abe @2.3,0.7  proto=none icon=🧓🏿
+Ian @2.3,1.3  proto=none icon=🧔🏾
+C2 -- Ana hazard=0 C2:edge
+C2 -- Eve hazard=0 C2:edge
+C2 -- Abe hazard=0 C2:edge
+C2 -- Ian hazard=0 C2:edge
+
+Ned @1.7,1.7 proto=none icon=👨🏼‍🦳
+Lou @1.7,2.3 proto=none icon=🧑🏿
+Fay @2.3,1.7  proto=none icon=👧🏻
+Sue @2.3,2.3  proto=none icon=👩🏽‍🦰
+C3 -- Ned hazard=0 C3:edge
+C3 -- Lou hazard=0 C3:edge
+C3 -- Fay hazard=0 C3:edge
+C3 -- Sue hazard=0 C3:edge
+```
+
+!!! "Note" This article is also available as a [video][], but I advise you to
+keep reading here to try the interactive demonstrations.
+
+[video]: [[en/blog/2026-spanning-tree-video.html]] "A non-interactive introduction to the spanning tree protocol"
+
+[TOC]
+
+# The basics
+
+Designed in the ’80s, the *spanning tree protocol* has evolved into a "rapid"
+flavor (RSTP) and a "VLAN-aware" variation (MSTP).[^history] Any sound-minded
+network engineer knows there are better alternatives, like [BGP EVPN VXLAN][].
+Yet, because any switch speaks it, the venerable spanning tree protocol still
+fills a niche.
+
+[^history]: STP was introduced in [IEEE 802.1D-1990][]. It is still present in
+    [IEEE 802.1D-1998][] but was withdrawn in [IEEE 802.1D-2004][] in favor of
+    RSTP, introduced in [IEEE 802.1w-2001][]. MSTP was introduced in [IEEE
+    802.1s-2002][] and merged into [IEEE 802.1Q-2003][]. Both of them are part
+    of [IEEE 802.1Q-2022][] along with [SPB][IEEE 802.1AQ-2012]—a protocol I had
+    never heard of until writing this article.
+
+[ieee 802.1d-1990]: sci-hub://10.1109/IEEESTD.1991.101050 "IEEE Standards for Local and Metropolitan Area Networks: Media Access Control (MAC) Bridges"
+[ieee 802.1d-1998]: sci-hub://10.1109/IEEESTD.1998.95619 "IEEE Standard for Local and Metropolitan Area Networks: Media Access Control (MAC) Bridges"
+[ieee 802.1d-2004]: sci-hub://10.1109/IEEESTD.2004.94569 "IEEE Standard for Local and Metropolitan Area Networks: Media Access Control (MAC) Bridges"
+[ieee 802.1w-2001]: sci-hub://10.1109/IEEESTD.2001.93287 "IEEE Standard for Local and Metropolitan Area Networks: Rapid Reconfiguration of Spanning Tree"
+[ieee 802.1s-2002]: sci-hub://10.1109/IEEESTD.2002.94223 "IEEE Standards for Local and Metropolitan Area Networks: Virtual Bridged Local Area Networks — Amendment: Multiple Spanning Trees"
+[ieee 802.1q-2003]: sci-hub://10.1109/IEEESTD.2003.94280 "IEEE Standards for Local and Metropolitan Area Networks: Virtual Bridged Local Area Networks"
+[ieee 802.1q-2005]: sci-hub://10.1109/IEEESTD.2006.216285 "IEEE Standard for Local and Metropolitan Area Networks: Virtual Bridged Local Area Networks"
+[ieee 802.1q-2022]: adoi://10.1109/IEEESTD.2022.10004498 "IEEE Standard for Local and Metropolitan Area Networks: Bridges and Bridged Networks"
+[ieee 802.1aq-2012]: sci-hub://10.1109/IEEESTD.2012.6231597 "IEEE Standard for Local and Metropolitan Area Networks: Shortest Path Bridging"
+
+We focus on RSTP: it replaced the original protocol in 2004. To eliminate
+network loops, RSTP implements a complex state machine. Timers, link state
+changes, and the link-local control frames a bridge receives from its neighbors
+drive its transitions. These Ethernet frames are the *Bridge Protocol Data
+Units* (BPDUs). You can watch them in action below: hit the “Start” button.
+
+``` { .text .mstp-topology }
+:protocol rstp
+:tx-hold 10
+
+A1 @0,1
+C11 @1,0 prio=4096 icon=🌳
+C12 @1,2 prio=4096 icon=🌳
+C21 @2,0 prio=4096 icon=🌳
+C22 @2,2 prio=4096 icon=🌳
+A2 @3,1
+
+H1 @0,0.2 proto=none icon=💻
+H2 @0,1.8 proto=none icon=🖨️
+H3 @3,0.2 proto=none icon=📠
+H4 @3,1.8 proto=none icon=📺
+
+A1 -- C11
+A1 -- C12
+A2 -- C21
+A2 -- C22
+C11 -- C12
+C11 -- C21
+C11 -- C21
+C11 -- C22
+C12 -- C21
+C12 -- C22
+C21 -- C22
+A1 -- H1 A1:edge
+A1 -- H2 A1:edge
+A2 -- H3 A2:edge
+A2 -- H4 A2:edge
+```
+
+After [some time](#mstp:5,...), the topology converges to a tree: from the root
+C11, there is a path to each bridge[^bridge] and no loop. In the upper right
+corner, the interface displays a tree icon 🌳 followed by the time it took to
+reach this state. [Cut a link](#mstp:9,C11--C12,...) and see how the protocol
+finds an alternate path to reach C12 in less than a second. You can stop the
+simulation, move it forward step by step, reset it to its initial state, or slow
+it down with the "snail" mode 🐌. Don't worry about all the displayed
+information: I explain it later.
+
+[^bridge]: From here, I use "bridge" instead of the more common word "switch."
+
+All examples run in your browser, powered by [MSTPD][]—an open-source
+user-space[^kernel] implementation of RSTP.[^incomplete]
+
+[^kernel]: The Linux kernel only runs STP. It delegates the other protocols to
+    user space.
+
+[^incomplete]: MSTPD implements the state machine from [IEEE 802.1Q-2005][], but
+    on Linux it runs RSTP only. Linux 5.18 added [support for forwarding
+    multiple spanning tree][], but MSTPD does not use it yet. See [PR #150][]
+    for progress on this front.
+
+[bgp evpn vxlan]: [[en/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN with FRR"
+[leave your rss reader]: [[en/blog/2026-spanning-tree.html]] "An interactive introduction to the spanning tree protocol"
+[mstpd]: https://github.com/mstpd/mstpd "Multiple Spanning Tree Protocol Daemon"
+[ustp]: https://git.openwrt.org/project/ustp/ "OpenWRT ustp daemon"
+[support for forwarding multiple spanning tree]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=ec7328b59176227216c461601c6bd0e922232a9b "net: bridge: mst: Multiple Spanning Tree (MST) mode"
+[PR #150]: https://github.com/mstpd/mstpd/pull/150 "[RFC/RFT] use kernel MST support if available"
+
+## Historical interlude
+
+[Radia Perlman][], an inductee of the [Internet Hall of Fame][] in 2014,
+summarized the ancestor of STP she invented at DEC with this poem, later
+included in a [US patent][us patent]:
+
+> I think that I shall never see  
+> A graph more lovely than a tree.  
+> A tree whose crucial property  
+> Is loop-free connectivity.  
+> A tree which must be sure to span  
+> So packets can reach every LAN.  
+> First, the root must be selected.  
+> By ID, it is elected.  
+> Least cost paths from root are traced.  
+> In the tree, these paths are placed.  
+> A mesh is made by folks like me,  
+> Then bridges find a spanning tree.
+>
+> ― _Radia Perlman_, [Algorhyme][].
+
+[radia perlman]: https://hiddenheroes.netguru.com/radia-perlman "The Magic Box and the Spanning Tree: How Radia Perlman made the Internet work"
+[us patent]: https://patents.google.com/patent/US7339900B2/en "Method and apparatus for preventing spanning tree loops during traffic overload conditions"
+[algorhyme]: https://hiddenheroes.netguru.com/radia-perlman "The Magic Box and the Spanning Tree: How Radia Perlman made the Internet work"
+[internet hall of fame]: https://www.internethalloffame.org/inductee/radia-perlman/ "Radia Perlman profile on the Internet Hall of Fame"
+
+<!-- Read by Radia: media/files/stp-algorhyme.ogg -->
+<!-- Musical version: https://www.youtube.com/watch?v=iE_AbM8ZykI -->
+
+## Electing the root bridge
+
+To build a tree, RSTP first elects the bridge with the **lowest bridge
+identifier** as the **root bridge**. The bridge identifier combines the priority
+and the MAC address: `8192.6e:2b:10:a0:5f:29`.
+
+In the example below, S1 and S2 have priorities of 4,096 and 8,192: S1 becomes
+root. S4 has a priority of 12,288, while S3 keeps the default priority of
+32,768:[^priority] S4 becomes root. S5 and S6 don't have a specific priority, so
+the lowest MAC address wins and S5 becomes root.
+
+[^priority]: The priority is a multiple of 4,096: with MSTP, the lower 12 bits
+    of the bridge priority encode the MST instance identifier, leaving only the
+    upper 4 bits for the configured priority.
+
+``` { .text .mstp-topology }
+:protocol rstp
+
+S1 @0,0 prio=4096
+S2 @0,1 prio=8192
+S1 -- S2
+
+S3 @1,0
+S4 @1,1 prio=12288
+S3 -- S4
+
+S5 @2,0
+S6 @2,1
+S5 -- S6
+```
+
+[Initially](#mstp:2,S2->S1,@), each bridge advertises itself as
+root:[^wireshark]
+
+```wireshark hl_lines="5 6"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    Root Identifier: 8192.02:00:00:01:00:01
+    Bridge Identifier: 8192.02:00:00:01:00:01
+```
+
+[^wireshark]: To inspect the BPDUs crossing a link, select it, click the
+    "Download packets" button, and open the file with [Wireshark][].
+
+[wireshark]: https://www.wireshark.org/ "Wireshark: network protocol analyzer"
+
+Once a bridge receives a BPDU advertising a better root bridge, it
+[propagates](#mstp:3,S2->S1,@) this new information to its neighbors.
+
+```wireshark hl_lines="5 6"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    Root Identifier: 4096.02:00:00:00:00:00
+    Bridge Identifier: 8192.02:00:00:00:00:01
+```
+
+## Assigning roles to ports
+
+The second step is to assign a role to each port. RSTP defines five roles, each
+denoted by a letter:
+
+- root (R),
+- designated (D),
+- alternate (A),
+- disabled (X), or
+- backup (B).[^backup]
+
+[^backup]: A backup port only exists if the bridge has several ports on the same
+    collision domain. This should not happen in a switched network.
+
+Each non-root bridge chooses its **root port**, the one with the lowest-cost
+path to the root. Unless you override it, each bridge derives the link cost
+from the speed: 20,000 for 1 Gbps. In case of equality, the lowest port
+identifier wins.
+
+Each remaining port becomes a **designated port** if the BPDU it sends is
+"better" than the BPDU it receives. Otherwise, it becomes an **alternate port**.
+Later, if the root port goes down, the "best" alternate port becomes the new
+root port. The tiebreakers for the best BPDU are:
+
+1. the lowest root bridge identifier,
+2. the lowest accumulated cost to the root,
+3. the lowest bridge identifier, and
+4. the lowest port identifier.
+
+``` { .text .mstp-topology }
+:protocol rstp
+
+S1 @1,0  prio=4096 icon=🌳
+S2 @0,1
+S3 @2,1
+
+S1 -- S2
+S1 -- S3
+S1 -- S3
+S2 -- S3
+```
+
+In the example above, [after convergence](#mstp:13), S1 is the root bridge
+because it has a priority of 4,096, while the other bridges have a priority of
+32,768. All its ports are designated ports because the accumulated cost to the
+root is 0.
+
+S2's port facing S1 becomes a root port because it has the lowest accumulated
+cost to the root—20,000 vs 40,000. S3 has two ports facing S1, and the one with
+the lowest port identifier becomes the root port—`0x8000` vs `0x8001`. The other
+candidate is an alternate port because the remote port on the link sends a
+better BPDU, with an accumulated cost of 0. On the segment between S2 and S3,
+S2's port wins: while both bridges have the same accumulated cost to the root
+(20,000), S2's bridge identifier is smaller—`32768.02:00:00:00:00:01` vs
+`32768.02:00:00:00:00:02`.
+
+```wireshark hl_lines="5 6 7"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    Root Identifier: 4096.02:00:00:00:00:00
+    Root Path Cost: 20000
+    Bridge Identifier: 32768.02:00:00:00:00:01
+    Port identifier: 0x8002
+```
+
+If you [cut the active link between S1 and S3](#mstp:13,S1--S3:1), S3 promotes
+the "best" alternate port to root port. If you also [disable the second
+link](#mstp:13,S1--S3:1,S1--S3:2), S3 chooses the remaining alternate port as a
+root port. But if you [disable the link between S1 and
+S2](#mstp:13,S1--S2,@,...), S2 needs a bit more work to elect a new root port
+because it does not have an alternate port.
+
+Unless a specific event happens, designated ports send BPDUs [every 2
+seconds](#mstp:13,S1->S3:2,S2->S3,S1->S2,@).[^hello] If a bridge does not
+receive BPDUs from its neighbor for 3 consecutive hello periods, it considers
+the neighbor dead and removes the port information.
+
+[^hello]: This is the value of the "hello" timer. It used to be configurable,
+    but [IEEE 802.1Q-2005][] pins it to 2. MSTPD does not allow another value.
+
+## Port state transition
+
+Each port can have one of three states. The diagram displays a background color
+for each state:
+
+- discarding (red),
+- learning (yellow), or
+- forwarding (green).
+
+A *root port* transitions automatically to the forwarding state. An *alternate
+port* stays in the discarding state. A *designated port* has two options to
+transition from the discarding state to the forwarding state:
+
+- If the port is an **edge port**, either through configuration or because the
+  remote device does not speak any flavor of STP, the bridge assumes it won't
+  participate in the protocol and cannot create a loop. In this case, the
+  designated port immediately transitions to the forwarding state.
+- Otherwise, it sends a **proposal** to its downstream neighbor. If the remote
+  bridge agrees that the received BPDU is "better" than any other BPDU stored
+  for other ports, it elects the receiving port as its root port and starts the
+  **synchronization** process: it transitions all non-edge non-synced designated
+  ports to the discarding state to avoid a loop. Then, it sends back an
+  **agreement**. Upon receiving the agreement, the peer designated port
+  transitions to the forwarding state.[^learning]
+
+[^learning]: If the peer port does not receive an agreement after the hello
+    timer elapses—or the maximum age if the port has just come up—it falls back
+    to the timer-based method for compatibility with STP: it transitions to
+    the learning state, waits again for the hello timer to expire, and
+    transitions to the forwarding state.
+
+``` { .text .mstp-topology }
+:protocol rstp
+
+S1 @1,0 prio=4096 icon=🌳
+S2 @1,1
+S3 @0,2
+S4 @2,2
+S5 @0,3 prio=8192 icon=🪾
+S6 @2,3
+H1 @0,1.2   proto=none icon=🖨️
+H2 @2,1.2   proto=none icon=📠
+H3 @2.5,1.3 proto=none icon=📺
+H4 @2.5,2.3 proto=none icon=💻
+
+S1 -- S2
+S2 -- S3
+S2 -- S4
+S3 -- S5
+S4 -- S6
+S4 -- S3
+S5 -- S6
+
+S3 -- H1 S3:edge
+S4 -- H2 S4:edge
+S4 -- H3 S4:edge
+S6 -- H4 S6:edge
+```
+
+In the topology above, H1, H2, H3, and H4 are end devices not participating in
+the protocol. We configure the ports they connect to as edge ports, so these
+ports immediately move to the forwarding state.
+
+Use the "step" button to move the simulation forward. The clock moves to 1
+second. [Step again](#mstp:2,S1->S2,S2->S1,@) and S1 and S2 send a proposal to
+each other. Here is the proposal from S2:
+
+```wireshark hl_lines="10 11 13"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x4e, Agreement, Port Role: Designated, Proposal
+        0... .... = Topology Change Acknowledgment: No
+        .1.. .... = Agreement: Yes
+        ..0. .... = Forwarding: No
+        ...0 .... = Learning: No
+        .... 11.. = Port Role: Designated (3)
+        .... ..1. = Proposal: Yes
+        .... ...0 = Topology Change: No
+    Root Identifier: 32768.02:00:00:00:00:01
+    Root Path Cost: 0
+    Bridge Identifier: 32768.02:00:00:00:00:01
+    Port identifier: 0x8001
+```
+
+S1 ignores it: its own root identifier is lower. When S2 receives a similar
+proposal from S1, it accepts S1 as its root bridge. It also elects the port to
+S1 as the root port and starts the synchronization process. The two designated
+ports are already discarding, so no change here. [Step
+again](#mstp:3,S2->S1#2,@) and S2 sends two BPDUs to S1. In one of them, the
+agreement bit is 1 and the proposal bit is 0. It also shows that S2 accepted S1
+as the root bridge and its root port is now in the forwarding state. When
+receiving this BPDU, S1 transitions its own designated port to the forwarding
+state. From this point, the link between S1 and S2 forwards user traffic.
+
+```wireshark hl_lines="7 8 10 11 13"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x79, Agreement, Forwarding, Learning, Port Role: Root, Topology Change
+        0... .... = Topology Change Acknowledgment: No
+        .1.. .... = Agreement: Yes
+        ..1. .... = Forwarding: Yes
+        ...1 .... = Learning: Yes
+        .... 10.. = Port Role: Root (2)
+        .... ..0. = Proposal: No
+        .... ...1 = Topology Change: Yes
+    Root Identifier: 4096.02:00:00:00:00:00
+    Root Path Cost: 20000
+    Bridge Identifier: 32768.02:00:00:00:00:01
+    Port identifier: 0x8001
+```
+
+Let's look at what happened to S5. [Reset the simulation and step
+twice](#mstp:2,S5->S3,S3->S5,S5->S6,S6->S5,@). S5 exchanges BPDUs with both S3
+and S6. Since S5 has a lower root identifier than S3 and S6, it stays the root
+bridge, while S3 and S6 accept the proposal and elect their root ports. S3 and
+S6 start the synchronization process. S6's port to H4 stays up because this is
+an edge port. [Move one step](#mstp:3,S3->S5#1,S6->S5#1,@). Both S3 and S6 send
+an agreement back to S5, which transitions both designated ports to the
+forwarding state. Yet, the link between S5 and S3 keeps discarding user traffic!
+If you look carefully, S3's port toward S5 is now a designated port, not a root
+port. During the [same step](#mstp:3,S2->S3,@), S3 also receives a better BPDU
+from S2 with S1 as the root bridge. It elects its port to S2 as the root port
+and downgrades the port to S5 to a designated port, which stays in the
+discarding state.
+
+On the [next step](#mstp:4,S3->S5,@), things get a bit tricky. S3 sends a
+proposal to S5:[^agreement]
+
+```wireshark hl_lines="11 13"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x4f, Agreement, Port Role: Designated, Proposal, Topology Change
+        0... .... = Topology Change Acknowledgment: No
+        .1.. .... = Agreement: Yes
+        ..0. .... = Forwarding: No
+        ...0 .... = Learning: No
+        .... 11.. = Port Role: Designated (3)
+        .... ..1. = Proposal: Yes
+        .... ...1 = Topology Change: Yes
+    Root Identifier: 4096.02:00:00:00:00:00
+    Root Path Cost: 40000
+    Bridge Identifier: 32768.02:00:00:00:00:02
+    Port identifier: 0x8002
+```
+
+[^agreement]: As in many proposals, S3 also sets the agreement bit to 1. The
+    proposal bit says "I am the designated port on this link and I want to
+    transition to the forwarding state." The agreement bit says "I am already in
+    sync with the rest of my bridge on this root information." Both can be true.
+
+S5 elects S1 as its root bridge and the port toward S3 as its root port. It
+starts its synchronization process, but the designated port to S6 does *not*
+move into the discarding state. Why? That port stays a designated port and its
+neighbor S6 had already sent an agreement on the link, so the port keeps its
+synced status.
+
+Now, let's [step back](#mstp:3,@) to look at what happens to S6. At this point,
+S6 believes S5 is the root bridge. [Step once](#mstp:4,S4->S6#1,@) and S4 sends
+a new proposal to S6. S6 accepts the proposal, elects S1 as the root bridge and
+the port to S4 as its root port. The role of the port facing S5 changes: from a
+root port, it becomes a designated port. Because its peer keeps advertising an
+inferior BPDU on the link, this port becomes disputed and moves to the
+discarding state. The root port transitions to the forwarding state and the link
+starts forwarding immediately because S4's designated port is already in the
+forwarding state. If we [step one more time](#mstp:5,S5->S6,S6->S5,@), S5 and S6
+exchange two BPDUs. The one from S5 is better because of its lower bridge
+identifier. S5's port stays a designated port, while S6 downgrades its own port
+to an alternate port.
+
+Let's rewind one last time from the start: cut the link between S1 and S2, [run
+the simulation until the topology is stable](#mstp:S1--S2,9), stop the
+simulation, and restore the link between S1 and S2. During the [first
+step](#mstp:S1--S2,9,S1--S2,1,S1->S2,S2->S1,@), S1 and S2 exchange proposals. S2
+elects S1 as the root bridge instead of S5 and the port to S1 as the root port.
+It downgrades the previous root port to a designated port and moves it into the
+discarding state. The other designated port stays synced and keeps its
+forwarding state. At the [next step](#mstp:S1--S2,9,S1--S2,2,S2->S1,@), S2 sends
+an agreement to S1 and the link between them starts forwarding user traffic. It
+also [sends a proposal to S3](#mstp:S1--S2,9,S1--S2,2,S2->S3,@), but not to S4.
+Instead, [it sends a regular BPDU to S4](#mstp:S1--S2,9,S1--S2,2,S2->S4,@). S4
+still elects S1 as its root bridge and the port to S2 as its root port. It
+demotes its previous root port, the one to S3, to a designated port, which
+transitions to the discarding state because of the root port change. The other
+alternate port, to S6, also becomes a designated port and stays in the
+discarding state. The new root port moves to the forwarding state. On the [next
+step](#mstp:S1--S2,9,S1--S2,3,S3->S4#1,@), S4's port to S3 settles as an
+alternate port after receiving a "better" BPDU from S3.
+
+RSTP is a giant state machine split into smaller ones: bridge detection, port
+information, port protocol migration, port role selection, port role
+transitions, port receive, port state transitions, port timers, port transmit,
+and topology change. Some of them are per bridge, some per port. Each bridge
+runs an instance. Time, operational port state changes, and the BPDUs it
+receives from other instances drive the transitions. Being event-driven makes
+RSTP more efficient but also more difficult to understand.
+
+![Western Australian Government Railways class Msa Garratt articulated steam
+locomotive: elevation and plan drawing]([[!!images/msa-garratt@2x.jpg]]
+"Placeholder for the <em>Port Information</em> state machine extracted from IEEE
+802.1Q-2005, page 182. Pending IEEE authorization for reproduction, this is the
+blueprint for the Western Australian Government Railways class Msa Garratt
+articulated steam locomotive.")
+
+## Topology change notification
+
+A bridge populates a MAC address table: it associates each source MAC address
+with the port that last received it. When forwarding an Ethernet frame, it looks
+up this table to choose the right port.[^bum] When a link fails, a connected
+fridge reachable through one port may become reachable through another one. The
+affected bridges should flush the MAC addresses they learned, because these
+entries may now be wrong.
+
+[^bum]: If it finds no entry, the bridge duplicates the Ethernet frame on all
+    ports, except the incoming one. The same happens if the destination MAC
+    address is the broadcast one (`ff:ff:ff:ff:ff:ff`). This behavior bootstraps
+    the learning process.
+
+For this purpose, RSTP implements *topology change notifications* using a
+flooding mechanism. When a non-edge port transitions to the forwarding state, a
+bridge generates BPDUs with the *topology change* (TC) bit set. It sends them to
+all the non-edge designated ports and to the root port. It also flushes the MAC
+address table on these ports. When a bridge receives such a BPDU, it propagates
+the notification to all non-edge designated ports and the root port, except the
+one the notification came from. It also flushes the MAC address table on these
+ports. In the examples, the BPDUs with the TC bit set to 1 have a red circle.
+
+``` { .text .mstp-topology }
+:protocol rstp
+
+S1 @1,0 prio=4096 icon=🌳
+S2 @0,1
+S3 @1,1
+S4 @2,1
+S5 @1,2
+LPT @0.1,2 proto=none icon=🖨️
+
+S1 -- S2
+S1 -- S3
+S1 -- S4
+S2 -- S3
+S2 -- S5
+S4 -- S5
+S5 -- LPT S5:edge
+```
+
+Start the simulation and wait a [few seconds](#mstp:10) for the topology to
+settle. Stop the simulation and [disable the link between S2 and
+S5](#mstp:10,S2--S5). S5 elects the port facing S4 as the root port, which
+transitions immediately to the forwarding state. [Step
+once](#mstp:10,S2--S5,1,S5->S4,@) and S5 emits a BPDU with the TC bit set to 1:
+
+```wireshark hl_lines="12"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x79, Agreement, Forwarding, Learning, Port Role: Root, Topology Change
+        0... .... = Topology Change Acknowledgment: No
+        .1.. .... = Agreement: Yes
+        ..1. .... = Forwarding: Yes
+        ...1 .... = Learning: Yes
+        .... 10.. = Port Role: Root (2)
+        .... ..0. = Proposal: No
+        .... ...1 = Topology Change: Yes
+    Root Identifier: 4096.02:00:00:00:00:00
+    Root Path Cost: 40000
+    Bridge Identifier: 32768.02:00:00:00:00:04
+    Port identifier: 0x8002
+```
+
+S4 receives this BPDU. It flushes the MAC address table on the port facing S1:
+while LPT was previously reachable through this port, it is now reachable
+through S5 instead. [Step once](#mstp:10,S2--S5,2,S4->S1,@). S4 sends S1 a BPDU
+with the TC bit set to 1. When S1 receives this BPDU, it flushes the MAC address
+table on the ports facing S2 and S3. [Step
+once](#mstp:10,S2--S5,3,S1->S2,S1->S3,@) and S1 sends a notification to S2 and
+S3. [Step once again](#mstp:10,S2--S5,4,S2->S3,@) and S2 sends a notification to
+S3, while S3 does nothing because the port toward S2 is an *alternate port*. S3
+does not flush any MAC address table: LPT is still reachable through its port to
+S1.
+
+If you [step a bit more](#mstp:10,S2--S5,6,@), you will see that some of the
+periodic BPDUs keep the TC bit set to 1. Each port runs a timer equal to the
+hello timer plus one second.[^timer] The timer starts when the port emits a
+notification. Until it expires, the port sets the TC bit to 1 in every BPDU it
+sends. You can also see [some periodic BPDUs](#mstp:10,S2--S5,7,S1->S4,S4->S5,@)
+without the TC bit: they originate from a port that only received a notification
+and therefore did not arm its timer.
+
+[^timer]: This timer makes RSTP resistant to packet loss.
+
+## Security
+
+RSTP is weak against configuration errors and malicious actors. A bridge not
+talking RSTP can create a loop. An attacker can insert themselves into the
+topology to disrupt the service, spy on the traffic, or alter it.
+
+To mitigate such problems, you need to identify the edge ports. An edge port
+connects to an end device, like a PC or a printer. Such devices do not generate
+BPDUs and cannot create a loop. RSTP defines two related flags:
+
+- When true, **AdminEdge** initializes a port as an edge port. It defaults to
+  false.
+- When true, **AutoEdge** lets a port become an edge port when it does not
+  receive BPDUs for 3 seconds. It defaults to true.
+
+If an edge port receives a BPDU, regardless of the values of these two flags, it
+reverts to a non-edge port.
+
+``` { .text .mstp-topology }
+R0 @1.5,1.5 prio=8192
+
+# AutoEdge=true, AdminEdge=false, bridge
+S1 @3,1.58
+R0 -- S1
+
+# AutoEdge=true, AdminEdge=false, end device
+H1 @2.84,2.18 icon=🖨️ proto=none
+R0 -- H1
+
+# AutoEdge=true, AdminEdge=true, bridge
+S2 @2.18,2.84
+R0 -- S2 R0:edge
+
+# AutoEdge=true, AdminEdge=true, end device
+H2 @1.58,3 icon=💻 proto=none
+R0 -- H2 R0:edge
+
+# AutoEdge=false, AdminEdge=true, bridge
+S3 @0.68,2.76
+R0 -- S3 R0:edge R0:no-auto-edge
+
+# AutoEdge=false, AdminEdge=true, end device
+H3 @0.24,2.32 icon=📠 proto=none
+R0 -- H3 R0:edge R0:no-auto-edge
+
+# AutoEdge=false, AdminEdge=false, bridge
+S4 @0,1.42
+R0 -- S4 R0:no-auto-edge
+
+# AutoEdge=false, AdminEdge=false, end device
+H4 @0.16,0.82 icon=📺 proto=none
+R0 -- H4 R0:no-auto-edge
+
+# Network port, bridge
+S5 @0.82,0.16
+R0 -- S5 R0:network S5:network
+
+# Network port, end device
+H5 @1.42,0 icon=☕ proto=none
+R0 -- H5 R0:network
+
+# AdminEdge=true, bpdu-guard=true, bridge
+S6 @2.32,0.24
+R0 -- S6 R0:bpdu-guard R0:edge
+
+# AdminEdge=true, bpdu-guard=true, end device
+H6 @2.76,0.68 icon=💡 proto=none
+R0 -- H6 R0:bpdu-guard R0:edge
+```
+
+In the topology above, S1, S2, S3, S4, S5, and S6 act as bridges, while H1, H2,
+H3, H4, H5, and H6 act as end devices:
+
+- S1 and H1 are on a port without a specific configuration: *AutoEdge* is true,
+  *AdminEdge* is false,
+- S2 and H2 are on a port where *AdminEdge* is true,
+- S3 and H3 are on a port where *AutoEdge* is false and *AdminEdge* is true,
+- S4 and H4 are on a port where *AutoEdge* is false.
+
+If you start the topology and [wait about 20 seconds](#mstp:24), links to S1,
+S2, S3, S4, H1, H2, H3, and H4 eventually forward user traffic: none of the
+flags matter.
+
+But what about the two remaining pairs? S5 and H5 connect to a *network* port.
+Such a port enables a non-standard feature: **bridge assurance**. The port
+transmits BPDUs regardless of its role. If it does not receive BPDUs for 3
+consecutive hello periods, it transitions to the discarding state. On the link
+between R0 and S5, you can see [BPDUs traveling in both
+directions](#mstp:24,R0->S5,S5->R0,@), unlike the other links, where only
+designated ports send BPDUs.
+
+S6 and H6 connect to a port where *AdminEdge* is true and **BPDU guard** is
+enabled. This is another non-standard feature that shuts down a port if [it
+receives a BPDU](#mstp:2,S6->R0,@).
+
+In summary, if you expect a port to be an edge port, you should set *AdminEdge*
+to true and enable *BPDU guard*. Otherwise, declare it as a *network* port.
+
+# Why RSTP today?
+
+A compelling use case for RSTP today is an out-of-band network for a datacenter,
+since you can tolerate an outage of a few seconds. The configuration is minimal
+and you can use cheap switches, like a Cisco 2960X.[^price] You need two
+switches acting as root bridges, and you build several loops to connect OOB
+switches in each cabinet. This simple design survives one failure on each
+loop.[^erps]
+
+[^price]: You can get them for less than US$100 through a broker. All the ports
+    run PVST+ by default and automatically fall back to plain RSTP.
+
+[^erps]: An alternative would be [Ethernet Ring Protection Switching][ITU-T
+    G.8032] (ERPS)—another protocol I had never heard of until researching this
+    article.
+
+``` { .text .mstp-topology }
+:protocol rstp
+:tx-hold 10
+
+# Root bridges
+R1 @0,1 prio=0
+R2 @0,2 prio=4096
+R1 -- R2 cost=200 R1:network R2:network
+R1 -- R2 cost=200 R1:network R2:network
+
+# First loop
+C1  @1,0 icon=🗄️
+C4  @2,0 icon=🗄️
+C7  @3,0 icon=🗄️
+C10 @4,0 icon=🗄️
+C12 @5,0 icon=🗄️
+C13 @5,3 icon=🗄️
+C15 @4,3 icon=🗄️
+C18 @3,3 icon=🗄️
+C21 @2,3 icon=🗄️
+C24 @1,3 icon=🗄️
+R1  -- C1  R1:network C1:network
+C1  -- C4  C1:network C4:network
+C4  -- C7  C4:network C7:network
+C7  -- C10 C7:network C10:network
+C10 -- C12 C10:network C12:network
+C12 -- C13 C12:network C13:network
+C13 -- C15 C13:network C15:network
+C15 -- C18 C15:network C18:network
+C18 -- C21 C18:network C21:network
+C21 -- C24 C21:network C24:network
+C24 -- R2  C24:network R2:network
+
+# Second loop
+C2  @1,0.5 icon=🗄️
+C5  @2,0.5 icon=🗄️
+C8  @3,0.5 icon=🗄️
+C11 @4,0.5 icon=🗄️
+C14 @4,2.5 icon=🗄️
+C17 @3,2.5 icon=🗄️
+C20 @2,2.5 icon=🗄️
+C23 @1,2.5 icon=🗄️
+R1  -- C2  R1:network C2:network
+C2  -- C5  C2:network C5:network
+C5  -- C8  C5:network C8:network
+C8  -- C11 C8:network C11:network
+C11 -- C14 C11:network C14:network
+C14 -- C17 C14:network C17:network
+C17 -- C20 C17:network C20:network
+C20 -- C23 C20:network C23:network
+C23 -- R2  C23:network R2:network
+
+# Third loop
+C3  @1,1 icon=🗄️
+C6  @2,1 icon=🗄️
+C9  @3,1 icon=🗄️
+C16 @3,2 icon=🗄️
+C19 @2,2 icon=🗄️
+C22 @1,2 icon=🗄️
+R1  -- C3  R1:network C3:network
+C3  -- C6  C3:network C6:network
+C6  -- C9  C6:network C9:network
+C9  -- C16 C9:network C16:network
+C16 -- C19 C16:network C19:network
+C19 -- C22 C19:network C22:network
+C22 -- R2  C22:network R2:network
+```
+
+This topology converges in about [6 seconds](#mstp:6). Each loop should stay
+small (around 16 bridges) to reduce the probability of a double failure and to
+avoid sharing too much bandwidth. The design can evolve a bit without adding too
+much complexity: one VLAN per loop or one bridge domain per loop.
+
+[ITU-T G.8032]: https://www.itu.int/rec/T-REC-G.8032 "ITU-T G.8032"
+
+## How large can a network be?
+
+The maximum age, whose default value is 20, governs the maximum distance of a
+node from the root. The topology below is too big for BPDUs from R1 to reach
+beyond S20.[^root-mac]
+
+[^root-mac]: If you look closely at what happens at t=2s, you can see that R2 is
+    gaining popularity as root: S17 to S36 believe R2 is the root bridge. S16
+    does not follow because we hit the maximum age. Later, S17 to S20 reverse
+    their position. I'll let you explore the state of the various bridges to
+    understand the root cause.
+
+``` { .text .mstp-topology}
+:protocol rstp
+:tx-hold 10
+:max-age 20
+
+R1 @0,0 prio=4096 icon=🌳
+R2 @0,5 prio=4096 icon=🪾
+
+S1  @1,0
+S2  @2,0
+S3  @3,0
+S4  @4,0
+S5  @5,0
+S6  @6,0
+
+S7  @6,1
+S8  @5,1
+S9  @4,1
+S10 @3,1
+S11 @2,1
+S12 @1,1
+
+S13 @1,2
+S14 @2,2
+S15 @3,2
+S16 @4,2
+S17 @5,2
+S18 @6,2
+
+S19 @6,3
+S20 @5,3
+S21 @4,3
+S22 @3,3
+S23 @2,3
+S24 @1,3
+
+S25 @1,4
+S26 @2,4
+S27 @3,4
+S28 @4,4
+S29 @5,4
+S30 @6,4
+
+S31 @6,5
+S32 @5,5
+S33 @4,5
+S34 @3,5
+S35 @2,5
+S36 @1,5
+
+R1  -- S1
+S1  -- S2
+S2  -- S3
+S3  -- S4
+S4  -- S5
+S5  -- S6
+S6  -- S7
+S7  -- S8
+S8  -- S9
+S9  -- S10
+S10 -- S11
+S11 -- S12
+S12 -- S13
+S13 -- S14
+S14 -- S15
+S15 -- S16
+S16 -- S17
+S17 -- S18
+S18 -- S19
+S19 -- S20
+S20 -- S21
+S21 -- S22
+S22 -- S23
+S23 -- S24
+S24 -- S25
+S25 -- S26
+S26 -- S27
+S27 -- S28
+S28 -- S29
+S29 -- S30
+S30 -- S31
+S31 -- S32
+S32 -- S33
+S33 -- S34
+S34 -- S35
+S35 -- S36
+S36 -- R2
+R1  -- R2 cost=200 down
+```
+
+Once the [topology settles](#mstp:40), part of the network considers R1 the
+root, while the other votes for R2. At the boundary, S20 tries to start a
+synchronization with S21 to move its *designated port* to the forwarding state.
+The BPDU looks like this:
+
+```wireshark hl_lines="10 11"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x4e, Agreement, Port Role: Designated, Proposal
+    Root Identifier: 4096.02:00:00:00:00:00
+    Root Path Cost: 400000
+    Bridge Identifier: 32768.02:00:00:00:00:15
+    Port identifier: 0x8002
+    Message Age: 20
+    Max Age: 20
+```
+
+S21 rejects it because the message age equals the maximum age. On the other
+hand, the BPDU S21 sends to S20 looks like this:
+
+```wireshark hl_lines="6 10 11"
+Spanning Tree Protocol
+    Protocol Identifier: Spanning Tree Protocol (0x0000)
+    Protocol Version Identifier: Rapid Spanning Tree (2)
+    BPDU Type: Rapid/Multiple Spanning Tree (0x02)
+    BPDU flags: 0x7c, Agreement, Forwarding, Learning, Port Role: Designated
+    Root Identifier: 4096.02:00:00:00:00:01
+    Root Path Cost: 320000
+    Bridge Identifier: 32768.02:00:00:00:00:16
+    Port identifier: 0x8001
+    Message Age: 16
+    Max Age: 20
+```
+
+This is not enough to change S20's *root port* because S20 has a lower *root
+identifier*—`4096.02:00:00:00:00:00` vs `4096.02:00:00:00:00:01`.
+
+[Fixing the link between R1 and R2](#mstp:40,R1--R2,...) resolves the issue. The
+maximum message age any packet carries is now 18, below the configured maximum
+age. But it only works until another link breaks. A plausible fix is to increase
+the maximum age to 40.[^forward-delay]
+
+[^forward-delay]: When increasing the maximum age to 40, you also need to
+    increase the forward delay to 21 (`:forward-delay 21`), as the standard
+    enforces this condition: 2 × (Forward Delay − 1) ≥ Max Age. For this
+    specific topology, you could also increase the maximum age to 37 and
+    forward-delay to 20.
+
+## How fast is RSTP?
+
+RSTP usually converges in a couple of seconds at startup. It often repairs a
+tree in less than a second. Even the [38-bridge topology][] takes less than 10
+seconds to converge.[^time] Some topologies can take a bit more time to recover
+when the root bridge becomes unavailable.[^slow]
+
+[^time]: The simulation may seem slow, but it does not run in real time. Look at
+    the current timestamp in the upper right corner to know the wall clock, e.g.
+    "t=8s." Once the topology stabilizes, the same corner shows the convergence
+    time, e.g. "🌳 2s."
+
+[^slow]: Khaled Elmeleegy, Alan Cox, and Eugene Ng formalized this phenomenon in
+    "[On Count-to-Infinity Induced Forwarding Loops in Ethernet Networks][1]"
+    and later in "[Understanding and Mitigating the Effects of Count to Infinity
+    in Ethernet Networks][2]." They propose a fix that did not find its way into
+    a standard.
+
+[1]: https://www.cs.rice.edu/~eugeneng/papers/INFOCOM06.pdf "On Count-to-Infinity Induced Forwarding Loops in Ethernet Networks"
+[2]: sci-hub://10.1109/TNET.2008.920874 "Understanding and Mitigating the Effects of Count to Infinity in Ethernet Networks"
+
+``` { .text .mstp-topology}
+:protocol rstp
+
+R0 @1,0 prio=0
+S1 @1,1 prio=4096
+S2 @0,2 prio=8192
+S3 @2,2
+
+R0 -- S1
+S1 -- S2
+S2 -- S3
+S3 -- S1
+```
+
+In the topology above, start the simulation, [wait for convergence](#mstp:10),
+hit stop, and [cut the link between R0 and S1](#mstp:10,R0--S1). The topology is
+already optimal, but RSTP has a hard time converging again.
+
+First, S1 loses its root port. It has no more information about R0 and elects
+itself as the root bridge. It keeps its ports to S2 and S3 as designated ports
+in the forwarding state. [Step once](#mstp:10,R0--S1,1,S1->S2,S1->S3,@) and it
+sends a BPDU to both S2 and S3 to let them know about the root change. When
+receiving it, S2 accepts S1 as its root because it does not have a better root
+on another port. It elects the port to S1 as its root port. The other port stays
+a designated port. Both ports keep forwarding.
+
+When receiving the BPDU from S1, S3 behaves differently: it knows R0 as a better
+root than S1 through its alternate port to S2. It promotes this port to a root
+port and demotes the port facing S1 to a designated port, which requires a new
+agreement. [Step once](#mstp:10,R0--S1,2,S3->S1#1,@) and S3 sends a proposal to
+S1 with R0 as the root bridge. S1 elects R0 as the root bridge and promotes its
+port to S3 as a root port.
+
+During the [same step](#mstp:10,R0--S1,2,S2->S3,@), S3 also receives a BPDU from
+S2 stating that S1 is the root bridge. Therefore, S3 has no port left with R0 as
+the root bridge: it elects S1 as the root bridge and its port to S2 as the root
+port. [Step once](#mstp:10,R0--S1,3,S3->S1,@) and its next BPDU to S1 includes
+this information: S1 elects itself again as the root bridge. But during the
+[same wave](#mstp:10,R0--S1,3,S1->S2#1,@), S1 sends a proposal to S2 with R0 as
+the root bridge. While S1 and S3 agree that S1 is the root bridge, S2 now
+believes this is R0! [In turn](#mstp:10,R0--S1,4,@,...), S2 again convinces S3
+that R0 is the root bridge, S3 convinces S1, S1 convinces S2, and S2 convinces
+S3.
+
+This could go on forever, but it does not. The BPDUs saying "R0 is root"
+eventually age out when the message age goes past the maximum age. In the
+example above, at the [eleventh second](#mstp:10,R0--S1,24,S2->S3,@), S2 sends a
+BPDU to S3 with R0 as root, but S3 drops it because its message age reached the
+maximum. With some luck, the topology can also converge faster if a port stops
+transmitting new BPDUs after tripping the transmit hold count, whose default
+value is 6 per second.
+
+[38-bridge topology]: [[en/blog/2026-spanning-tree.html]]#how-large-can-a-network-be
+
+# About MSTP
+
+MSTP is the "VLAN-aware" version of RSTP: it runs several instances of RSTP and
+lets the administrator map each VLAN to a specific instance. For example, you
+can map VLANs 100 to 200 to a first instance, and 300 to 400 to a second
+instance. The remaining VLANs map to a special instance named the Internal
+Spanning Tree (IST). MSTP adds its own complexity, but the gist is that you have
+several logical topologies acting independently. If you want to dig deeper, have
+a look at "[MSTP Tutorial Part I: Inside a Region][]."
+
+[mstp tutorial part i: inside a region]: https://ine.com/blog/2008-07-27-mstp-tutorial-part-i-inside-a-region "MSTP Tutorial Part I: Inside a Region"
+
+# About the interactive examples
+
+The interactive examples run [MSTPD][] directly in your browser, compiled to
+[WebAssembly][] with [emscripten][]. A C API replaces the code talking to the
+Linux kernel: it manages bridges and ports, exports state as JSON, and drives
+time deterministically. A JavaScript wrapper makes it more user-friendly:
+
+```javascript
+import { loadMSTPD } from "./dist/mstpd.mjs";
+const mstp = await loadMSTPD();
+
+// Create 3 bridges
+const a = mstp.createBridge("A", { priority: 4096 });
+const b = mstp.createBridge("B", { priority: 8192 });
+const c = mstp.createBridge("C");
+
+// Each bridge has two ports
+const a1 = a.addPort("a-b", { portno: 1 });
+const a2 = a.addPort("a-c", { portno: 2 });
+const b1 = b.addPort("b-a", { portno: 1 });
+const b2 = b.addPort("b-c", { portno: 2 });
+const c1 = c.addPort("c-a", { portno: 1 });
+const c2 = c.addPort("c-b", { portno: 2 });
+
+// Build a triangle topology
+mstp.link(a1, b1);
+mstp.link(a2, c1);
+mstp.link(b2, c2);
+
+// Enable all bridges and ports
+for (const br of [a, b, c]) br.enable();
+for (const p of [a1, a2, b1, b2, c1, c2]) p.enable();
+
+// Execute 40 seconds' worth of wall clock and display the topology
+mstp.step(40);
+console.log("Topology:", mstp.topology());
+```
+
+Several dozen unit tests explore the features of MSTPD and check that they work
+correctly in this environment:
+
+```console
+$ node --test *.test.mjs
+✔ two bridges: lower priority becomes root (41.657342ms)
+✔ triangle loop: exactly one port blocks and all agree on the root (5.832ms)
+✔ breaking the active link reconverges and restoring recovers (18.730753ms)
+[…]
+ℹ tests 40
+ℹ pass 40
+ℹ fail 0
+[…]
+ℹ duration_ms 396.190897
+```
+
+Additional JavaScript code looks for specific `<pre>` blocks containing a
+topology definition and turns them into the interactive widget. You can inspect
+and modify the definition by hitting the "edit" button.
+
+There is also a cool trick to tell whether the topology has converged. After
+each step, we save a snapshot of the simulation memory, play 50 seconds' worth
+of simulation to check if the topology is stable, and travel back in time by
+restoring that snapshot. 🕰️
+
+The complete code lives on [GitHub][]. I am happy with the result. It can be
+difficult to follow everything happening during a single step, but stepping
+forward and backward helps. I plan to use the same approach in future blog posts
+about networking features.
+
+!!! "Note" [Michael Lynch][] reviewed a first draft of this article. He authored
+"[Refactoring English][]," a book to sharpen your writing for blog posts,
+documentation, commit messages, and tutorials. Any errors are still mine!
+
+[emscripten]: https://emscripten.org/ "Emscripten documentation"
+[webassembly]: https://developer.mozilla.org/en-US/docs/WebAssembly "WebAssembly on MDN"
+[github]: https://github.com/vincentbernat/mstpd/tree/feature/wasm/wasm
+[michael lynch]: https://mtlynch.io/
+[refactoring english]: https://refactoringenglish.com/ "Refactoring English: Effective Writing for Software Developers"
+
+*[STP]: Spanning Tree Protocol
+*[RSTP]: Rapid Spanning Tree Protocol
+*[PVST]: Per-VLAN Spanning Tree
+*[MSTP]: Multiple Spanning Tree Protocol
+*[MST]: Multiple Spanning Tree
+*[IS-IS]: Intermediate System to Intermediate System
+*[OSPF]: Open Shortest Path First
+*[BPDU]: Bridge Protocol Data Unit
+*[BPDUs]: Bridge Protocol Data Units
+*[SPB]: Shortest Path Bridging
+*[FDB]: Forwarding Database
+*[TC]: Topology Change
+*[IST]: Internal Spanning Tree
+*[ERPS]: Ethernet Ring Protection Switching
+*[OOB]: Out-of-band
+*[TC]: Topology Change
+*[DEC]: Digital Equipment Corporation
