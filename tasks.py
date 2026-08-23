@@ -425,17 +425,6 @@ def build(c):
         c.run("rm media/css/common.css media/css/root.css")
         # Ensure no light-dark() is remaining in SVG files
         c.run("! find . -name '*.svg' -print0 | xargs -0 grep -qF 'light-dark('")
-        # Fix HTML (<source> is an empty tag). This won't be needed once libxml
-        # starts shipping libxml2 >= 2.15.
-        with step("fix HTML"):
-            c.run(
-                r"find . -name '*.html' -print0"
-                r"| xargs -0 sed -i 's+\(<source[^>]*>\)</source>+\1+g'"
-            )
-            c.run(
-                r"find . -name '*.html' -print0"
-                r"| xargs -0 sed -i 's+\(<track[^>]*>\)</track>+\1+g'"
-            )
 
         with step("subset fonts"):
             c.run("""

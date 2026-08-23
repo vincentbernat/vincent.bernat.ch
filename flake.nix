@@ -44,6 +44,7 @@
             overlay = workspace.mkPyprojectOverlay {
               sourcePreference = "wheel";
             };
+            hacks = pkgs.callPackage inputs.pyproject-nix.build.hacks { };
             buildSystemOverrides =
               let
                 overrides = {
@@ -65,6 +66,11 @@
                 )
                 overrides;
             moreOverrides = final: prev: {
+              # lxml from nixpkgs
+              lxml = hacks.nixpkgsPrebuilt {
+                from = python.pkgs.lxml;
+                prev = prev.lxml;
+              };
               # No need for tools from fonttools (we pull the Nix version for that)
               fonttools = prev.fonttools.overrideAttrs (old: {
                 postInstall = (old.postInstall or "") + ''
