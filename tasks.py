@@ -1,4 +1,4 @@
-from invoke import task
+from invoke import task, Exit
 
 import os
 import sys
@@ -172,50 +172,63 @@ def screenshots(c):
             )
 
 
-# Encoding of videos needs to be done with video2hls.
-"""
-while read video arguments; do
-  video2hls --hls-playlist-prefix https://media.bernat.ch/videos/${video%.*}/ \
-    --poster-grayscale --poster-quality 30 \
-    $=arguments -- $video
-done <<EOF
-2012-multicast-vxlan.ogv         --video-bitrate-factor 0.3
-2012-network-lab-kvm.ogv         --video-bitrate-factor 0.3
-2013-exabgp-highavailability.ogv --video-bitrate-factor 0.3
-2014-dashkiosk.ogv               --video-bitrate-factor 0.7
-2014-eudyptula-boot-1.mp4        --video-bitrate-factor 0.5
-2014-eudyptula-boot-2.mp4        --video-bitrate-factor 0.5
-2015-hotfix-qemu-venom.mp4       --video-bitrate-factor 0.5
-2015-dotscale-docker-machine-swarm.mkv \
-                                 --video-bitrate-factor 0.3
-2017-netops-org-mode-1.mp4       --video-bitrate-factor 0.5
-2017-netops-org-mode-2.mp4       --video-bitrate-factor 0.5
-2017-netops-org-mode-3.mp4       --video-bitrate-factor 0.5
-2018-adlib-opl2lpt-1-indy3.mp4   --video-bitrate-factor 0.5 \
-                                 --audio-bitrate 128 --audio-only
-2018-adlib-opl2lpt-2-indy4.mp4   --video-bitrate-factor 0.5 \
-                                 --audio-bitrate 128 --audio-only
-2018-adlib-opl2lpt-3-monkey2.mp4 --video-bitrate-factor 0.5 \
-                                 --audio-bitrate 128 --audio-only
-2018-self-hosted-videos.mp4      --mp4-overlay {resolution}p, progressive \
-                                 --video-overlay {resolution}p, HLS
-2018-opl2-audio-board-1.mp4      --video-bitrate-factor 0.3 \
-                                 --audio-bitrate 128 --audio-only
-2018-opl2-audio-board-2.mp4      --video-bitrate-factor 0.6 \
-                                 --poster-seek 10% \
-                                 --audio-bitrate 128 --audio-only
-2019-self-hosted-videos-subtitles.webm \
-                                 --poster-seek 15s
-2021-network-cmdb.mkv            --video-bitrate-factor 0.5 \
-                                 --poster-seek 20%
-2021-frnog34-jerikan.mp4         --video-bitrate-factor 0.5
-2022-clickhouse-meetup-akvorado.mkv \
-                                 --video-widths 1280 428 \
-                                 --video-bitrates 500 100
-2022-frnog36-akvorado.mp4        --video-bitrate-factor 0.5
-2026-spanning-tree.mp4           --video-bitrate-factor 0.5
-EOF
-"""
+# Additional video2hls arguments for each video.
+video_arguments = {
+    "2012-multicast-vxlan.ogv": "--video-bitrate-factor 0.3",
+    "2012-network-lab-kvm.ogv": "--video-bitrate-factor 0.3",
+    "2013-exabgp-highavailability.ogv": "--video-bitrate-factor 0.3",
+    "2014-dashkiosk.ogv": "--video-bitrate-factor 0.7",
+    "2014-eudyptula-boot-1.mp4": "--video-bitrate-factor 0.5",
+    "2014-eudyptula-boot-2.mp4": "--video-bitrate-factor 0.5",
+    "2015-hotfix-qemu-venom.mp4": "--video-bitrate-factor 0.5",
+    "2015-dotscale-docker-machine-swarm.mkv": "--video-bitrate-factor 0.3",
+    "2017-netops-org-mode-1.mp4": "--video-bitrate-factor 0.5",
+    "2017-netops-org-mode-2.mp4": "--video-bitrate-factor 0.5",
+    "2017-netops-org-mode-3.mp4": "--video-bitrate-factor 0.5",
+    "2018-adlib-opl2lpt-1-indy3.mp4": (
+        "--video-bitrate-factor 0.5 --audio-bitrate 128 --audio-only"
+    ),
+    "2018-adlib-opl2lpt-2-indy4.mp4": (
+        "--video-bitrate-factor 0.5 --audio-bitrate 128 --audio-only"
+    ),
+    "2018-adlib-opl2lpt-3-monkey2.mp4": (
+        "--video-bitrate-factor 0.5 --audio-bitrate 128 --audio-only"
+    ),
+    "2018-self-hosted-videos.mp4": (
+        "--mp4-overlay {resolution}p, progressive --video-overlay {resolution}p, HLS"
+    ),
+    "2018-opl2-audio-board-1.mp4": (
+        "--video-bitrate-factor 0.3 --audio-bitrate 128 --audio-only"
+    ),
+    "2018-opl2-audio-board-2.mp4": (
+        "--video-bitrate-factor 0.6 --poster-seek 10% --audio-bitrate 128 --audio-only"
+    ),
+    "2019-self-hosted-videos-subtitles.webm": "--poster-seek 15s",
+    "2021-network-cmdb.mkv": "--video-bitrate-factor 0.5 --poster-seek 20%",
+    "2021-frnog34-jerikan.mp4": "--video-bitrate-factor 0.5",
+    "2022-clickhouse-meetup-akvorado.mkv": (
+        "--video-widths 1280 428 --video-bitrates 500 100"
+    ),
+    "2022-frnog36-akvorado.mp4": "--video-bitrate-factor 0.5",
+    "2026-spanning-tree.mp4": "--video-bitrate-factor 0.25",
+}
+
+
+@task
+def encode_video(c, video):
+    """Encode a video to HLS with video2hls."""
+    if video not in video_arguments:
+        raise Exit(f"unknown video {video}, add it to video_arguments")
+    short = os.path.splitext(video)[0]
+    with c.cd("content/media/videos"):
+        c.run(
+            "video2hls "
+            f"--hls-playlist-prefix https://media.bernat.ch/videos/{short}/ "
+            "--poster-grayscale --poster-quality 30 "
+            f"{video_arguments[video]} -- {video}",
+            hide=False,
+        )
+
 
 # For 2018-adlib-opl2lpt.mp4, chapters have been included with "mp4chaps -i
 # 2018-adlib-opl2lpt.mp4". It's not that useful: 1. browsers don't have builtin
@@ -588,7 +601,7 @@ printf " GIF %10s %10s %10s\n" \
         else:
             c.run("git reset --hard")
             c.run("git clean -d -f")
-            raise RuntimeError("Build rollbacked")
+            raise Exit("Build rollbacked")
 
 
 @task
