@@ -261,7 +261,7 @@ def upload_videos(c, video=None):
                 ),
                 hide=False,
             )
-        # Copy poster and index.m3u8
+        # Copy poster, index.m3u8, and chapter if any
         c.run(
             "cp {directory}/poster.jpg "
             "content/media/images/posters/{short}.jpg".format(
@@ -274,6 +274,13 @@ def upload_videos(c, video=None):
                 short=directory, directory=os.path.join(path, directory)
             )
         )
+        if os.path.isfile(os.path.join(path, directory, "chapters.vtt")):
+            c.run(
+                "cp {directory}/chapters.vtt "
+                "content/media/videos/{short}.chapters.vtt".format(
+                    short=directory, directory=os.path.join(path, directory)
+                )
+            )
 
 
 @task

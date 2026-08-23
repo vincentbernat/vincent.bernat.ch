@@ -463,7 +463,6 @@ class ImageFixerPlugin(Plugin):
                 )
                 progressive.attr.type = 'video/mp4; codecs="mp4a.40.2,avc1.4d401f"'
                 img.append(progressive)
-                # Add subtitle tracks if any
                 vtts = [
                     v
                     for v in self.site.content.node_from_relative_path(
@@ -471,8 +470,20 @@ class ImageFixerPlugin(Plugin):
                     ).walk_resources()
                     if v.name.endswith(".vtt") and v.name.startswith("{}.".format(id))
                 ]
+                # Add chapters track if any
+                for vtt in vtts:
+                    if vtt.name != "{}.chapters.vtt".format(id):
+                        continue
+                    track = pq("<track>")
+                    track.attr.src = self.site.media_url(vtt.relative_path[6:])
+                    track.attr.kind = "chapters"
+                    track.attr.label = resource.meta.l10n.chapters
+                    img.append(track)
+                # Add subtitle tracks if any
                 for vtt in vtts:
                     code = vtt.name[len(id) + 1 : -4]
+                    if code == "chapters":
+                        continue
                     track = pq("<track>")
                     track.attr.src = self.site.media_url(vtt.relative_path[6:])
                     track.attr.kind = "subtitles"
