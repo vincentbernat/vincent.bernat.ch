@@ -22,6 +22,13 @@
 {{ "{:15}".format(name) }} {{ value }}{% if extra[name] is defined %} {{ extra[name] }}{% endif %};
 {% endfor %}
 {% endmacro %}
+{% macro serve(files="$uri.html $uri $uri/index.html =404") %}
+{%- if site.config.mode == "production" -%}
+try_files {{ files }};
+{%- else -%}
+proxy_pass http://hyde;
+{%- endif -%}
+{% endmacro %}
 {% macro add_headers(extra={}) %}
 {% set headers = {
   "X-Content-Type-Options": "nosniff",
@@ -34,9 +41,10 @@ add_header "{{ name }}" "{{ value }}";
 {% endfor %}
 {% endmacro %}
 
+{% set server %}
 index      index.html;
 error_page 404 {{ content_url('/en/404.html') }};
-expires    6h;
+expires    {% if site.config.mode == "production" %}6h{% else %}epoch{% endif %};
 {{ add_headers() }}
 
 location = /nginx.conf {
@@ -47,26 +55,30 @@ location = /nginx.conf {
 {% for code, lang in languages %}
 location /{{ code }} {
   error_page 404 {{ content_url('/' + code + '/404.html') }};
-  try_files $uri.html $uri $uri/index.html =404;
+  {{ serve() }}
 }
 location = /{{ code }}/blog/subscribe {
   return 301 /{{ code }}/blog/atom.xml;
 }
 location {{ content_url('/' + code + '/404.html') }} {
   internal;
-  try_files $uri.html $uri;
+  {{ serve("$uri.html $uri") }}
 }
 {% endfor %}
 location = / {
   access_log off;
   log_not_found off;
+{% if site.config.mode == "production" %}
   set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
   {{ add_headers({"Vary": "Accept-Language"})|indent(2) }}
   return 301 /$lang;
+{% else %}
+  autoindex on;
+{% endif %}
 }
 
 location / {
-  try_files $uri.html $uri $uri/index.html =404;
+  {{ serve() }}
 }
 
 {# redirections #}
@@ -84,10 +96,13 @@ location ~ ^(?<canonical>.+)/(?:index\.html)?$ {
   access_log off;
   return 301 $canonical;
 }
+{# in development, URLs keep their .html extension #}
+{% if site.config.mode == "production" %}
 location ~ ^(?<canonical>.*)\.html$ {
   access_log off;
   return 301 $canonical;
 }
+{% endif %}
 
 {% for res in resource.node.walk_resources() %}
 {# handle exceptions #}
@@ -111,7 +126,7 @@ location ~ ^(?<canonical>.*)\.html$ {
 {% if specific %}
 location = {{ content_url(res.url) }} {
 {{ specific }}
-  try_files $uri.html $uri $uri/index.html =404;
+  {{ serve() }}
 }
 {% endif %}
 {% endfor %}
@@ -124,13 +139,58 @@ location /ip {
 }
 location = /hit {
   access_log off;
+{% if site.config.mode == "production" %}
   proxy_pass http://127.0.0.3:8087/count;
   proxy_pass_request_headers off;
   proxy_set_header Referer $http_referer;
   proxy_set_header Accept-Language $http_accept_language;
   proxy_set_header User-Agent $http_user_agent;
   proxy_set_header X-Real-Ip $remote_addr;
+{% else %}
+  return 202;
+{% endif %}
 }
 location /redirect-ddg {
   return 302 https://html.duckduckgo.com/html?q=site:{{base|replace("https://","")}}/$arg_lang+$arg_q;
 }
+{% endset %}
+
+{%- if site.config.mode == "production" %}
+{{ server }}
+{% else %}
+{# complete configuration, to be run with "nginx -p <dir> -c <dir>/nginx.conf" #}
+daemon off;
+error_log stderr;
+pid nginx.pid;
+events {}
+http {
+  access_log /dev/stdout;
+  client_body_temp_path client-body;
+  proxy_temp_path proxy;
+  proxy_intercept_errors on;
+  proxy_read_timeout 10m;
+
+  upstream hyde {
+    server 127.0.0.1:8081;
+  }
+
+  server {
+    listen 8080;
+    root {{ site.config.deploy_root_path }};
+
+{# videos come from the disk, or from the media server when missing #}
+    location ~ ^/media/videos/[^/]+/ {
+      root {{ site.config.content_root_path }};
+      try_files $uri @media;
+    }
+
+    location @media {
+      rewrite ^/media/(.*)$ /$1 break;
+      proxy_pass https://media.bernat.ch;
+      proxy_ssl_server_name on;
+    }
+
+{{ server|indent(4, true) }}
+  }
+}
+{% endif %}

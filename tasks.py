@@ -8,6 +8,10 @@ import csv
 import re
 import json
 import shlex
+import pty
+import select
+import subprocess
+import tempfile
 import datetime
 import contextlib
 import urllib
@@ -114,8 +118,71 @@ def pagefind(c, site="deploy"):
 
 @task
 def serve(c):
-    """Serve dev content"""
-    c.run(f"{bwrap} --share-net -- hyde -x serve -a 0.0.0.0", pty=True, hide=False)
+    """Serve dev content behind nginx"""
+
+    def spawn(command):
+        """Run a command in the background, attached to a pty to keep colors."""
+        master, slave = pty.openpty()
+        process = subprocess.Popen(
+            f"exec {command}",
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            stdout=slave,
+            stderr=slave,
+            start_new_session=True,
+        )
+        os.close(slave)
+        process.output = master
+        return process
+
+    def mux(processes, until):
+        """Display the outputs of the given processes until one of them exits."""
+        colors = ["\033[36m", "\033[35m"]
+        reset = "\033[0m"
+        outputs = {
+            process.output: (f"{colors[idx % len(colors)]}{name:5}{reset} │ ", b"")
+            for idx, (name, process) in enumerate(processes.items())
+        }
+        while until.poll() is None and outputs:
+            ready, _, _ = select.select(list(outputs), [], [], 0.2)
+            for fd in ready:
+                prefix, pending = outputs[fd]
+                try:
+                    data = os.read(fd, 65536)
+                except OSError:
+                    data = b""
+                if not data:
+                    del outputs[fd]
+                    continue
+                lines = (pending + data.replace(b"\r", b"")).split(b"\n")
+                outputs[fd] = (prefix, lines.pop())
+                for line in lines:
+                    print(f"{prefix}{line.decode('utf-8', 'replace')}", flush=True)
+
+    # Ports are also set in layout/nginx.j2
+    hyde_port = 8081
+    processes = {}
+    try:
+        with tempfile.TemporaryDirectory(prefix="nginx-") as run:
+            processes["hyde"] = spawn(
+                f"{bwrap} --share-net -- hyde -x serve -a 127.0.0.1 -p {hyde_port}"
+            )
+            curl = subprocess.Popen(
+                shlex.split(
+                    "curl -sS --retry 10 --retry-connrefused --retry-all-errors "
+                    f"-o {run}/nginx.conf http://127.0.0.1:{hyde_port}/nginx.conf"
+                )
+            )
+            mux(processes, until=curl)
+            if curl.wait() != 0:
+                raise Exit("unable to get the nginx configuration")
+            processes["nginx"] = spawn(f"nginx -p {run} -c {run}/nginx.conf")
+            mux(processes, until=processes["nginx"])
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for process in processes.values():
+            process.terminate()
 
 
 @task
@@ -244,7 +311,7 @@ def video_encode(c, video=None):
         c.run(
             "video2hls "
             "--hls-type fmp4 "
-            f"--hls-playlist-prefix {short}/ https://media.bernat.ch/videos/{short}/ "
+            f"--hls-playlist-prefix {short}/ "
             "--audio-separate "
             "--poster-grayscale --poster-quality 70 "
             f"{video_arguments[video]} -- {video}",
