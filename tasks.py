@@ -6,6 +6,8 @@ import time
 import yaml
 import csv
 import re
+import json
+import shlex
 import datetime
 import contextlib
 import urllib
@@ -52,6 +54,16 @@ def confirm(question, default=False):
             return False
         err = "I didn't understand you. Please specify '(y)es' or '(n)o'."
         print(err, file=sys.stderr)
+
+
+def human(size):
+    if size < 1024:
+        return f"{size} B"
+    for unit in ("KiB", "MiB"):
+        size /= 1024
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+    return f"{size / 1024:.1f} GiB"
 
 
 @contextlib.contextmanager
@@ -210,7 +222,7 @@ video_arguments = {
         "--video-widths 1280 428 --video-bitrates 500 100"
     ),
     "2022-frnog36-akvorado.mp4": "--video-bitrate-factor 0.5",
-    "2026-spanning-tree.mp4": "--video-bitrate-factor 0.25",
+    "2026-spanning-tree.mp4": "--video-bitrate-factor 0.25 --audio-separate",
 }
 
 
@@ -239,6 +251,148 @@ def encode_video(c, video=None):
 #
 # Then, to normalize (where 6.4dB is the desired offset compared to max)
 #  ffmpeg -i 2021-network-cmdb.mkv -filter:a "volume=6.4dB" -c:v copy normalized.mkv
+
+
+@task
+def analyze_video(c, video):
+    """Report the size breakdown of an encoded video."""
+    directory = os.path.join("content/media/videos", os.path.splitext(video)[0])
+    master = os.path.join(directory, "index.m3u8")
+    if not os.path.isfile(master):
+        raise Exit(f"{master} does not exist")
+
+    def value(line, key):
+        """Value of one attribute of an M3U8 tag."""
+        match = re.search(f'{key}="?([^",]*)', line)
+        return match and match.group(1)
+
+    def measure(name, paths, duration):
+        """Print the sizes for a set of files, return total and details."""
+        # For MPEG-TS, the number of bytes taken by each PID
+        pids = {}
+        if paths[0].endswith(".ts"):
+            for path in paths:
+                with open(path, "rb") as f:
+                    data = f.read()
+                for high, low in zip(data[1::188], data[2::188]):
+                    pid = ((high & 0x1F) << 8) | low
+                    pids[pid] = pids.get(pid, 0) + 188
+        # The size of each elementary stream. There are too many
+        # packets to bring them back to Python, so awk adds them up.
+        files = " ".join(shlex.quote(path) for path in paths)
+        output = c.run(
+            f"cat {files} | ffprobe -v error -of compact=p=0 "
+            "-show_entries packet=stream_index,size - "
+            "| awk -F'[=|]' '{ s[$2] += $4 } END { for (i in s) print i, s[i] }'",
+            hide=True,
+        ).stdout
+        payloads = {
+            int(index): int(size)
+            for index, size in (line.split() for line in output.splitlines())
+        }
+        # The first file describes the streams. For fragmented MP4,
+        # this is the initialization segment.
+        streams = json.loads(
+            c.run(
+                "ffprobe -v error -of json "
+                f"-show_entries stream=index,id,codec_type {shlex.quote(paths[0])}",
+                hide=True,
+            ).stdout
+        )["streams"]
+        # For each kind of stream, its payload and the space it takes
+        # once packaged
+        kinds = {}
+        for stream in streams:
+            payload = payloads.get(stream["index"], 0)
+            kind = kinds.setdefault(stream["codec_type"], [0, 0])
+            kind[0] += payload
+            kind[1] += pids.get(int(stream.get("id", "0x0"), 16), payload)
+        total = sum(os.path.getsize(path) for path in paths)
+        cells = ""
+        for kind in ("video", "audio"):
+            if kind not in kinds:
+                cells += f"{'-':>11}{'':6}"
+                continue
+            cells += f"{human(kinds[kind][0]):>11}"
+            cells += f"{kinds[kind][0] * 8 / duration / 1000:>5.0f}k"
+        rest = total - sum(kind[0] for kind in kinds.values())
+        cells += f"{human(rest):>11}{100 * rest / total:>6.1f}%"
+        print(f"{name:<16}{human(total):>11}{cells}")
+        return total, kinds
+
+    header = f"{'rendition':<16}{'on disk':>11}{'video':>11}{'':6}"
+    header += f"{'audio':>11}{'':6}{'container':>11}{'':7}"
+    print(header.rstrip())
+    print("─" * len(header))
+
+    # Renditions of the master playlist: variants and alternative audio
+    lines = [line.strip() for line in open(master)]
+    renditions = []
+    for index, line in enumerate(lines):
+        if line.startswith("#EXT-X-MEDIA:") and value(line, "URI"):
+            renditions.append((value(line, "NAME") or "audio", value(line, "URI")))
+        elif line.startswith("#EXT-X-STREAM-INF:"):
+            renditions.append((value(line, "NAME") or "video", lines[index + 1]))
+
+    ladder = []
+    used = {"index.m3u8"}
+    for name, uri in renditions:
+        playlist = os.path.basename(uri)
+        used.add(playlist)
+        segments, duration = [], 0
+        for line in open(os.path.join(directory, playlist)):
+            line = line.strip()
+            if line.startswith("#EXT-X-MAP:"):
+                segments.append(value(line, "URI"))
+            elif line.startswith("#EXTINF:"):
+                duration += float(line.split(":", 1)[1].rstrip(","))
+            elif line and not line.startswith("#"):
+                segments.append(line)
+        used.update(segments)
+        if segments:
+            paths = [os.path.join(directory, segment) for segment in segments]
+            ladder.append(measure(name, paths, duration))
+
+    # Standalone files, like the progressive version
+    rows = list(ladder)
+    leftovers = sorted(set(os.listdir(directory)) - used)
+    for name in leftovers:
+        if name.endswith(".mp4"):
+            target = os.path.join(directory, name)
+            duration = c.run(
+                "ffprobe -v error -of default=nw=1:nk=1 "
+                f"-show_entries format=duration {shlex.quote(target)}",
+                hide=True,
+            ).stdout
+            rows.append(measure(name, [target], float(duration)))
+
+    # Totals, then where the container bytes go
+    total = sum(size for size, _ in rows)
+    cells = ""
+    for kind in ("video", "audio"):
+        payload = sum(kinds.get(kind, [0])[0] for _, kinds in rows)
+        cells += f"{human(payload) if payload else '-':>11}{'':6}"
+    rest = total - sum(kind[0] for _, kinds in rows for kind in kinds.values())
+    cells += f"{human(rest):>11}{100 * rest / total:>6.1f}%"
+    print("─" * len(header))
+    print(f"{'total':<16}{human(total):>11}{cells}")
+
+    # Everything else
+    print()
+    for name in leftovers:
+        if not name.endswith(".mp4"):
+            size = os.path.getsize(os.path.join(directory, name))
+            print(f"{name:<16}{human(size):>11}")
+    playlists = sum(
+        os.path.getsize(os.path.join(directory, name))
+        for name in os.listdir(directory)
+        if name.endswith(".m3u8")
+    )
+    print(f"{'playlists':<16}{human(playlists):>11}")
+    size = sum(
+        os.path.getsize(os.path.join(directory, name)) for name in os.listdir(directory)
+    )
+    print(f"{'directory':<16}{human(size):>11}")
 
 
 @task
