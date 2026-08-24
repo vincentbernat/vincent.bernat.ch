@@ -228,59 +228,59 @@
                   ]
                 };
               '';
+              parallel = "${pkgs.parallel}/bin/parallel --will-cite --null --halt now,fail=1 -j$(nproc)";
+              optimizePng = pkgs.writeShellScript "optimize-png" ''
+                ${pngquant}/bin/pngquant --skip-if-larger --strip --quiet -o "$2" "$1" || [ $? = 98 ]
+              '';
             in
             pkgs.stdenvNoCC.mkDerivation {
               name = "optimize-images";
               src = <target>;
               buildPhase = ''
-                find . -type d -print \
-                  | sed "s,^,$out/," \
-                  | xargs mkdir -p
+                find . -type d -print0 | ${parallel} -X mkdir -p $out/{}
 
                 # SVG (skip interactive ones containing <script>)
                 for d in $(find . -type d); do
                   find $d -maxdepth 1 -type f -name '*.svg' -print0 \
                     | sort -z \
-                    | xargs -r0 sh -c 'grep -LZ "<script" "$@" || true' grep \
-                    | xargs -r0n5 -P$(nproc) ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
+                    | xargs -r0 sh -c 'grep -LZ "<script" "$@" || [ $? = 1 ]' grep \
+                    | ${parallel} -n5 ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
                 done
 
                 # Convert JPG to sRGB
                 find . -type f -name '*.jpg' -print0 \
-                  | xargs -r0 -P$(nproc) -i ${lcms}/bin/jpgicc -q100 '{}' $out/'{}'
+                  | ${parallel} ${lcms}/bin/jpgicc -q100 {} $out/{}
 
                 # JPG→AVIF
                 find $out -type f -name '*.jpg' -print0 \
-                  | xargs -r0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
-                                                                       --min 0 --max 63 \
-                                                                       -a end-usage=q -a cq-level=21 -a tune=ssim \
-                                                                  '{}' '{}'.avif
+                  | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 \
+                                                       --min 0 --max 63 \
+                                                       -a end-usage=q -a cq-level=21 -a tune=ssim \
+                                                  {} {}.avif
 
                 # Optimize JPG
                 for d in $(find $out -type d); do
                   find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
                     | sort -z \
-                    | xargs -r0n5 -P$(nproc) ${jpegoptim}/bin/jpegoptim \
-                                                --max=84 --all-progressive --strip-all --keep-icc
+                    | ${parallel} -n5 ${jpegoptim}/bin/jpegoptim \
+                                          --max=84 --all-progressive --strip-all --keep-icc
                 done
 
                 # Optimize PNG
                 find . -type f -name '*.png' -print0 \
-                    | xargs -r0 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
-                                                --quiet -o $out/'{}' '{}' \
-                    || [ $? -eq 123 ]
+                    | ${parallel} ${optimizePng} {} $out/{}
 
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
-                    | xargs -r0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+                    | ${parallel} ${libwebp}/bin/cwebp -z 8 {} -o {}.webp
 
                 # GIF→WebP
                 find . -type f -name '*.gif' -print0 \
-                    | xargs -r0 -P$(nproc) -i ${libwebp}/bin/gif2webp -quiet '{}' -o $out/'{}'.webp
+                    | ${parallel} ${libwebp}/bin/gif2webp -quiet {} -o $out/{}.webp
 
                 # Optimize GIF
                 find . -type f -name '*.gif' -print0 \
-                    | xargs -r0 -P$(nproc) -i ${gifsicle}/bin/gifsicle --optimize=3 '{}' -o $out/'{}'
+                    | ${parallel} ${gifsicle}/bin/gifsicle --optimize=3 {} -o $out/{}
               '';
               installPhase = "true";
             };
