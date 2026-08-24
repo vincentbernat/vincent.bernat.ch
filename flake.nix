@@ -92,17 +92,44 @@
             );
           in
           pythonSet.mkVirtualEnv "www-env" workspace.deps.default;
+        hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
         nodeEnv = pkgs.importNpmLock.buildNodeModules {
           npmRoot = ./.;
           inherit (pkgs) nodejs;
-          derivationArgs.postInstall = ''
-            # baguetteBox's UMD wrapper uses `this` as the global, which is
-            # undefined when loaded as an ES module. Fall back to `self`.
-            substituteInPlace $out/node_modules/baguettebox.js/dist/baguetteBox.js \
-              --replace-fail \
-              '}(this, function () {' \
-              '}(typeof self !== "undefined" ? self : this, function () {'
-          '';
+          derivationArgs = {
+            nativeBuildInputs = [ pkgs.esbuild ];
+            postInstall = ''
+              # baguetteBox's UMD wrapper uses `this` as the global, which is
+              # undefined when loaded as an ES module. Fall back to `self`.
+              substituteInPlace $out/node_modules/baguettebox.js/dist/baguetteBox.js \
+                --replace-fail \
+                '}(this, function () {' \
+                '}(typeof self !== "undefined" ? self : this, function () {'
+
+              # hls.js ships a full build and a light build. The light one has
+              # no alternate audio. Build the same as light, with alternate
+              # audio.
+              (
+                cd $out/node_modules/hls.js
+
+                # Read the feature flags from the sources and turn them all
+                # off. A new flag in hls.js then stays off instead of being
+                # left undefined. This fails when a flag we turn on is gone.
+                grep -q __USE_ALT_AUDIO__ src/define-plugin.d.ts
+                off=$(sed -n 's/^declare const \(__USE_[A-Z0-9_]*__\).*/--define:\1=false/p' \
+                  src/define-plugin.d.ts)
+
+                echo 'import Hls from "./src/exports-default"; self.Hls = Hls;' \
+                  | esbuild --bundle --loader=js --format=iife --target=es2015 \
+                    --banner:js='(function __HLS_WORKER_BUNDLE__(__IN_WORKER__){' \
+                    --footer:js='})(false);' \
+                    --define:__VERSION__='"${hlsVersion}"' \
+                    $off \
+                    --define:__USE_ALT_AUDIO__=true \
+                    --outfile=dist/hls.light-alt-audio.js
+              )
+            '';
+          };
         };
         jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
         fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {

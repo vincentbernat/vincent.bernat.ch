@@ -186,8 +186,12 @@ def screenshots(c):
 
 # Additional video2hls arguments for each video.
 video_arguments = {
-    "2012-multicast-vxlan.ogv": "--video-bitrate-factor 0.3",
-    "2012-network-lab-kvm.ogv": "--video-bitrate-factor 0.3",
+    "2012-multicast-vxlan.ogv": (
+        "--video-bitrate-factor 0.3 --no-audio --no-audio-separate"
+    ),
+    "2012-network-lab-kvm.ogv": (
+        "--video-bitrate-factor 0.3 --no-audio --no-audio-separate"
+    ),
     "2013-exabgp-highavailability.ogv": "--video-bitrate-factor 0.3",
     "2014-dashkiosk.ogv": "--video-bitrate-factor 0.7",
     "2014-eudyptula-boot-1.mp4": "--video-bitrate-factor 0.5",
@@ -236,13 +240,21 @@ def video_encode(c, video=None):
         raise Exit(f"unknown video {video}, add it to video_arguments")
     short = os.path.splitext(video)[0]
     with c.cd("content/media/videos"):
+        c.run(f"rm -rf ./{short}")
         c.run(
             "video2hls "
-            f"--hls-playlist-prefix https://media.bernat.ch/videos/{short}/ "
-            "--poster-grayscale --poster-quality 30 "
+            "--hls-type fmp4 "
+            f"--hls-playlist-prefix {short}/ https://media.bernat.ch/videos/{short}/ "
+            "--audio-separate "
+            "--poster-grayscale --poster-quality 70 "
             f"{video_arguments[video]} -- {video}",
             hide=False,
         )
+        # Copy poster, index.m3u8, and chapters if any
+        c.run(f"cp {short}/poster.jpg ../images/posters/{short}.jpg")
+        c.run(f"cp {short}/index.m3u8 {short}.m3u8")
+        if os.path.isfile(f"{short}/chapters.vtt"):
+            c.run(f"cp {short}/chapters.vtt {short}.chapters.vtt")
 
 
 # When possible, normalize videos to -2.0dB for peaks. Use the
@@ -404,7 +416,6 @@ def video_upload(c, video=None):
             continue
         if video is not None and video != directory:
             continue
-        # Upload
         for host in hosts:
             c.run(
                 "rsync --delete --info=progress2 -a {directory}/ {host}:"
@@ -412,26 +423,6 @@ def video_upload(c, video=None):
                     host=host, short=directory, directory=os.path.join(path, directory)
                 ),
                 hide=False,
-            )
-        # Copy poster, index.m3u8, and chapter if any
-        c.run(
-            "cp {directory}/poster.jpg "
-            "content/media/images/posters/{short}.jpg".format(
-                short=directory, directory=os.path.join(path, directory)
-            )
-        )
-        c.run(
-            "cp {directory}/index.m3u8 "
-            "content/media/videos/{short}.m3u8".format(
-                short=directory, directory=os.path.join(path, directory)
-            )
-        )
-        if os.path.isfile(os.path.join(path, directory, "chapters.vtt")):
-            c.run(
-                "cp {directory}/chapters.vtt "
-                "content/media/videos/{short}.chapters.vtt".format(
-                    short=directory, directory=os.path.join(path, directory)
-                )
             )
 
 
