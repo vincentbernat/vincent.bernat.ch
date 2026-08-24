@@ -233,11 +233,6 @@ def encode_video(c, video=None):
         )
 
 
-# For 2018-adlib-opl2lpt.mp4, chapters have been included with "mp4chaps -i
-# 2018-adlib-opl2lpt.mp4". It's not that useful: 1. browsers don't have builtin
-# support for chapters (we would need a JS player), 2. they don't survive the
-# HLS transformation yet.
-
 # When possible, normalize videos to -2.0dB for peaks. Use the
 # following command to get the peak volume:
 #  ffmpeg -loglevel info -i 2021-network-cmdb.mkv -af "volumedetect" -vn -sn -dn -f null /dev/null
