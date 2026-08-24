@@ -227,11 +227,11 @@ video_arguments = {
 
 
 @task
-def encode_video(c, video=None):
+def video_encode(c, video=None):
     """Encode a video to HLS with video2hls."""
     if video is None:
         for video in video_arguments:
-            encode_video(c, video)
+            video_encode(c, video)
     if video not in video_arguments:
         raise Exit(f"unknown video {video}, add it to video_arguments")
     short = os.path.splitext(video)[0]
@@ -254,7 +254,7 @@ def encode_video(c, video=None):
 
 
 @task
-def analyze_video(c, video):
+def video_analyze(c, video):
     """Report the size breakdown of an encoded video."""
     directory = os.path.join("content/media/videos", os.path.splitext(video)[0])
     master = os.path.join(directory, "index.m3u8")
@@ -396,7 +396,7 @@ def analyze_video(c, video):
 
 
 @task
-def upload_videos(c, video=None):
+def video_upload(c, video=None):
     """Upload a transcoded video."""
     path = "content/media/videos"
     for directory in os.listdir(path):
@@ -436,7 +436,7 @@ def upload_videos(c, video=None):
 
 
 @task
-def update_fonts(c):
+def fonts_update(c):
     """Build fonts with Nix"""
     # We can compare the metrics using http://webfont-test.com/
     with step("building Iosevka"):
@@ -456,7 +456,7 @@ def update_fonts(c):
 
 
 @task
-def linkcheck(c, remote=True):
+def links_check(c, remote=True):
     """Check links"""
     result = c.run(
         "nix run .#linkchecker -- -f ./linkcheckerrc {}".format(
@@ -466,11 +466,11 @@ def linkcheck(c, remote=True):
         hide=False,
     )
     if result.failed:
-        fixlinks(c)
+        links_fix(c)
 
 
 @task
-def fixlinks(c):
+def links_fix(c):
     """Try to fix links"""
     fp = open("linkchecker-out.csv")
     reader = csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
