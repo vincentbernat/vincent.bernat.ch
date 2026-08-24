@@ -247,11 +247,11 @@
 
                 # Convert JPG to sRGB
                 find . -type f -name '*.jpg' -print0 \
-                  | xargs -r0n5 -P$(nproc) -i ${lcms}/bin/jpgicc -q100 '{}' $out/'{}'
+                  | xargs -r0 -P$(nproc) -i ${lcms}/bin/jpgicc -q100 '{}' $out/'{}'
 
                 # JPG→AVIF
                 find $out -type f -name '*.jpg' -print0 \
-                  | xargs -r0n5 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
+                  | xargs -r0 -P$(nproc) -i ${libavif}/bin/avifenc --codec aom --yuv 420 \
                                                                        --min 0 --max 63 \
                                                                        -a end-usage=q -a cq-level=21 -a tune=ssim \
                                                                   '{}' '{}'.avif
@@ -266,21 +266,21 @@
 
                 # Optimize PNG
                 find . -type f -name '*.png' -print0 \
-                    | xargs -r0n5 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
+                    | xargs -r0 -P$(nproc) -i ${pngquant}/bin/pngquant --skip-if-larger --strip \
                                                 --quiet -o $out/'{}' '{}' \
                     || [ $? -eq 123 ]
 
                 # PNG→WebP
                 find $out -type f -name '*.png' -print0 \
-                    | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
+                    | xargs -r0 -P$(nproc) -i ${libwebp}/bin/cwebp -z 8 '{}' -o '{}'.webp
 
                 # GIF→WebP
                 find . -type f -name '*.gif' -print0 \
-                    | xargs -r0n5 -P$(nproc) -i ${libwebp}/bin/gif2webp -quiet '{}' -o $out/'{}'.webp
+                    | xargs -r0 -P$(nproc) -i ${libwebp}/bin/gif2webp -quiet '{}' -o $out/'{}'.webp
 
                 # Optimize GIF
                 find . -type f -name '*.gif' -print0 \
-                    | xargs -r0n5 -P$(nproc) -i ${gifsicle}/bin/gifsicle --optimize=3 '{}' -o $out/'{}'
+                    | xargs -r0 -P$(nproc) -i ${gifsicle}/bin/gifsicle --optimize=3 '{}' -o $out/'{}'
               '';
               installPhase = "true";
             };
