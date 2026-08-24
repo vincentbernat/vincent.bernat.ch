@@ -215,8 +215,11 @@ video_arguments = {
 
 
 @task
-def encode_video(c, video):
+def encode_video(c, video=None):
     """Encode a video to HLS with video2hls."""
+    if video is None:
+        for video in video_arguments:
+            encode_video(c, video)
     if video not in video_arguments:
         raise Exit(f"unknown video {video}, add it to video_arguments")
     short = os.path.splitext(video)[0]
