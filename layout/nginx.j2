@@ -164,7 +164,12 @@ error_log stderr;
 pid nginx.pid;
 events {}
 http {
-  access_log /dev/stdout;
+{# keep only the time of day #}
+  map $time_local $time_short {
+    ~^[^:]+:(\S+) $1;
+  }
+  log_format short '$time_short $remote_addr "$request" $status';
+  access_log /dev/stdout short;
   client_body_temp_path client-body;
   proxy_temp_path proxy;
   proxy_intercept_errors on;
