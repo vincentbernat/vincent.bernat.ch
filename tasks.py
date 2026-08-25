@@ -299,7 +299,8 @@ def video_encode(c, video=None, skipifexists=False):
     """Encode a video to HLS with video2hls."""
     if video is None:
         for video in video_arguments:
-            video_encode(c, video, True)
+            with step(f"encoding {video}"):
+                video_encode(c, video, True)
         return
     if video not in video_arguments:
         raise Exit(f"unknown video {video}, add it to video_arguments")
@@ -483,14 +484,17 @@ def video_upload(c, video=None):
             continue
         if video is not None and video != directory:
             continue
-        for host in hosts:
-            c.run(
-                "rsync --delete --info=progress2 -a {directory}/ {host}:"
-                "/data/webserver/media.bernat.ch/videos/{short}/".format(
-                    host=host, short=directory, directory=os.path.join(path, directory)
-                ),
-                hide=False,
-            )
+        with step(f"uploading {directory}"):
+            for host in hosts:
+                c.run(
+                    "rsync --delete --info=progress2 -a {directory}/ {host}:"
+                    "/data/webserver/media.bernat.ch/videos/{short}/".format(
+                        host=host,
+                        short=directory,
+                        directory=os.path.join(path, directory),
+                    ),
+                    hide=False,
+                )
 
 
 @task
