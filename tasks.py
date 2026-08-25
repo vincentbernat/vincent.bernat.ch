@@ -253,12 +253,8 @@ def screenshots(c):
 
 # Additional video2hls arguments for each video.
 video_arguments = {
-    "2012-multicast-vxlan.ogv": (
-        "--video-bitrate-factor 0.3 --no-audio --no-audio-separate"
-    ),
-    "2012-network-lab-kvm.ogv": (
-        "--video-bitrate-factor 0.3 --no-audio --no-audio-separate"
-    ),
+    "2012-multicast-vxlan.ogv": "--video-bitrate-factor 0.3 --no-audio",
+    "2012-network-lab-kvm.ogv": "--video-bitrate-factor 0.3 --no-audio",
     "2013-exabgp-highavailability.ogv": "--video-bitrate-factor 0.3",
     "2014-dashkiosk.ogv": "--video-bitrate-factor 0.7",
     "2014-eudyptula-boot-1.mp4": "--video-bitrate-factor 0.5",
@@ -278,7 +274,8 @@ video_arguments = {
         "--video-bitrate-factor 0.5 --audio-bitrate 128 --audio-only"
     ),
     "2018-self-hosted-videos.mp4": (
-        "--mp4-overlay {resolution}p, progressive --video-overlay {resolution}p, HLS"
+        "--mp4-overlay '{resolution}p, progressive' "
+        "--video-overlay '{resolution}p, HLS'"
     ),
     "2018-opl2-audio-board-1.mp4": (
         "--video-bitrate-factor 0.3 --audio-bitrate 128 --audio-only"
@@ -298,14 +295,17 @@ video_arguments = {
 
 
 @task
-def video_encode(c, video=None):
+def video_encode(c, video=None, skipifexists=False):
     """Encode a video to HLS with video2hls."""
     if video is None:
         for video in video_arguments:
-            video_encode(c, video)
+            video_encode(c, video, True)
+        return
     if video not in video_arguments:
         raise Exit(f"unknown video {video}, add it to video_arguments")
     short = os.path.splitext(video)[0]
+    if skipifexists and os.path.isdir(f"content/media/videos/{short}"):
+        return
     with c.cd("content/media/videos"):
         c.run(f"rm -rf ./{short}")
         c.run(
@@ -320,7 +320,7 @@ def video_encode(c, video=None):
         # Copy poster, index.m3u8, and chapters if any
         c.run(f"cp {short}/poster.jpg ../images/posters/{short}.jpg")
         c.run(f"cp {short}/index.m3u8 {short}.m3u8")
-        if os.path.isfile(f"{short}/chapters.vtt"):
+        if os.path.isfile(f"content/media/videos/{short}/chapters.vtt"):
             c.run(f"cp {short}/chapters.vtt {short}.chapters.vtt")
 
 
