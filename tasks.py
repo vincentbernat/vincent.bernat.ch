@@ -161,7 +161,7 @@ def serve(c):
     try:
         with tempfile.TemporaryDirectory(prefix="nginx-") as run:
             processes["hyde"] = spawn(
-                f"{bwrap} --share-net -- hyde -x serve -a 127.0.0.1 -p {hyde_port}"
+                f"{bwrap} --share-net -- hyde -x serve -s -a 127.0.0.1 -p {hyde_port}"
             )
             curl = subprocess.Popen(
                 shlex.split(

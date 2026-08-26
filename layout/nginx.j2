@@ -138,8 +138,8 @@ location /ip {
   return 200 $remote_addr;
 }
 location = /hit {
-  access_log off;
 {% if site.config.mode == "production" %}
+  access_log off;
   proxy_pass http://127.0.0.3:8087/count;
   proxy_pass_request_headers off;
   proxy_set_header Referer $http_referer;
@@ -147,7 +147,7 @@ location = /hit {
   proxy_set_header User-Agent $http_user_agent;
   proxy_set_header X-Real-Ip $remote_addr;
 {% else %}
-  return 202;
+  return 204;
 {% endif %}
 }
 location /redirect-ddg {
@@ -168,7 +168,7 @@ http {
   map $time_local $time_short {
     ~^[^:]+:(\S+) $1;
   }
-  log_format short '$time_short $remote_addr "$request" $status';
+  log_format short '$time_short $status "$request_method $request_uri"';
   access_log /dev/stdout short;
   client_body_temp_path client-body;
   proxy_temp_path proxy;
