@@ -16,7 +16,7 @@ luffy.do(() => {
     const params = new URLSearchParams({
       p: vars.event ?? vars.path ?? url.pathname,
       t: vars.title ?? document.title,
-      r: vars.referrer ?? document.referrer,
+      r: vars.referrer ?? (vars.event ? canonical : document.referrer),
       q: vars.query ?? location.search,
       s:
         vars.screen ??
