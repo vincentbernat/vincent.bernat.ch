@@ -84,20 +84,16 @@ def step(what):
 
 
 @task
-def gen(c):
+def build_dev(c, clean=False):
     """Generate dev content"""
+    if clean:
+        c.run("rm -rf deploy")
     c.run("[ ! -d deploy ] || find deploy -perm 444 -delete")
     c.run(f"{bwrap} -- hyde -x gen")
 
 
-@task(post=[gen])
-def regen(c):
-    """Regenerate dev content"""
-    c.run("rm -rf deploy")
-
-
 @task
-def pagefind(c, site="deploy"):
+def build_pagefind(c, site="deploy"):
     """Run pagefind indexation"""
     c.run(
         f"{bwrap} -- node_modules/pagefind/lib/runner/bin.cjs "
@@ -677,7 +673,7 @@ rm ../result
         # Build index
         with step("pagefind index"):
             with c.cd(".."):
-                pagefind(c, site=".final")
+                build_pagefind(c, site=".final")
 
         # Compute hash on various files
         with step("cache busting and SRI"):
