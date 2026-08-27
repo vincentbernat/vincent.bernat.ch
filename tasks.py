@@ -822,28 +822,6 @@ printf " GIF %10s %10s %10s\n" \
 
 
 @task
-def image_quality(c, extension="jpg", target_extension=""):
-    """Compare image compression"""
-    c.run(
-        rf"""
-count=0
-total=0
-for f in $(cd content/media ; find images -name '*.{extension}'); do
-  [ -f .final/media/$f{target_extension} ] || continue
-  ssim=$(magick compare -metric SSIM \
-           content/media/$f \
-           .final/media/$f{target_extension} \
-           /dev/null 2>&1)
-  count=$((count+1))
-  total=$((total+ssim))
-done
-echo "SSIM {extension} to {extension}{target_extension}: $((total/count)) (out of $count)"
-""",
-        shell="/bin/zsh",
-    )
-
-
-@task
 def push(c, clean=False):
     """Push built site to production"""
     with step("push to GitHub"):
