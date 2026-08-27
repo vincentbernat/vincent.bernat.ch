@@ -172,7 +172,9 @@ def serve(c):
             mux(processes, until=curl)
             if curl.wait() != 0:
                 raise Exit("unable to get the nginx configuration")
-            processes["nginx"] = spawn(f"nginx -p {run} -c {run}/nginx.conf")
+            processes["nginx"] = spawn(
+                f"nginx -p {run} -e /dev/stderr -c {run}/nginx.conf"
+            )
             mux(processes, until=processes["nginx"])
     except KeyboardInterrupt:
         pass
