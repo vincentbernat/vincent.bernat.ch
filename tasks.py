@@ -183,7 +183,7 @@ def serve(c):
 
 @task
 def prune(c, before="1 year ago"):
-    """Prune old commits."""
+    """Prune old commits from final render"""
     with c.cd(".final"):
         out = c.run(
             f"git log --before='{before}' --pretty=format:%H | head -1"
@@ -195,7 +195,7 @@ def prune(c, before="1 year ago"):
 
 @task
 def archive(c, lang="en", pause=2):
-    """Archive on the Wayback Machine."""
+    """Archive on the Wayback Machine"""
     ns = {"urlset": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     sitemap = f".final/{lang}/sitemap.xml"
     locs = ET.parse(sitemap).getroot().findall(".//urlset:loc", ns)
@@ -292,7 +292,7 @@ video_arguments = {
 
 @task
 def video_encode(c, video=None, skipifexists=False):
-    """Encode a video to HLS with video2hls."""
+    """Encode a video to HLS with video2hls"""
     if video is None:
         for video in video_arguments:
             with step(f"encoding {video}"):
@@ -331,7 +331,7 @@ def video_encode(c, video=None, skipifexists=False):
 
 @task
 def video_analyze(c, video):
-    """Report the size breakdown of an encoded video."""
+    """Report the size breakdown of an encoded video"""
     directory = os.path.join("content/media/videos", os.path.splitext(video)[0])
     master = os.path.join(directory, "index.m3u8")
     if not os.path.isfile(master):
@@ -473,7 +473,7 @@ def video_analyze(c, video):
 
 @task
 def video_upload(c, video=None):
-    """Upload a transcoded video."""
+    """Upload a transcoded video"""
     path = "content/media/videos"
     for directory in os.listdir(path):
         if not os.path.isfile(os.path.join(path, directory, "index.m3u8")):
