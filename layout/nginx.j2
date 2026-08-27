@@ -68,13 +68,9 @@ location {{ content_url('/' + code + '/404.html') }} {
 location = / {
   access_log off;
   log_not_found off;
-{% if site.config.mode == "production" %}
   set_from_accept_language $lang {% for code, lang in languages %}{{ code }}{% if not loop.last %} {% endif %}{% endfor %};
   {{ add_headers({"Vary": "Accept-Language"})|indent(2) }}
   return 301 /$lang;
-{% else %}
-  autoindex on;
-{% endif %}
 }
 
 location / {
