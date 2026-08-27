@@ -142,33 +142,6 @@
             type = "app";
             program = "${pkgs.linkchecker}/bin/linkchecker";
           };
-          goaccess =
-            let
-              pkg = (pkgs.goaccess.overrideAttrs (old: {
-                patches = (old.patches or [ ]) ++ [
-                  # Consider "Feeds" as a kind of "Crawlers"
-                  (pkgs.writeText "goaccess-feeds.patch" ''
-                    diff --git a/src/browsers.c b/src/browsers.c
-                    index a8345297d8a3..20a1d28928ea 100644
-                    --- a/src/browsers.c
-                    +++ b/src/browsers.c
-                    @@ -431,7 +431,7 @@ is_crawler (const char *agent) {
-                         free (browser);
-                       free (a);
-
-                    -  return strcmp (btype, "Crawlers") == 0 ? 1 : 0;
-                    +  return (strcmp (btype, "Crawlers") == 0 || strcmp (btype, "Feeds") == 0) ? 1 : 0;
-                     }
-
-                     /* Return the Opera 15 and beyond.
-                  '')
-                ];
-              }));
-            in
-            {
-              type = "app";
-              program = "${pkg}/bin/goaccess";
-            };
         };
         packages = {
           build.subsetFonts =
