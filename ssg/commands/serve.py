@@ -23,10 +23,13 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
+from ..model.blogroll import FEEDS
 from . import command, forward
 
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
 UNWATCHED = (config.ROOT / "ssg" / "tests",)
+# Files outside watched directories
+WATCHED_FILES = (FEEDS,)
 NIX_PROFILES = next(
     (d for d in (config.ROOT / ".direnv~", config.ROOT / ".direnv") if d.is_dir()),
     config.ROOT / ".direnv",
@@ -69,6 +72,8 @@ class Watcher:
         self.directories: dict[int, Path] = {}
         # Directories where new subdirectories are watched too
         self.recursive: set[int] = set()
+        # Only these names in some directories
+        self.only: dict[int, set[str]] = {}
         self.last = float("-inf")
         for directory in directories:
             self.add(directory)
@@ -85,16 +90,23 @@ class Watcher:
             ]
             self.watch(directory, recursive=True)
 
-    def watch(self, directory: Path, recursive: bool = False) -> None:
+    def watch(self, directory: Path, recursive: bool = False) -> int | None:
         """Watch a directory, without its subdirectories."""
         wd = self.libc.inotify_add_watch(self.fd, os.fsencode(directory), EVENTS)
         if wd < 0:
             error = os.strerror(ctypes.get_errno())
             print(f"cannot watch {directory}: {error}", file=sys.stderr)
-            return
+            return None
         self.directories[wd] = directory
         if recursive:
             self.recursive.add(wd)
+        return wd
+
+    def watch_file(self, path: Path) -> None:
+        """Watch a file. Watch its directory to also see it replaced."""
+        wd = self.watch(path.parent)
+        if wd is not None:
+            self.only.setdefault(wd, set()).add(path.name)
 
     def changes(self, timeout: float) -> list[str]:
         """Wait for changes and return the changed files. When a change comes
@@ -129,6 +141,8 @@ class Watcher:
                 changed.append("(too many events)")
                 continue
             if IGNORED.search(name):
+                continue
+            if wd in self.only and name not in self.only[wd]:
                 continue
             path = self.directories[wd] / name
             changed.append(str(path.relative_to(config.ROOT)))
@@ -284,6 +298,8 @@ def serve() -> None:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     output = config.MODES["development"].output
     watcher = Watcher(WATCHED)
+    for path in WATCHED_FILES:
+        watcher.watch_file(path)
     environment = None
     if os.environ.get("DIRENV_DIR") and NIX_PROFILES.is_dir():
         watcher.watch(NIX_PROFILES)

@@ -10,6 +10,7 @@ from markupsafe import Markup
 
 from .. import config, deps
 from ..images import thumbnails
+from ..model.blogroll import FEEDS, Feed, favorites, pick_digest, picks, published
 from . import jinja_global
 
 if TYPE_CHECKING:
@@ -64,6 +65,28 @@ def licenses(lang: str) -> list[tuple[list[str], list[str]]]:
             items.append(f"[source]({annotation['source']})")
         result.append((as_list(annotation["path"]), items))
     return result
+
+
+@jinja_global
+def blogroll() -> list[tuple[str, list[Feed]]]:
+    """Published feeds of feeds.yaml, by category."""
+    deps.record_file(FEEDS)
+    return published(str(FEEDS))
+
+
+@jinja_global
+def blogroll_favorites(categories: list[tuple[str, list[Feed]]]) -> list[Feed]:
+    """Starred feeds of the blogroll, sorted by title."""
+    return favorites(categories)
+
+
+@jinja_global
+@jinja2.pass_context
+def related_blog(ctx: jinja2.runtime.Context, resource: Resource) -> Feed | None:
+    """A feed of the blogroll related to the tags of a blog post."""
+    site = ctx["site"]
+    deps.record(f"b:{resource.path}", pick_digest(site, resource.path))
+    return picks(site, resource.meta.language).get(resource.path)
 
 
 @jinja_global

@@ -1,0 +1,24 @@
+{# -*- web -*- #}
+{% set page = site.resource(resource.meta.language ~ "/blogroll.html") %}
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>{{ resource.meta.author|e }} — {{ resource.meta.title|e }}</title>
+    <ownerName>{{ resource.meta.author|e }}</ownerName>
+{% if page %}
+    <ownerId>{{ base }}{{ content_url(page.url) }}</ownerId>
+{% endif %}
+    <docs>https://opml.org/spec2.opml</docs>
+  </head>
+  <body>
+{% for category, feeds in blogroll() %}
+    <outline text="{{ category|e }}" title="{{ category|e }}">
+{% for feed in feeds %}
+      <outline type="rss" text="{{ feed.title|e }}" title="{{ feed.title|e }}" xmlUrl="{{ feed.feed|e }}" htmlUrl="{{ feed.url|e }}"
+{%- if feed.description %} description="{{ feed.description|e }}"{% endif %}
+{%- if feed.language %} language="{{ feed.language }}"{% endif %}/>
+{% endfor %}
+    </outline>
+{% endfor %}
+  </body>
+</opml>

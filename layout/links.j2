@@ -47,9 +47,25 @@
 <li><span class="lf-sym">🎲</span>
     <a href="{{ content_url(random.url) }}" class="lf-title">{{ random.meta.title|e }}</a></li>
 {% endif %}
+{% if resource.post and resource.meta.language == "en" %}
+{% set blog = related_blog(resource) %}
+{% if blog %}
+<li><span class="lf-sym">🪢</span>
+  <span>
+    {{ resource.meta.l10n.from_blogroll.format(content_url(resource.meta.language ~ '/blogroll.html')) }}:
+    <a href="{{ blog.url|e }}">{{ blog.title|e }}</a>
+{%- if blog.summary %}, {{ blog.summary|e }}{% endif %}
+  </span>
+</li>
+{% endif %}
+{% endif %}
 {% if resource.meta.subscribe %}
 <li><span class="lf-sym">🗞️</span>
-    <a href="{{ content_url( resource.meta.language + '/blog/atom.xml') }}">{{ resource.meta.l10n.subscribe }}</a></li>
+  <span>
+    <a href="{{ content_url( resource.meta.language + '/blog/atom.xml') }}">{{ resource.meta.l10n.subscribe }}</a>
+    (RSS/Atom)
+  </span>
+</li>
 {% endif %}
 {% if resource.meta.comments %}
 <li>

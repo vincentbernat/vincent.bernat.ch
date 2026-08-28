@@ -104,6 +104,54 @@
 
 {% endmacro %}
 
+{# One feed of the blogroll #}
+{% macro blogroll_feed(feed, star=True) %}
+{% set lang = resource.meta.language %}
+{% set other = feed.language and feed.language != lang %}
+<li>
+  <a href="{{ feed.url|e }}"{% if other %} lang="{{ feed.language }}" hreflang="{{ feed.language }}"{% endif %} class="lf-title">{{ feed.title|e }}</a>
+{%- if star and feed.starred %} <span role="img" aria-label="{{ resource.meta.l10n.starred|e }}" title="{{ resource.meta.l10n.starred|e }}">⭐</span>{% endif %}
+
+{% if feed.description or other %}
+  <span class="lf-description"><span>{{ (feed.description[:1]|upper ~ feed.description[1:])|e }}
+{%- if other %} ({{ resource.meta.l10n.language[feed.language] }}){% endif -%}
+  </span></span>
+{% endif %}
+</li>
+{%- endmacro %}
+
+{# Display the blogroll by category, or only the favorites #}
+{% macro list_blogroll(favorites=False) %}
+{% set categories = blogroll() %}
+{% if favorites %}
+<div class="lf-blogroll">
+  <ul>
+{% for feed in blogroll_favorites(categories) %}
+    {{ blogroll_feed(feed, star=False)|indent(4) }}
+{% endfor %}
+  </ul>
+</div>
+{% else %}
+<div class="toc"><ul>
+{%- for category, feeds in categories %}
+<li><a href="#blogroll-{{ category|lower }}">{{ category|e }}</a>
+{%- endfor -%}
+</ul></div>
+<div class="lf-blogroll">
+{% for category, feeds in categories %}
+  <div class="lf-blogroll-category" id="blogroll-{{ category|lower }}">
+    <h2>{{ category|e }}</h2>
+    <ul>
+{% for feed in feeds %}
+      {{ blogroll_feed(feed)|indent(6) }}
+{% endfor %}
+    </ul>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
 {# Display date of the resource #}
 {% macro resource_date(lang, resource) %}
 {% if resource.meta.created != None %}
