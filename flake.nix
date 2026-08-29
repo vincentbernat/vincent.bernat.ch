@@ -142,7 +142,7 @@
               program = "${pkgs.linkchecker}/bin/linkchecker";
             };
           };
-          packages = {
+          legacyPackages = {
             build.subsetFonts =
               # Impure!
               # Subset fonts. Nice tool to quickly look at the result:

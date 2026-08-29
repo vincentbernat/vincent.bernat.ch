@@ -661,6 +661,7 @@ def build(c):
 
         with step("subset fonts"):
             c.run("""
+set -e
 cd ..
 NIX_PATH=fonts=$PWD/.final/media/fonts
 NIX_PATH=$NIX_PATH:monospace=$PWD/glyphs-monospace.txt
