@@ -1,58 +1,52 @@
-// Self-hosted videos
+// Self-hosted videos with HLS
 luffy.do(() => {
-  // Pause other videos when playing a new one
-  const allVideos = (selector) => {
-    selector = selector || "";
-    return document.querySelectorAll(`video.lf-media ${selector}`);
-  };
-  const pauseOthersWhenPlaying = (video) => {
-    video.addEventListener(
-      "play",
-      ({ target }) => {
-        allVideos().forEach((ovideo) => {
-          if (target != ovideo && !ovideo.paused) ovideo.pause();
-        });
-      },
-      false,
-    );
-  };
-  allVideos().forEach(pauseOthersWhenPlaying);
-
-  const videoSources = document.querySelectorAll(
-    "video.lf-media source[type='application/vnd.apple.mpegurl']",
-  );
-  if (videoSources.length == 0) return;
+  const hlsSource = "source[type='application/vnd.apple.mpegurl']";
+  const hlsVideos = [
+    ...document.querySelectorAll(`video.lf-media ${hlsSource}`),
+  ].map(({ parentNode }) => parentNode);
+  if (hlsVideos.length == 0) return;
 
   // Enable HLS for selected videos
   luffy.load("hls.js", () => {
-    if (!Hls.isSupported()) return;
+    if (Hls.isSupported()) {
+      hlsVideos.forEach((oldVideo, index) => {
+        const m3u8 = oldVideo.querySelector(hlsSource).src;
+        const newVideo = oldVideo.cloneNode(true);
+        const allSources = newVideo.querySelectorAll("source");
 
-    videoSources.forEach(({ src, parentNode }) => {
-      const m3u8 = src;
-      const oldVideo = parentNode;
-      const newVideo = oldVideo.cloneNode(true);
-      const allSources = newVideo.querySelectorAll("source");
+        // Remove all sources from clone. Keep tracks.
+        allSources.forEach((source) => source.remove());
 
-      // Remove all sources from clone. Keep tracks.
-      allSources.forEach((source) => source.remove());
+        // Enable HLS on the video
+        const hls = new Hls({
+          autoStartLoad: false,
+          capLevelToPlayerSize: true,
+          maxMaxBufferLength: 90,
+        });
+        hls.loadSource(m3u8);
+        hls.attachMedia(newVideo);
+        newVideo.addEventListener(
+          "play",
+          () => hls.startLoad(newVideo.currentTime),
+          false,
+        );
 
-      // Enable HLS on the video
-      const hls = new Hls({
-        autoStartLoad: false,
-        capLevelToPlayerSize: true,
-        maxMaxBufferLength: 90,
+        hlsVideos[index] = newVideo;
+        oldVideo.parentNode.replaceChild(newVideo, oldVideo);
       });
-      hls.loadSource(m3u8);
-      hls.attachMedia(newVideo);
-      newVideo.addEventListener(
+    }
+
+    hlsVideos.forEach((video) => {
+      // Pause other videos when playing a new one
+      video.addEventListener(
         "play",
-        () => hls.startLoad(newVideo.currentTime),
+        ({ target }) => {
+          hlsVideos.forEach((ovideo) => {
+            if (target != ovideo && !ovideo.paused) ovideo.pause();
+          });
+        },
         false,
       );
-      pauseOthersWhenPlaying(newVideo);
-
-      // Replace video tag with our clone.
-      oldVideo.parentNode.replaceChild(newVideo, oldVideo);
     });
   });
 });
