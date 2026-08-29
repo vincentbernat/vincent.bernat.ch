@@ -18,7 +18,31 @@ import urllib
 import urllib.request
 import binascii
 import base64
+import fcntl
+import struct
+import termios
+import invoke.runners
+import invoke.terminals
 import xml.etree.ElementTree as ET
+
+
+# invoke gives FIONREAD a buffer of 2 bytes, but it writes an int. Python 3.14
+# refuses that and the thread forwarding stdin dies. Interactive commands run
+# with pty=True, like a pager, then get no keystroke.
+#
+# See:
+# - https://github.com/pyinvoke/invoke/pull/1053
+# - https://github.com/pyinvoke/invoke/pull/1074
+# - https://github.com/pyinvoke/invoke/pull/1077 (the one this patch is from)
+def bytes_to_read(input_):
+    if invoke.terminals.isatty(input_) and invoke.terminals.has_fileno(input_):
+        fionread = fcntl.ioctl(input_, termios.FIONREAD, b"\0" * 4)
+        return struct.unpack("i", fionread)[0]
+    return 1
+
+
+invoke.terminals.bytes_to_read = bytes_to_read
+invoke.runners.bytes_to_read = bytes_to_read
 
 conf = "site-production.yaml"
 media = yaml.safe_load(open(conf))["media_url"]
