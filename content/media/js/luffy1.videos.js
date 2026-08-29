@@ -23,6 +23,14 @@ luffy.do(() => {
           capLevelToPlayerSize: true,
           maxMaxBufferLength: 90,
         });
+        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+          // Switch audio track to match the document language
+          const track = hls.audioTracks.find(
+            ({ lang }) =>
+              lang?.slice(0, 2) === document.documentElement.lang.slice(0, 2),
+          );
+          if (track) hls.audioTrack = track.id;
+        });
         hls.loadSource(m3u8);
         hls.attachMedia(newVideo);
         newVideo.addEventListener(
