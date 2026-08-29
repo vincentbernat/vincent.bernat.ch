@@ -47,6 +47,12 @@ luffy.do(() => {
         },
         false,
       );
+      // Count for analytics, only on the first play
+      video.addEventListener(
+        "play",
+        () => luffy.count?.({ event: "play-video", title: "Play a video" }),
+        { once: true },
+      );
     });
   });
 });
