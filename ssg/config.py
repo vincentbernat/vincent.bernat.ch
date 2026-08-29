@@ -76,7 +76,7 @@ LOAD = (
     (".lf-media", ["css/luffy1.media.css"], False),
     (
         "video.lf-media source[type='application/vnd.apple.mpegurl']",
-        ["js/hls.js"],
+        ["js/videojs.js"],
         True,
     ),
     (
