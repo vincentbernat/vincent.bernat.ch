@@ -40,7 +40,7 @@ luffy.do(() => {
       !event.metaKey &&
       event.key === "G"
     ) {
-      // Ctrl+Alt+G: cycle debug grid (off → grid → grid on baseline → off).
+      // Ctrl+Shift+G: cycle debug grid (off → grid → grid on baseline → off).
       // --lf-baseline-offset is precomputed at build time in :root.
       gridState = (gridState + 1) % 3;
       document.documentElement.classList.toggle(
