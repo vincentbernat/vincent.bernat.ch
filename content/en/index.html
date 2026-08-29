@@ -15,14 +15,13 @@ past, I worked for
 [Wallix](https://www.wallix.com) 🛡️.
 I like cats 🐈.
 
-The main content of this site is [my blog][]. The latest articles
-are
+{% from "macros.j2" import list_articles with context %}
 {% set articles = site.content|attr("walk_resources_sorted_by_time_en")() %}
-“[{{ articles[0].meta.title|replace("“", "‘")|replace("”", "’")|e }}]({{ content_url(articles[0].url) }}),”
-“[{{ articles[1].meta.title|replace("“", "‘")|replace("”", "’")|e }}]({{ content_url(articles[1].url) }}),”
-“[{{ articles[2].meta.title|replace("“", "‘")|replace("”", "’")|e }}]({{ content_url(articles[2].url) }}),” and
-“[{{ articles[3].meta.title|replace("“", "‘")|replace("”", "’")|e }}]({{ content_url(articles[3].url) }}).”
-The most popular article is "[VXLAN: BGP EVPN with FRR][popular]."
+
+The main content of this site is [my blog][].
+The latest articles are {{ list_articles(articles[:3]) }}
+The most popular article is {{ list_articles(articles|selectattr("meta.popular")) }}
+I also recommend reading {{ list_articles(articles|selectattr("meta.featured")) }}
 
 ![Swimming ducks]([[!!images/ducks.gif]])
 
@@ -42,6 +41,5 @@ non-native speaker][]."
  - **OpenPGP**: [public key]([[!!files/gpg.txt]])
 
 [my blog]: [[en/blog]]
-[popular]: [[en/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN with FRR"
 [A more privacy-friendly blog]: [[en/blog/2018-more-privacy-blog.html]] "A more privacy-friendly blog"
 [Blogging with LLMs as a non-native speaker]: [[en/blog/2026-blogging-llm.html]] "Blogging with LLMs as a non-native speaker"

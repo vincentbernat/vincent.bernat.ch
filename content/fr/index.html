@@ -15,13 +15,13 @@ Auparavant, j'ai travaillé pour
 [Wallix](https://www.wallix.com) 🛡️.
 J'aime les chats 🐈.
 
-Ce site contient principalement [mon blog][]. Les derniers articles sont
+{% from "macros.j2" import list_articles with context %}
 {% set articles = site.content|attr("walk_resources_sorted_by_time_fr")() %}
-« [{{ articles[0].meta.title|e }}]({{ content_url(articles[0].url) }}) »,
-« [{{ articles[1].meta.title|e }}]({{ content_url(articles[1].url) }}) »,
-« [{{ articles[2].meta.title|e }}]({{ content_url(articles[2].url) }}) » et
-« [{{ articles[3].meta.title|e }}]({{ content_url(articles[3].url) }}) ».
-L'article le plus populaire est « [VXLAN: BGP EVPN avec FRR][popular] ».
+
+Ce site contient principalement [mon blog][].
+Les derniers articles sont {{ list_articles(articles[:3]) }}
+L'article le plus populaire est {{ list_articles(articles|selectattr("meta.popular")) }}
+Je vous conseille de lire également {{ list_articles(articles|selectattr("meta.featured")) }}
 
 ![Canards qui nagent]([[!!images/ducks.gif]])
 
@@ -42,6 +42,5 @@ détails. Ma position sur l'utilisation de l'IA pour l'écriture est décrite da
  - **OpenPGP**: [clé publique]([[!!files/gpg.txt]])
 
 [mon blog]: [[fr/blog]]
-[popular]: [[fr/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN avec FRR"
 [Un blog plus respectueux de la vie privée]: [[fr/blog/2018-blog-respect-vie-privee.html]] "Un blog plus respectueux de la vie privée"
 [Tenir un blog bilingue avec l'aide d'une IA]: [[fr/blog/2026-blog-ia.html]] "Tenir un blog bilingue avec l'aide d'une IA"

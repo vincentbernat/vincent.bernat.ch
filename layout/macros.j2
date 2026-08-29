@@ -27,6 +27,20 @@
 </ul>
 {% endmacro %}
 
+{# Inline list of articles, quoted as expected for the current language #}
+{% macro list_articles(articles) %}
+{%- set lang = resource.meta.language -%}
+{%- for article in articles -%}
+{%- set title = article.meta.title|replace("“", "‘")|replace("”", "’")|e -%}
+{%- set link = "[" ~ title ~ "](" ~ content_url(article.url) ~ ")" -%}
+{%- if lang == "fr" -%}
+« {{ link }} »{{ "." if loop.last else (" et " if loop.revindex == 2 else ", ") }}
+{%- else -%}
+“{{ link }}{{ "." if loop.last else "," }}”{{ "" if loop.last else (" and " if loop.revindex == 2 else " ") }}
+{%- endif -%}
+{%- endfor -%}
+{% endmacro %}
+
 {% macro tagfmt_plain(resource, tag, text, disabled) %}
 {{ text[0]|upper }}{{ text[1:] }}
 {% endmacro %}
