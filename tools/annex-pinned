@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""List annex content kept alive by refs other than a baseline branch.
+
+To drop the listed content, tell git-annex that only latest counts as used:
+
+    git config annex.used-refspec '+refs/heads/latest'
+    git annex unused
+    git annex dropunused all
+
+The content is then gone for good. Any branch listed here keeps a broken
+symlink.
+"""
+
+import argparse
+import collections
+import re
+import subprocess
+
+KEY_RE = re.compile(rb"(?:SHA256E|SHA256|SHA512E|SHA1E|MD5E|WORM)-[^/\x00\n]+")
+SIZE_RE = re.compile(r"-s(\d+)(?:-|--)")
+POINTER_LIMIT = 1024
+
+
+def git(*args, binary=False):
+    out = subprocess.run(["git", *args], check=True, stdout=subprocess.PIPE).stdout
+    return out if binary else out.decode()
+
+
+def refs():
+    out = git("for-each-ref", "--format=%(refname)", "refs/heads", "refs/remotes")
+    return [r for r in out.split("\n") if r]
+
+
+def tree_entries(ref):
+    """Yield (blob, path) for entries that may be annex links."""
+    out = git("ls-tree", "-r", "-l", "-z", ref)
+    for entry in out.split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        mode, _, blob, size = meta.split(maxsplit=3)
+        if mode == "120000":
+            yield blob, path
+        elif mode == "100644" and size.isdigit() and int(size) <= POINTER_LIMIT:
+            yield blob, path
+
+
+def blob_keys(blobs):
+    """Map blob to annex key, for blobs holding a symlink or a pointer."""
+    if not blobs:
+        return {}
+    stdin = "\n".join(blobs) + "\n"
+    proc = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        input=stdin.encode(),
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    keys, data = {}, proc.stdout
+    pos = 0
+    while pos < len(data):
+        eol = data.index(b"\n", pos)
+        header = data[pos:eol].split()
+        pos = eol + 1
+        if len(header) < 3:
+            continue
+        blob, size = header[0].decode(), int(header[2])
+        body, pos = data[pos : pos + size], pos + size + 1
+        found = KEY_RE.findall(body)
+        if found:
+            keys[blob] = found[-1].decode()
+    return keys
+
+
+def human(size):
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if size < 1024 or unit == "GiB":
+            return f"{size:.1f} {unit}" if unit != "B" else f"{size} B"
+        size /= 1024
+
+
+def short(key):
+    _, _, digest = key.partition("--")
+    return digest.split(".")[0][:8] or key[:8]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--baseline", default="refs/heads/latest")
+    parser.add_argument(
+        "--max-branches",
+        type=int,
+        help="cap branches shown, by default two when there are two, else one",
+    )
+    args = parser.parse_args()
+
+    seen = {}
+    for ref in refs():
+        for blob, path in tree_entries(ref):
+            seen.setdefault(blob, []).append((ref, path))
+    keys = blob_keys(list(seen))
+
+    baseline = set()
+    usage = collections.defaultdict(lambda: collections.defaultdict(set))
+    for blob, places in seen.items():
+        key = keys.get(blob)
+        if not key:
+            continue
+        for ref, path in places:
+            if ref == args.baseline:
+                baseline.add(key)
+            else:
+                usage[key][path].add(ref)
+
+    rows = [(k, v) for k, v in usage.items() if k not in baseline]
+    rows.sort(key=lambda kv: -int(SIZE_RE.search(kv[0]).group(1)))
+
+    total = 0
+    for key, names in rows:
+        size = int(SIZE_RE.search(key).group(1))
+        total += size
+        first = True
+        for path in sorted(names):
+            branches = sorted(
+                (
+                    r.replace("refs/heads/", "").replace("refs/remotes/", "")
+                    for r in names[path]
+                ),
+                key=lambda b: (b.startswith("_"), b),
+            )
+            keep = args.max_branches
+            if keep is None:
+                keep = len(branches) if len(branches) <= 2 else 1
+            shown = ", ".join(branches[:keep])
+            extra = len(branches) - keep
+            if extra > 0:
+                shown += f" (+{extra} more)"
+            head = f"{short(key):<10}{human(size):>10}" if first else " " * 20
+            print(f"{head}  {path}  [{shown}]")
+            first = False
+    print(f"\n{len(rows)} keys, {human(total)} kept alive outside {args.baseline}")
+
+
+if __name__ == "__main__":
+    main()

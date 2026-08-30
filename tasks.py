@@ -208,7 +208,7 @@ def serve(c):
 
 
 @task
-def prune(c, before="1 year ago"):
+def prune_final(c, before="1 year ago"):
     """Prune old commits from final render"""
     with c.cd(".final"):
         out = c.run(
