@@ -19,10 +19,10 @@ luffy.do(() => {
   luffy.load("videojs.js", () => {
     const videos = hlsVideos.map((oldVideo) => {
       // <media-i18n> takes the language from the document, <video-player>
-      // owns the state, <video-skin> draws the controls.
+      // owns the state, <video-minimal-skin> draws the controls.
       const i18n = document.createElement("media-i18n");
       const player = document.createElement("video-player");
-      const skin = document.createElement("video-skin");
+      const skin = document.createElement("video-minimal-skin");
       const video = document.createElement("hls-video");
 
       skin.className = oldVideo.className;
@@ -104,7 +104,7 @@ luffy.do(() => {
 
           // Scroll element into view if needed. An <hls-video> has no box of
           // its own, the skin around it has one.
-          const box = videos[i].closest("video-skin") ?? videos[i];
+          const box = videos[i].closest("video-minimal-skin") ?? videos[i];
           const rect = box.getBoundingClientRect();
           if (
             rect.top >= 0 &&
