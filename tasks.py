@@ -9,7 +9,9 @@ import re
 import json
 import shlex
 import pty
+import tty
 import select
+import signal
 import subprocess
 import tempfile
 import datetime
@@ -155,29 +157,46 @@ def serve(c):
         process.output = master
         return process
 
-    def mux(processes, until):
-        """Display the outputs of the given processes until one of them exits."""
+    def mux(processes, until, reload=None):
+        """Display the outputs of the given processes until one of them exits.
+        When reload is provided, Ctrl-R calls it."""
         colors = ["\033[36m", "\033[35m"]
         reset = "\033[0m"
         outputs = {
             process.output: (f"{colors[idx % len(colors)]}{name:5}{reset} │ ", b"")
             for idx, (name, process) in enumerate(processes.items())
         }
-        while until.poll() is None and outputs:
-            ready, _, _ = select.select(list(outputs), [], [], 0.2)
-            for fd in ready:
-                prefix, pending = outputs[fd]
-                try:
-                    data = os.read(fd, 65536)
-                except OSError:
-                    data = b""
-                if not data:
-                    del outputs[fd]
-                    continue
-                lines = (pending + data.replace(b"\r", b"")).split(b"\n")
-                outputs[fd] = (prefix, lines.pop())
-                for line in lines:
-                    print(f"{prefix}{line.decode('utf-8', 'replace')}", flush=True)
+        # Get keys one by one instead of one line at a time. Other keys are
+        # dropped, but Ctrl-C still works as usual.
+        keys = []
+        saved = None
+        if reload is not None and sys.stdin.isatty():
+            keys = [sys.stdin.fileno()]
+            saved = termios.tcgetattr(sys.stdin)
+            tty.setcbreak(sys.stdin)
+        try:
+            while until.poll() is None and outputs:
+                ready, _, _ = select.select(list(outputs) + keys, [], [], 0.2)
+                for fd in ready:
+                    if fd in keys:
+                        if b"\x12" in os.read(fd, 65536):
+                            reload()
+                        continue
+                    prefix, pending = outputs[fd]
+                    try:
+                        data = os.read(fd, 65536)
+                    except OSError:
+                        data = b""
+                    if not data:
+                        del outputs[fd]
+                        continue
+                    lines = (pending + data.replace(b"\r", b"")).split(b"\n")
+                    outputs[fd] = (prefix, lines.pop())
+                    for line in lines:
+                        print(f"{prefix}{line.decode('utf-8', 'replace')}", flush=True)
+        finally:
+            if saved is not None:
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, saved)
 
     # Ports are also set in layout/nginx.j2
     hyde_port = 8081
@@ -199,7 +218,21 @@ def serve(c):
             processes["nginx"] = spawn(
                 f"nginx -p {run} -e /dev/stderr -c {run}/nginx.conf"
             )
-            mux(processes, until=processes["nginx"])
+
+            def reload():
+                """Fetch the nginx configuration again and reload nginx."""
+                result = subprocess.run(
+                    shlex.split(
+                        f"curl -sSf -o {run}/nginx.conf "
+                        f"http://127.0.0.1:{hyde_port}/nginx.conf"
+                    )
+                )
+                if result.returncode != 0:
+                    return
+                os.kill(processes["nginx"].pid, signal.SIGHUP)
+                print("\033[34;1m▶ \033[32;1mnginx reloaded\033[0m", flush=True)
+
+            mux(processes, until=processes["nginx"], reload=reload)
     except KeyboardInterrupt:
         pass
     finally:
