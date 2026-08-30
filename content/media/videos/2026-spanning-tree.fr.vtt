@@ -1,178 +1,178 @@
 WEBVTT
 
 1
-00:00:00.400 --> 00:00:03.240
+00:00:00.400 --> 00:00:03.599
 Imaginez que vous louiez des bureaux
 pour un événement de trois jours.
 
 2
-00:00:03.240 --> 00:00:06.160
+00:00:03.619 --> 00:00:07.038
 Vous installez à la hâte quelques
 commutateurs Ethernet et scotchez
 
 3
-00:00:06.160 --> 00:00:09.920
+00:00:07.038 --> 00:00:09.755
 des câbles au sol pour
 connecter tout le monde.
 
 4
-00:00:09.920 --> 00:00:12.980
+00:00:09.920 --> 00:00:12.944
 Malheureusement, Gaston,
 votre collègue le plus maladroit,
 
 5
-00:00:12.980 --> 00:00:16.080
+00:00:12.944 --> 00:00:16.860
 trébuche sur un câble à chaque fois qu'il
 se lève pour aller chercher un café.
 
 6
-00:00:16.080 --> 00:00:20.100
+00:00:16.880 --> 00:00:21.483
 Vous pourriez ajouter des câbles en plus,
 mais vous provoqueriez une tempête de diffusion :
 
 7
-00:00:20.100 --> 00:00:24.050
+00:00:21.483 --> 00:00:26.946
 des paquets Ethernet qui tournent en boucle
 et se multiplient jusqu'à saturation.
 
 8
-00:00:24.720 --> 00:00:29.220
+00:00:26.966 --> 00:00:30.611
 C'est là qu'intervient le
 spanning tree protocol (STP).
 
 9
-00:00:29.220 --> 00:00:33.840
+00:00:30.631 --> 00:00:35.698
 STP bloque le trafic sur un sous-ensemble des
 câbles pour ne laisser qu'un arbre sans boucle.
 
 10
-00:00:33.840 --> 00:00:38.340
+00:00:35.718 --> 00:00:40.332
 Quand Gaston récidive, STP reconstruit
 l'arbre en une seconde, ce qui laisse
 
 11
-00:00:38.340 --> 00:00:42.820
+00:00:40.332 --> 00:00:44.873
 à Nono, votre unique renfort technique,
 le temps de rebrancher le câble.
 
 12
-00:00:42.820 --> 00:00:46.917
+00:00:44.893 --> 00:00:50.113
 Jugez par vous-même : cette illustration fait
 tourner une véritable implémentation de STP.
 
 13
-00:00:47.727 --> 00:00:51.007
+00:00:50.133 --> 00:00:54.178
 Conçu dans les années 80, le spanning
 tree protocol a donné naissance
 
 14
-00:00:51.007 --> 00:00:57.267
+00:00:54.178 --> 00:00:59.803
 à une déclinaison « rapide » (RSTP) et à
 une variante « compatible VLAN » (MSTP).
 
 15
-00:00:57.267 --> 00:00:59.887
+00:00:59.823 --> 00:01:02.301
 Tout ingénieur réseau sensé sait qu'il existe
 
 16
-00:00:59.887 --> 00:01:04.647
+00:01:02.301 --> 00:01:06.291
 de meilleures solutions, comme BGP EVPN VXLAN.
 
 17
-00:01:04.647 --> 00:01:07.687
+00:01:06.311 --> 00:01:09.880
 Pourtant, puisque n'importe quel
 commutateur le parle, le vénérable
 
 18
-00:01:07.687 --> 00:01:09.921
+00:01:09.880 --> 00:01:12.883
 spanning tree protocol n'a
 pas dit son dernier mot.
 
 19
-00:01:10.571 --> 00:01:16.171
+00:01:12.903 --> 00:01:17.773
 Nous nous concentrons sur RSTP : il a
 remplacé le protocole d'origine en 2004.
 
 20
-00:01:16.171 --> 00:01:20.791
+00:01:17.793 --> 00:01:22.098
 Pour éliminer les boucles réseau, RSTP
 met en œuvre une machine à états complexe.
 
 21
-00:01:20.791 --> 00:01:24.891
+00:01:22.118 --> 00:01:26.338
 Des temporisateurs, les changements
 d'état des liens et les trames de contrôle
 
 22
-00:01:24.891 --> 00:01:29.031
+00:01:26.338 --> 00:01:29.842
 qu'un pont reçoit de ses voisins
 commandent ses transitions.
 
 23
-00:01:29.031 --> 00:01:33.281
+00:01:29.862 --> 00:01:34.219
 Ces trames Ethernet sont les
 Bridge Protocol Data Units (BPDU).
 
 24
-00:01:33.931 --> 00:01:35.081
+00:01:34.239 --> 00:01:35.468
 Voyez-les à l'œuvre ici.
 
 25
-00:01:35.891 --> 00:01:39.431
+00:01:35.891 --> 00:01:39.344
 Au bout de quelques instants,
 la topologie converge vers un arbre :
 
 26
-00:01:39.431 --> 00:01:44.291
+00:01:39.344 --> 00:01:43.579
 depuis la racine C11, il existe un
 chemin vers chaque pont et aucune boucle.
 
 27
-00:01:44.291 --> 00:01:47.491
+00:01:44.291 --> 00:01:47.292
 En haut à droite, l'interface
 affiche une icône d'arbre 🌳
 
 28
-00:01:47.491 --> 00:01:50.714
+00:01:47.292 --> 00:01:49.792
 suivie du temps qu'il a fallu
 pour atteindre cet état.
 
 29
-00:01:51.364 --> 00:01:53.664
+00:01:51.364 --> 00:01:53.343
 Coupons un lien et observons comment
 
 30
-00:01:53.664 --> 00:01:57.364
+00:01:53.343 --> 00:01:57.542
 le protocole trouve en moins d'une
 seconde un autre chemin pour joindre C12.
 
 31
-00:01:57.364 --> 00:02:00.814
+00:01:57.562 --> 00:02:01.341
 Ne vous inquiétez pas de toutes les informations
 affichées : je les explique plus loin.
 
 32
-00:02:01.504 --> 00:02:05.964
+00:02:01.504 --> 00:02:05.294
 Tous les exemples s'exécutent
 dans un navigateur grâce à MSTPD,
 
 33
-00:02:05.964 --> 00:02:08.914
+00:02:05.294 --> 00:02:09.726
 une implémentation libre de RSTP
 fonctionnant en espace utilisateur.
 
 34
-00:02:12.051 --> 00:02:16.951
+00:02:12.051 --> 00:02:16.189
 Radia Perlman, intronisée à
 l'Internet Hall of Fame en 2014,
 
 35
-00:02:16.951 --> 00:02:21.351
+00:02:16.189 --> 00:02:20.471
 a résumé dans ce poème l'ancêtre
 de STP qu'elle a inventé chez DEC.
 
 36
-00:02:21.351 --> 00:02:23.584
+00:02:21.351 --> 00:02:23.654
 Il a été repris plus tard
 dans un brevet américain :
 
@@ -225,526 +225,526 @@ Le maillage vient de gens comme moi ;
 Les ponts y trouvent l'arbre à chaque fois.
 
 49
-00:02:54.600 --> 00:02:57.620
+00:02:54.600 --> 00:02:57.183
 Pour construire un arbre,
 RSTP commence par élire
 
 50
-00:02:57.620 --> 00:03:00.900
+00:02:57.183 --> 00:03:00.954
 comme pont racine celui qui a
 l'identifiant de pont le plus faible.
 
 51
-00:03:00.900 --> 00:03:03.480
+00:03:00.974 --> 00:03:03.104
 Cet identifiant combine la priorité
 
 52
-00:03:03.480 --> 00:03:05.040
+00:03:03.104 --> 00:03:04.184
 et l'adresse MAC :
 
 53
-00:03:05.040 --> 00:03:11.017
+00:03:04.184 --> 00:03:10.898
 8192.6e:2b:10:a0:5f:29.
 
 54
-00:03:11.687 --> 00:03:15.667
+00:03:11.687 --> 00:03:15.698
 Dans cet exemple, S1 et S2
 ont des priorités de 4 096
 
 55
-00:03:15.667 --> 00:03:19.167
+00:03:15.698 --> 00:03:18.919
 et 8 192 : S1 devient racine.
 
 56
-00:03:19.167 --> 00:03:22.707
+00:03:19.167 --> 00:03:23.224
 S4 a une priorité de 12 288,
 tandis que S3 conserve
 
 57
-00:03:22.707 --> 00:03:27.607
+00:03:23.224 --> 00:03:28.362
 la priorité par défaut de
 32 768 : S4 devient racine.
 
 58
-00:03:27.607 --> 00:03:30.207
+00:03:28.382 --> 00:03:31.208
 S5 et S6 n'ont pas de priorité particulière :
 
 59
-00:03:30.207 --> 00:03:33.300
+00:03:31.208 --> 00:03:34.980
 l'adresse MAC la plus faible
 l'emporte et S5 devient racine.
 
 60
-00:03:34.250 --> 00:03:36.933
+00:03:35.000 --> 00:03:37.349
 Au départ, chaque pont
 s'annonce comme racine :
 
 61
-00:03:42.650 --> 00:03:45.830
+00:03:42.650 --> 00:03:46.359
 Dès qu'un pont reçoit une BPDU
 annonçant une meilleure racine,
 
 62
-00:03:45.830 --> 00:03:48.867
+00:03:46.359 --> 00:03:49.024
 il propage cette nouvelle
 information à ses voisins.
 
 63
-00:03:56.950 --> 00:03:59.930
+00:03:56.950 --> 00:04:00.584
 La deuxième étape consiste à
 attribuer un rôle à chaque port.
 
 64
-00:03:59.930 --> 00:04:03.367
+00:04:00.604 --> 00:04:04.969
 RSTP définit cinq rôles,
 chacun représenté par une lettre :
 
 65
-00:04:04.217 --> 00:04:09.975
+00:04:04.989 --> 00:04:12.424
 racine (R), désigné (D), alternatif
 (A), désactivé (X), de secours (B).
 
 66
-00:04:10.745 --> 00:04:13.485
+00:04:12.444 --> 00:04:15.328
 Chaque pont qui n'est pas
 racine choisit comme port racine
 
 67
-00:04:13.485 --> 00:04:16.345
+00:04:15.328 --> 00:04:18.694
 celui dont le chemin vers la
 racine a le coût le plus faible.
 
 68
-00:04:16.345 --> 00:04:18.865
+00:04:18.714 --> 00:04:21.053
 Sauf si vous configurez une valeur spécifique,
 
 69
-00:04:18.865 --> 00:04:23.985
+00:04:21.053 --> 00:04:27.084
 chaque pont déduit le coût d'un lien à
 partir de son débit : 20 000 pour 1 Gbit/s.
 
 70
-00:04:23.985 --> 00:04:27.678
+00:04:27.104 --> 00:04:30.780
 En cas d'égalité, l'identifiant
 de port le plus faible l'emporte.
 
 71
-00:04:28.428 --> 00:04:30.908
+00:04:30.800 --> 00:04:33.545
 Chacun des ports restants
 devient un port désigné si
 
 72
-00:04:30.908 --> 00:04:35.608
+00:04:33.545 --> 00:04:37.348
 la BPDU qu'il émet est « meilleure »
 que celle qu'il reçoit.
 
 73
-00:04:35.608 --> 00:04:38.488
+00:04:37.368 --> 00:04:39.454
 Sinon, il devient un port alternatif.
 
 74
-00:04:38.488 --> 00:04:41.648
+00:04:39.474 --> 00:04:42.324
 Plus tard, si le port racine
 tombe, le « meilleur »
 
 75
-00:04:41.648 --> 00:04:44.728
+00:04:42.324 --> 00:04:44.475
 port alternatif devient le port racine.
 
 76
-00:04:44.728 --> 00:04:47.411
+00:04:44.728 --> 00:04:47.603
 Les critères pour choisir
 la meilleure BPDU sont :
 
 77
-00:04:48.161 --> 00:04:50.821
+00:04:48.161 --> 00:04:51.324
 1. l'identifiant de pont
 racine le plus faible,
 
 78
-00:04:50.821 --> 00:04:53.807
+00:04:51.324 --> 00:04:54.807
 2. le coût cumulé jusqu'à
 la racine le plus faible,
 
 79
-00:04:53.807 --> 00:04:59.060
+00:04:54.807 --> 00:05:01.257
 3. l'identifiant de pont le plus faible,
 4. l'identifiant de port le plus faible.
 
 80
-00:04:59.710 --> 00:05:03.930
+00:05:01.277 --> 00:05:05.067
 Dans cet exemple, après
 convergence, S1 est la racine
 
 81
-00:05:03.930 --> 00:05:10.430
+00:05:05.067 --> 00:05:12.271
 car sa priorité est de 4 096, alors que les
 autres ponts ont une priorité de 32 768.
 
 82
-00:05:10.430 --> 00:05:14.893
+00:05:12.291 --> 00:05:16.715
 Tous ses ports sont des ports désignés puisque
 le coût cumulé jusqu'à la racine est nul.
 
 83
-00:05:15.603 --> 00:05:19.323
+00:05:16.735 --> 00:05:20.920
 Le port de S2 face à S1 devient
 un port racine car il présente
 
 84
-00:05:19.323 --> 00:05:25.123
+00:05:20.920 --> 00:05:25.954
 le coût cumulé le plus faible vers
 la racine : 20 000 contre 40 000.
 
 85
-00:05:25.123 --> 00:05:28.663
+00:05:25.974 --> 00:05:29.752
 S3 possède deux ports face à S1 et
 celui dont l'identifiant de port
 
 86
-00:05:28.663 --> 00:05:33.803
+00:05:29.752 --> 00:05:32.074
 est le plus faible devient le port racine :
 
 87
-00:05:33.803 --> 00:05:36.123
+00:05:32.074 --> 00:05:36.035
 0x8000 contre 0x8001.
 
 88
-00:05:36.123 --> 00:05:39.003
+00:05:36.123 --> 00:05:38.555
 L'autre candidat est un port alternatif car
 
 89
-00:05:39.003 --> 00:05:43.803
+00:05:38.555 --> 00:05:42.974
 le port distant sur ce lien émet une
 meilleure BPDU, avec un coût cumulé nul.
 
 90
-00:05:43.803 --> 00:05:49.563
+00:05:43.803 --> 00:05:48.336
 Sur le segment entre S2 et S3,
 c'est le port de S2 qui l'emporte :
 
 91
-00:05:49.563 --> 00:05:54.343
+00:05:48.336 --> 00:05:52.214
 les deux ponts ont le même coût
 cumulé jusqu'à la racine (20 000),
 
 92
-00:05:54.343 --> 00:05:59.323
+00:05:52.214 --> 00:05:59.505
 mais l'identifiant de pont de S2 est
 plus petit : 32768.02:00:00:00:00:01
 
 93
-00:05:59.323 --> 00:06:03.126
+00:05:59.505 --> 00:06:03.076
 contre 32768.02:00:00:00:00:02.
 
 94
-00:06:09.783 --> 00:06:12.683
+00:06:09.783 --> 00:06:12.412
 Si vous coupez le lien actif entre S1 et S3,
 
 95
-00:06:12.683 --> 00:06:15.897
+00:06:12.412 --> 00:06:16.132
 S3 promeut le « meilleur »
 port alternatif en port racine.
 
 96
-00:06:16.567 --> 00:06:19.347
+00:06:16.567 --> 00:06:19.498
 Si vous désactivez aussi
 le second lien, S3 retient
 
 97
-00:06:19.347 --> 00:06:21.634
+00:06:19.498 --> 00:06:22.208
 le port alternatif restant comme port racine.
 
 98
-00:06:22.284 --> 00:06:26.764
+00:06:22.284 --> 00:06:27.978
 En revanche, si vous désactivez le lien entre
 S1 et S2, S2 doit travailler un peu plus
 
 99
-00:06:26.764 --> 00:06:30.601
+00:06:27.978 --> 00:06:33.667
 pour élire un nouveau port racine,
 car il ne dispose d'aucun port alternatif.
 
 100
-00:06:31.391 --> 00:06:37.451
+00:06:33.687 --> 00:06:39.042
 Sauf événement particulier, les ports désignés
 émettent une BPDU toutes les 2 secondes.
 
 101
-00:06:37.451 --> 00:06:41.971
+00:06:39.062 --> 00:06:45.058
 Si un pont ne reçoit plus de BPDU de son voisin
 pendant 3 périodes « hello » consécutives,
 
 102
-00:06:41.971 --> 00:06:46.201
+00:06:45.058 --> 00:06:49.464
 il le considère comme mort et efface
 les informations associées au port.
 
 103
-00:06:49.377 --> 00:06:51.617
+00:06:49.484 --> 00:06:51.866
 Chaque port se trouve dans
 l'un des trois états suivants.
 
 104
-00:06:51.617 --> 00:06:54.767
+00:06:51.886 --> 00:06:54.635
 Le schéma représente chaque
 état par une couleur de fond :
 
 105
-00:06:55.477 --> 00:06:59.067
+00:06:55.477 --> 00:06:59.869
 rejet (rouge), apprentissage
 (jaune), transmission (vert).
 
 106
-00:06:59.737 --> 00:07:03.557
+00:06:59.889 --> 00:07:03.346
 Un port racine passe automatiquement
 à l'état de transmission.
 
 107
-00:07:03.557 --> 00:07:06.757
+00:07:03.557 --> 00:07:05.672
 Un port alternatif reste à l'état de rejet.
 
 108
-00:07:06.757 --> 00:07:09.737
+00:07:06.757 --> 00:07:09.630
 Un port désigné dispose
 de deux moyens pour passer
 
 109
-00:07:09.737 --> 00:07:12.405
+00:07:09.630 --> 00:07:12.529
 de l'état de rejet à l'état de transmission :
 
 110
-00:07:13.095 --> 00:07:16.895
+00:07:13.095 --> 00:07:17.512
 Si le port est un port d'extrémité,
 soit par configuration, soit parce que
 
 111
-00:07:16.895 --> 00:07:21.275
+00:07:17.512 --> 00:07:22.144
 l'équipement distant ne parle aucune
 variante de STP, le pont suppose
 
 112
-00:07:21.275 --> 00:07:25.115
+00:07:22.144 --> 00:07:26.392
 que cet équipement ne participe pas au
 protocole et ne peut donc pas créer de boucle.
 
 113
-00:07:25.115 --> 00:07:30.039
+00:07:26.412 --> 00:07:30.337
 Dans ce cas, le port désigné passe
 immédiatement à l'état de transmission.
 
 114
-00:07:30.949 --> 00:07:33.945
+00:07:30.949 --> 00:07:34.385
 Sinon, il envoie une proposition
 à son voisin en aval.
 
 115
-00:07:33.945 --> 00:07:37.151
+00:07:34.405 --> 00:07:38.230
 Si le pont distant estime que
 la BPDU reçue est « meilleure »
 
 116
-00:07:37.151 --> 00:07:41.632
+00:07:38.230 --> 00:07:42.467
 que toutes celles mémorisées pour ses
 autres ports, il élit le port de réception
 
 117
-00:07:41.632 --> 00:07:46.946
+00:07:42.467 --> 00:07:47.053
 comme port racine et démarre le processus
 de synchronisation : pour éviter une boucle,
 
 118
-00:07:46.946 --> 00:07:50.446
+00:07:47.053 --> 00:07:49.770
 il fait passer à l'état de
 rejet tous les ports désignés
 
 119
-00:07:50.446 --> 00:07:54.128
+00:07:49.770 --> 00:07:53.050
 qui ne sont ni des ports
 d'extrémité ni déjà synchronisés.
 
 120
-00:07:54.128 --> 00:07:55.781
+00:07:54.128 --> 00:07:55.516
 Il renvoie ensuite un accord.
 
 121
-00:07:55.781 --> 00:07:58.309
+00:07:55.781 --> 00:07:58.480
 À la réception de cet accord,
 le port désigné du pair
 
 122
-00:07:58.309 --> 00:07:59.860
+00:07:58.480 --> 00:07:59.893
 passe à l'état de transmission.
 
 123
-00:08:00.550 --> 00:08:05.030
+00:08:00.550 --> 00:08:05.071
 Dans cette topologie, H1, H2,
 H3 et H4 sont des équipements terminaux
 
 124
-00:08:05.030 --> 00:08:07.710
+00:08:05.071 --> 00:08:06.972
 qui ne participent pas au protocole.
 
 125
-00:08:07.710 --> 00:08:10.570
+00:08:07.710 --> 00:08:10.269
 Nous configurons leurs ports
 comme des ports d'extrémité :
 
 126
-00:08:10.570 --> 00:08:13.405
+00:08:10.269 --> 00:08:13.220
 ils passent donc immédiatement
 à l'état de transmission.
 
 127
-00:08:14.055 --> 00:08:18.655
+00:08:14.055 --> 00:08:18.895
 Nous avançons encore d'un cran : S1 et S2
 s'envoient mutuellement une proposition.
 
 128
-00:08:18.655 --> 00:08:20.572
+00:08:18.915 --> 00:08:20.316
 Voici celle de S2 :
 
 129
-00:08:27.289 --> 00:08:31.289
+00:08:27.289 --> 00:08:31.865
 S1 ignore cette proposition : son propre
 identifiant de racine est plus faible.
 
 130
-00:08:31.289 --> 00:08:36.649
+00:08:31.885 --> 00:08:36.404
 Quand S2 reçoit une proposition similaire
 de S1, il accepte S1 comme racine.
 
 131
-00:08:36.649 --> 00:08:39.069
+00:08:36.649 --> 00:08:39.487
 Il élit également le port
 vers S1 comme port racine
 
 132
-00:08:39.069 --> 00:08:42.289
+00:08:39.487 --> 00:08:42.189
 et démarre le processus de synchronisation.
 
 133
-00:08:42.289 --> 00:08:46.305
+00:08:42.289 --> 00:08:46.697
 Ses deux ports désignés sont déjà à l'état
 de rejet : rien ne change de ce côté.
 
 134
-00:08:46.935 --> 00:08:50.855
+00:08:46.935 --> 00:08:51.672
 Nous avançons encore d'un cran :
 S2 envoie deux BPDU à S1.
 
 135
-00:08:50.855 --> 00:08:55.635
+00:08:51.692 --> 00:08:55.545
 Dans l'une d'elles, le bit d'accord
 vaut 1 et le bit de proposition vaut 0.
 
 136
-00:08:55.635 --> 00:08:59.235
+00:08:55.635 --> 00:08:58.821
 Elle montre aussi que S2
 a accepté S1 comme racine
 
 137
-00:08:59.235 --> 00:09:02.075
+00:08:58.821 --> 00:09:02.058
 et que son port racine est
 désormais à l'état de transmission.
 
 138
-00:09:02.075 --> 00:09:05.515
+00:09:02.078 --> 00:09:05.508
 À la réception de cette BPDU,
 S1 fait passer son propre
 
 139
-00:09:05.515 --> 00:09:07.895
+00:09:05.508 --> 00:09:07.408
 port désigné à l'état de transmission.
 
 140
-00:09:07.895 --> 00:09:11.839
+00:09:07.895 --> 00:09:13.190
 À partir de cet instant, le lien entre
 S1 et S2 achemine le trafic utilisateur.
 
 141
-00:09:20.455 --> 00:09:22.635
+00:09:20.455 --> 00:09:22.369
 Voyons maintenant ce qui est arrivé à S5.
 
 142
-00:09:22.635 --> 00:09:25.775
+00:09:22.635 --> 00:09:26.013
 Nous réinitialisons la simulation
 et avançons de deux pas.
 
 143
-00:09:25.775 --> 00:09:30.455
+00:09:26.033 --> 00:09:28.634
 S5 échange des BPDU avec S3 et S6.
 
 144
-00:09:30.455 --> 00:09:35.575
+00:09:30.455 --> 00:09:35.557
 Comme S5 possède un identifiant de racine
 plus faible que S3 et S6, il reste la racine,
 
 145
-00:09:35.575 --> 00:09:40.835
+00:09:35.557 --> 00:09:40.518
 tandis que S3 et S6 acceptent la
 proposition et élisent leurs ports racines.
 
 146
-00:09:40.835 --> 00:09:44.215
+00:09:40.835 --> 00:09:44.225
 S3 et S6 démarrent le
 processus de synchronisation.
 
 147
-00:09:44.215 --> 00:09:47.872
+00:09:44.245 --> 00:09:48.514
 Le port de S6 vers H4 reste actif
 car il s'agit d'un port d'extrémité.
 
 148
-00:09:48.322 --> 00:09:50.242
+00:09:48.534 --> 00:09:49.921
 Nous avançons d'un cran :
 
 149
-00:09:50.242 --> 00:09:54.442
+00:09:49.921 --> 00:09:54.066
 S3 et S6 renvoient tous deux
 un accord à S5, qui fait passer
 
 150
-00:09:54.442 --> 00:09:57.422
+00:09:54.066 --> 00:09:56.586
 ses deux ports désignés
 à l'état de transmission.
 
 151
-00:09:57.422 --> 00:10:02.402
+00:09:57.422 --> 00:10:02.283
 Pourtant, le lien entre S5 et S3 continue
 de rejeter le trafic utilisateur !
 
 152
-00:10:02.402 --> 00:10:05.682
+00:10:02.402 --> 00:10:05.356
 Si vous regardez attentivement,
 le port de S3 vers S5
 
 153
-00:10:05.682 --> 00:10:08.605
+00:10:05.356 --> 00:10:08.324
 est maintenant un port désigné,
 et non un port racine.
 
 154
-00:10:09.315 --> 00:10:12.015
+00:10:09.315 --> 00:10:11.979
 Lors de la même étape,
 S3 reçoit aussi une meilleure
 
 155
-00:10:12.015 --> 00:10:15.675
+00:10:11.979 --> 00:10:14.787
 BPDU de S2, avec S1 comme racine.
 
 156
-00:10:15.675 --> 00:10:19.355
+00:10:15.675 --> 00:10:19.314
 Il élit son port vers S2 comme
 port racine et rétrograde le port
 
 157
-00:10:19.355 --> 00:10:23.539
+00:10:19.314 --> 00:10:22.387
 vers S5 en port désigné,
 qui reste à l'état de rejet.
 
 158
-00:10:24.209 --> 00:10:26.929
+00:10:24.209 --> 00:10:26.700
 À l'étape suivante,
 les choses se corsent un peu.
 
@@ -753,1046 +753,1046 @@ les choses se corsent un peu.
 S3 envoie une proposition à S5 :
 
 160
-00:10:34.902 --> 00:10:40.502
+00:10:34.902 --> 00:10:38.883
 S5 élit S1 comme racine et le
 port vers S3 comme port racine.
 
 161
-00:10:40.502 --> 00:10:43.962
+00:10:40.502 --> 00:10:43.944
 Il démarre son processus de
 synchronisation, mais le port désigné
 
 162
-00:10:43.962 --> 00:10:47.502
+00:10:43.944 --> 00:10:45.986
 vers S6 ne passe pas à l'état de rejet.
 
 163
-00:10:47.502 --> 00:10:48.342
+00:10:47.502 --> 00:10:48.203
 Pourquoi ?
 
 164
-00:10:48.342 --> 00:10:51.962
+00:10:48.342 --> 00:10:51.761
 Ce port reste un port désigné
 et son voisin S6 avait déjà
 
 165
-00:10:51.962 --> 00:10:55.680
+00:10:51.761 --> 00:10:56.237
 envoyé un accord sur ce lien : il conserve
 donc son statut de port synchronisé.
 
 166
-00:10:56.350 --> 00:10:58.990
+00:10:56.350 --> 00:10:59.506
 Revenons un pas en arrière pour
 observer ce qui arrive à S6.
 
 167
-00:10:58.990 --> 00:11:02.113
+00:10:59.526 --> 00:11:02.251
 À cet instant, S6 croit que S5 est la racine.
 
 168
-00:11:02.763 --> 00:11:06.983
+00:11:02.763 --> 00:11:07.347
 Nous avançons d'un cran : S4 envoie
 une nouvelle proposition à S6.
 
 169
-00:11:06.983 --> 00:11:10.603
+00:11:07.367 --> 00:11:09.706
 S6 l'accepte, élit S1 comme racine
 
 170
-00:11:10.603 --> 00:11:13.963
+00:11:09.706 --> 00:11:11.906
 et le port vers S4 comme port racine.
 
 171
-00:11:13.963 --> 00:11:16.883
+00:11:13.963 --> 00:11:16.209
 Le rôle du port face à S5 change :
 
 172
-00:11:16.883 --> 00:11:20.443
+00:11:16.209 --> 00:11:18.726
 de port racine, il devient port désigné.
 
 173
-00:11:20.443 --> 00:11:24.723
+00:11:20.443 --> 00:11:24.117
 Comme son pair continue d'annoncer
 une BPDU inférieure sur le lien,
 
 174
-00:11:24.723 --> 00:11:28.843
+00:11:24.117 --> 00:11:27.197
 ce port devient contesté
 et passe à l'état de rejet.
 
 175
-00:11:28.843 --> 00:11:33.383
+00:11:28.843 --> 00:11:34.189
 Le port racine passe à l'état de transmission
 et le lien devient immédiatement opérationnel,
 
 176
-00:11:33.383 --> 00:11:37.980
+00:11:34.189 --> 00:11:37.648
 car le port désigné de S4 est
 déjà à l'état de transmission.
 
 177
-00:11:38.670 --> 00:11:43.370
+00:11:38.670 --> 00:11:42.943
 Si nous avançons d'un cran,
 S5 et S6 échangent deux BPDU.
 
 178
-00:11:43.370 --> 00:11:47.330
+00:11:43.370 --> 00:11:46.894
 Celle de S5 est meilleure grâce à
 son identifiant de pont plus faible.
 
 179
-00:11:47.330 --> 00:11:50.510
+00:11:47.330 --> 00:11:50.377
 Le port de S5 reste un
 port désigné, tandis que S6
 
 180
-00:11:50.510 --> 00:11:52.747
+00:11:50.377 --> 00:11:53.057
 rétrograde le sien en port alternatif.
 
 181
-00:11:53.397 --> 00:11:56.617
+00:11:53.397 --> 00:11:56.502
 Reprenons une dernière fois depuis
 le début : nous coupons le lien
 
 182
-00:11:56.617 --> 00:12:01.177
+00:11:56.502 --> 00:12:01.970
 entre S1 et S2, laissons tourner la simulation
 jusqu'à ce que la topologie soit stable,
 
 183
-00:12:01.177 --> 00:12:05.213
+00:12:01.970 --> 00:12:07.283
 arrêtons-la, puis rétablissons
 le lien entre S1 et S2.
 
 184
-00:12:05.923 --> 00:12:09.763
+00:12:07.303 --> 00:12:11.250
 Lors du premier pas, S1 et S2
 échangent des propositions.
 
 185
-00:12:09.763 --> 00:12:15.843
+00:12:11.270 --> 00:12:15.810
 S2 élit S1 comme racine à la place de S5,
 et le port vers S1 comme port racine.
 
 186
-00:12:15.843 --> 00:12:18.483
+00:12:15.843 --> 00:12:18.484
 Il rétrograde son ancien
 port racine en port désigné
 
 187
-00:12:18.483 --> 00:12:21.483
+00:12:18.484 --> 00:12:19.965
 et le place à l'état de rejet.
 
 188
-00:12:21.483 --> 00:12:24.680
+00:12:21.483 --> 00:12:25.760
 L'autre port désigné reste synchronisé
 et conserve son état de transmission.
 
 189
-00:12:25.370 --> 00:12:28.830
+00:12:25.780 --> 00:12:28.722
 À l'étape suivante, S2 envoie un accord à S1
 
 190
-00:12:28.830 --> 00:12:31.547
+00:12:28.722 --> 00:12:32.725
 et le lien entre eux commence à
 acheminer le trafic utilisateur.
 
 191
-00:12:32.197 --> 00:12:34.880
+00:12:32.745 --> 00:12:36.060
 S2 envoie également une
 proposition à S3, mais pas à S4.
 
 192
-00:12:35.790 --> 00:12:39.470
+00:12:36.080 --> 00:12:38.028
 Il lui envoie plutôt une BPDU ordinaire.
 
 193
-00:12:39.470 --> 00:12:45.410
+00:12:39.470 --> 00:12:43.954
 S4 élit malgré tout S1 comme racine
 et le port vers S2 comme port racine.
 
 194
-00:12:45.410 --> 00:12:50.470
+00:12:45.410 --> 00:12:49.560
 Il rétrograde son ancien port racine,
 celui vers S3, en port désigné,
 
 195
-00:12:50.470 --> 00:12:55.170
+00:12:49.560 --> 00:12:52.915
 qui passe à l'état de rejet à
 cause du changement de port racine.
 
 196
-00:12:55.170 --> 00:12:57.890
+00:12:55.170 --> 00:12:58.275
 L'autre port alternatif,
 celui vers S6, devient lui aussi
 
 197
-00:12:57.890 --> 00:13:01.250
+00:12:58.275 --> 00:13:00.406
 un port désigné et reste à l'état de rejet.
 
 198
-00:13:01.250 --> 00:13:03.780
+00:13:01.250 --> 00:13:04.026
 Le nouveau port racine passe
 à l'état de transmission.
 
 199
-00:13:04.450 --> 00:13:08.230
+00:13:04.450 --> 00:13:08.495
 À l'étape suivante, le port de
 S4 vers S3 se stabilise comme
 
 200
-00:13:08.230 --> 00:13:11.380
+00:13:08.495 --> 00:13:14.022
 port alternatif après avoir reçu
 une « meilleure » BPDU de S3.
 
 201
-00:13:12.090 --> 00:13:17.450
+00:13:14.042 --> 00:13:18.285
 RSTP est une gigantesque machine à états
 découpée en machines plus petites :
 
 202
-00:13:17.450 --> 00:13:22.090
+00:13:18.285 --> 00:13:22.058
 Bridge Detection, Port Information,
 Port Protocol Migration,
 
 203
-00:13:22.090 --> 00:13:26.690
+00:13:22.058 --> 00:13:25.796
 Port Role Selection, Port Role
 Transitions, Port Receive,
 
 204
-00:13:26.690 --> 00:13:31.110
+00:13:25.796 --> 00:13:30.389
 Port State Transitions, Port Timers,
 Port Transmit et Topology Change.
 
 205
-00:13:31.110 --> 00:13:33.690
+00:13:31.110 --> 00:13:34.923
 Certaines s'appliquent au pont
 entier, d'autres à chaque port.
 
 206
-00:13:33.690 --> 00:13:35.870
+00:13:34.943 --> 00:13:37.142
 Chaque pont exécute une instance ;
 
 207
-00:13:35.870 --> 00:13:39.830
+00:13:37.142 --> 00:13:42.564
 le temps, les changements d'état
 opérationnel des ports et les BPDU reçues
 
 208
-00:13:39.830 --> 00:13:43.270
+00:13:42.564 --> 00:13:45.174
 des autres instances en
 pilotent les transitions.
 
 209
-00:13:43.270 --> 00:13:48.617
+00:13:45.194 --> 00:13:50.587
 Ce fonctionnement par événements rend RSTP plus
 efficace, mais aussi plus difficile à appréhender.
 
 210
-00:13:51.754 --> 00:13:55.894
+00:13:51.754 --> 00:13:55.231
 Un pont maintient automatiquement
 une table d'adresses MAC :
 
 211
-00:13:55.894 --> 00:13:59.434
+00:13:55.231 --> 00:13:59.344
 il associe chaque adresse MAC source
 au port qui l'a reçue en dernier.
 
 212
-00:13:59.434 --> 00:14:04.474
+00:13:59.434 --> 00:14:03.562
 Pour commuter une trame Ethernet, il consulte
 cette table afin de choisir le bon port.
 
 213
-00:14:04.474 --> 00:14:07.714
+00:14:04.474 --> 00:14:07.997
 Quand un lien tombe, un frigo
 connecté joignable par un port
 
 214
-00:14:07.714 --> 00:14:10.654
+00:14:07.997 --> 00:14:09.402
 peut le devenir par un autre.
 
 215
-00:14:10.654 --> 00:14:13.114
+00:14:10.654 --> 00:14:13.701
 Les ponts concernés doivent
 purger les adresses MAC apprises :
 
 216
-00:14:13.114 --> 00:14:16.284
+00:14:13.701 --> 00:14:15.328
 elles ne sont peut-être plus valables.
 
 217
-00:14:16.934 --> 00:14:19.814
+00:14:16.934 --> 00:14:19.784
 Pour cela, RSTP met en œuvre des notifications
 
 218
-00:14:19.814 --> 00:14:23.754
+00:14:19.784 --> 00:14:22.946
 de changement de topologie à
 l'aide d'un mécanisme d'inondation.
 
 219
-00:14:23.754 --> 00:14:26.934
+00:14:23.754 --> 00:14:26.488
 Lorsqu'un port qui n'est pas
 un port d'extrémité passe
 
 220
-00:14:26.934 --> 00:14:32.494
+00:14:26.488 --> 00:14:33.584
 à l'état de transmission, un pont génère des
 BPDU dont le bit topology change (TC) est activé.
 
 221
-00:14:32.494 --> 00:14:37.014
+00:14:33.604 --> 00:14:39.404
 Il les envoie à tous ses ports désignés, à l'exception
 des ports d'extrémité, ainsi qu'à son port racine.
 
 222
-00:14:37.014 --> 00:14:40.674
+00:14:39.424 --> 00:14:42.042
 Il purge également la table
 d'adresses MAC sur ces ports.
 
 223
-00:14:40.674 --> 00:14:45.814
+00:14:42.062 --> 00:14:46.769
 Quand un pont reçoit une telle BPDU,
 il propage la notification sur ses ports désignés
 
 224
-00:14:45.814 --> 00:14:51.094
+00:14:46.769 --> 00:14:51.929
 hors ports d'extrémité et sur son port racine,
 sauf celui par lequel elle est arrivée.
 
 225
-00:14:51.094 --> 00:14:54.494
+00:14:51.949 --> 00:14:54.862
 Il purge lui aussi la table
 d'adresses MAC sur ces ports.
 
 226
-00:14:54.494 --> 00:14:59.517
+00:14:54.882 --> 00:14:59.578
 Dans les exemples, les BPDU dont le bit TC
 vaut 1 sont entourées d'un cercle rouge.
 
 227
-00:15:00.167 --> 00:15:04.117
+00:15:00.167 --> 00:15:04.728
 Nous lançons la simulation et attendons
 quelques secondes que la topologie se stabilise.
 
 228
-00:15:04.767 --> 00:15:09.127
+00:15:04.767 --> 00:15:09.470
 Nous arrêtons la simulation et
 désactivons le lien entre S2 et S5.
 
 229
-00:15:09.127 --> 00:15:12.727
+00:15:09.490 --> 00:15:12.909
 S5 élit le port face à S4 comme port racine,
 
 230
-00:15:12.727 --> 00:15:15.550
+00:15:12.909 --> 00:15:15.297
 lequel passe immédiatement
 à l'état de transmission.
 
 231
-00:15:16.200 --> 00:15:20.583
+00:15:16.200 --> 00:15:21.044
 Nous avançons d'un cran :
 S5 émet une BPDU avec le bit TC à 1 :
 
 232
-00:15:25.280 --> 00:15:27.680
+00:15:25.280 --> 00:15:26.870
 S4 reçoit cette BPDU.
 
 233
-00:15:27.680 --> 00:15:33.240
+00:15:27.680 --> 00:15:32.747
 Il purge la table d'adresses MAC sur le
 port face à S1 : par exemple, LPT était
 
 234
-00:15:33.240 --> 00:15:37.325
+00:15:32.747 --> 00:15:36.548
 auparavant joignable par ce port,
 mais il faut désormais passer par S5.
 
 235
-00:15:37.975 --> 00:15:39.415
+00:15:37.975 --> 00:15:39.188
 Nous avançons d'un cran :
 
 236
-00:15:39.415 --> 00:15:43.715
+00:15:39.188 --> 00:15:43.086
 S4 envoie à S1 une BPDU avec le bit TC à 1.
 
 237
-00:15:43.715 --> 00:15:46.715
+00:15:43.715 --> 00:15:46.472
 À la réception de cette
 BPDU, S1 purge la table
 
 238
-00:15:46.715 --> 00:15:49.925
+00:15:46.472 --> 00:15:48.957
 d'adresses MAC sur les ports face à S2 et S3.
 
 239
-00:15:50.575 --> 00:15:53.958
+00:15:50.575 --> 00:15:55.061
 Nous avançons d'un cran : S1 envoie
 une notification à S2 et à S3.
 
 240
-00:15:54.608 --> 00:15:58.168
+00:15:55.081 --> 00:15:59.277
 Nous avançons encore d'un cran :
 S2 envoie une notification à S3,
 
 241
-00:15:58.168 --> 00:16:02.348
+00:15:59.277 --> 00:16:04.251
 tandis que S3 ne fait rien car son
 port vers S2 est un port alternatif.
 
 242
-00:16:02.348 --> 00:16:05.068
+00:16:04.271 --> 00:16:06.923
 S3 ne purge aucune table d'adresses MAC :
 
 243
-00:16:05.068 --> 00:16:07.992
+00:16:06.923 --> 00:16:10.959
 LPT reste joignable par son port vers S1.
 
 244
-00:16:08.662 --> 00:16:10.902
+00:16:10.979 --> 00:16:13.074
 Si vous avancez encore un peu, vous verrez
 
 245
-00:16:10.902 --> 00:16:14.742
+00:16:13.074 --> 00:16:17.380
 que certaines BPDU périodiques
 conservent le bit TC à 1.
 
 246
-00:16:14.742 --> 00:16:19.142
+00:16:17.400 --> 00:16:22.400
 Chaque port dispose d'un temporisateur égal
 au temporisateur « hello » plus une seconde.
 
 247
-00:16:19.142 --> 00:16:22.642
+00:16:22.420 --> 00:16:25.406
 Ce temporisateur démarre quand
 le port émet une notification.
 
 248
-00:16:22.642 --> 00:16:28.192
+00:16:25.426 --> 00:16:30.660
 Jusqu'à son expiration, le port positionne le
 bit TC à 1 dans toutes les BPDU qu'il envoie.
 
 249
-00:16:28.842 --> 00:16:33.282
+00:16:30.680 --> 00:16:35.248
 Vous pouvez aussi voir certaines BPDU
 périodiques sans le bit TC : elles proviennent
 
 250
-00:16:33.282 --> 00:16:37.458
+00:16:35.248 --> 00:16:40.976
 d'un port qui n'a fait que recevoir une notification
 et qui n'a donc pas armé son temporisateur.
 
 251
-00:16:40.635 --> 00:16:45.275
+00:16:40.996 --> 00:16:46.475
 RSTP est sensible aux erreurs de configuration
 et peu résistant face aux acteurs malveillants.
 
 252
-00:16:45.275 --> 00:16:48.655
+00:16:46.495 --> 00:16:49.178
 Un pont qui ne parle pas
 RSTP peut créer une boucle.
 
 253
-00:16:48.655 --> 00:16:51.935
+00:16:49.198 --> 00:16:51.978
 Une personne malveillante peut
 s'insérer dans la topologie
 
 254
-00:16:51.935 --> 00:16:55.092
+00:16:51.978 --> 00:16:55.615
 pour perturber le service,
 espionner le trafic ou le modifier.
 
 255
-00:16:55.762 --> 00:17:00.082
+00:16:55.762 --> 00:16:59.406
 Pour limiter ces problèmes, vous devez
 identifier les ports d'extrémité.
 
 256
-00:17:00.082 --> 00:17:04.402
+00:17:00.082 --> 00:17:04.366
 Un port d'extrémité est raccordé à un
 équipement tel qu'un PC ou une imprimante.
 
 257
-00:17:04.402 --> 00:17:08.782
+00:17:04.402 --> 00:17:08.624
 Ces équipements ne génèrent pas de
 BPDU et ne peuvent pas créer de boucle.
 
 258
-00:17:08.782 --> 00:17:11.412
+00:17:08.782 --> 00:17:10.571
 RSTP propose deux options liées :
 
 259
-00:17:12.102 --> 00:17:15.882
+00:17:12.102 --> 00:17:15.743
 Quand elle est vraie, AdminEdge
 initialise un port comme port d'extrémité.
 
 260
-00:17:15.882 --> 00:17:17.822
+00:17:15.882 --> 00:17:17.471
 Elle est désactivée par défaut.
 
 261
-00:17:17.822 --> 00:17:20.502
+00:17:17.822 --> 00:17:20.799
 Quand elle est vraie, AutoEdge
 permet à un port de devenir
 
 262
-00:17:20.502 --> 00:17:23.982
+00:17:20.799 --> 00:17:24.424
 un port d'extrémité s'il ne reçoit
 aucune BPDU pendant 3 secondes.
 
 263
-00:17:23.982 --> 00:17:25.312
+00:17:24.444 --> 00:17:26.148
 Elle est activée par défaut.
 
 264
-00:17:26.042 --> 00:17:29.382
+00:17:26.168 --> 00:17:29.296
 Si un port d'extrémité reçoit
 une BPDU, quelles que soient
 
 265
-00:17:29.382 --> 00:17:32.712
+00:17:29.296 --> 00:17:32.493
 les valeurs de ces deux options,
 il redevient un port ordinaire.
 
 266
-00:17:33.362 --> 00:17:38.702
+00:17:33.362 --> 00:17:40.171
 Dans cette topologie, S1, S2, S3, S4,
 S5 et S6 se comportent comme des ponts,
 
 267
-00:17:38.702 --> 00:17:43.407
+00:17:40.171 --> 00:17:47.166
 tandis que H1, H2, H3, H4, H5 et H6 se
 comportent comme des équipements terminaux :
 
 268
-00:17:44.137 --> 00:17:49.437
+00:17:47.186 --> 00:17:51.591
 S1 et H1 sont sur un port sans
 configuration : AutoEdge est vraie,
 
 269
-00:17:49.437 --> 00:17:54.273
+00:17:51.591 --> 00:17:56.939
 AdminEdge est fausse, S2 et H2 sont
 sur un port où AdminEdge est vraie,
 
 270
-00:17:55.023 --> 00:17:58.503
+00:17:56.959 --> 00:18:00.691
 S3 et H3 sont sur un port où
 AutoEdge est fausse et AdminEdge
 
 271
-00:17:58.503 --> 00:18:02.608
+00:18:00.691 --> 00:18:04.642
 est vraie, S4 et H4 sont sur
 un port où AutoEdge est fausse.
 
 272
-00:18:03.278 --> 00:18:07.558
+00:18:04.662 --> 00:18:09.694
 Si vous lancez la topologie et attendez une
 vingtaine de secondes, les liens vers S1,
 
 273
-00:18:07.558 --> 00:18:11.178
+00:18:09.694 --> 00:18:12.945
 S2, S3, S4, H1, H2,
 
 274
-00:18:11.178 --> 00:18:14.658
+00:18:12.945 --> 00:18:17.125
 H3 et H4 finissent par acheminer
 le trafic utilisateur :
 
 275
-00:18:14.658 --> 00:18:15.975
+00:18:17.125 --> 00:18:19.523
 aucune option n'a d'importance.
 
 276
-00:18:16.625 --> 00:18:19.025
+00:18:19.543 --> 00:18:21.272
 Mais qu'en est-il des deux dernières paires ?
 
 277
-00:18:19.025 --> 00:18:22.405
+00:18:21.292 --> 00:18:24.656
 S5 et H5 sont raccordés à
 un port de type network.
 
 278
-00:18:22.405 --> 00:18:26.565
+00:18:24.676 --> 00:18:28.556
 Un tel port active une fonctionnalité
 propriétaire : le bridge assurance.
 
 279
-00:18:26.565 --> 00:18:30.285
+00:18:28.576 --> 00:18:31.223
 Le port émet des BPDU quel que soit son rôle.
 
 280
-00:18:30.285 --> 00:18:33.825
+00:18:31.243 --> 00:18:34.766
 S'il n'en reçoit aucune pendant 3
 périodes « hello » consécutives,
 
 281
-00:18:33.825 --> 00:18:37.052
+00:18:34.766 --> 00:18:36.288
 il passe à l'état de rejet.
 
 282
-00:18:37.762 --> 00:18:42.502
+00:18:37.762 --> 00:18:43.015
 Sur le lien entre R0 et S5, vous pouvez
 voir des BPDU circuler dans les deux sens,
 
 283
-00:18:42.502 --> 00:18:47.152
+00:18:43.015 --> 00:18:46.667
 contrairement aux autres liens,
 où seuls les ports désignés en émettent.
 
 284
-00:18:47.842 --> 00:18:52.789
+00:18:47.842 --> 00:18:53.301
 S6 et H6 sont raccordés à un port où AdminEdge
 est vraie et où le BPDU guard est activé.
 
 285
-00:18:53.459 --> 00:18:57.956
+00:18:53.459 --> 00:18:58.407
 Il s'agit d'une autre fonctionnalité propriétaire,
 qui désactive un port s'il reçoit une BPDU.
 
 286
-00:18:58.626 --> 00:19:01.666
+00:18:58.626 --> 00:19:02.242
 En résumé, si vous attendez d'un
 port qu'il soit un port d'extrémité,
 
 287
-00:19:01.666 --> 00:19:05.906
+00:19:02.242 --> 00:19:06.039
 positionnez AdminEdge à vrai
 et activez le BPDU guard.
 
 288
-00:19:05.906 --> 00:19:08.022
+00:19:06.059 --> 00:19:08.309
 Sinon, déclarez-le comme port network.
 
 289
-00:19:11.739 --> 00:19:15.519
+00:19:11.739 --> 00:19:15.889
 Un cas d'usage solide pour RSTP
 aujourd'hui est le réseau d'administration
 
 290
-00:19:15.519 --> 00:19:19.759
+00:19:15.889 --> 00:19:21.737
 hors bande (OOB) d'un centre de données, où
 quelques secondes d'indisponibilité sont tolérables.
 
 291
-00:19:19.759 --> 00:19:26.019
+00:19:21.757 --> 00:19:29.447
 La configuration est minimale et vous pouvez utiliser
 des commutateurs bon marché, comme un Cisco 2960X.
 
 292
-00:19:26.019 --> 00:19:29.059
+00:19:29.467 --> 00:19:32.955
 Deux commutateurs jouent le rôle de
 ponts racines et plusieurs boucles
 
 293
-00:19:29.059 --> 00:19:32.619
+00:19:32.955 --> 00:19:35.264
 raccordent les commutateurs
 présents dans chaque baie.
 
 294
-00:19:32.619 --> 00:19:35.922
+00:19:35.284 --> 00:19:38.396
 Cette conception simple survit
 à une panne sur chaque boucle.
 
 295
-00:19:36.672 --> 00:19:39.912
+00:19:38.416 --> 00:19:40.794
 La convergence prend environ 6 secondes.
 
 296
-00:19:39.912 --> 00:19:44.672
+00:19:40.814 --> 00:19:45.022
 Chaque boucle doit rester petite
 (environ 16 ponts) pour réduire la probabilité
 
 297
-00:19:44.672 --> 00:19:49.592
+00:19:45.022 --> 00:19:48.161
 d'une double panne et éviter de
 partager trop de bande passante.
 
 298
-00:19:49.592 --> 00:19:52.672
+00:19:49.592 --> 00:19:52.929
 Cette conception peut évoluer un
 peu sans devenir trop complexe :
 
 299
-00:19:52.672 --> 00:19:57.156
+00:19:52.929 --> 00:19:56.021
 un VLAN par boucle ou un
 domaine de pont par boucle.
 
 300
-00:20:00.252 --> 00:20:03.412
+00:20:00.252 --> 00:20:02.986
 L'âge maximal, dont la
 valeur par défaut est 20,
 
 301
-00:20:03.412 --> 00:20:06.432
+00:20:02.986 --> 00:20:06.753
 détermine la distance maximale
 entre un nœud et la racine.
 
 302
-00:20:06.432 --> 00:20:10.722
+00:20:06.773 --> 00:20:12.088
 Cette topologie est trop grande : les BPDU
 issues de R1 ne parviennent pas au-delà de S20.
 
 303
-00:20:11.492 --> 00:20:14.472
+00:20:12.108 --> 00:20:15.225
 Une fois la topologie stabilisée,
 une partie du réseau
 
 304
-00:20:14.472 --> 00:20:18.232
+00:20:15.225 --> 00:20:18.547
 considère R1 comme racine et
 l'autre partie vote pour R2.
 
 305
-00:20:18.232 --> 00:20:21.512
+00:20:18.567 --> 00:20:21.602
 À la frontière, S20 tente de
 démarrer une synchronisation
 
 306
-00:20:21.512 --> 00:20:26.572
+00:20:21.602 --> 00:20:26.087
 avec S21 pour faire passer son port
 désigné à l'état de transmission.
 
 307
-00:20:26.572 --> 00:20:28.389
+00:20:26.572 --> 00:20:28.215
 Sa BPDU ressemble à ceci :
 
 308
-00:20:34.026 --> 00:20:38.586
+00:20:34.026 --> 00:20:37.973
 S21 la rejette car l'âge du
 message est égal à l'âge maximal.
 
 309
-00:20:38.586 --> 00:20:43.429
+00:20:38.586 --> 00:20:43.834
 De son côté, la BPDU que S21
 envoie à S20 ressemble à ceci :
 
 310
-00:20:50.065 --> 00:20:53.685
+00:20:50.065 --> 00:20:54.029
 Cela ne suffit pas à changer le
 port racine de S20, car S20 dispose
 
 311
-00:20:53.685 --> 00:21:00.062
+00:20:54.029 --> 00:21:03.330
 d'un identifiant de racine plus faible :
 4096.02:00:00:00:00:00 contre 4096.02:00:00:00:00:01.
 
 312
-00:21:00.792 --> 00:21:04.172
+00:21:03.350 --> 00:21:06.357
 Réparer le lien entre R1
 et R2 résout le problème.
 
 313
-00:21:04.172 --> 00:21:06.692
+00:21:06.377 --> 00:21:09.052
 L'âge de message maximal
 transporté par un paquet
 
 314
-00:21:06.692 --> 00:21:10.152
+00:21:09.052 --> 00:21:13.048
 est désormais de 18, en dessous
 de l'âge maximal configuré.
 
 315
-00:21:10.152 --> 00:21:12.832
+00:21:13.068 --> 00:21:15.795
 Mais cela ne fonctionne que
 jusqu'à la rupture d'un autre lien.
 
 316
-00:21:12.832 --> 00:21:16.362
+00:21:15.815 --> 00:21:19.592
 Une correction possible consiste
 à porter l'âge maximal à 40.
 
 317
-00:21:19.539 --> 00:21:23.279
+00:21:19.612 --> 00:21:23.018
 RSTP converge en général en
 quelques secondes au démarrage.
 
 318
-00:21:23.279 --> 00:21:26.319
+00:21:23.279 --> 00:21:26.419
 Il répare souvent un arbre
 en moins d'une seconde.
 
 319
-00:21:26.319 --> 00:21:30.739
+00:21:26.439 --> 00:21:29.875
 Même la topologie à 38 ponts
 converge en moins de 10 secondes.
 
 320
-00:21:30.739 --> 00:21:33.679
+00:21:30.739 --> 00:21:34.366
 Certaines topologies mettent un
 peu plus de temps à se rétablir
 
 321
-00:21:33.679 --> 00:21:35.762
+00:21:34.366 --> 00:21:36.260
 quand la racine devient indisponible.
 
 322
-00:21:36.472 --> 00:21:41.672
+00:21:36.472 --> 00:21:42.223
 Dans cette topologie, une fois qu'elle a
 convergé, nous coupons le lien entre R0 et S1.
 
 323
-00:21:41.672 --> 00:21:46.462
+00:21:42.243 --> 00:21:46.109
 La topologie est déjà optimale,
 mais RSTP peine à converger de nouveau.
 
 324
-00:21:47.372 --> 00:21:49.912
+00:21:47.372 --> 00:21:49.305
 D'abord, S1 perd son port racine.
 
 325
-00:21:49.912 --> 00:21:54.892
+00:21:49.912 --> 00:21:53.221
 Il n'a plus aucune information
 sur R0 et se proclame racine.
 
 326
-00:21:54.892 --> 00:21:59.838
+00:21:54.892 --> 00:21:59.366
 Il conserve ses ports vers S2 et S3 comme
 ports désignés à l'état de transmission.
 
 327
-00:22:00.488 --> 00:22:03.608
+00:22:00.488 --> 00:22:03.709
 Nous avançons d'un cran :
 il envoie une BPDU à S2
 
 328
-00:22:03.608 --> 00:22:06.468
+00:22:03.709 --> 00:22:06.272
 et à S3 pour les informer
 du changement de racine.
 
 329
-00:22:06.468 --> 00:22:09.988
+00:22:06.468 --> 00:22:10.583
 À sa réception, S2 accepte S1
 comme racine, car il ne connaît pas
 
 330
-00:22:09.988 --> 00:22:12.688
+00:22:10.583 --> 00:22:12.342
 de meilleure racine sur un autre port.
 
 331
-00:22:12.688 --> 00:22:15.688
+00:22:12.688 --> 00:22:15.212
 Il élit le port vers S1 comme port racine.
 
 332
-00:22:15.688 --> 00:22:18.248
+00:22:15.688 --> 00:22:17.534
 L'autre port reste un port désigné.
 
 333
-00:22:18.248 --> 00:22:19.738
+00:22:18.248 --> 00:22:19.884
 Aucun des deux ports ne change d'état.
 
 334
-00:22:20.408 --> 00:22:24.628
+00:22:20.408 --> 00:22:24.291
 À la réception de la BPDU de S1,
 S3 se comporte différemment :
 
 335
-00:22:24.628 --> 00:22:29.388
+00:22:24.291 --> 00:22:29.050
 il connaît R0 comme une meilleure racine
 que S1 grâce à son port alternatif vers S2.
 
 336
-00:22:29.388 --> 00:22:32.548
+00:22:29.388 --> 00:22:32.969
 Il promeut ce port en port racine
 et rétrograde le port vers S1
 
 337
-00:22:32.548 --> 00:22:36.972
+00:22:32.969 --> 00:22:37.153
 en port désigné, ce qui
 nécessite un nouvel accord.
 
 338
-00:22:37.622 --> 00:22:42.822
+00:22:37.622 --> 00:22:43.129
 Nous avançons d'un cran : S3 envoie une
 proposition à S1 avec R0 comme racine.
 
 339
-00:22:42.822 --> 00:22:48.138
+00:22:43.149 --> 00:22:47.358
 S1 élit R0 comme racine et promeut
 son port vers S3 en port racine.
 
 340
-00:22:48.868 --> 00:22:52.188
+00:22:48.868 --> 00:22:51.961
 Lors de la même séquence,
 S3 reçoit aussi une BPDU
 
 341
-00:22:52.188 --> 00:22:55.208
+00:22:51.961 --> 00:22:54.496
 de S2 affirmant que S1 est la racine.
 
 342
-00:22:55.208 --> 00:22:59.168
+00:22:55.208 --> 00:22:58.441
 S3 n'a donc plus aucun port
 annonçant R0 comme racine :
 
 343
-00:22:59.168 --> 00:23:03.805
+00:22:58.441 --> 00:23:02.607
 il élit S1 comme racine et son
 port vers S2 comme port racine.
 
 344
-00:23:04.475 --> 00:23:07.615
+00:23:04.475 --> 00:23:07.568
 Nous avançons d'un cran :
 sa BPDU suivante vers S1
 
 345
-00:23:07.615 --> 00:23:12.038
+00:23:07.568 --> 00:23:10.859
 contient cette information et
 S1 s'élit de nouveau racine.
 
 346
-00:23:12.708 --> 00:23:18.008
+00:23:12.708 --> 00:23:17.473
 Mais lors de la même vague, S1 envoie une
 proposition à S2 avec R0 comme racine.
 
 347
-00:23:18.008 --> 00:23:22.938
+00:23:18.008 --> 00:23:23.746
 Alors que S1 et S3 s'accordent sur le fait que S1
 est la racine, S2 croit désormais que c'est R0 !
 
 348
-00:23:23.648 --> 00:23:27.728
+00:23:23.766 --> 00:23:27.521
 À son tour, S2 convainc de
 nouveau S3 que R0 est la racine,
 
 349
-00:23:27.728 --> 00:23:32.772
+00:23:27.521 --> 00:23:32.590
 S3 convainc S1, S1 convainc
 S2 et S2 convainc S3.
 
 350
-00:23:33.462 --> 00:23:36.082
+00:23:33.462 --> 00:23:36.073
 Cela pourrait durer indéfiniment,
 mais ce n'est pas le cas.
 
 351
-00:23:36.082 --> 00:23:39.202
+00:23:36.093 --> 00:23:40.580
 Les BPDU affirmant « R0 est la
 racine » finissent par se périmer
 
 352
-00:23:39.202 --> 00:23:41.772
+00:23:40.580 --> 00:23:43.345
 lorsque l'âge du message
 dépasse l'âge maximal.
 
 353
-00:23:42.442 --> 00:23:47.782
+00:23:43.365 --> 00:23:47.770
 Dans cet exemple, à la onzième
 seconde, S2 envoie une BPDU à S3
 
 354
-00:23:47.782 --> 00:23:52.462
+00:23:47.770 --> 00:23:52.264
 avec R0 comme racine, mais S3 la jette
 car elle a atteint l'âge maximal.
 
 355
-00:23:52.462 --> 00:23:55.742
+00:23:52.462 --> 00:23:55.973
 Avec un peu de chance, la convergence
 peut aussi être plus rapide
 
 356
-00:23:55.742 --> 00:23:59.042
+00:23:55.973 --> 00:23:59.886
 si un port cesse de transmettre
 des BPDU après avoir atteint
 
 357
-00:23:59.042 --> 00:24:02.572
+00:23:59.886 --> 00:24:04.437
 le transmit hold count, dont la
 valeur par défaut est 6 par seconde.
 
 358
-00:24:06.268 --> 00:24:09.108
+00:24:06.268 --> 00:24:09.501
 Les exemples interactifs
 exécutent MSTPD directement
 
 359
-00:24:09.108 --> 00:24:12.188
+00:24:09.501 --> 00:24:13.116
 dans le navigateur, compilé en
 WebAssembly avec emscripten.
 
 360
-00:24:12.188 --> 00:24:17.868
+00:24:13.136 --> 00:24:18.122
 Une API C remplace le code qui dialogue
 avec le noyau Linux : elle gère les ponts
 
 361
-00:24:17.868 --> 00:24:23.328
+00:24:18.122 --> 00:24:23.118
 et les ports, exporte l'état en JSON et fait
 avancer le temps de manière déterministe.
 
 362
-00:24:23.328 --> 00:24:26.475
+00:24:23.328 --> 00:24:26.324
 Une surcouche JavaScript la
 rend plus agréable à utiliser :
 
 363
-00:24:27.345 --> 00:24:30.765
+00:24:27.345 --> 00:24:31.576
 Plusieurs dizaines de tests unitaires
 explorent les fonctionnalités de MSTPD
 
 364
-00:24:30.765 --> 00:24:33.475
+00:24:31.576 --> 00:24:34.757
 et vérifient leur bon fonctionnement
 dans cet environnement :
 
 365
-00:24:34.465 --> 00:24:37.685
+00:24:34.777 --> 00:24:37.731
 Du code JavaScript supplémentaire
 recherche les blocs contenant
 
 366
-00:24:37.685 --> 00:24:41.905
+00:24:37.731 --> 00:24:41.766
 une définition de topologie et les
 transforme en composant interactif.
 
 367
-00:24:41.905 --> 00:24:45.509
+00:24:41.905 --> 00:24:45.733
 La définition peut être inspectée
 et modifiée avec le bouton « edit ».
 
 368
-00:24:46.159 --> 00:24:49.999
+00:24:46.159 --> 00:24:49.595
 Il y a aussi une astuce pour
 déterminer si la topologie a convergé.
 
 369
-00:24:49.999 --> 00:24:53.819
+00:24:49.999 --> 00:24:54.195
 Après chaque pas, nous enregistrons un
 instantané de la mémoire de la simulation,
 
 370
-00:24:53.819 --> 00:24:57.359
+00:24:54.195 --> 00:24:58.828
 jouons 50 secondes en accéléré pour
 vérifier que la topologie est stable,
 
 371
-00:24:57.359 --> 00:25:01.593
+00:24:58.828 --> 00:25:01.915
 puis remontons le temps en
 restaurant cet instantané. 🕰️
 
 372
-00:25:02.243 --> 00:25:04.523
+00:25:02.243 --> 00:25:04.033
 Le code complet se trouve sur GitHub.
 
 373
-00:25:04.523 --> 00:25:06.443
+00:25:04.523 --> 00:25:06.259
 Je suis très satisfait du résultat.
 
 374
-00:25:06.443 --> 00:25:08.943
+00:25:06.443 --> 00:25:08.898
 Il peut être difficile de
 suivre tout ce qui se passe
 
 375
-00:25:08.943 --> 00:25:12.823
+00:25:08.898 --> 00:25:12.583
 à chaque étape, mais la possibilité
 d'avancer et reculer aide beaucoup.
 
 376
-00:25:12.823 --> 00:25:17.263
+00:25:12.823 --> 00:25:15.501
 Je compte réutiliser cette approche
 dans de prochains articles.
 
 377
-00:25:17.263 --> 00:25:18.459
+00:25:17.263 --> 00:25:18.326
 Merci d'avoir regardé !
