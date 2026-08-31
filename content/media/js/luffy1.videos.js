@@ -7,12 +7,10 @@ luffy.do(() => {
   if (hlsVideos.length === 0) return;
 
   // Video.js 10 needs MSE and a recent browser (the most recent feature it uses
-  // is CSS nesting).
-  if (
-    !("MediaSource" in window || "ManagedMediaSource" in window) ||
-    !window.CSS?.supports("selector(&)")
-  )
-    return;
+  // is CSS nesting). iPhone has only ManagedMediaSource, which Video.js does not
+  // check codecs against, and Safari plays HLS on its own.
+  // https://github.com/videojs/v10/pull/2564
+  if (!window.MediaSource || !window.CSS?.supports("selector(&)")) return;
 
   const language = document.documentElement.lang.slice(0, 2);
 
