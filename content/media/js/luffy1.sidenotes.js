@@ -2,7 +2,7 @@
    positions incorrectly, leaving them stacked on top of each other. Notably
    Safari 26.x with x < 5. Detect such overlaps and fall back to inline
    sidenotes when they happen. */
-/* Between June 15th and July 11th, 10 occurrences. */
+/* Between June 15th and August 31st, 28 occurrences. */
 
 luffy.do(() => {
   const main = document.querySelector(".lf-main");

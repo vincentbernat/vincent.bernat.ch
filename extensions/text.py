@@ -35,26 +35,35 @@ class FootnotesPlugin(Plugin):
             return
         d = pq(text, parser="html")
 
+        # The footnote extension uses the following classes:
+        # - .footnote: the ordered list of footnotes, to be removed
+        # - .footnote-ref: the link to the footnote, renamed to .lf-sidenote-ref
+        # - .footnote-backref: the link at the end of footnote to go back to the
+        #   reference
+        #
+        # And we add:
+        # - .lf-sidenote-refmark: the reference mark before the sidenote
+        # - .lf-sidenote-end: replace the backref link
+
         # Rename footnote to sidenote
         for cls in ["footnote-ref", "footnote-backref"]:
             els = d(f".{cls}")
             els.removeClass(cls)
-            els.addClass(cls.replace("foot", "side"))
+            els.addClass(cls.replace("foot", "lf-side"))
 
         sidenotes = d(".footnote ol")
 
-        # Pop out orphaned backlinks
-        backrefs = sidenotes(".sidenote-backref")
+        # Pop out backrefs when they are the only element of their container.
+        backrefs = sidenotes(".lf-sidenote-backref")
         for backref in backrefs.items():
             parent = backref.parent()
             if len(parent.contents()) == 1:
-                # We only have the <a> link
                 parent.replace_with(backref)
 
         # Create sidenotes and insert them after their parent.
         for ref in d.items("sup[id^='fnref:']"):
             name = ref.attr.id[6:]
-            fn = sidenotes("li[id='fn:{}']".format(name))
+            fn = sidenotes(f"li[id='fn:{name}']")
             assert fn
             parents = ref.parents()
             for i in range(len(parents) - 1):
@@ -63,17 +72,17 @@ class FootnotesPlugin(Plugin):
             sidenote = pq("<aside>")
             sidenote.attr.role = "note"
             sidenote.attr.class_ = "lf-sidenote"
-            sidenote.attr.id = "sidenote-{}".format(name)
-            ref[0].set("style", "anchor-name: --fn-{}".format(name))
-            sidenote[0].set("style", "position-anchor: --fn-{}".format(name))
+            sidenote.attr.id = f"sidenote-{name}"
+            ref[0].set("style", f"anchor-name: --lf-sn-{name}")
+            sidenote[0].set("style", f"position-anchor: --lf-sn-{name}")
             sidenote.html(
-                '<sup class="lf-refmark">{}</sup>{}'.format(ref.text(), fn.html())
+                f'<sup class="lf-sidenote-refmark">{ref.text()}</sup>{fn.html()}'
             )
-            for backref in sidenote("a.sidenote-backref").items():
+            for backref in sidenote("a.lf-sidenote-backref").items():
                 backref[0].tag = "span"
                 backref[0].attrib.clear()
-                backref[0].set("class", "sidenote-end")
-            ref("a.sidenote-ref").attr.href = "#sidenote-{}".format(name)
+                backref[0].set("class", "lf-sidenote-end")
+            ref("a.lf-sidenote-ref").attr.href = f"#sidenote-{name}"
             insert_point = parent
             # Skip past following siblings without margin-top
             next_el = insert_point[0].getnext()
@@ -141,9 +150,9 @@ class TOCPlugin(Plugin):
             # The empty details element is only a switch: CSS uses its state to
             # display the TOC collapsed or expanded. It never hides anything.
             toc.prepend(
-                '<details><summary aria-label="{}"></summary></details>'.format(
-                    resource.meta.l10n.toc
-                )
+                "<details>"
+                f'<summary aria-label="{resource.meta.l10n.toc}"></summary>'
+                "</details>"
             )
             html = toc.outer_html()
             html = re.sub(r"</li>\s+</ul>", "</li></ul>", html)
