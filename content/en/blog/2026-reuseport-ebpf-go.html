@@ -101,7 +101,8 @@ documents this mechanism:[^accuracy]
 [commit3]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=c125e80b88687b25b321795457309eaaee4bf270 "soreuseport: fast reuseport TCP socket selection"
 [pending patch]: https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/commit/?id=41788bdd42312828532c4ddbadc0a4d28426d4fd "man/man7/socket.7: Fix documentation for SO_ATTACH_REUSEPORT_PORT"
 
-[^accuracy]: The current version of the manual page is incomplete and does not
+[^accuracy]:
+    The current version of the manual page is incomplete and does not
     cover the evolution introduced in Linux 4.19. There is a [pending patch][]
     about this.
 
@@ -123,7 +124,8 @@ Altering the load-balancing algorithm for a group of sockets requires two steps:
 1. write and compile an eBPF program in C,[^rust] and
 2. load it and attach it in Go.
 
-[^rust]: [Rust][] is another option. However, the program we use is so trivial that
+[^rust]:
+    [Rust][] is another option. However, the program we use is so trivial that
     it does not make sense to use Rust.
 
 [Rust]: https://aya-rs.dev/book/ "Building eBPF Programs with Aya"
@@ -162,7 +164,8 @@ descriptors. In ❸, we randomly select the index of the target socket.[^random]
 In ❹, we invoke the `bpf_sk_select_reuseport()` helper to record our decision.
 Finally, in ❺, we accept the packet.
 
-[^random]: As `bpf_get_prandom_u32()` returns a pseudo-random 32-bit unsigned
+[^random]:
+    As `bpf_get_prandom_u32()` returns a pseudo-random 32-bit unsigned
     value, this method exhibits a very slight bias towards the first indexes.
     This is unlikely to be worth fixing.
 
@@ -183,7 +186,8 @@ Then, include the following headers:[^kernel]
 #include <bpf/bpf_helpers.h>
 ```
 
-[^kernel]: Some examples include `<linux/bpf.h>` instead of `"vmlinux.h"`. This
+[^kernel]:
+    Some examples include `<linux/bpf.h>` instead of `"vmlinux.h"`. This
     makes your eBPF program dependent on the installed kernel headers.
 
 For my 6.17 kernel, the generated `vmlinux.h` is quite big: 2.7 MiB. Moreover,
@@ -263,7 +267,8 @@ for range workers {
 }
 ```
 
-[^listenaddr]: `listenAddr` is initially set to `127.0.0.1:0` to allocate a
+[^listenaddr]:
+    `listenAddr` is initially set to `127.0.0.1:0` to allocate a
     random port. After the first iteration, it is updated with the allocated
     port.
 
@@ -457,7 +462,8 @@ until there are no more packets. A solution is to set a deadline for
 `conn.Read()` and check if we should stop the goroutine when the deadline is
 exceeded:
 
-[^c]: In C, we would `poll()` both the socket and a pipe used to signal for
+[^c]:
+    In C, we would `poll()` both the socket and a pipe used to signal for
     shutdown. When the second condition is triggered, we drain the socket by
     executing a series of non-blocking `read()` until we get `EWOULDBLOCK`.
 

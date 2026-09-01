@@ -42,14 +42,16 @@ using [versioned URLs][] but most of them aren't. There is
 currently [no standard tool to handle vendoring][]. My personal take
 is to **vendor all dependencies** with [Glide][].[^godep]
 
-[^vendoring]: In Go, "vendoring" is about both *bundling* and
+[^vendoring]:
+    In Go, "vendoring" is about both *bundling* and
     *dependency management*. As the Go ecosystem matures, the
     *bundling* part (fixed snapshots of dependencies) may become
     optional but the `vendor/` directory may stay for dependency
     management (retrieval of the latest versions of dependencies
     matching a set of constraints).
 
-[^godep]: [Another branch][own take godep] is using `go dep`, the
+[^godep]:
+    [Another branch][own take godep] is using `go dep`, the
     [<del>official</del> package manager for Go][godep].
 
 It is a good practice to split an application into different packages
@@ -135,7 +137,8 @@ We define two rules:[^auto]
 We use a variable to invoke `glide`. This enables a user to easily
 override it (for example, with `make GLIDE=$GOPATH/bin/glide`).
 
-[^auto]: If you don't want to automatically update `glide.lock` when a
+[^auto]:
+    If you don't want to automatically update `glide.lock` when a
     change is detected in `glide.yaml`, rename the target to
     `deps-update` and make it a phony target.
 
@@ -167,7 +170,8 @@ get`[^irony] to download and build `golint`. In ❷, the `lint` rule
 executes `golint` on each package contained in the `$(PKGS)`
 variable. We'll explain this variable in the next section.
 
-[^irony]: There is some irony for bad mouthing `go get` and then
+[^irony]:
+    There is some irony for bad mouthing `go get` and then
     immediately use it because it is convenient.
 
 ## Working with non-vendored packages only
@@ -183,7 +187,8 @@ we care about**:
     PKGS = $(or $(PKG), $(shell cd $(BASE) && \
         env GOPATH=$(GOPATH) $(GO) list ./... | grep -v "^$(PACKAGE)/vendor/"))
 
-[^recursive]: I think `./...` should not include the `vendor/`
+[^recursive]:
+    I think `./...` should not include the `vendor/`
     directory by default. Dependencies should be trusted to have run
     their own tests in the environment they expect them to
     succeed. <del>Unfortunately, this is [unlikely to change][].</del>

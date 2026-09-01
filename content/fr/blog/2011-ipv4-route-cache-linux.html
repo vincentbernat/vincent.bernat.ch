@@ -38,18 +38,20 @@ J'espère fournir ici une vue concise sur le cache des routes, tel
 qu'implémenté dans **Linux 3.1**[^valid]. Ce cache est dépendant du protocole
 sous-jacent[^dst] et je ne couvre ici que la version **IPv4**.
 
-[^valid]: Le contenu de cet article est valide pour les noyaux 2.6.38,
-          2.6.39, 3.0 et 3.1. Il contient également les informations
-          nécessaires pour comprendre le fonctionnement des noyaux
-          2.6.35, 2.6.36 et 2.6.37 ainsi que pour 3.2, 3.3, 3.4 et
-          3.5. La mise en cache des routes a été
-          [retirée dans la version 3.6][removed] du noyau.
+[^valid]:
+    Le contenu de cet article est valide pour les noyaux 2.6.38,
+    2.6.39, 3.0 et 3.1. Il contient également les informations
+    nécessaires pour comprendre le fonctionnement des noyaux
+    2.6.35, 2.6.36 et 2.6.37 ainsi que pour 3.2, 3.3, 3.4 et
+    3.5. La mise en cache des routes a été
+    [retirée dans la version 3.6][removed] du noyau.
 
-[^dst]: Linux fournit un sous-système indépendant du protocole appelé
-        *protocol-independent destination cache* (DST). Toutefois, ce
-        composant n'est là que pour découpler les autres sous-systèmes du
-        cache et ne fournit pas tous les services nécessaires à
-        l'implémentation d'un cache.
+[^dst]:
+    Linux fournit un sous-système indépendant du protocole appelé
+    *protocol-independent destination cache* (DST). Toutefois, ce
+    composant n'est là que pour découpler les autres sous-systèmes du
+    cache et ne fournit pas tous les services nécessaires à
+    l'implémentation d'un cache.
 
 [TOC]
 
@@ -67,15 +69,16 @@ assez trivial, il doit répondre à un certain nombre de questions :
  - Est-ce que l'adresse de destination correspond à cette route ? Ou à celle-là ?
  - Est-ce que la passerelle à utiliser est actuellement disponible ?
 
-[^martian]: Les adresses *martiennes* sont des adresses qui ne peuvent
-            pas être utilisées comme adresses sources, soit parce
-            qu'elles sont réservées pour un usage spécifique (comme
-            les adresses multicast), soit en raison de la mise en
-            œuvre du *reverse path filtering* qui vérifie si un paquet
-            reçu sur une interface aurait sa réponse vers la même
-            interface, comme défini dans la [RFC 3704][rfc3704]. Cette
-            fonctionnalité peut être activée dans Linux via le réglage
-            `rp_filter`.
+[^martian]:
+    Les adresses *martiennes* sont des adresses qui ne peuvent
+    pas être utilisées comme adresses sources, soit parce
+    qu'elles sont réservées pour un usage spécifique (comme
+    les adresses multicast), soit en raison de la mise en
+    œuvre du *reverse path filtering* qui vérifie si un paquet
+    reçu sur une interface aurait sa réponse vers la même
+    interface, comme défini dans la [RFC 3704][rfc3704]. Cette
+    fonctionnalité peut être activée dans Linux via le réglage
+    `rp_filter`.
 
 Toutes ces vérifications peuvent prendre du temps, y compris pour des
 tables de routage réduites. Aussi, Linux tient à jour un *cache des
@@ -114,9 +117,10 @@ des systèmes BSD qui gardent le cache dans la table de routage. Chaque
 entrée est une liste chaînée où chaque élément est une entrée du
 cache.
 
-[^src]: Pour plus de détails, les fichiers à examiner sont
-        `include/net/dst.h`, `include/net/route.h` et
-        `net/ipv4/route.c`.
+[^src]:
+    Pour plus de détails, les fichiers à examiner sont
+    `include/net/dst.h`, `include/net/route.h` et
+    `net/ipv4/route.c`.
 
 ![Schéma de la table de hachage utilisé pour le cache des routes]([[!!images/linux/routing-cache.svg]] "Vue partielle avec trois entrées de la table de hachage utilisée par le cache des routes")
 
@@ -161,10 +165,11 @@ cache. La plupart d'entre eux sont disponibles via la commande
     d'entrées. Toutefois, cette valeur peut influencer son
     efficacité. Nous verrons cela plus en détail par la suite.
 
-[^size]: En fait, la taille de la table de hachage est toujours une
-         puissance de deux. La valeur de `rhash_entries` est alors
-         arrondie à la prochaine puissance de deux. En interne, sa
-         valeur est stockée dans `rt_hash_mask + 1`.
+[^size]:
+    En fait, la taille de la table de hachage est toujours une
+    puissance de deux. La valeur de `rhash_entries` est alors
+    arrondie à la prochaine puissance de deux. En interne, sa
+    valeur est stockée dans `rt_hash_mask + 1`.
 
 Il existe deux réglages que l'on retrouve souvent dans les
 documentations mais qui sont désormais obsolètes :
@@ -442,8 +447,9 @@ longue que la valeur autorisée (soit plus longue que
 autres chaînes[^attack]), toutes les entrées du cache correspondant à
 l'interface courante sont invalidées.
 
-[^attack]: Cela permet au noyau de se protéger contre les attaques par
-           collision.
+[^attack]:
+    Cela permet au noyau de se protéger contre les attaques par
+    collision.
 
 # Conclusion
 

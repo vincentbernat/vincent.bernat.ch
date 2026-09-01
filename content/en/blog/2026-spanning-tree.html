@@ -57,7 +57,8 @@ rebuilds the tree in a second, leaving some time for Blobby, your one-person
 support crew, to reconnect the cable.[^sprites] See for yourself: the diagram
 below runs a real STP implementation in your browser!
 
-[^sprites]: The sprites for Stan and Blobby come from [Craftpix][]. The coffee
+[^sprites]:
+    The sprites for Stan and Blobby come from [Craftpix][]. The coffee
     cups come from [Yanin][].
 
 ``` { .text .mstp-topology }
@@ -165,7 +166,8 @@ network engineer knows there are better alternatives, like [BGP EVPN VXLAN][].
 Yet, because any switch speaks it, the venerable spanning tree protocol still
 fills a niche.
 
-[^history]: STP was introduced in [IEEE 802.1D-1990][]. It is still present in
+[^history]:
+    STP was introduced in [IEEE 802.1D-1990][]. It is still present in
     [IEEE 802.1D-1998][] but was withdrawn in [IEEE 802.1D-2004][] in favor of
     RSTP, introduced in [IEEE 802.1w-2001][]. MSTP was introduced in [IEEE
     802.1s-2002][] and merged into [IEEE 802.1Q-2003][]. Both of them are part
@@ -235,10 +237,12 @@ information: I explain it later.
 All examples run in your browser, powered by [MSTPD][]—an open-source
 user-space[^kernel] implementation of RSTP.[^incomplete]
 
-[^kernel]: The Linux kernel only runs STP. It delegates the other protocols to
+[^kernel]:
+    The Linux kernel only runs STP. It delegates the other protocols to
     user space.
 
-[^incomplete]: MSTPD implements the state machine from [IEEE 802.1Q-2005][], but
+[^incomplete]:
+    MSTPD implements the state machine from [IEEE 802.1Q-2005][], but
     on Linux it runs RSTP only. Linux 5.18 added [support for forwarding
     multiple spanning tree][], but MSTPD does not use it yet. See [PR #150][]
     for progress on this front.
@@ -290,7 +294,8 @@ root. S4 has a priority of 12,288, while S3 keeps the default priority of
 32,768:[^priority] S4 becomes root. S5 and S6 don't have a specific priority, so
 the lowest MAC address wins and S5 becomes root.
 
-[^priority]: The priority is a multiple of 4,096: with MSTP, the lower 12 bits
+[^priority]:
+    The priority is a multiple of 4,096: with MSTP, the lower 12 bits
     of the bridge priority encode the MST instance identifier, leaving only the
     upper 4 bits for the configured priority.
 
@@ -322,7 +327,8 @@ Spanning Tree Protocol
     Bridge Identifier: 8192.02:00:00:01:00:01
 ```
 
-[^wireshark]: To inspect the BPDUs crossing a link, select it, click the
+[^wireshark]:
+    To inspect the BPDUs crossing a link, select it, click the
     "Download packets" button, and open the file with [Wireshark][].
 
 [wireshark]: https://www.wireshark.org/ "Wireshark: network protocol analyzer"
@@ -350,7 +356,8 @@ denoted by a letter:
 - disabled (X), or
 - backup (B).[^backup]
 
-[^backup]: A backup port only exists if the bridge has several ports on the same
+[^backup]:
+    A backup port only exists if the bridge has several ports on the same
     collision domain. This should not happen in a switched network.
 
 Each non-root bridge chooses its **root port**, the one with the lowest-cost
@@ -418,7 +425,8 @@ seconds](#mstp:13,S1->S3:2,S2->S3,S1->S2,@).[^hello] If a bridge does not
 receive BPDUs from its neighbor for 3 consecutive hello periods, it considers
 the neighbor dead and removes the port information.
 
-[^hello]: This is the value of the "hello" timer. It used to be configurable,
+[^hello]:
+    This is the value of the "hello" timer. It used to be configurable,
     but [IEEE 802.1Q-2005][] pins it to 2. MSTPD does not allow another value.
 
 ## Port state transition
@@ -446,7 +454,8 @@ transition from the discarding state to the forwarding state:
   **agreement**. Upon receiving the agreement, the peer designated port
   transitions to the forwarding state.[^learning]
 
-[^learning]: If the peer port does not receive an agreement after the hello
+[^learning]:
+    If the peer port does not receive an agreement after the hello
     timer elapses—or the maximum age if the port has just come up—it falls back
     to the timer-based method for compatibility with STP: it transitions to
     the learning state, waits again for the hello timer to expire, and
@@ -572,7 +581,8 @@ Spanning Tree Protocol
     Port identifier: 0x8002
 ```
 
-[^agreement]: As in many proposals, S3 also sets the agreement bit to 1. The
+[^agreement]:
+    As in many proposals, S3 also sets the agreement bit to 1. The
     proposal bit says "I am the designated port on this link and I want to
     transition to the forwarding state." The agreement bit says "I am already in
     sync with the rest of my bridge on this root information." Both can be true.
@@ -639,7 +649,8 @@ fridge reachable through one port may become reachable through another one. The
 affected bridges should flush the MAC addresses they learned, because these
 entries may now be wrong.
 
-[^bum]: If it finds no entry, the bridge duplicates the Ethernet frame on all
+[^bum]:
+    If it finds no entry, the bridge duplicates the Ethernet frame on all
     ports, except the incoming one. The same happens if the destination MAC
     address is the broadcast one (`ff:ff:ff:ff:ff:ff`). This behavior bootstraps
     the learning process.
@@ -825,10 +836,12 @@ switches acting as root bridges, and you build several loops to connect OOB
 switches in each cabinet. This simple design survives one failure on each
 loop.[^erps]
 
-[^price]: You can get them for less than US$100 through a broker. All the ports
+[^price]:
+    You can get them for less than US$100 through a broker. All the ports
     run PVST+ by default and automatically fall back to plain RSTP.
 
-[^erps]: An alternative would be [Ethernet Ring Protection Switching][ITU-T
+[^erps]:
+    An alternative would be [Ethernet Ring Protection Switching][ITU-T
     G.8032] (ERPS)—another protocol I had never heard of until researching this
     article.
 
@@ -913,7 +926,8 @@ The maximum age, whose default value is 20, governs the maximum distance of a
 node from the root. The topology below is too big for BPDUs from R1 to reach
 beyond S20.[^root-mac]
 
-[^root-mac]: If you look closely at what happens at t=2s, you can see that R2 is
+[^root-mac]:
+    If you look closely at what happens at t=2s, you can see that R2 is
     gaining popularity as root: S17 to S36 believe R2 is the root bridge. S16
     does not follow because we hit the maximum age. Later, S17 to S20 reverse
     their position. I'll let you explore the state of the various bridges to
@@ -1053,7 +1067,8 @@ maximum message age any packet carries is now 18, below the configured maximum
 age. But it only works until another link breaks. A plausible fix is to increase
 the maximum age to 40.[^forward-delay]
 
-[^forward-delay]: When increasing the maximum age to 40, you also need to
+[^forward-delay]:
+    When increasing the maximum age to 40, you also need to
     increase the forward delay to 21 (`:forward-delay 21`), as the standard
     enforces this condition: 2 × (Forward Delay − 1) ≥ Max Age. For this
     specific topology, you could also increase the maximum age to 37 and
@@ -1066,12 +1081,14 @@ tree in less than a second. Even the [38-bridge topology][] takes less than 10
 seconds to converge.[^time] Some topologies can take a bit more time to recover
 when the root bridge becomes unavailable.[^slow]
 
-[^time]: The simulation may seem slow, but it does not run in real time. Look at
+[^time]:
+    The simulation may seem slow, but it does not run in real time. Look at
     the current timestamp in the upper right corner to know the wall clock, e.g.
     "t=8s." Once the topology stabilizes, the same corner shows the convergence
     time, e.g. "🌳 2s."
 
-[^slow]: Khaled Elmeleegy, Alan Cox, and Eugene Ng formalized this phenomenon in
+[^slow]:
+    Khaled Elmeleegy, Alan Cox, and Eugene Ng formalized this phenomenon in
     "[On Count-to-Infinity Induced Forwarding Loops in Ethernet Networks][1]"
     and later in "[Understanding and Mitigating the Effects of Count to Infinity
     in Ethernet Networks][2]." They propose a fix that did not find its way into

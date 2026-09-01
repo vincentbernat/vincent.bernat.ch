@@ -24,16 +24,18 @@ création a longtemps eu la **réputation d'être particulièrement
 difficile**[^difficulty] et beaucoup se sont tournés vers des outils
 moins contraignants[^fpm] tels que [fpm][] ou [CheckInstall][].
 
-[^difficulty]: La mémoire collective est toujours marquée par la
-               glorieuse époque précédant l'introduction de
-               *debhelper* 7.0.50 (circa 2009). La création du fichier
-               `debian/rules` était alors particulièrement
-               laborieuse. Toutefois, de nos jours, le squelette est
-               devenu minimal.
+[^difficulty]:
+    La mémoire collective est toujours marquée par la
+    glorieuse époque précédant l'introduction de
+    *debhelper* 7.0.50 (circa 2009). La création du fichier
+    `debian/rules` était alors particulièrement
+    laborieuse. Toutefois, de nos jours, le squelette est
+    devenu minimal.
 
-[^fpm]: La complexité n'est pas la seule raison de ce choix : les
-        outils alternatifs proposent également la création de paquets
-        RPM, ce que les outils Debian ne permettent pas.
+[^fpm]:
+    La complexité n'est pas la seule raison de ce choix : les
+    outils alternatifs proposent également la création de paquets
+    RPM, ce que les outils Debian ne permettent pas.
 
 Toutefois, la construction de paquets Debian en utilisant les outils
 officiels est plutôt simple en appliquant ces quelques concessions :
@@ -81,7 +83,8 @@ Le premier contient uniquement `9`[^compat] :
     ::sh
     echo 9 > debian/compat
 
-[^compat]: Ce niveau de compatibilité est disponible à partir de
+[^compat]:
+    Ce niveau de compatibilité est disponible à partir de
     Debian 8 et d'Ubuntu Precise. Il couvre donc un large éventail de
     distributions.
 
@@ -181,13 +184,14 @@ spécifier la version[^version] sans avoir à tenir à jour
         -C /tmp/installdir \
         --description "high-performance memory object caching system"
 
-[^version]: Il y a différentes façons de numéroter les versions d'un
-            paquet. La façon proposée ici n'est pas plus mauvaise
-            qu'une autre pour Ubuntu. Pour Debian, elle ne couvre pas
-            les mises à jour entre deux versions de la
-            distribution. De nos jours, il est cependant plutôt
-            courant de réinstaller un système plutôt que de le mettre
-            à jour.
+[^version]:
+    Il y a différentes façons de numéroter les versions d'un
+    paquet. La façon proposée ici n'est pas plus mauvaise
+    qu'une autre pour Ubuntu. Pour Debian, elle ne couvre pas
+    les mises à jour entre deux versions de la
+    distribution. De nos jours, il est cependant plutôt
+    courant de réinstaller un système plutôt que de le mettre
+    à jour.
 
 Vous pouvez lire le résultat final sur [GitHub][memcached-basic-gh] et
 le construire avec la commande `dpkg-buildpackage -us -uc -b`.
@@ -281,16 +285,17 @@ paquet. Habituellement, l'utilisateur peut personnaliser les options
 du démon en modifiant le fichier `/etc/default/memcached`. Pour en
 fournir un, placez son contenu dans le fichier `debian/memcached.default`.
 
-[^provided]: Il est également possible d'utiliser le script fourni en
-             amont. Toutefois, il n'existe pas de script universel
-             fonctionnant sur toutes les distributions. Il est donc
-             important de vérifier que ce script est adapté à Debian
-             en le comparant au squelette et en vérifiant qu'il utilise
-             bien `start-stop-daemon` et le fichier
-             `/lib/lsb/init-functions`. Si c'est le cas, vous pouvez
-             le copier vous-même dans
-             `debian/memcached/etc/init.d`. *debhelper* ajoutera les
-             scripts nécessaires à son intégration.
+[^provided]:
+    Il est également possible d'utiliser le script fourni en
+    amont. Toutefois, il n'existe pas de script universel
+    fonctionnant sur toutes les distributions. Il est donc
+    important de vérifier que ce script est adapté à Debian
+    en le comparant au squelette et en vérifiant qu'il utilise
+    bien `start-stop-daemon` et le fichier
+    `/lib/lsb/init-functions`. Si c'est le cas, vous pouvez
+    le copier vous-même dans
+    `debian/memcached/etc/init.d`. *debhelper* ajoutera les
+    scripts nécessaires à son intégration.
 
 ### Upstart
 
@@ -340,8 +345,9 @@ pour *Upstart*, la directive `Type` est particulièrement
 importante. Nous utilisons `forking` car *memcached* est démarré avec
 l'option `-d`.
 
-[^default]: Un utilisateur désireux de modifier certaines options doit
-            plutôt utiliser `systemctl edit`.
+[^default]:
+    Un utilisateur désireux de modifier certaines options doit
+    plutôt utiliser `systemctl edit`.
 
 !!! "Mise à jour (11.2017)" Pour les paquets destinés à Debian Stretch
 ou Ubuntu Yaketty (ou plus récents), placez `10` dans le fichier
@@ -383,13 +389,14 @@ il est possible d'économiser du temps et de l'énergie en exploitant
 plutôt sa [gestion des utilisateurs dynamiques][dynamic users
 feature].
 
-[^naming]: La charte Debian ne se prononce pas sur la convention à
-           utiliser. Il est courant de préfixer le nom du démon avec
-           un tiret bas (comme dans les BSD). Un autre usage courant
-           est d'utiliser `Debian-` comme préfixe. Cette dernière
-           méthode a l'inconvénient de produire un nom d'utilisateur
-           trop long pour être visible dans les utilitaires comme
-           `top` et `ps`.
+[^naming]:
+    La charte Debian ne se prononce pas sur la convention à
+    utiliser. Il est courant de préfixer le nom du démon avec
+    un tiret bas (comme dans les BSD). Un autre usage courant
+    est d'utiliser `Debian-` comme préfixe. Cette dernière
+    méthode a l'inconvénient de produire un nom d'utilisateur
+    trop long pour être visible dans les utilitaires comme
+    `top` et `ps`.
 
 Ajoutez un fichier `debian/memcached.postinst` avec le contenu
 suivant :
@@ -552,10 +559,11 @@ récalcitrant et invoquons manuellement
 `dh_auto_test`. `dh_auto_install` n'est pas surchargé et `dh`
 exécutera alors une variante de `make install`.
 
-[^clean]: Il aurait été possible d'appeler `dh_auto_clean` à la fin de
-          la cible. Toutefois, nous nous plaçons dans l'hypothèse que
-          chaque construction est faite sur une nouvelle copie issue
-          du système de version.
+[^clean]:
+    Il aurait été possible d'appeler `dh_auto_clean` à la fin de
+    la cible. Toutefois, nous nous plaçons dans l'hypothèse que
+    chaque construction est faite sur une nouvelle copie issue
+    du système de version.
 
 Afin de mieux apprécier la différence, la voici sous forme de patch :
 

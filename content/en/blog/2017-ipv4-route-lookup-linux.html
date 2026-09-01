@@ -33,7 +33,8 @@ Since 2.6.39, Linux stores routes in a **compressed prefix tree**
 maintained but it has been [removed][route cache removed][^why] in
 Linux 3.6.
 
-[^why]: The routing cache was subject to reasonably easy to launch
+[^why]:
+    The routing cache was subject to reasonably easy to launch
     denial of service attacks. It was also believed to not be
     efficient for high volume sites like Google but I have first-hand
     experience it was not the case for moderately high volume sites.
@@ -138,7 +139,8 @@ trie:
 
 ![Level-compressed trie]([[!!images/linux/lpc-trie-lpc-trie-v3.svg]] "LPC trie. Two levels are merged into a single one using a 4-element vector. The last element of this vector is empty.")
 
-[^ref-lpc]: “[IP-address lookup using LC-tries][lpc-trie],” IEEE
+[^ref-lpc]:
+    “[IP-address lookup using LC-tries][lpc-trie],” IEEE
     Journal on Selected Areas in Communications, 17(6):1083-1092, June
     1999.
 
@@ -165,7 +167,8 @@ Here is the representation of our example routing table in memory:[^tnode]
 
 ![Memory representation of a trie]([[!!images/linux/lpc-trie-struct-v3.svg]] "In-memory representation of an LPC trie in Linux")
 
-[^tnode]: For internal nodes, the `key_vector` structure is embedded
+[^tnode]:
+    For internal nodes, the `key_vector` structure is embedded
     into a `tnode` structure. This structure contains information
     rarely used during lookup, notably the reference to the parent
     that is usually not needed for backtracking as Linux keeps the
@@ -229,7 +232,8 @@ some interesting statistics are available in `/proc/net/fib_triestat`:[^stats]
     Total size: 1  kB
     […]
 
-[^stats]: One leaf can contain several routes (`struct fib_alias` is a
+[^stats]:
+    One leaf can contain several routes (`struct fib_alias` is a
     list). The number of "prefixes" can therefore be greater than the
     number of leaves. The system also keeps statistics about the
     distribution of the internal nodes relative to the number of bits
@@ -258,7 +262,8 @@ the `fib_lookup()` function:
 
 ![Maximum depth and lookup time]([[!!images/linux/lpc-trie-maxdepth-v2.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic.")
 
-[^bench]: The measurements are done in a virtual machine with one
+[^bench]:
+    The measurements are done in a virtual machine with one
     vCPU. The host is an [Intel Core i5-4670K][] running at 3.7 GHz
     during the experiment (CPU governor was set to performance). The
     benchmark is single-threaded. It runs a warm-up phase, then
@@ -371,7 +376,8 @@ the current incarnation of advanced routing has been introduced in
 Linux 2.1.68 after a first attempt using "classes" in Linux
 2.1.15.[^old-doc]
 
-[^old-doc]: Fun fact: the documentation of this first attempt at
+[^old-doc]:
+    Fun fact: the documentation of this first attempt at
     more flexible routing is still available in today's kernel tree
     and explains
     the [usage of the "default class"][policy-routing.txt].

@@ -36,15 +36,17 @@ I hope to provide here a concise view of the route cache, as it is
 implemented in **Linux 3.1**.[^valid] It is protocol-dependent[^dst]
 and I will cover only the **IPv4** version here.
 
-[^valid]: The content of this article should be valid for Linux
-          2.6.38, 2.6.39, 3.0 and 3.1. There are some clues for Linux
-          2.6.35, 2.6.36 and 2.6.37 as well as for Linux 3.2, 3.3, 3.4
-          and 3.5. Starting from Linux 3.6, the whole
-          [route cache has been removed][removed].
+[^valid]:
+    The content of this article should be valid for Linux
+    2.6.38, 2.6.39, 3.0 and 3.1. There are some clues for Linux
+    2.6.35, 2.6.36 and 2.6.37 as well as for Linux 3.2, 3.3, 3.4
+    and 3.5. Starting from Linux 3.6, the whole
+    [route cache has been removed][removed].
 
-[^dst]: Linux provides a protocol-independent destination cache
-        subsystem (DST). This component is not a generic cache layer
-        and only enables loose coupling with external subsystems.
+[^dst]:
+    Linux provides a protocol-independent destination cache
+    subsystem (DST). This component is not a generic cache layer
+    and only enables loose coupling with external subsystems.
 
 [TOC]
 
@@ -61,13 +63,14 @@ trivial, several questions need to be answered:
  - Does the destination address match this route? And this one?
  - Can I currently contact the gateway that I should use?
 
-[^martian]: Martian addresses are addresses that cannot be used as a
-            source address, either because they are reserved for
-            special-use (like a multicast address) or because of the
-            use of *reverse path filtering* which checks if a packet
-            received on one interface would be answered on the same
-            interface, as defined in [RFC 3704][rfc3704]. This feature
-            is enabled by setting `rp_filter` in Linux.
+[^martian]:
+    Martian addresses are addresses that cannot be used as a
+    source address, either because they are reserved for
+    special-use (like a multicast address) or because of the
+    use of *reverse path filtering* which checks if a packet
+    received on one interface would be answered on the same
+    interface, as defined in [RFC 3704][rfc3704]. This feature
+    is enabled by setting `rp_filter` in Linux.
 
 These checks can be a bit time consuming, even for small route
 tables. To avoid them for each packet, Linux maintains a *route
@@ -101,8 +104,9 @@ The schema below shows how this cache is implemented.[^src] It uses a
 separate [hash table][hash] (BSD systems keep the cache in the routing
 table). Each bucket is a chained list of route cache entries.
 
-[^src]: For more details, you may want to look at `include/net/dst.h`,
-        `include/net/route.h` and `net/ipv4/route.c`.
+[^src]:
+    For more details, you may want to look at `include/net/dst.h`,
+    `include/net/route.h` and `net/ipv4/route.c`.
 
 ![Schema of the route cache hash table]([[!!images/linux/routing-cache.svg]] "Partial view of the route cache hash table with three cached entries")
 
@@ -142,10 +146,11 @@ There are several values you can tune. Most of them are available in
    entries. However, this value could potentially influence its
    efficiency. See below for more details on this.
 
-[^size]: In fact, the size of the hash table is always a power of
-         two. If specified, `rhash_entries` is rounded to the next
-         power of two and, internally, is stored as `rt_hash_mask +
-         1`.
+[^size]:
+    In fact, the size of the hash table is always a power of
+    two. If specified, `rhash_entries` is rounded to the next
+    power of two and, internally, is stored as `rt_hash_mask +
+    1`.
 
 You may find documentation about these obsolete *sysctl* values:
 

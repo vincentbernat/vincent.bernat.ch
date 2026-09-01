@@ -39,21 +39,23 @@ Alors que [Upstart][] ou [systemd][] semblent être de bons candidats,
 je n'ai pas trouvé de moyen simple de leur faire lancer des tâches
 arbitraires sans privilège particulier[^user].
 
-[^user]: _systemd_ et _Upstart_ sont difficiles à faire tourner sans
-         être ni PID 1, ni _root_. Ils supportent tous les deux les
-         sessions utilisateurs mais il est alors nécessaire de les
-         utiliser comme PID 1. J'ai découvert par la suite (mais trop
-         tard) que [runit][] correspondait bien aux besoins : il ne
-         nécessite ni de tourner en PID 1 ou en _root_ et le
-         répertoire utilisé pour définir les services peut être choisi
-         avec une variable d'environnement.
+[^user]:
+    _systemd_ et _Upstart_ sont difficiles à faire tourner sans
+    être ni PID 1, ni _root_. Ils supportent tous les deux les
+    sessions utilisateurs mais il est alors nécessaire de les
+    utiliser comme PID 1. J'ai découvert par la suite (mais trop
+    tard) que [runit][] correspondait bien aux besoins : il ne
+    nécessite ni de tourner en PID 1 ou en _root_ et le
+    répertoire utilisé pour définir les services peut être choisi
+    avec une variable d'environnement.
 
 Ainsi est né [lanĉo][][^name]. Il s'agit d'un lanceur de tâches très
 simple : il peut lancer des tâches, les arrêter et vérifier si elles
 sont toujours présentes. Il utilise les [cgroups][] disponibles dans
 les noyaux Linux récents. Il n'y a aucun démon.
 
-[^name]: _Lanĉo_ signifie _lanceur_ en Espéranto. Le nom de la
+[^name]:
+    _Lanĉo_ signifie _lanceur_ en Espéranto. Le nom de la
     commande aurait pu être `lancxo`, mais je ne le savais pas.
 
 [TOC]
@@ -129,12 +131,13 @@ retrouver même si une tâche multiplie les processus[^forkbomb] :
     $ lanco testns check second-task || echo "Killed!"
     Killed!
 
-[^forkbomb]: Les _cgroups_ dans Linux ne fournissent pas de moyen
-             particulier pour tuer toutes les tâches d'un groupe. Il
-             est alors nécessaire de tuer les tâches une à
-             une. _lanĉo_ n'essaie pas de stopper les tâches avant des
-             les tuer. Il est donc inefficace contre les _fork bombs_
-             un peu violentes.
+[^forkbomb]:
+    Les _cgroups_ dans Linux ne fournissent pas de moyen
+    particulier pour tuer toutes les tâches d'un groupe. Il
+    est alors nécessaire de tuer les tâches une à
+    une. _lanĉo_ n'essaie pas de stopper les tâches avant des
+    les tuer. Il est donc inefficace contre les _fork bombs_
+    un peu violentes.
 
 Il y a également une commande dont la sortie est similaire à `top`
 (`lanco testns top`) :
@@ -221,9 +224,10 @@ disponible ne peut être attaché qu'à une seule
 hiérarchie. Habituellement, chacun est affecté à une hiérarchie
 différente afin de ne pas coupler les ressources entre elles[^cpu].
 
-[^cpu]: Les sous-systèmes `cpu` et `cpuacct` sont une exception. Étant
-        complémentaires, ils sont habituellement montés sur la même
-        hiérarchie.
+[^cpu]:
+    Les sous-systèmes `cpu` et `cpuacct` sont une exception. Étant
+    complémentaires, ils sont habituellement montés sur la même
+    hiérarchie.
 
 Regardons comment fonctionne le sous-système `cpuset` qui permet
 d'assigner les tâches à un sous-ensemble de CPU et de nœuds de mémoire
@@ -276,11 +280,12 @@ Voici comment sont exploités les _cgroups_ dans _lanĉo_ :
  - Le sous-système `cpuacct` est utilisé pour suivre l'usage CPU : un
    groupe est créé à cet effet dans ce sous-système.
 
-[^agent]: Malheureusement, l'agent est attaché à une hiérarchie et non
-          à un groupe. Pour permettre d'exécuter une commande pour
-          chaque tâche qui se termine, il est donc nécessaire de
-          stocker cette commande dans le système de fichiers afin que
-          l'agent puisse l'exécuter.
+[^agent]:
+    Malheureusement, l'agent est attaché à une hiérarchie et non
+    à un groupe. Pour permettre d'exécuter une commande pour
+    chaque tâche qui se termine, il est donc nécessaire de
+    stocker cette commande dans le système de fichiers afin que
+    l'agent puisse l'exécuter.
 
 *[cgroups]: Control Groups
 *[NUMA]: Non-Uniform Memory Access

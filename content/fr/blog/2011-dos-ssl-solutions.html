@@ -134,16 +134,17 @@ Une solution quasiment équivalente consiste à utiliser `CONNMARK` pour
 suivre le déroulement de la première poignée de mains et d'interdire
 toutes celles qui pourraient survenir ensuite[^noo].
 
-[^noo]: Décoder l'état d'une connexion TLS dans Netfilter est
-        complexe. La première solution repose globalement sur le fait
-        qu'une rénégociation est empaquetée dans un segment TCP avec
-        drapeau « _push_ ». Ce n'est pas forcément le cas. Avec la
-        seconde solution, on part du principe que le premier
-        enregistrement TLS chiffré est dans le même segment TCP que le
-        message _Client Key Exchange_. S'il est dans son propre
-        segment TCP, il sera vu comme une renégociation. La machine à
-        état doit être améliorée pour pouvoir détecter cet
-        enregistrement à n'importe quelle position.
+[^noo]:
+    Décoder l'état d'une connexion TLS dans Netfilter est
+    complexe. La première solution repose globalement sur le fait
+    qu'une rénégociation est empaquetée dans un segment TCP avec
+    drapeau « _push_ ». Ce n'est pas forcément le cas. Avec la
+    seconde solution, on part du principe que le premier
+    enregistrement TLS chiffré est dans le même segment TCP que le
+    message _Client Key Exchange_. S'il est dans son propre
+    segment TCP, il sera vu comme une renégociation. La machine à
+    état doit être améliorée pour pouvoir détecter cet
+    enregistrement à n'importe quelle position.
 
 Si les renégociations TLS sont désactivées, il est possible de
 simplement limiter le nombre de poignées de mains en limitant le
@@ -162,12 +163,13 @@ Les serveurs ainsi protégés sont toujours vulnérables à une attaque de
 plus grande envergure mais devraient pouvoir écarter tout attaquant
 solitaire[^a].
 
-[^a]: À noter toutefois que comme toute limitation assimilant un
-      utilisateur à une IP, il y a un risque important de faux
-      positifs comprenant notamment les serveurs mandataires
-      légitimes, les réseaux derrière du NAT, les utilisateurs de
-      mobiles partageant une même IP ou ceux qui se trouvent derrière
-      un CGN.
+[^a]:
+    À noter toutefois que comme toute limitation assimilant un
+    utilisateur à une IP, il y a un risque important de faux
+    positifs comprenant notamment les serveurs mandataires
+    légitimes, les réseaux derrière du NAT, les utilisateurs de
+    mobiles partageant une même IP ou ceux qui se trouvent derrière
+    un CGN.
 
 J'ai réuni ces solutions dans un
 [simple fichier pour référence][netfilter].
@@ -223,9 +225,10 @@ suites de chiffrement :
     permettre d'utiliser des suites aussi coûteuses qui sont trop
     lentes et trop gourmandes en énergie.
 
-[^1]: Les suites de chiffrement supportées par tous les navigateurs
-      sont `RC4-MD5`, `RC4-SHA` et `3DES-SHA`. <del>`DHE-DSS-AES256-SHA`
-      nécessite normalement TLS 1.2</del> <del>(présent dans aucun navigateur).</del>
+[^1]:
+    Les suites de chiffrement supportées par tous les navigateurs
+    sont `RC4-MD5`, `RC4-SHA` et `3DES-SHA`. <del>`DHE-DSS-AES256-SHA`
+    nécessite normalement TLS 1.2</del> <del>(présent dans aucun navigateur).</del>
 
 Étudions plus en avant pourquoi, dans le cadre d'une suite basée sur
 RSA comme `AES256-SHA`, le serveur doit effectuer plus de calculs que
@@ -242,10 +245,11 @@ les plus coûteuses d'une poignée de mains. Pour comprendre pourquoi le
 déchiffrement est plus coûteux que le chiffrement, il faut d'abord
 comprendre comment RSA fonctionne.
 
-[^c]: En français, le vocabulaire approprié est _chiffrement_ et
-      _déchiffrement_. En anglais, il s'agit de _encrypt_ et
-      _decrypt_. En français, _crypter_ ne veut rien dire. _Décrypter_
-      signifie décoder le message sans en détenir la clé secrète.
+[^c]:
+    En français, le vocabulaire approprié est _chiffrement_ et
+    _déchiffrement_. En anglais, il s'agit de _encrypt_ et
+    _decrypt_. En français, _crypter_ ne veut rien dire. _Décrypter_
+    signifie décoder le message sans en détenir la clé secrète.
 
 Tout d'abord, un serveur a besoin d'une clé privée et d'une clef
 publique. Voici les étapes principales pour générer celles-ci :
@@ -339,8 +343,9 @@ attaque :
 > de messages préfabriqués afin de forcer le serveur à effectuer un
 > déchiffrement RSA.
 
-[^0]: Eric est l'auteur de nombreuses RFC liées à TLS. Il connaît donc
-      bien le sujet.
+[^0]:
+    Eric est l'auteur de nombreuses RFC liées à TLS. Il connaît donc
+    bien le sujet.
 
 J'ai rapidement écrit un
 [outil effectuant les étapes ainsi décrites][brute-shake]. Afin

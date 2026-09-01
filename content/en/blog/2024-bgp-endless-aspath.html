@@ -28,7 +28,8 @@ two distinct autonomous systems share the same ASN. However, it interferes with
 BGP's loop prevention mechanism and should be used cautiously. A safer
 alternative is the `allowas-in` directive.[^allowconfedas-in]
 
-[^allowconfedas-in]: When using BGP confederations with Cisco IOS XR, use
+[^allowconfedas-in]:
+    When using BGP confederations with Cisco IOS XR, use
     `allowconfedas-in` instead. It's available since [IOS XR 7.11][].
 
 In the example below, we have four routers in a single confederation, each in
@@ -75,7 +76,8 @@ The session with `R3` uses both `as-override` and `next-hop-self` directives.
 The latter is only necessary to make the announced prefix valid, as there is no
 IGP in this example.[^igp]
 
-[^igp]: Using BGP confederations is already inadvisable. If you don't use the
+[^igp]:
+    Using BGP confederations is already inadvisable. If you don't use the
     same IGP for all sub-ASes, you're inviting trouble! However, the scenario
     described here is also possible with an IGP.
 
@@ -114,7 +116,8 @@ Here's the sequence of events leading to an infinite AS path:
    ID. The prefix is forwarded to `R2` with AS path `(64501 64503 64501 64503
    64501 64503 64501 64500)`.
 
-[^confed]: When an AS path segment is composed of ASNs from a confederation, it
+[^confed]:
+    When an AS path segment is composed of ASNs from a confederation, it
     is displayed between parentheses.
 
 A few iterations later, `R1` views the looping prefix as follows:[^pacing]
@@ -141,7 +144,8 @@ Paths: (2 available, best #2)
       best of AS 64503, Overall best
 ```
 
-[^pacing]: By default, IOS XR paces eBGP updates. This is controlled by the
+[^pacing]:
+    By default, IOS XR paces eBGP updates. This is controlled by the
     `advertisement-interval` directive. Its default value is 30 seconds for eBGP
     peers (even in the same confederation). `R1` and `R2` set this value to 0,
     while `R3` sets it to 2 seconds. This gives some time to watch the AS path
@@ -152,7 +156,8 @@ bytes per [RFC 4271][rfc4271] or 65535 bytes per [RFC 8654][rfc8654]). At some
 point, BGP updates can't be generated. On Cisco IOS XR, the BGP process crashes
 well before reaching this limit.[^ddts]
 
-[^ddts]: This is [CVE-2025-20115][]. It only happens when using `as-override` on
+[^ddts]:
+    This is [CVE-2025-20115][]. It only happens when using `as-override` on
     an AS path with a too long `AS_CONFED_SEQUENCE`. This is fixed in 24.2.21
     and 24.3.1.
 

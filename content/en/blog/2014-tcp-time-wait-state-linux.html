@@ -36,9 +36,10 @@ handle the `TIME-WAIT` state. Also, keep in mind we are looking at the
 TCP stack of Linux. This is completely unrelated to _Netfilter_
 connection tracking which may be tweaked in other ways.[^netfilter]
 
-[^netfilter]: Notably, fiddling with
-    `net.netfilter.nf_conntrack_tcp_timeout_time_wait` won't change
-    anything on how the TCP stack will handle the `TIME-WAIT` state.
+[^netfilter]:
+    Notably, fiddling with `net.netfilter.nf_conntrack_tcp_timeout_time_wait`
+    won't change anything on how the TCP stack will handle the `TIME-WAIT`
+    state.
 
 [TOC]
 
@@ -80,11 +81,12 @@ There are two purposes for the `TIME-WAIT` state:
 
 ![Duplicate segments accepted in another connection]([[!!images/tcp/duplicate-segment.svg]] "Due to a shortened TIME-WAIT state, a delayed TCP segment has been accepted in an unrelated connection.")
 
-[^rfc1337]: The first workaround proposed in [RFC 1337][] is to
-            ignore _RST_ segments in the `TIME-WAIT` state. This
-            behavior is controlled by `net.ipv4.rfc1337` which is not
-            enabled by default on Linux because this is not a complete
-            solution to the problem described in the RFC.
+[^rfc1337]:
+    The first workaround proposed in [RFC 1337][] is to
+    ignore _RST_ segments in the `TIME-WAIT` state. This
+    behavior is controlled by `net.ipv4.rfc1337` which is not
+    enabled by default on Linux because this is not a complete
+    solution to the problem described in the RFC.
 
   - The other purpose is to ensure **the remote end has closed the
     connection**. When the last _ACK_ is lost, the remote end stays in
@@ -97,10 +99,11 @@ There are two purposes for the `TIME-WAIT` state:
 
 ![Last ACK lost]([[!!images/tcp/last-ack.svg]] "If the remote end stays in LAST-ACK state because the last ACK was lost, opening a new connection with the same quadruplet will not work.")
 
-[^lastack]: While in the `LAST-ACK` state, a connection will
-            retransmit the last _FIN_ segment until it gets the
-            expected _ACK_ segment. Therefore, it is unlikely we stay
-            long in this state.
+[^lastack]:
+    While in the `LAST-ACK` state, a connection will
+    retransmit the last _FIN_ segment until it gets the
+    expected _ACK_ segment. Therefore, it is unlikely we stay
+    long in this state.
 
 [RFC 793][] requires the `TIME-WAIT` state to last twice the time of the
 MSL. On Linux, this duration is **not** tunable and is defined in
@@ -175,22 +178,25 @@ several ways (in order of difficulty to set up):
  - use **more server IP** by configuring additional IP on the web
    server.[^others]
 
-[^outgoing]: On the client side, older kernels also have to find a **free
-             local tuple** (source address and source port) for each
-             outgoing connection. Increasing the number of server
-             ports or IP won't help in this case. Linux 3.2 is recent
-             enough to be able to share the same local tuple for
-             different destinations. Thanks to Willy Tarreau for his [insight][] on this aspect.
+[^outgoing]:
+    On the client side, older kernels also have to find a **free
+    local tuple** (source address and source port) for each
+    outgoing connection. Increasing the number of server
+    ports or IP won't help in this case. Linux 3.2 is recent
+    enough to be able to share the same local tuple for
+    different destinations. Thanks to Willy Tarreau for his [insight][] on this aspect.
 
-[^bind]: To avoid `EADDRINUSE` errors, the load balancer needs to use
+[^bind]:
+    To avoid `EADDRINUSE` errors, the load balancer needs to use
     the `SO_REUSEADDR` option before
     calling [`bind()`, then `connect()`][11].
 
-[^others]: This last solution may seem a bit dumb since you could just
-           use more ports but some servers are not able to be
-           configured this way. The second-to-last solution can also be
-           quite cumbersome to set up, depending on the load-balancing
-           software, but uses less IP than the last solution.
+[^others]:
+    This last solution may seem a bit dumb since you could just
+    use more ports but some servers are not able to be
+    configured this way. The second-to-last solution can also be
+    quite cumbersome to set up, depending on the load-balancing
+    software, but uses less IP than the last solution.
 
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
 [11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
@@ -287,14 +293,16 @@ purposes):
     hand, a connection to a remote service is locally bound to some
     random port and does not share its entry.
 
-[^tcptimewaitsock]: The use of a dedicated memory structure for sockets
-                    in the `TIME-WAIT` is here since Linux 2.6.14.
-                    The [`struct sock_common` structure][sock_common] is a
-                    bit more verbose and I won't copy it here.
+[^tcptimewaitsock]:
+    The use of a dedicated memory structure for sockets
+    in the `TIME-WAIT` is here since Linux 2.6.14.
+    The [`struct sock_common` structure][sock_common] is a
+    bit more verbose and I won't copy it here.
 
-[^deathrow]: Since [Linux 4.1][dr], the way `TIME-WAIT` sockets are
-             tracked has been modified to increase performance and
-             parallelism. The death row is now just a hash table.
+[^deathrow]:
+    Since [Linux 4.1][dr], the way `TIME-WAIT` sockets are
+    tracked has been modified to increase performance and
+    parallelism. The death row is now just a hash table.
 
 We are only concerned by the space occupied by `struct
 tcp_timewait_sock` and `struct inet_bind_socket`. There is one `struct
@@ -450,10 +458,11 @@ This mechanism also relies on the timestamp option but affects **both
 incoming and outgoing connections**. This is handy when the server
 usually closes the connection first.[^serverfirst]
 
-[^serverfirst]: When the server closes the connection first, it gets
-                the `TIME-WAIT` state while the client will consider
-                the corresponding quadruplet free and hence may reuse
-                it for a new connection.
+[^serverfirst]:
+    When the server closes the connection first, it gets
+    the `TIME-WAIT` state while the client will consider
+    the corresponding quadruplet free and hence may reuse
+    it for a new connection.
 
 The `TIME-WAIT` state is scheduled to expire sooner: it will be
 removed after the retransmission timeout (_RTO_) interval which is

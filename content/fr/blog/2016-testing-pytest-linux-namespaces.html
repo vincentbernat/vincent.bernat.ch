@@ -213,23 +213,24 @@ décorateur `parametrize()` : `lldpd`, `lldpcli`, `namespaces` et
    sur le module [pyroute2][]. Le fichier
    [`fixtures/network.py`][network.py] contient davantage de détails.
 
-[^limitations]: Il y a trois principales limitations concernant
-                l'usage des espaces de noms avec cette fixture. Tout
-                d'abord, lors de la création d'un *user namespace*,
-                seul *root* est lié avec l'utilisateur actuel. `lldpd`
-                nécessite deux utilisateurs (`root` et
-                `_lldpd`). Aussi, il n'est pas possible de se reposer
-                sur cette fonctionnalité pour faire tourner les tests
-                sans être root. La seconde limitation concerne les
-                *PID namespace*. Il n'est pas possible pour un process
-                de changer de *PID namespace*. L'appel de `setns()` ne
-                sera effectif que pour les descendants du process. Il
-                est donc important de ne monter `/proc` que dans les
-                descendants. La dernière limitation concerne les fils
-                d'exécution : ils doivent tous être dans le même *user
-                namespace* et *PID namespace*. Le module `threading`
-                doit donc être remplacé par l'utilisation du module
-                `multiprocessing`.
+[^limitations]:
+    Il y a trois principales limitations concernant
+    l'usage des espaces de noms avec cette fixture. Tout
+    d'abord, lors de la création d'un *user namespace*,
+    seul *root* est lié avec l'utilisateur actuel. `lldpd`
+    nécessite deux utilisateurs (`root` et
+    `_lldpd`). Aussi, il n'est pas possible de se reposer
+    sur cette fonctionnalité pour faire tourner les tests
+    sans être root. La seconde limitation concerne les
+    *PID namespace*. Il n'est pas possible pour un process
+    de changer de *PID namespace*. L'appel de `setns()` ne
+    sera effectif que pour les descendants du process. Il
+    est donc important de ne monter `/proc` que dans les
+    descendants. La dernière limitation concerne les fils
+    d'exécution : ils doivent tous être dans le même *user
+    namespace* et *PID namespace*. Le module `threading`
+    doit donc être remplacé par l'utilisation du module
+    `multiprocessing`.
 
 Vous pouvez découvrir un exemple d'exécution de ces tests en regardant
 le résultat obtenu avec [Travis pour la version 0.9.2][Travis build

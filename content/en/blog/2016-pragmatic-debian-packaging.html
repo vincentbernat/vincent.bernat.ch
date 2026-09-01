@@ -24,14 +24,16 @@ packaging has **a reputation of being unnecessarily
 difficult**[^difficulty] and many people prefer to use less
 constrained tools[^fpm] like [fpm][] or [CheckInstall][].
 
-[^difficulty]: People may remember the time before *debhelper* 7.0.50
-               (circa 2009) where `debian/rules` was a daunting
-               beast. However, nowadays, the boilerplate is quite
-               reduced.
+[^difficulty]:
+    People may remember the time before *debhelper* 7.0.50
+    (circa 2009) where `debian/rules` was a daunting
+    beast. However, nowadays, the boilerplate is quite
+    reduced.
 
-[^fpm]: The complexity is not the only reason. These alternative tools
-        enable the creation of RPM packages, something that Debian
-        tools do not.
+[^fpm]:
+    The complexity is not the only reason. These alternative tools
+    enable the creation of RPM packages, something that Debian
+    tools do not.
 
 However, building Debian packages with the official tools can become
 straightforward if you bend some rules:
@@ -76,7 +78,8 @@ The first one is easy. Put `9` in it:[^compat]
     ::sh
     echo 9 > debian/compat
 
-[^compat]: This compatibility level is available from Debian 8 and
+[^compat]:
+    This compatibility level is available from Debian 8 and
     Ubuntu Precise. Therefore, this covers a wide range of
     distributions.
 
@@ -177,12 +180,13 @@ have done with `fpm`:
         -C /tmp/installdir \
         --description "high-performance memory object caching system"
 
-[^version]: There are many ways to version a package. Again, if you
-            want to be pragmatic, the proposed solution should be good
-            enough for Ubuntu. On Debian, it doesn't cover upgrade
-            from one distribution version to another, but we assume
-            that nowadays, systems get reinstalled instead of being
-            upgraded.
+[^version]:
+    There are many ways to version a package. Again, if you
+    want to be pragmatic, the proposed solution should be good
+    enough for Ubuntu. On Debian, it doesn't cover upgrade
+    from one distribution version to another, but we assume
+    that nowadays, systems get reinstalled instead of being
+    upgraded.
 
 You can review the whole package tree on [GitHub][memcached-basic-gh]
 and build it with `dpkg-buildpackage -us -uc -b`.
@@ -273,15 +277,16 @@ init scripts allow user customizations by providing a
 `/etc/default/memcached` file. You can ship one by putting its content
 in `debian/memcached.default`.
 
-[^provided]: It's also possible to use a script provided by
-             upstream. However, there is no such thing as an init
-             script that works on all distributions. Compare the
-             proposed with the skeleton, check if it is using
-             `start-stop-daemon` and if it sources
-             `/lib/lsb/init-functions` before considering it. If it
-             seems to fit, you can install it yourself in
-             `debian/memcached/etc/init.d/`. *debhelper* will ensure
-             its proper integration.
+[^provided]:
+    It's also possible to use a script provided by
+    upstream. However, there is no such thing as an init
+    script that works on all distributions. Compare the
+    proposed with the skeleton, check if it is using
+    `start-stop-daemon` and if it sources
+    `/lib/lsb/init-functions` before considering it. If it
+    seems to fit, you can install it yourself in
+    `debian/memcached/etc/init.d/`. *debhelper* will ensure
+    its proper integration.
 
 ### Upstart
 
@@ -329,8 +334,9 @@ practice with systemd.[^default] Like for *Upstart*, the directive
 `Type` is quite important. We used `forking` as *memcached* is started
 with the `-d` flag.
 
-[^default]: Instead, a user wanting to customize the options is
-            expected to edit the unit with `systemctl edit`.
+[^default]:
+    Instead, a user wanting to customize the options is
+    expected to edit the unit with `systemctl edit`.
 
 !!! "Update (2017-11)" When targeting Debian Stretch, Ubuntu Yaketty
 or more recent, put `10` in `debian/compat` and ignore the following
@@ -368,13 +374,14 @@ ship a dedicated user. In the case of *memcached*, we can provide a
 !!! "Update (2018-11)" If you only care about *systemd*, you may save
 time and energy by using its [dynamic users feature][] instead.
 
-[^naming]: The Debian Policy doesn't provide any hint for the naming
-           convention of these system users. A common usage is to
-           prefix the daemon name with an underscore (like
-           `_memcached`). Another common usage is to use `Debian-` as
-           a prefix. The main drawback of the latter solution is that
-           the name is likely to be replaced by the UID in `ps` and
-           `top` because of its length.
+[^naming]:
+    The Debian Policy doesn't provide any hint for the naming
+    convention of these system users. A common usage is to
+    prefix the daemon name with an underscore (like
+    `_memcached`). Another common usage is to use `Debian-` as
+    a prefix. The main drawback of the latter solution is that
+    the name is likely to be replaced by the UID in `ps` and
+    `top` because of its length.
 
 Add a `debian/memcached.postinst` file with the following content:
 
@@ -533,9 +540,10 @@ directory. We suppress this rogue test and let `dh_auto_test` execute
 the test suite. `dh_auto_install` is not overridden either, so `dh`
 will execute some variant of `make install`.
 
-[^clean]: We could call `dh_auto_clean` at the end of the target to
-          let it invoke `make clean`. However, it is assumed that a
-          fresh checkout is used before each build.
+[^clean]:
+    We could call `dh_auto_clean` at the end of the target to
+    let it invoke `make clean`. However, it is assumed that a
+    fresh checkout is used before each build.
 
 To get a better sense of the difference, here is a diff:
 

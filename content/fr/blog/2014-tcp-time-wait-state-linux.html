@@ -37,7 +37,8 @@ Gardez à l'esprit que nous nous intéressons à la pile TCP de Linux qui
 n'a quasiment aucun lien avec le suivi de connexions de
 _Netfilter_[^netfilter].
 
-[^netfilter]: Notamment, les paramètres tels que
+[^netfilter]:
+    Notamment, les paramètres tels que
     `net.netfilter.nf_conntrack_tcp_timeout_time_wait` n'ont
     absolument aucune influence sur la gestion des connexions dans
     l'état `TIME-WAIT`.
@@ -89,10 +90,11 @@ L'état `TIME-WAIT` a deux buts :
 
 ![Dernier ACK perdu]([[!!images/tcp/last-ack.svg]] "Lorsque le pair distant reste dans l'état LAST-ACK, ouvrir une nouvelle connexion avec le même quadruplet échoue.")
 
-[^lastack]: Dans l'état `LAST-ACK`, une connexion retransmet
-            régulièrement le dernier segment _FIN_ jusqu'à recevoir le
-            segment _ACK_ attendu. Il est donc normalement peu
-            probable de rester très longtemps dans cet état.
+[^lastack]:
+    Dans l'état `LAST-ACK`, une connexion retransmet
+    régulièrement le dernier segment _FIN_ jusqu'à recevoir le
+    segment _ACK_ attendu. Il est donc normalement peu
+    probable de rester très longtemps dans cet état.
 
 La [RFC 793][] demande à ce que l'état `TIME-WAIT` dure au moins deux
 fois le MSL. Sur Linux, cette durée n'est pas configurable. Elle est
@@ -168,24 +170,27 @@ difficulté) :
  - utiliser **plus d'IP serveurs** en configurant des IP
    supplémentaires sur le serveur web[^others].
 
-[^outgoing]: Côté client, les noyaux plus anciens doivent également
-             trouver un tuple local disponible (adresse source, port
-             source) pour chaque connexion sortante. Augmenter les
-             paramètres côté serveur n'a donc pas d'effet. Un noyau
-             Linux 3.2 est toutefois assez récent pour partager un
-             même tuple local vers différentes destinations. Merci à
-             Willy Tarreau pour son [point de vue][insight] sur la
-             question.
+[^outgoing]:
+    Côté client, les noyaux plus anciens doivent également
+    trouver un tuple local disponible (adresse source, port
+    source) pour chaque connexion sortante. Augmenter les
+    paramètres côté serveur n'a donc pas d'effet. Un noyau
+    Linux 3.2 est toutefois assez récent pour partager un
+    même tuple local vers différentes destinations. Merci à
+    Willy Tarreau pour son [point de vue][insight] sur la
+    question.
 
-[^bind]: Pour éviter les erreurs `EADDRINUSE`, le répartiteur de
+[^bind]:
+    Pour éviter les erreurs `EADDRINUSE`, le répartiteur de
     charge doit utiliser l'option `SO_REUSEADDR` avant
     d'appeler [`bind()` puis `connect()`][11].
 
-[^others]: La dernière solution peut sembler un peu stupide par
-           rapport à l'utilisation de ports supplémentaires mais
-           certains serveurs ne permettent pas d'écouter sur plusieurs
-           ports. L'avant-dernière solution est plus économique en
-           nombre d'IP consommées.
+[^others]:
+    La dernière solution peut sembler un peu stupide par
+    rapport à l'utilisation de ports supplémentaires mais
+    certains serveurs ne permettent pas d'écouter sur plusieurs
+    ports. L'avant-dernière solution est plus économique en
+    nombre d'IP consommées.
 
 [insight]: http://marc.info/?l=haproxy&m=139315382127339&w=2
 [11]: https://idea.popcount.org/2014-04-03-bind-before-connect/ "Bind before connect"
@@ -282,14 +287,16 @@ différents :
     côté, chaque connexion sortante utilise un port local aléatoire et
     ne partage donc généralement pas son entrée.
 
-[^tcptimewaitsock]: L'utilisation d'une structure dédiée pour les
-                    connexions dans l'état `TIME-WAIT` remonte au
-                    noyau Linux 2.6.14.
+[^tcptimewaitsock]:
+    L'utilisation d'une structure dédiée pour les
+    connexions dans l'état `TIME-WAIT` remonte au
+    noyau Linux 2.6.14.
 
-[^deathrow]: Depuis [Linux 4.1][dr], la liste des connexions dans
-             l'état `TIME-WAIT` est stockée dans une table de hachage
-             classique afin d'augmenter les performances et le
-             parallélisme.
+[^deathrow]:
+    Depuis [Linux 4.1][dr], la liste des connexions dans
+    l'état `TIME-WAIT` est stockée dans une table de hachage
+    classique afin d'augmenter les performances et le
+    parallélisme.
 
 Chaque connexion (entrante ou sortante) a donc besoin d'un `struct
 tcp_timewait_sock` De plus, chaque connexion sortante est attachée à
@@ -436,10 +443,11 @@ influence à la fois **les connexions entrantes et les connexions
 sortantes** ce qui est utile quand les états `TIME-WAIT` s'accumulent
 côté serveur[^serverfirst].
 
-[^serverfirst]: Quand un serveur ferme la connexion en premier, la
-                connexion atteint l'état `TIME-WAIT` de son côté
-                alors que le client considère que le quadruplet en
-                question est disponible pour une nouvelle connexion.
+[^serverfirst]:
+    Quand un serveur ferme la connexion en premier, la
+    connexion atteint l'état `TIME-WAIT` de son côté
+    alors que le client considère que le quadruplet en
+    question est disponible pour une nouvelle connexion.
 
 L'état `TIME-WAIT` va expirer plus tôt : il sera supprimé après
 écoulement du délai de retransmission (_RTO_) qui est calculé à partir

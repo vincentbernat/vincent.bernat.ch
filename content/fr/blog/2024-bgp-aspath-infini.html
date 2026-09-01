@@ -32,7 +32,8 @@ ASN. Cependant, cela interfère avec le mécanisme de prévention des boucles de
 BGP et doit être utilisé avec prudence. Une alternative plus sûre est la
 directive `allowas-in`[^allowconfedas-in].
 
-[^allowconfedas-in]: Lors de l'utilisation des confédérations BGP avec Cisco IOS
+[^allowconfedas-in]:
+    Lors de l'utilisation des confédérations BGP avec Cisco IOS
     XR, utilisez `allowconfedas-in` à la place. C'est disponible depuis [IOS XR
     7.11][].
 
@@ -83,7 +84,8 @@ La session avec `R3` utilise à la fois les directives `as-override` et
 `next-hop-self`. Cette dernière est seulement nécessaire pour rendre le préfixe
 annoncé valide, car il n'y a pas d'IGP dans cet exemple[^igp].
 
-[^igp]: L'utilisation des confédérations BGP est déjà une mauvaise idée. Si en
+[^igp]:
+    L'utilisation des confédérations BGP est déjà une mauvaise idée. Si en
     plus vous n'utilisez pas le même IGP pour tous les sous-AS, vous vous
     exposez à bien des problèmes ! Toutefois, le scénario exposé ici est aussi
     possible avec un IGP.
@@ -125,7 +127,8 @@ Voici la séquence d'événements menant à un chemin d'AS infini :
    gagne en raison de l'ID de routeur inférieur. Le préfixe est transmis à `R2`
    avec le chemin d'AS `(64501 64503 64501 64503 64501 64503 64501 64500)`.
 
-[^confed]: Lorsqu'un segment de chemin d'AS est composé d'ASN d'une
+[^confed]:
+    Lorsqu'un segment de chemin d'AS est composé d'ASN d'une
     confédération, il est représenté entre parenthèses.
 
 Quelques itérations plus tard, `R1` voit le préfixe en boucle comme suit[^pacing] :
@@ -152,7 +155,8 @@ Paths: (2 available, best #2)
       best of AS 64503, Overall best
 ```
 
-[^pacing]: Par défaut, IOS XR ralentit les mises à jour eBGP. Ceci est contrôlé
+[^pacing]:
+    Par défaut, IOS XR ralentit les mises à jour eBGP. Ceci est contrôlé
     par la directive `advertisement-interval`. Sa valeur par défaut est de 30
     secondes pour les sessions eBGP (y compris dans les confédérations). `R1` et
     `R2` passent cette valeur à 0, tandis que `R3` la définit à 2 secondes. Cela
@@ -164,7 +168,8 @@ selon [RFC 8654][rfc8654]). Passé un certain nombre d'itérations, les mises à
 jour BGP ne peuvent plus être générées. Sur Cisco IOS XR, le processus BGP
 plante bien avant d'atteindre cette limite[^ddts].
 
-[^ddts]: Il s'agit de la [CVE-2025-20115][]. Cela ne se produit qu'avec
+[^ddts]:
+    Il s'agit de la [CVE-2025-20115][]. Cela ne se produit qu'avec
     `as-override` sur un chemin d'AS contenant un segment `AS_CONFED_SEQUENCE`
     trop long. C'est corrigé dans les versions 24.2.21 et 24.3.1.
 

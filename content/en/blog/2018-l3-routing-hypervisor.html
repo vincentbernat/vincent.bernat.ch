@@ -23,7 +23,8 @@ On layer 2 networks, high availability can be achieved by:
  - the underlying network (in the case of an overlay network, like
    [VXLAN][]).
 
-[^mclag]: MC-LAG has been standardized in [IEEE
+[^mclag]:
+    MC-LAG has been standardized in [IEEE
     802.1AX-2014][]. However, most vendors are likely to stick with
     their implementations. With MC-LAG, control planes remain
     independent.
@@ -35,7 +36,8 @@ the scope of a single layer 2 network** by, for example, using one
 distinct network in each rack and connecting them with layer
 3 routing. Incidents are unlikely to impact a whole IP network.
 
-[^incident]: An incident can stem from an operator mistake, but also
+[^incident]:
+    An incident can stem from an operator mistake, but also
     from software bugs, which are more likely to happen in complex
     implementations during infrequent operations, like a software
     upgrade.
@@ -136,7 +138,8 @@ be shadowed by a regular default route:
     ip route add blackhole default metric 4294967294 table private
     ip route add blackhole default metric 4294967294 table local-out
 
-[^nodistribute]: These routes should not be distributed over
+[^nodistribute]:
+    These routes should not be distributed over
     BGP. Hypervisors should receive a default route with a lower
     metric from edge routers.
 
@@ -157,7 +160,8 @@ route cache is increased (default is only 4096):[^ddos]
     sysctl -qw net.ipv6.conf.all.forwarding=1
     sysctl -qw net.ipv6.route.max_size=524288
 
-[^ddos]: Do not increase this value too much. An external attacker can
+[^ddos]:
+    Do not increase this value too much. An external attacker can
     fill the cache easily. The value proposed here corresponds to
     256 MiB of memory. See « [IPv6 route lookup on
     Linux][ddos-cache] » for more details.
@@ -178,7 +182,8 @@ next-hop:[^privacy]
         via fe80::5254:33ff:fe00:f dev vnet6 \
         table public
 
-[^privacy]: This example assumes the guest does not use privacy
+[^privacy]:
+    This example assumes the guest does not use privacy
     extensions ([RFC 3041][]). A workaround is to assign a whole `/64`
     for each guest. This also removes the need to use NDP proxying.
 
@@ -198,7 +203,8 @@ request before being able to forward the packet:[^arp]
     ip route add 192.0.2.15/32 dev vnet6 \
       table public
 
-[^arp]: A static ARP entry can also be added with the remote MAC
+[^arp]:
+    A static ARP entry can also be added with the remote MAC
     address.
 
 Additional IP addresses and subnets can be configured the same way but
@@ -211,7 +217,8 @@ address:[^onlink]
       via 192.0.2.15 dev vnet6 onlink \
       table public
 
-[^onlink]: The `onlink` keyword is needed for the BGP daemon, *BIRD*,
+[^onlink]:
+    The `onlink` keyword is needed for the BGP daemon, *BIRD*,
     to accept the next-hop. Otherwise, it would consider there isn't a
     directly connected (non-host) route covering it.
 
@@ -239,7 +246,8 @@ autoconfiguration mechanisms are used. On the other hand, leaf routers
 (and hypervisors) may optionally learn fewer routes as they can push
 non-local traffic north.
 
-[^current]: For example, a [Juniper QFX5100][] supports about 200k
+[^current]:
+    For example, a [Juniper QFX5100][] supports about 200k
     IPv4 routes (about US$10,000, with Broadcom Trident II chipset). On
     the other hand, an [Arista 7208SR][] supports 1.2M IPv4 routes
     (about US$20,000, with Broadcom Jericho chipset), through the use of
@@ -254,7 +262,8 @@ scalable and cost-efficient design:[^scale]
 
 ![L2 fabric design]([[!!images/l3-routing-l2.svg]] "L2 fabric leaf-spine fabric design with 4 distinct L2 networks. Each hypervisor establishes a BGP session to at least one route reflector for each L2 network.")
 
-[^scale]: From a scalability point of view, with switches able to
+[^scale]:
+    From a scalability point of view, with switches able to
     handle 32k MAC addresses, the fabric can host more than 8,000
     hypervisors (more than 5 million virtual guests). Therefore,
     cost-effective switches can be used as both leaves and
@@ -327,7 +336,8 @@ Here is an example of configuration for *Junos*:[^instances]
         autonomous-system 65000;
     }
 
-[^instances]: Using routing instances would enable hosting several
+[^instances]:
+    Using routing instances would enable hosting several
     route reflectors on the same box. This is not used in this example
     but should be considered to reduce costs.
 
@@ -346,7 +356,8 @@ this route reflector, a whole subnet is authorized in ❸.[^security] We
 also declare the second route reflector for the same network as
 a neighbor to ensure they connect to each other.
 
-[^security]: This prevents the use of any authentication mechanism:
+[^security]:
+    This prevents the use of any authentication mechanism:
     BGP usually relies on TCP MD5 signature ([RFC 2385][]) to
     authenticate BGP sessions. On most OSes, this requires knowing
     allowed peers. To tighten a bit the security in absence of
@@ -364,7 +375,8 @@ on a path may be left undetected until the hold timer expires.
 Therefore, in ❹, we enable BFD, a protocol to quickly[^minimum] detect
 faults in the path between two BGP peers ([RFC 5880][]).
 
-[^minimum]: On the QFX5000 Series switches, the minimum interval is
+[^minimum]:
+    On the QFX5000 Series switches, the minimum interval is
     [officially][] one second. This is quite unfortunate as it makes
     BFD mostly useless.
 
@@ -385,7 +397,8 @@ in BGP ([RFC 7911][]):[^addpath]
     set protocols bgp group public-v4 family inet  unicast add-path send path-count 4
     set protocols bgp group public-v6 family inet6 unicast add-path send path-count 4
 
-[^addpath]: Unfortunately, for no good reason, Junos doesn't support
+[^addpath]:
+    Unfortunately, for no good reason, Junos doesn't support
     the BGP add-path extension in a routing instance. Such a
     configuration is possible with Cumulus Linux.
 
@@ -426,7 +439,8 @@ also available.[^bird] The configuration for the private routing
 domain is similar. To avoid dedicated boxes, a solution is to run the
 route reflectors on some of the top of the rack switches.
 
-[^bird]: Only *BIRD* comes with BFD support out of the box but it does
+[^bird]:
+    Only *BIRD* comes with BFD support out of the box but it does
     not support implicit peers. *FRR* needs Cumulus's [PTMD][]. If you
     don't care about BFD, *GoBGP* is really nice as a route reflector.
 
@@ -484,7 +498,8 @@ table to the kernel's one:[^rt_tables]
       kernel table 90; # Kernel table number
     }
 
-[^rt_tables]: Kernel tables are numbered. `ip` can use names declared
+[^rt_tables]:
+    Kernel tables are numbered. `ip` can use names declared
     in `/etc/iproute2/rt_tables`.
 
 We also need to enable BFD on all interfaces:
@@ -512,7 +527,8 @@ Some missing bits are:
  - [setup of the `private` table][private]; and
  - [setup for IPv6][ipv6].[^ecmpv6]
 
-[^ecmpv6]: It should be noted that ECMP with IPv6 only works from
+[^ecmpv6]:
+    It should be noted that ECMP with IPv6 only works from
     *BIRD* 1.6.1. Moreover, when using Linux 4.11 or more recent, you
     need to apply [commit 98bb80a243b5][].
 
@@ -578,7 +594,8 @@ per-interface *sysctl*[^sysctl] or through the `rpfilter` match of
         sysctl -qw net.ipv4.conf.${iface##*/}.rp_filter=1
     done
 
-[^sysctl]: For a given interface, Linux uses the maximum value between
+[^sysctl]:
+    For a given interface, Linux uses the maximum value between
     the *sysctl* for `all` and the one for the interface.
 
 There is no need to prevent L2 spoofing as there is no gain for the
@@ -602,7 +619,8 @@ to configure a larger subnet as, by default, Linux would install a
 route for the subnet to this interface, which would be
 incorrect.[^noprefixroute]
 
-[^noprefixroute]: It is possible to prevent Linux from installing a
+[^noprefixroute]:
+    It is possible to prevent Linux from installing a
     connected route by using the `noprefixroute` flag. However, this
     flag is only available since Linux 4.4 for IPv4. Only use this
     flag if your DHCP server is giving you a hard time as it may

@@ -27,7 +27,8 @@ plusieurs façons :
    cas des protocoles reposant sur d'autres réseaux, tels que
    [VXLAN][]).
 
-[^mclag]: Le MC-LAG a été standardisé dans [IEEE
+[^mclag]:
+    Le MC-LAG a été standardisé dans [IEEE
     802.1AX-2014][]. Toutefois, il est probable que la plupart des
     vendeurs conservent leurs propres implémentations. La
     caractéristique essentielle d'un MC-LAG est de garder des plans de
@@ -41,7 +42,8 @@ chaque réseau L2**. Par exemple, il est courant d'avoir un réseau L2
 dans chaque baie et de les connecter entre eux via du routage L3. Un
 incident impacte rarement l'ensemble d'un réseau IP.
 
-[^incident]: Un incident peut se déclencher à la suite d'une erreur
+[^incident]:
+    Un incident peut se déclencher à la suite d'une erreur
     humaine mais également à cause de bugs logiciels. Ceux-ci
     surviennent notamment lors des opérations peu fréquentes, comme
     une mise à jour.
@@ -149,7 +151,8 @@ métrique élevée[^nodistribute]. En temps normal, ces routes sont
     ip route add blackhole default metric 4294967294 table private
     ip route add blackhole default metric 4294967294 table local-out
 
-[^nodistribute]: Ces routes ne doivent pas être distribuées via
+[^nodistribute]:
+    Ces routes ne doivent pas être distribuées via
     BGP. Une route par défaut avec une métrique plus faible doit être
     apprise depuis les routeurs de bordure.
 
@@ -172,7 +175,8 @@ défaut est seulement 4096)[^ddos] :
     sysctl -qw net.ipv6.conf.all.forwarding=1
     sysctl -qw net.ipv6.route.max_size=524288
 
-[^ddos]: Il ne faut pas augmenter cette valeur de manière trop brutale.
+[^ddos]:
+    Il ne faut pas augmenter cette valeur de manière trop brutale.
     Il est possible pour un attaquant de remplir le cache assez
     facilement. La valeur proposée ici correspond à 256 Mio de
     mémoire. Voir « [Fonctionnement de la table de routage IPv6 sous
@@ -195,7 +199,8 @@ l'adresse MAC) est utilisée comme prochain saut[^privacy] :
         via fe80::5254:33ff:fe00:f dev vnet6 \
         table public
 
-[^privacy]: Cet exemple ne fonctionne que si la machine virtuelle
+[^privacy]:
+    Cet exemple ne fonctionne que si la machine virtuelle
     n'utilise pas les extensions pour la vie privée ([RFC 3041][]).
     Une solution alternative est d'assigner un `/64` à chaque machine
     virtuelle. Cela présente aussi l'avantage de ne plus nécessiter de
@@ -230,7 +235,8 @@ première IP configurée[^onlink] :
       via 192.0.2.15 dev vnet6 onlink \
       table public
 
-[^onlink]: Le mot-clé `onlink` est nécessaire pour que le démon BGP
+[^onlink]:
+    Le mot-clé `onlink` est nécessaire pour que le démon BGP
     *BIRD* accepte la route. Dans le cas contraire, il considère qu'il
     n'y a pas de route directement connectée valide pour résoudre le
     prochain saut.
@@ -262,7 +268,8 @@ D'un autre côté, les routeurs de type *leaf* (et les hyperviseurs)
 peuvent apprendre moins de routes et pousser le reste du trafic vers
 le nord.
 
-[^current]: Par exemple, un [Juniper QFX5100][] accepte environ
+[^current]:
+    Par exemple, un [Juniper QFX5100][] accepte environ
     200 000 routes IPv4 (pour environ 10 000 $, avec des puces
     Broadcom Trident II). Un [Arista 7208SR][] accepte quant à lui
     plus d'un million de routes IPv4 (pour environ 20 000 $, avec des
@@ -276,7 +283,8 @@ Une autre solution est d'utiliser une fabrique de type L2. Cela peut sembler sur
 
 ![Fabrique de type L2]([[!!images/l3-routing-l2.svg]] "Fabrique L2 de type leaf-spine utilisant 4 réseaux L2 distincts. Chaque hyperviseur établit une session BGP vers au moins un réflecteur de route sur chaque réseau L2.")
 
-[^scale]: En ce qui concerne la taille maximale d'une telle fabrique,
+[^scale]:
+    En ce qui concerne la taille maximale d'une telle fabrique,
     avec des commutateurs capables de gérer 32 000 adresses MAC, la
     fabrique peut héberger 8000 hyperviseurs (plus de 5 millions de
     machines virtuelles). Ainsi, que ce soit pour la partie *leaf* ou
@@ -355,7 +363,8 @@ Voici un exemple de configuration avec *Junos*[^instances] :
         autonomous-system 65000;
     }
 
-[^instances]: L'utilisation d'instances de routage permettrait de
+[^instances]:
+    L'utilisation d'instances de routage permettrait de
     configurer plusieurs réflecteurs sur le même équipement. L'exemple
     ne montre pas cette possibilité mais elle réduirait les coûts.
 
@@ -375,7 +384,8 @@ connecter au réflecteur, un sous-réseau entier est autorisé en
 ❸[^security]. Nous déclarons aussi le second réflecteur présent sur le
 même réseau L2 afin qu'ils s'échangent leurs routes.
 
-[^security]: Cela interdit généralement d'utiliser un mécanisme
+[^security]:
+    Cela interdit généralement d'utiliser un mécanisme
     d'authentification. BGP utilise habituellement les signatures TCP
     MD5 ([RFC 2385][]). Sur la plupart des systèmes, cela implique de
     connaître par avance les pairs. Pour améliorer la sécurité, il est
@@ -393,7 +403,8 @@ commutateurs sur les chemins. En ❹, nous activons BFD, un protocole
 qui permet de détecter en moins d'une seconde[^minimum] un problème
 entre deux pairs BGP ([RFC 5880][]).
 
-[^minimum]: Sur la série de commutateurs QFX5000, l'intervalle minimal
+[^minimum]:
+    Sur la série de commutateurs QFX5000, l'intervalle minimal
     est [officiellement][officially] d'une seconde. C'est regrettable
     car cela rend BFD quasiment inutile.
 
@@ -415,7 +426,8 @@ redistribuer l'ensemble des chemins possibles ([RFC 7911][])[^addpath]
     set protocols bgp group public-v4 family inet  unicast add-path send path-count 4
     set protocols bgp group public-v6 family inet6 unicast add-path send path-count 4
 
-[^addpath]: Malheureusement, pour une raison particulièrement
+[^addpath]:
+    Malheureusement, pour une raison particulièrement
     mystérieuse, *Junos* ne supporte pas l'extension BGP *add-path*
     dans une instance de routage. Une telle configuration est
     toutefois possible avec Cumulus Linux.
@@ -458,7 +470,8 @@ est identique. Pour éviter d'investir dans du matériel dédié pour les
 réflecteurs, il est possible de convertir certains commutateurs de
 baie à cet usage.
 
-[^bird]: Seul *BIRD* implémente BFD mais il ne supporte pas les pairs
+[^bird]:
+    Seul *BIRD* implémente BFD mais il ne supporte pas les pairs
     implicites. *FRR* nécessite d'être couplé à [PTMD][] de
     Cumulus. Si BFD ne vous intéresse pas, *GoBGP* fait un excellent
     réflecteur de routes.
@@ -519,7 +532,8 @@ noyau[^rt_tables] :
       kernel table 90; # Numéro de la table de routage dans le noyau
     }
 
-[^rt_tables]: Les tables de routage du noyau sont numérotées. La
+[^rt_tables]:
+    Les tables de routage du noyau sont numérotées. La
     commande `ip` peut utiliser les noms déclarés dans le fichier
     `/etc/iproute2/rt_tables`.
 
@@ -549,7 +563,8 @@ Il faut également ajouter :
  - [la configuration de la table `private`][private] ;
  - [la configuration pour IPv6][ipv6][^ecmpv6].
 
-[^ecmpv6]: À noter que *BIRD* 1.6.1 est nécessaire pour faire
+[^ecmpv6]:
+    À noter que *BIRD* 1.6.1 est nécessaire pour faire
     fonctionner l'ECMP avec IPv6. De plus, avec un Linux 4.11 ou plus
     récent, le [commit 98bb80a243b5][] est également requis.
 
@@ -620,7 +635,8 @@ dernière option est disponible.
         sysctl -qw net.ipv4.conf.${iface##*/}.rp_filter=1
     done
 
-[^sysctl]: Pour une interface donnée, Linux utilise la valeur maximale
+[^sysctl]:
+    Pour une interface donnée, Linux utilise la valeur maximale
     entre le *sysctl* pour `all` et celui de l'interface.
 
 Il n'est pas utile de s'inquiéter d'une usurpation sur le L2,
@@ -645,7 +661,8 @@ suffisante et il ne faut pas configurer un sous-réseau plus grand :
 Linux installerait la route correspondante sur cette interface, ce qui
 serait incorrect[^noprefixroute].
 
-[^noprefixroute]: Il est possible d'empêcher Linux d'installer la
+[^noprefixroute]:
+    Il est possible d'empêcher Linux d'installer la
     route connectée en utilisant le drapeau `noprefixroute`. Celui-ci
     n'est disponible pour IPv4 que depuis Linux 4.4. Il n'est utile
     que si le serveur DHCP donne du fil à retordre car cela peut

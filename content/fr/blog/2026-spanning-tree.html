@@ -44,7 +44,8 @@ votre unique renfort technique, le temps de rebrancher le câble[^sprites]. Juge
 par vous-même : l'illustration ci-dessous fait tourner une véritable
 implémentation de STP dans votre navigateur !
 
-[^sprites]: Les sprites de Gaston et Nono proviennent de [Craftpix][]. Les
+[^sprites]:
+    Les sprites de Gaston et Nono proviennent de [Craftpix][]. Les
     tasses de café proviennent de [Yanin][].
 
 ``` { .text .mstp-topology }
@@ -153,7 +154,8 @@ solutions, comme [BGP EVPN VXLAN][]. Pourtant, puisque n'importe quel
 commutateur le parle, le vénérable *spanning tree protocol* n'a pas dit son
 dernier mot.
 
-[^history]: STP a été introduit dans [IEEE 802.1D-1990][]. Il est encore présent
+[^history]:
+    STP a été introduit dans [IEEE 802.1D-1990][]. Il est encore présent
     dans [IEEE 802.1D-1998][], mais il a été retiré d'[IEEE 802.1D-2004][] au
     profit de RSTP, introduit dans [IEEE 802.1w-2001][]. MSTP est apparu dans
     [IEEE 802.1s-2002][] avant d'être intégré à [IEEE 802.1Q-2003][]. Tous deux
@@ -221,20 +223,23 @@ simulation, l'avancer pas à pas, la réinitialiser ou la ralentir avec le mode 
 escargot » 🐌. Ne vous inquiétez pas de toutes les informations affichées : je
 les explique plus loin.
 
-[^bridge]: À partir d'ici, j'emploie le terme « pont » plutôt que le mot plus
+[^bridge]:
+    À partir d'ici, j'emploie le terme « pont » plutôt que le mot plus
     courant « commutateur ».
 
 Tous les exemples s'exécutent dans votre navigateur grâce à [MSTPD][], une
 implémentation libre de RSTP[^incomplete] fonctionnant en espace
 utilisateur[^kernel].
 
-[^incomplete]: MSTPD implémente la machine à états d'[IEEE 802.1Q-2005][], mais
+[^incomplete]:
+    MSTPD implémente la machine à états d'[IEEE 802.1Q-2005][], mais
     sous Linux, il ne fait tourner que RSTP. Linux 5.18 a ajouté la [prise en
     charge de la commutation pour plusieurs arbres recouvrants][support for
     forwarding multiple spanning tree], mais MSTPD ne l'utilise pas encore.
     Consultez la [PR #150][] pour suivre les avancées sur ce point.
 
-[^kernel]: Le noyau Linux ne gère que STP. Il délègue les autres protocoles à
+[^kernel]:
+    Le noyau Linux ne gère que STP. Il délègue les autres protocoles à
     l'espace utilisateur.
 
 [bgp evpn vxlan]: [[fr/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN avec FRR"
@@ -301,7 +306,8 @@ par défaut de 32 768[^priority] : S4 devient racine. S5 et S6 n'ont pas de
 priorité particulière : l'adresse MAC la plus faible l'emporte et S5 devient
 racine.
 
-[^priority]: La priorité est un multiple de 4 096 : avec MSTP, les 12 bits de
+[^priority]:
+    La priorité est un multiple de 4 096 : avec MSTP, les 12 bits de
     poids faible de la priorité du pont encodent l'identifiant de l'instance
     MST, ne laissant que les 4 bits de poids fort pour la priorité configurée.
 
@@ -332,7 +338,8 @@ Spanning Tree Protocol
     Bridge Identifier: 8192.02:00:00:01:00:01
 ```
 
-[^wireshark]: Pour inspecter les BPDU qui circulent sur un lien, sélectionnez-le,
+[^wireshark]:
+    Pour inspecter les BPDU qui circulent sur un lien, sélectionnez-le,
     cliquez sur le bouton « *Download packets* », puis ouvrez le fichier avec
     [Wireshark][].
 
@@ -361,7 +368,8 @@ rôles, chacun représenté par une lettre :
 - désactivé (X, *disabled*),
 - de secours (B, *backup*)[^backup].
 
-[^backup]: Un port de secours n'existe que si le pont possède plusieurs ports
+[^backup]:
+    Un port de secours n'existe que si le pont possède plusieurs ports
     sur le même domaine de collision. Cela ne devrait pas se produire dans un
     réseau commuté.
 
@@ -432,7 +440,8 @@ secondes](#mstp:13,S1->S3:2,S2->S3,S1->S2,@)[^hello]. Si un pont ne reçoit plus
 BPDU de son voisin pendant 3 périodes « *hello* » consécutives, il le considère
 comme mort et efface les informations associées au port.
 
-[^hello]: C'est la valeur du temporisateur « *hello* ». Elle était autrefois
+[^hello]:
+    C'est la valeur du temporisateur « *hello* ». Elle était autrefois
     configurable, mais [IEEE 802.1Q-2005][] la fixe à 2. MSTPD n'autorise pas
     d'autre valeur.
 
@@ -462,7 +471,8 @@ pour passer de l'état de rejet à l'état de transmission :
   ni déjà synchronisés. Il renvoie ensuite un **accord**. À la réception de cet
   accord, le port désigné du pair passe à l'état de transmission[^learning].
 
-[^learning]: Si un port ne reçoit pas d'accord à l'expiration du temporisateur
+[^learning]:
+    Si un port ne reçoit pas d'accord à l'expiration du temporisateur
     « *hello* » (ou de l'âge maximal si le port vient tout juste d'être activé),
     il se rabat sur la méthode à base de temporisateurs, par compatibilité avec
     STP : il passe à l'état d'apprentissage, attend de nouveau l'expiration du
@@ -591,7 +601,8 @@ Spanning Tree Protocol
     Port identifier: 0x8002
 ```
 
-[^agreement]: Comme dans beaucoup de propositions, S3 positionne aussi le bit
+[^agreement]:
+    Comme dans beaucoup de propositions, S3 positionne aussi le bit
     d'accord à 1. Le bit de proposition signifie « je suis le port désigné sur
     ce lien et je veux passer à l'état de transmission ». Le bit d'accord
     signifie « je suis déjà synchronisé avec le reste de mon pont sur cette
@@ -661,7 +672,8 @@ lien tombe, un frigo connecté joignable par un port peut le devenir par un
 autre. Les ponts concernés doivent alors purger les adresses MAC apprises :
 elles ne sont peut-être plus valables.
 
-[^bum]: S'il ne trouve aucune entrée, le pont duplique la trame Ethernet sur
+[^bum]:
+    S'il ne trouve aucune entrée, le pont duplique la trame Ethernet sur
     tous les ports, sauf celui d'entrée. Il en va de même si l'adresse MAC de
     destination est l'adresse de diffusion (`ff:ff:ff:ff:ff:ff`). Ce
     comportement amorce le processus d'apprentissage.
@@ -856,10 +868,12 @@ le rôle de ponts racines et plusieurs boucles raccordent les commutateurs
 présents dans chaque baie. Cette conception simple survit à une panne sur chaque
 boucle[^erps].
 
-[^price]: Vous pouvez en trouver d'occasion pour moins de 100 €. Tous les ports
+[^price]:
+    Vous pouvez en trouver d'occasion pour moins de 100 €. Tous les ports
     utilisent PVST+ par défaut et basculent automatiquement vers RSTP classique.
 
-[^erps]: Une solution de rechange serait l'[Ethernet Ring Protection
+[^erps]:
+    Une solution de rechange serait l'[Ethernet Ring Protection
     Switching][ITU-T G.8032] (ERPS), un autre protocole dont je n'avais jamais
     entendu parler avant de me documenter pour cet article.
 
@@ -945,7 +959,8 @@ L'âge maximal, dont la valeur par défaut est 20, détermine la distance maxima
 entre un nœud et la racine. La topologie ci-dessous est trop grande : les BPDU
 issues de R1 ne parviennent pas au-delà de S20[^root-mac].
 
-[^root-mac]: Si vous observez attentivement ce qui se passe à t=2s, vous verrez
+[^root-mac]:
+    Si vous observez attentivement ce qui se passe à t=2s, vous verrez
     que R2 gagne en popularité comme racine : S17 à S36 croient que R2 est la
     racine. S16 ne suit pas car nous atteignons l'âge maximal. Plus tard, S17 à
     S20 changent d'avis. Je vous laisse explorer l'état des différents ponts
@@ -1087,7 +1102,8 @@ l'âge maximal configuré. Mais cela ne fonctionne que jusqu'à la rupture d'un
 autre lien. Une correction possible consiste à porter l'âge maximal à
 40[^forward-delay].
 
-[^forward-delay]: En portant l'âge maximal à 40, vous devez aussi augmenter le
+[^forward-delay]:
+    En portant l'âge maximal à 40, vous devez aussi augmenter le
     délai de transmission à 21 (`:forward-delay 21`), car le standard impose la
     condition suivante : 2 × (*Forward Delay* − 1) ≥ *Max Age*. Pour cette
     topologie précise, vous pourriez aussi porter l'âge maximal à 37 et le délai
@@ -1100,12 +1116,14 @@ arbre en moins d'une seconde. Même la [topologie à 38 ponts][38-bridge topolog
 converge en moins de 10 secondes[^time]. Certaines topologies mettent un peu
 plus de temps à se rétablir quand la racine devient indisponible[^slow].
 
-[^time]: La simulation peut sembler lente, mais elle ne tourne pas en temps
+[^time]:
+    La simulation peut sembler lente, mais elle ne tourne pas en temps
     réel. Regardez l'horodatage dans le coin supérieur droit pour connaître le
     temps écoulé, par exemple « t=8s ». Une fois la topologie stabilisée, ce
     même coin affiche le temps de convergence, par exemple « 🌳 2s ».
 
-[^slow]: Khaled Elmeleegy, Alan Cox et Eugene Ng ont formalisé ce phénomène dans
+[^slow]:
+    Khaled Elmeleegy, Alan Cox et Eugene Ng ont formalisé ce phénomène dans
     « [On Count-to-Infinity Induced Forwarding Loops in Ethernet Networks][1] »,
     puis dans « [Understanding and Mitigating the Effects of Count to Infinity
     in Ethernet Networks][2] ». Ils proposent une correction qui n'a jamais

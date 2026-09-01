@@ -31,12 +31,14 @@ long-standing challenge,[^past] but I expect this issue is now fixed by using
 **RIB sharding**, a method that splits the routing database into several parts
 to enable concurrent updates.
 
-[^optimize]: Each router exporting flows doesn't need to send its routes. When
+[^optimize]:
+    Each router exporting flows doesn't need to send its routes. When
     Akvorado does not find a route from a specific device, it falls back to a
     route sent by another device. It is up to the operator to decide if this
     is a good enough approximation.
 
-[^past]: I made many attempts to scale the BMP component. See for example
+[^past]:
+    I made many attempts to scale the BMP component. See for example
     [PR #254][], [PR #255][], [PR #278][], [PR #2244][], and [PR #2245][].
     Despite these efforts, this component remained problematic for some users.
     See [discussion #2287][] as the latest example.
@@ -97,7 +99,8 @@ algorithm][]. The [benchmarks][] demonstrate it outperforms other packages for
 lookups, insertions, and memory usage.[^performance] Plus, the author is quite
 helpful.
 
-[^performance]: It keeps improving: [bart 0.28.0][] features a new
+[^performance]:
+    It keeps improving: [bart 0.28.0][] features a new
     implementation that trades a bit of memory for greater lookup performance. I
     did not test it yet, as I have been preparing this blog post for a couple
     of months already.
@@ -123,7 +126,8 @@ index with a 32-bit route index matching the position of the route in the list.
 Akvorado scans routes from the first to the last to find the best one.[^scan] It
 knows there is no more route if the route key returns no result.
 
-[^scan]: Akvorado prefers the route matching the exact next hop. Otherwise, it
+[^scan]:
+    Akvorado prefers the route matching the exact next hop. Otherwise, it
     falls back to any other route. This is an approximation. An alternative
     would be to have one prefix tree for each BGP peer but it would require
     configuring all routers to export their routes. [pmacct][]'s BMP daemon
@@ -144,7 +148,8 @@ type routeKey uint64
 A route contains a BGP peer identifier, a partial NLRI[^nlri], the next hop, and the
 attributes.
 
-[^nlri]: If we consider the BGP RIB as a database, the Network Layer
+[^nlri]:
+    If we consider the BGP RIB as a database, the Network Layer
     Reachability Information (NLRI) is the primary key. Its content depends on
     the BGP family. With IPv4 or IPv6 unicast, this is the prefix. For VPNv4 and
     VPNv6 families, it includes the route distinguisher. If you enable the
@@ -190,7 +195,8 @@ different trade-offs:
   of pointers.
 - But it is **not safe for concurrent use**.
 
-[^hash]: The `Hash()` methods rely on the [`hash/maphash`][hash/maphash] package
+[^hash]:
+    The `Hash()` methods rely on the [`hash/maphash`][hash/maphash] package
     and on the [`unsafe`][unsafe] package to avoid memory copies. See for
     example the [`Hash()` function for the `nlri` structure][nlri.Hash()].
 
@@ -208,7 +214,8 @@ different trade-offs:
 Bogner][] had the patience, availability, and technical skills to help me [debug
 this issue][discussion #2287].
 
-[^cisco]: Despite being an author or co-author of the first BMP-related RFCs since
+[^cisco]:
+    Despite being an author or co-author of the first BMP-related RFCs since
     2016 ([RFC 7854][], [RFC 8671][], [RFC 9069][]), Cisco did not implement it
     in a usable way in IOS XR until version 24.2.1. We still need to upgrade a
     few routers to enable this feature.
@@ -238,11 +245,13 @@ There are several users of the RIB, each with its own set of constraints:
 In short: on a busy setup, lock contention is high for both readers and
 writers, and neither can lag too much behind.
 
-[^KIP-932]: [KIP-932][] introduces, in Kafka 4.2, the concept of share groups to
+[^KIP-932]:
+    [KIP-932][] introduces, in Kafka 4.2, the concept of share groups to
     enable cooperative consumption on the same partition. This is not supported
     in Akvorado yet.
     
-[^bmpconfig]: You can configure BMP to send routes for each BGP peer before or after
+[^bmpconfig]:
+    You can configure BMP to send routes for each BGP peer before or after
     applying the incoming policies. In this case, you can get more than one
     million routes for each transit peer. You can also tell BMP to send the
     local RIB, which only contains the best path for each prefix.
@@ -284,7 +293,8 @@ fast as possible, while 1 to 16 readers continuously look up a set of 10,000
 routes. I don't know if this benchmark is realistic, but it confirms the
 improvements for both read and write latencies:
 
-[^plausible]: The prefixes are random, but the prefix size distribution and the
+[^plausible]:
+    The prefixes are random, but the prefix size distribution and the
     AS path length distribution follow the [data provided by Geoff Huston][].
 
 ![Two heatmaps. One for read latency ratio, the other for write latency ratio.
@@ -341,7 +351,8 @@ prefix index 5, stored with a generation index of 3, while the current value in
 the `[]generations` array is 4. The generation number could overflow, but it is
 not a problem as lookups are quick.
 
-[^retry]: Alternatively, we could retry the lookup, but it would be pointless:
+[^retry]:
+    Alternatively, we could retry the lookup, but it would be pointless:
     the RIB is an [eventually consistent][] database, and an empty list was a
     correct answer at some point in the recent past.
 

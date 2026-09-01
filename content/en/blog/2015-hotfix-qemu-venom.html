@@ -47,9 +47,10 @@ kernel attracted a lot of interest in this area, with solutions like
 [kpatch][] (by Red Hat) and the inclusion of a [common framework][] in
 the kernel. The userspace has far fewer out-of-the-box solutions.[^userspace]
 
-[^userspace]: An interesting project seems to be [Katana][]. But there
-              are also some insightful [hacking][1] [papers][2] on
-              the subject.
+[^userspace]:
+    An interesting project seems to be [Katana][]. But there
+    are also some insightful [hacking][1] [papers][2] on
+    the subject.
 
 [TOC]
 
@@ -206,11 +207,12 @@ done by setting the `DEB_BUILD_OPTIONS` environment variable to
 
 [^buildid]: The Fedora Wiki contains the [rationale behind the build ID][].
 
-[^reproducible]: If the build is incorrectly reproduced, the build ID
-                 won't match. The information provided by the debug
-                 symbols may or may not be correct. Debian currently
-                 has a [reproducible builds][] effort to ensure that
-                 each package can be reproduced.
+[^reproducible]:
+    If the build is incorrectly reproduced, the build ID
+    won't match. The information provided by the debug
+    symbols may or may not be correct. Debian currently
+    has a [reproducible builds][] effort to ensure that
+    each package can be reproduced.
 
 We have now two possible cases:
 
@@ -224,8 +226,9 @@ memory:[^more]
 
 ![Memory layout of a regular process on x86]([[!!images/memory-layout-regular-v2.svg]] "Memory layout of a regular process on Linux x86 with ASLR.")
 
-[^more]: [Anatomy of a program in memory][] is a great blog post
-         explaining in more detail how a program lives in memory.
+[^more]:
+    [Anatomy of a program in memory][] is a great blog post
+    explaining in more detail how a program lives in memory.
 
 The random gaps (ASLR) are here to prevent an attacker from reliably
 jumping to a particular exploited function in memory. On x86-64, the
@@ -399,11 +402,12 @@ back in memory.[^write]
         return ret;
     }
 
-[^write]: Being an uninitialized static variable, the variable is in
-          the BSS section. This section is mapped to a writable memory
-          segment. If it were not the case, with Linux, the `ptrace()`
-          system call is still allowed to write. Linux will copy the
-          page and mark it as private.
+[^write]:
+    Being an uninitialized static variable, the variable is in
+    the BSS section. This section is mapped to a writable memory
+    segment. If it were not the case, with Linux, the `ptrace()`
+    system call is still allowed to write. Linux will copy the
+    page and mark it as private.
 
 Since `ptrace()` only allows one to read or write a word at a time,
 `ptrace_read()` and `ptrace_write()` are wrappers to read or write
@@ -437,11 +441,12 @@ arbitrary large chunks of memory.[^vmreadv] Here is the code for
         return (unsigned char *)buffer;
     }
 
-[^vmreadv]: With Linux 3.2 or later, `process_vm_readv()`
-            and `process_vm_writev()` can be used to transfer data from/to
-            a remote process without using `ptrace()` at all. However,
-            `ptrace()` would still be needed to reliably stop the main
-            thread.
+[^vmreadv]:
+    With Linux 3.2 or later, `process_vm_readv()`
+    and `process_vm_writev()` can be used to transfer data from/to
+    a remote process without using `ptrace()` at all. However,
+    `ptrace()` would still be needed to reliably stop the main
+    thread.
 
 ## Putting the pieces together
 

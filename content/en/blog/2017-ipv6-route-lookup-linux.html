@@ -42,7 +42,8 @@ sharing:
    space. Level-compression is therefore quite efficient with IPv4. This may not
    be the case with IPv6.
 
-[^ssr]: For a given destination prefix, it's possible to attach source-specific
+[^ssr]:
+    For a given destination prefix, it's possible to attach source-specific
     prefixes:
 
         ::shell
@@ -173,7 +174,8 @@ Here is what a cache entry with a PMTU exception looks like:
     2001:db8:1::50 via 2001:db8:1::13 dev out6  metric 0
         cache  expires 573sec mtu 1400 pref medium
 
-[^ddos]: It is actually possible for an attacker to create arbitrary entries in
+[^ddos]:
+    It is actually possible for an attacker to create arbitrary entries in
     a router's cache by sending ICMP packets "message too big." This attack is
     the origin of the [CVE-2018-19299][]. For more details, see [Marek Isalski's
     presentation to UKNOF 43][] on the subject.
@@ -199,7 +201,8 @@ Excerpt of an Internet full view
   information for the /64 subnet is converted into routes by some external
   process and redistributed among other routers sharing the same subnet.[^neigh]
 
-[^neigh]: This is quite different from the classic scenario where Linux acts as a
+[^neigh]:
+    This is quite different from the classic scenario where Linux acts as a
     gateway for a /64 subnet. In this case, the neighbor subsystem stores the
     reachability information for each host and the routing table only contains a
     single /64 prefix.
@@ -212,7 +215,8 @@ correlate the results with the radix tree size:
 
 ![Maximum depth and lookup time]([[!!images/linux/ipv6-radix-maxdepth.svg]] "Maximum depth and lookup time depending on the number of routes inserted. The x-axis scale is logarithmic. The error bars represent the median absolute deviation.")
 
-[^bench]: The measurements are done in a virtual machine with one vCPU and no
+[^bench]:
+    The measurements are done in a virtual machine with one vCPU and no
     neighbors. The host is an [Intel Core i5-4670K][] running at 3.7 GHz during
     the experiment (CPU governor set to performance). The benchmark is
     single-threaded. Many lookups are performed and the result reported is the
@@ -227,11 +231,12 @@ scenario, the range from the first /48 to the last one is scanned. For each
 range, 5000 addresses are picked semi-randomly. This operation is repeated until
 we get 5000 hits or until 1 million tests have been executed.
 
-[^hits]: Most of the packets in the network are expected to be routed to a
-  destination. However, this also means the backtracking code path is not used
-  in the /128 and /48 scenarios. Having a fallback route gives far different
-  results and makes it difficult to ensure we explore the address space
-  correctly.
+[^hits]:
+    Most of the packets in the network are expected to be routed to a
+    destination. However, this also means the backtracking code path is not used
+    in the /128 and /48 scenarios. Having a fallback route gives far different
+    results and makes it difficult to ensure we explore the address space
+    correctly.
 
 The relation between the maximum depth and the lookup time is incomplete and I
 cannot explain the difference in performance between the different densities of
@@ -257,7 +262,8 @@ are removed on the first modification. If we cancel these optimizations, the
 lookup time for IPv4 is impacted by about 30 ns. This still leaves a 100 ns
 difference with IPv6 to be explained.
 
-[^ipv6opt]: The exact same optimizations could be applied for IPv6. Nobody did
+[^ipv6opt]:
+    The exact same optimizations could be applied for IPv6. Nobody did
     it [yet][ipv6opt].
 
 Let's compare how time is spent in each lookup function. Here is
@@ -283,7 +289,8 @@ Here is an approximate breakdown on the time spent:
  - 5% is spent in the route lookup of the *local* table; and
  - most of the remaining is spent in routing rule evaluation (about 100 ns).[^compileout]
 
-[^compileout]: Compiling out table support effectively removes these last
+[^compileout]:
+    Compiling out table support effectively removes these last
     100 ns.
 
 Why is the evaluation of routing rules less efficient with IPv6? Again, I
@@ -319,7 +326,8 @@ booted with the `slab_nomerge` flag:
     fib6_nodes         76101  76104     64   63    1
     ip6_dst_cache      40090  40090    384   10    1
 
-[^percpu]: There is also per-CPU pointers allocated directly (4 bytes per entry
+[^percpu]:
+    There is also per-CPU pointers allocated directly (4 bytes per entry
     per CPU on a 64-bit architecture). We ignore this detail.
 
 In the above example, the used memory is 76104×64+40090×384 bytes (about

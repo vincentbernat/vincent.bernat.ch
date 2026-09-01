@@ -22,12 +22,14 @@ pense que ce problème est désormais résolu grâce au **sharding de la RIB**, 
 méthode qui découpe la base de routage en plusieurs parties afin de permettre
 les mises à jour concurrentes.
 
-[^optimize]: Chaque routeur exportant des flux n'a pas besoin d'envoyer ses
+[^optimize]:
+    Chaque routeur exportant des flux n'a pas besoin d'envoyer ses
     routes. Quand Akvorado ne trouve pas de route pour un équipement donné, il
     se rabat sur une route envoyée par un autre équipement. C'est à l'opérateur
     de juger si cette approximation est acceptable.
 
-[^past]: J'ai effectué de nombreuses tentatives pour augmenter l'efficacité du
+[^past]:
+    J'ai effectué de nombreuses tentatives pour augmenter l'efficacité du
     composant BMP. Voir par exemple les [PR #254][], [PR #255][], [PR #278][],
     [PR #2244][] et [PR #2245][]. Malgré ces efforts, ce composant est resté
     problématique pour certains utilisateurs. Voir la
@@ -89,7 +91,8 @@ l'[algorithme ART][art algorithm] de Donald Knuth. Les [benchmarks][] montrent
 qu'il surpasse les autres implémentations pour les recherches, les insertions et
 la consommation mémoire[^performance]. De plus, l'auteur est d'une grande aide.
 
-[^performance]: Cela continue de s'améliorer : [bart 0.28.0][] introduit une
+[^performance]:
+    Cela continue de s'améliorer : [bart 0.28.0][] introduit une
     implémentation alternative qui troque un peu de mémoire contre de meilleures
     performances en recherche. Je ne l'ai pas encore essayée car cela fait déjà
     quelques mois que je prépare ce billet.
@@ -116,7 +119,8 @@ de la route dans la liste. Akvorado parcourt les routes de la première à la
 dernière pour trouver la meilleure[^scan]. Il sait qu'il n'y a plus de route
 lorsque la clé ne renvoie aucun résultat.
 
-[^scan]: Akvorado préfère la route dont le prochain saut correspond exactement.
+[^scan]:
+    Akvorado préfère la route dont le prochain saut correspond exactement.
     Sinon, il se rabat sur n'importe quelle autre route. C'est une
     approximation. Une alternative consisterait à maintenir un arbre de
     préfixes par pair BGP, mais il faudrait alors configurer tous les routeurs pour
@@ -138,7 +142,8 @@ type routeKey uint64
 Une route contient un identifiant de pair BGP, un NLRI partiel[^nlri], le prochain
 saut et les attributs.
 
-[^nlri]: Si nous considérons la RIB BGP comme une base de données, le NLRI
+[^nlri]:
+    Si nous considérons la RIB BGP comme une base de données, le NLRI
     (*Network Layer Reachability Information*) en constitue la clé primaire.
     Son contenu dépend de la famille BGP. Pour IPv4 ou IPv6 unicast, il s'agit
     du préfixe. Pour les familles VPNv4 et VPNv6, il inclut le *route
@@ -188,7 +193,8 @@ Go 1.23. Nous le conservons car ses compromis sont différents :
   plutôt que des pointeurs ;
 - mais il **n'est pas utilisable de manière concurrente**.
 
-[^hash]: Les méthodes `Hash()` s'appuient sur les paquets
+[^hash]:
+    Les méthodes `Hash()` s'appuient sur les paquets
     [`hash/maphash`][hash/maphash] et [`unsafe`][unsafe] pour une meilleure
     performance. Voir par exemple la [fonction `Hash()` de la structure
     `nlri`][nlri.Hash()].
@@ -207,7 +213,8 @@ Go 1.23. Nous le conservons car ses compromis sont différents :
 [Gerhard Bogner][] a eu la patience, la disponibilité et les compétences
 techniques pour m'aider à [déboguer ce problème][discussion #2287].
 
-[^cisco]: Bien qu'auteur ou co-auteur des premières RFC liées à BMP depuis 2016
+[^cisco]:
+    Bien qu'auteur ou co-auteur des premières RFC liées à BMP depuis 2016
     ([RFC 7854][], [RFC 8671][], [RFC 9069][]), Cisco n'a pas fourni
     d'implémentation utilisable dans IOS XR avant la version 24.2.1. Il nous
     reste encore quelques routeurs à mettre à jour pour activer cette
@@ -241,11 +248,13 @@ En résumé : sur une installation chargée, la contention sur le verrou est
 forte autant pour les lecteurs que pour les écrivains, et aucun des deux ne
 peut prendre trop de retard.
 
-[^KIP-932]: La [KIP-932][] introduit, dans Kafka 4.2, la notion de *groupes
+[^KIP-932]:
+    La [KIP-932][] introduit, dans Kafka 4.2, la notion de *groupes
     partagés* pour permettre la consommation coopérative d'une même partition.
     Akvorado ne la prend pas encore en charge.
 
-[^bmpconfig]: BMP peut être configuré pour envoyer les routes de chaque pair BGP
+[^bmpconfig]:
+    BMP peut être configuré pour envoyer les routes de chaque pair BGP
     avant ou après l'application des politiques entrantes. Dans ce dernier cas,
     plus d'un million de routes peuvent arriver par transit. BMP peut aussi être
     configuré pour envoyer la RIB locale, qui ne contient que le meilleur chemin
@@ -290,7 +299,8 @@ demi-million de routes synthétiques mais plausibles[^plausible], réparties ent
 benchmark est réaliste, mais il confirme les améliorations à la fois sur les
 latences en lecture et en écriture :
 
-[^plausible]: Les préfixes sont aléatoires, mais la distribution de leurs tailles
+[^plausible]:
+    Les préfixes sont aléatoires, mais la distribution de leurs tailles
     et celle des longueurs de chemin AS suivent les [données fournies par
     Geoff Huston][data provided by Geoff Huston].
 
@@ -349,7 +359,8 @@ de 3, alors que la valeur actuelle dans le tableau `[]generations` est 4. Le
 numéro de génération peut boucler, mais ce n'est pas un problème car les
 recherches sont rapides.
 
-[^retry]: Une alternative aurait été de réessayer la recherche, mais cela
+[^retry]:
+    Une alternative aurait été de réessayer la recherche, mais cela
     n'aurait pas de sens : la RIB est une structure [cohérente à terme][] et
     une liste de routes vide est bien un état qui s'est produit récemment.
 

@@ -107,7 +107,8 @@ mécanisme[^accuracy] :
 [commit3]: https://git.kernel.org/pub/scm/linux/kernel/git/davem/net-next.git/commit/?id=c125e80b88687b25b321795457309eaaee4bf270 "soreuseport: fast reuseport TCP socket selection"
 [pending patch]: https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/commit/?id=41788bdd42312828532c4ddbadc0a4d28426d4fd "man/man7/socket.7: Fix documentation for SO_ATTACH_REUSEPORT_PORT"
 
-[^accuracy]: La version actuelle de la page de manuel est incomplète et ne
+[^accuracy]:
+    La version actuelle de la page de manuel est incomplète et ne
     couvre pas l'évolution introduite dans Linux 4.19. Il existe un [patch en
     attente][pending patch] à ce sujet.
 
@@ -129,7 +130,8 @@ nécessite deux étapes :
 1. écrire et compiler un programme eBPF en C[^rust] ;
 2. le charger et l'attacher en Go.
 
-[^rust]: [Rust][] est une autre option. Cependant, le programme que nous
+[^rust]:
+    [Rust][] est une autre option. Cependant, le programme que nous
     utilisons est si trivial qu'il est superflu d'utiliser Rust.
 
 [Rust]: https://aya-rs.dev/book/ "Building eBPF Programs with Aya"
@@ -169,7 +171,8 @@ sélectionnons aléatoirement l'index de la chaussette cible[^random]. En ❹, n
 invoquons la fonction `bpf_sk_select_reuseport()` pour enregistrer notre
 décision. Enfin, en ❺, nous acceptons le paquet.
 
-[^random]: Comme `bpf_get_prandom_u32()` renvoie une valeur pseudo-aléatoire de
+[^random]:
+    Comme `bpf_get_prandom_u32()` renvoie une valeur pseudo-aléatoire de
     32 bits, cette méthode présente un très léger biais vers les premiers index.
     Cela ne vaut probablement pas la peine d'être corrigé.
 
@@ -190,7 +193,8 @@ Ensuite, incluez les entêtes suivantes[^kernel] :
 #include <bpf/bpf_helpers.h>
 ```
 
-[^kernel]: Certains exemples incluent `<linux/bpf.h>` au lieu de `"vmlinux.h"`.
+[^kernel]:
+    Certains exemples incluent `<linux/bpf.h>` au lieu de `"vmlinux.h"`.
     Cela rend votre programme eBPF dépendant des entêtes du noyau installées.
 
 Pour mon noyau 6.17, le fichier `vmlinux.h` généré est assez volumineux :
@@ -272,7 +276,8 @@ for range workers {
 ```
 
 
-[^listenaddr]: `listenAddr` est initialement défini à `127.0.0.1:0` pour allouer
+[^listenaddr]:
+    `listenAddr` est initialement défini à `127.0.0.1:0` pour allouer
     un port aléatoire. Après la première itération, il est mis à jour avec le
     port alloué.
 
@@ -470,7 +475,8 @@ routine doit appeler `conn.Read()` jusqu'à ce qu'il n'y ait plus de paquets. Un
 solution consiste à définir une échéance pour `conn.Read()` et vérifier si nous
 devons arrêter la routine Go lorsque l'échéance est écoulée :
 
-[^c]: Avec C, nous pouvons appeler `poll()` sur la chaussette et sur un tube
+[^c]:
+    Avec C, nous pouvons appeler `poll()` sur la chaussette et sur un tube
     pour signaler l'arrêt de la routine. Une fois la seconde condition activée,
     une série d'appels non bloquants à `read()` permet de vider la chaussette
     des paquets restants, jusqu'à recevoir `EWOULDBLOCK`.

@@ -118,16 +118,17 @@ would allow an attacker to evade detection. Another equivalent
 solution would be to use `CONNMARK` to record the fact the initial
 handshake has been done and forbid any subsequent handshakes.[^noo]
 
-[^noo]: Handling TLS state in Netfilter is quite hard. The first
-        solution is using the fact that renegotiation requests are
-        encapsulated in a TCP segment flagged with "push." This is not
-        always the case and it is trivial to workaround. With the
-        second solution, we assume that the first encrypted handshake
-        record is packed in the same TCP segment than the client key
-        exchange. If it comes in its own TCP segment, it would be seen
-        as a renegotiation while it is not. The state machine needs to
-        be improved to detect the first encrypted handshake at the
-        beginning of a TLS record or in the middle of it.
+[^noo]:
+    Handling TLS state in Netfilter is quite hard. The first
+    solution is using the fact that renegotiation requests are
+    encapsulated in a TCP segment flagged with "push." This is not
+    always the case and it is trivial to workaround. With the
+    second solution, we assume that the first encrypted handshake
+    record is packed in the same TCP segment than the client key
+    exchange. If it comes in its own TCP segment, it would be seen
+    as a renegotiation while it is not. The state machine needs to
+    be improved to detect the first encrypted handshake at the
+    beginning of a TLS record or in the middle of it.
 
 If you happen to disable TLS renegotiation, you can still use some
 Netfilter rule to limit the number of TLS handshakes by limiting the
@@ -145,10 +146,11 @@ number of TCP connections from one IP:
 Your servers will still be vulnerable to a large botnet but if there
 is only a handful of source IP, this rule will work just fine.[^a]
 
-[^a]: However, since this rule relies on source IP to identify the
-      attacker, the risk of false positive is real. You can slow down
-      legitimate proxies, networks NATed behind a single IP, mobile
-      users sharing an IP address or people behind a CGN.
+[^a]:
+    However, since this rule relies on source IP to identify the
+    attacker, the risk of false positive is real. You can slow down
+    legitimate proxies, networks NATed behind a single IP, mobile
+    users sharing an IP address or people behind a CGN.
 
 I have made all these solutions available in a
 [single file][netfilter].
@@ -198,9 +200,10 @@ However, you can't really use only these shiny cipher suites:
  3. They are expensive for some mobile clients: they need more memory,
     more processing power and will drain battery faster.
 
-[^1]: Cipher suites supported by all browsers are `RC4-MD5`, `RC4-SHA`
-      and `3DES-SHA`. <del>Support for `DHE-DSS-AES256-SHA` requires TLS
-      1.2</del> <del>(not supported by any browser).</del>
+[^1]:
+    Cipher suites supported by all browsers are `RC4-MD5`, `RC4-SHA`
+    and `3DES-SHA`. <del>Support for `DHE-DSS-AES256-SHA` requires TLS
+    1.2</del> <del>(not supported by any browser).</del>
 
 Let's dig a bit more into why the server needs more computational power
 in the case of RSA. Here is a TLS handshake when using a cipher suite

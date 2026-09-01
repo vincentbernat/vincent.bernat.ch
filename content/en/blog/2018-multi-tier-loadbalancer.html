@@ -37,7 +37,8 @@ Operability
   new software on the backends, adding or removing backends, or scaling up or
   down the load-balancing layer itself.
 
-[^backend]: In this article, "*backend servers*" are the servers behind the
+[^backend]:
+    In this article, "*backend servers*" are the servers behind the
     load-balancing layer. To avoid confusion, we will not use the term
     "*frontend*."
 
@@ -73,7 +74,8 @@ described in this article to manage services in a Kubernetes cluster.
 Check out the documentation about [Kubernetes without kube-proxy][] as
 well as the documentation on [how to set up BGP][].
 
-[^morningpaper]: A good summary of the paper is available from [Adrian
+[^morningpaper]:
+    A good summary of the paper is available from [Adrian
     Colyer][]. From the same author, you may also have a look at the summary for
     "[Stateless datacenter load-balancing with Beamer][]."
 
@@ -159,7 +161,8 @@ illustrates two key concepts for operability:
     down through the agent check. The same mechanism as for regular backends can be
     used to signal the unavailability of this load-balancer.
 
-[^agentcheck]: If you feel this solution is fragile, feel free to develop your
+[^agentcheck]:
+    If you feel this solution is fragile, feel free to develop your
     own agent. It could coordinate with a key-value store to determine the
     wanted state of the server. It is possible to centralize the agent in a
     single location, but you may get a chicken-and-egg problem to ensure its
@@ -195,7 +198,8 @@ connections among available load-balancers:
 first tier. Flows are spread among available L7 load-balancers. Routing is
 stateless and asymmetric. Backend servers are not represented.")
 
-[^flow]: A flow is usually determined by the source and destination IP and the
+[^flow]:
+    A flow is usually determined by the source and destination IP and the
     L4 protocol. Alternatively, the source and destination port can also be
     used. The router hashes this information to choose the destination. For
     Linux, you may find more information on this topic in "[Celebrating ECMP in
@@ -308,7 +312,8 @@ The first option increases complexity and limits scalability. We won't use
 it.[^conntrackd] The second option is less resilient during some changes but can
 be enhanced with a hybrid approach using a local state.
 
-[^conntrackd]: On Linux, it can be implemented by using [Netfilter][] for
+[^conntrackd]:
+    On Linux, it can be implemented by using [Netfilter][] for
     load-balancing and [conntrackd][] to synchronize state. *IPVS* only provides
     active/backup synchronization.
 
@@ -390,7 +395,8 @@ The *Maglev* scheduling algorithm will be available with Linux 4.18, thanks to
 of source hashing as a scheduling algorithm will hurt the resilience of the
 setup.
 
-[^backport]: The backport is not strictly equivalent to its original version. Be
+[^backport]:
+    The backport is not strictly equivalent to its original version. Be
     sure to check the [`README` file][README] to understand the differences.
 
 DSR is implemented using the tunnel mode. This method is compatible with routed
@@ -414,7 +420,8 @@ traffic:[^firewall]
     ip link set up dev tunlv6
     ip addr add 2001:db8::198.51.100.1/128 dev tunlv6
 
-[^firewall]: As is, this configuration is insecure. You need to ensure only
+[^firewall]:
+    As is, this configuration is insecure. You need to ensure only
     the L4 load-balancers will be able to send IPIP traffic.
 
 ## Evaluation of the resilience
@@ -471,7 +478,8 @@ Additionally, *IPVS* correctly routes ICMP messages to the same L7
 load-balancers as the associated connections.[^icmp] This ensures path MTU
 discovery works and there is no need for [smart workarounds][].
 
-[^icmp]: This feature was added in Linux 4.4. See for example [commit
+[^icmp]:
+    This feature was added in Linux 4.4. See for example [commit
     1471f35efa86][].
 
 # Tier 0: DNS load-balancing

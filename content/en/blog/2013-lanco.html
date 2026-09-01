@@ -37,21 +37,23 @@ While [Upstart][] or [systemd][] seemed to be good candidates for this
 purpose, I didn't find a straightforward way to run arbitrary tasks
 without any privilege.[^user]
 
-[^user]: Both _systemd_ and _Upstart_ are difficult to run without
-         being PID 1 and without being _root_. They both support user
-         sessions but this requires to use them as PID 1 as well. I
-         discovered later that [runit][] would have been a good fit:
-         it does not require to be PID 1, it does not need to be run
-         as _root_ and the service directory can be specified by an
-         environment variable. It could have been tweaked to meet the
-         above requirements.
+[^user]:
+    Both _systemd_ and _Upstart_ are difficult to run without
+    being PID 1 and without being _root_. They both support user
+    sessions but this requires to use them as PID 1 as well. I
+    discovered later that [runit][] would have been a good fit:
+    it does not require to be PID 1, it does not need to be run
+    as _root_ and the service directory can be specified by an
+    environment variable. It could have been tweaked to meet the
+    above requirements.
 
 Here comes [lanĉo][].[^name] It is a very simple task launcher. It can
 run any tasks, stop them and check if they are still running. It
 leverages [cgroups][] in recent Linux kernels and avoids the use of
 any daemon.
 
-[^name]: _Lanĉo_ means _launcher_ in Esperanto. The command name could
+[^name]:
+    _Lanĉo_ means _launcher_ in Esperanto. The command name could
     have been `lancxo`, but I was not aware of this at the time.
 
 [TOC]
@@ -125,11 +127,12 @@ processes even when they are forking away:[^forkbomb]
     $ lanco testns check second-task || echo "Killed!"
     Killed!
 
-[^forkbomb]: Linux _cgroups_ do not provide any facility to kill a
-             whole group. We need to iterate through the processes and
-             kill them one by one. _lanĉo_ does not try to freeze
-             processes before killing them and therefore may be
-             inefficient against violent fork bombs.
+[^forkbomb]:
+    Linux _cgroups_ do not provide any facility to kill a
+    whole group. We need to iterate through the processes and
+    kill them one by one. _lanĉo_ does not try to freeze
+    processes before killing them and therefore may be
+    inefficient against violent fork bombs.
 
 Also, there is a `top`-like command (`lanco testns top`):
 
@@ -211,9 +214,10 @@ assign resources to a set of tasks. Each available subsystem can only
 be in one hierarchy, so the usual way to setup things is to assign a
 hierarchy for each subsystem.[^cpu]
 
-[^cpu]: The `cpu` and `cpuacct` subsystems are the notable
-        exception. There seems to be little use to keep them in
-        separate hierarchies, so they are part of the same hierarchy.
+[^cpu]:
+    The `cpu` and `cpuacct` subsystems are the notable
+    exception. There seems to be little use to keep them in
+    separate hierarchies, so they are part of the same hierarchy.
 
 Let's have a look at the `cpuset` subsystem: it allows one to assign tasks
 to specific CPUs and memory nodes (for NUMA systems). Suppose we
@@ -263,11 +267,12 @@ Here are the features used by _lanĉo_:
  - The `cpuacct` subsystem is used to track CPU usage: a group is
    created in this subsystem for this purpose.
 
-[^agent]: Unfortunately, only one global release agent per hierarchy
-          can be used. Since _lanĉo_ provides the ability to
-          execute an arbitrary command when a task terminates, the
-          command needs to be stored on the filesystem for the release
-          agent of the namespace to execute it.
+[^agent]:
+    Unfortunately, only one global release agent per hierarchy
+    can be used. Since _lanĉo_ provides the ability to
+    execute an arbitrary command when a task terminates, the
+    command needs to be stored on the filesystem for the release
+    agent of the namespace to execute it.
 
 *[cgroups]: Control Groups
 *[NUMA]: Non-Uniform Memory Access
