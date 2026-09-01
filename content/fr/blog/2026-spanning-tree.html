@@ -139,7 +139,7 @@ C3 -- Mia hazard=0 C3:edge
 !!! "Note" Cet article est aussi disponible en [vidéo][video], mais je vous
 conseille de continuer ici afin d'explorer les démonstrations interactives.
 
-[video]: [[fr/blog/2026-spanning-tree-video.html]] "Un guide non-interactif du Spanning Tree Protocol"
+[video]: [[fr/blog/2026-spanning-tree-video.html]] "Un guide non interactif du Spanning Tree Protocol"
 [craftpix]: https://craftpix.net/ "Craftpix: 2D game assets"
 [yanin]: https://yaninyunus.itch.io/16x16-specialtycoffee "Yanin: 16x16 specialty coffee assets"
 
@@ -175,10 +175,10 @@ dernier mot.
 
 Nous nous concentrons sur RSTP : il a remplacé le protocole d'origine en 2004.
 Pour éliminer les boucles réseau, RSTP met en œuvre une machine à états
-complexe. Des temporisateurs, les changements d'état des liens et les trames de
-contrôle qu'un pont reçoit de ses voisins commandent ses transitions. Ces trames
-Ethernet sont les *Bridge Protocol Data Units* (BPDU). Vous pouvez les voir à
-l'œuvre ci-dessous : appuyez sur le bouton « *Start* ».
+complexe. Les temporisateurs, les changements d'état des liens et les trames de
+contrôle qu'un pont reçoit de ses voisins directs pilotent ses transitions. Ces
+trames Ethernet sont les *Bridge Protocol Data Units* (BPDU). Vous pouvez les
+voir à l'œuvre ci-dessous : appuyez sur le bouton « *Start* ».
 
 ``` { .text .mstp-topology }
 :protocol rstp
@@ -374,10 +374,9 @@ rôles, chacun représenté par une lettre :
     réseau commuté.
 
 Chaque pont qui n'est pas racine choisit comme **port racine** celui dont le
-chemin vers la racine a le coût le plus faible. Sauf si vous configurez une
-valeur spécifique, chaque pont déduit le coût d'un lien à partir de son débit :
-20 000 pour 1 Gbit/s. En cas d'égalité, l'identifiant de port le plus faible
-l'emporte.
+chemin vers la racine a le coût le plus faible. Sauf configuration explicite,
+chaque pont déduit le coût d'un lien à partir de son débit : 20 000 pour
+1 Gbit/s. En cas d'égalité, l'identifiant de port le plus faible l'emporte.
 
 Chacun des ports restants devient un **port désigné** si la BPDU qu'il émet est
 « meilleure » que celle qu'il reçoit. Sinon, il devient un **port alternatif**.
@@ -610,7 +609,7 @@ Spanning Tree Protocol
 
 S5 élit S1 comme racine et le port vers S3 comme port racine. Il démarre son
 processus de synchronisation, mais le port désigné vers S6 ne passe *pas* à
-l'état de rejet. Pourquoi ? Ce port reste un port désigné et son voisin S6 avait
+l'état de rejet. Pourquoi ? Ce port reste un port désigné et son voisin S6 a
 déjà envoyé un accord sur ce lien : il conserve donc son statut de port
 synchronisé.
 
@@ -651,8 +650,8 @@ RSTP est une gigantesque machine à états découpée en machines plus petites :
 *Bridge Detection*, *Port Information*, *Port Protocol Migration*, *Port Role
 Selection*, *Port Role Transitions*, *Port Receive*, *Port State Transitions*,
 *Port Timers*, *Port Transmit* et *Topology Change*. Certaines s'appliquent à
-l'ensemble du pont, d'autres à chaque port. Chaque pont exécute une instance ;
-le temps, les changements d'état opérationnel des ports et les BPDU reçues des
+l'ensemble du pont, d'autres à chaque port. Chaque pont en exécute une instance.
+Le temps, les changements d'état opérationnel des ports et les BPDU reçues des
 autres instances en pilotent les transitions. Ce fonctionnement par événements
 rend RSTP plus efficace, mais aussi plus difficile à appréhender.
 
@@ -734,8 +733,8 @@ Spanning Tree Protocol
 ```
 
 S4 reçoit cette BPDU. Il purge la table d'adresses MAC sur le port face à S1 :
-par exemple, LPT était auparavant joignable par ce port, mais il faut désormais
-passer par S5. [Avancez d'un cran](#mstp:10,S2--S5,2,S4->S1,@) : S4 envoie à S1
+LPT était auparavant joignable par ce port, mais il l'est désormais par S5.
+[Avancez d'un cran](#mstp:10,S2--S5,2,S4->S1,@) : S4 envoie à S1
 une BPDU avec le bit TC à 1. À la réception de cette BPDU, S1 purge la table
 d'adresses MAC sur les ports face à S2 et S3. [Avancez d'un
 cran](#mstp:10,S2--S5,3,S1->S2,S1->S3,@) : S1 envoie une notification à S2 et à
@@ -838,7 +837,7 @@ terminaux :
 - S3 et H3 sont sur un port où *AutoEdge* est fausse et *AdminEdge* est vraie,
 - S4 et H4 sont sur un port où *AutoEdge* est fausse.
 
-Si vous lancez la topologie et [attendez une vingtaine de secondes](#mstp:24),
+Si vous lancez la simulation et [attendez une vingtaine de secondes](#mstp:24),
 les liens vers S1, S2, S3, S4, H1, H2, H3 et H4 finissent par acheminer le
 trafic utilisateur : aucune de ces options n'a d'importance.
 
@@ -945,10 +944,10 @@ C19 -- C22 C19:network C22:network
 C22 -- R2  C22:network R2:network
 ```
 
-La convergence prend environ [6 secondes](#mstp:6). Chaque boucle doit rester
-petite (environ 16 ponts) pour réduire la probabilité d'une double panne et
-éviter de partager trop de bande passante. Cette conception peut évoluer un peu
-sans devenir trop complexe : un VLAN par boucle ou un domaine de pont par
+Cette topologie converge en environ [6 secondes](#mstp:6). Chaque boucle doit
+rester petite (environ 16 ponts) pour réduire la probabilité d'une double panne
+et éviter de partager trop de bande passante. Cette conception peut évoluer un
+peu sans devenir trop complexe : un VLAN par boucle ou un domaine de pont par
 boucle.
 
 [ITU-T G.8032]: https://www.itu.int/rec/T-REC-G.8032 "ITU-T G.8032"
@@ -956,7 +955,7 @@ boucle.
 ## Quelle taille pour un réseau ?
 
 L'âge maximal, dont la valeur par défaut est 20, détermine la distance maximale
-entre un nœud et la racine. La topologie ci-dessous est trop grande : les BPDU
+entre un pont et la racine. La topologie ci-dessous est trop grande : les BPDU
 issues de R1 ne parviennent pas au-delà de S20[^root-mac].
 
 [^root-mac]:
@@ -1257,7 +1256,7 @@ $ node --test *.test.mjs
 ```
 
 Du code JavaScript supplémentaire recherche les blocs `<pre>` contenant une
-définition de topologie et les transforme en composant interactif. Vous pouvez
+définition de topologie et les transforme en composants interactifs. Vous pouvez
 inspecter et modifier la définition en cliquant sur le bouton « *edit* ».
 
 Il y a aussi une astuce pour déterminer si la topologie a convergé. Après chaque

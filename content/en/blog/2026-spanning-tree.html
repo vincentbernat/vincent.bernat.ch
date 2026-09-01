@@ -443,8 +443,8 @@ port* stays in the discarding state. A *designated port* has two options to
 transition from the discarding state to the forwarding state:
 
 - If the port is an **edge port**, either through configuration or because the
-  remote device does not speak any flavor of STP, the bridge assumes it won't
-  participate in the protocol and cannot create a loop. In this case, the
+  remote device does not speak any flavor of STP, the bridge assumes the device
+  won't participate in the protocol and cannot create a loop. In this case, the
   designated port immediately transitions to the forwarding state.
 - Otherwise, it sends a **proposal** to its downstream neighbor. If the remote
   bridge agrees that the received BPDU is "better" than any other BPDU stored
@@ -549,8 +549,8 @@ Let's look at what happened to S5. [Reset the simulation and step
 twice](#mstp:2,S5->S3,S3->S5,S5->S6,S6->S5,@). S5 exchanges BPDUs with both S3
 and S6. Since S5 has a lower root identifier than S3 and S6, it stays the root
 bridge, while S3 and S6 accept the proposal and elect their root ports. S3 and
-S6 start the synchronization process. S6's port to H4 stays up because this is
-an edge port. [Move one step](#mstp:3,S3->S5#1,S6->S5#1,@). Both S3 and S6 send
+S6 start the synchronization process. S6's port to H4 keeps forwarding because
+it is an edge port. [Move one step](#mstp:3,S3->S5#1,S6->S5#1,@). Both S3 and S6 send
 an agreement back to S5, which transitions both designated ports to the
 forwarding state. Yet, the link between S5 and S3 keeps discarding user traffic!
 If you look carefully, S3's port toward S5 is now a designated port, not a root
@@ -590,7 +590,7 @@ Spanning Tree Protocol
 S5 elects S1 as its root bridge and the port toward S3 as its root port. It
 starts its synchronization process, but the designated port to S6 does *not*
 move into the discarding state. Why? That port stays a designated port and its
-neighbor S6 had already sent an agreement on the link, so the port keeps its
+neighbor S6 has already sent an agreement on the link, so the port keeps its
 synced status.
 
 Now, let's [step back](#mstp:3,@) to look at what happens to S6. At this point,
@@ -606,7 +606,7 @@ exchange two BPDUs. The one from S5 is better because of its lower bridge
 identifier. S5's port stays a designated port, while S6 downgrades its own port
 to an alternate port.
 
-Let's rewind one last time from the start: cut the link between S1 and S2, [run
+Let's rewind to the start one last time: cut the link between S1 and S2, [run
 the simulation until the topology is stable](#mstp:S1--S2,9), stop the
 simulation, and restore the link between S1 and S2. During the [first
 step](#mstp:S1--S2,9,S1--S2,1,S1->S2,S2->S1,@), S1 and S2 exchange proposals. S2
@@ -710,7 +710,7 @@ Spanning Tree Protocol
 
 S4 receives this BPDU. It flushes the MAC address table on the port facing S1:
 while LPT was previously reachable through this port, it is now reachable
-through S5 instead. [Step once](#mstp:10,S2--S5,2,S4->S1,@). S4 sends S1 a BPDU
+through S5. [Step once](#mstp:10,S2--S5,2,S4->S1,@). S4 sends S1 a BPDU
 with the TC bit set to 1. When S1 receives this BPDU, it flushes the MAC address
 table on the ports facing S2 and S3. [Step
 once](#mstp:10,S2--S5,3,S1->S2,S1->S3,@) and S1 sends a notification to S2 and
@@ -808,7 +808,7 @@ H3, H4, H5, and H6 act as end devices:
 - S3 and H3 are on a port where *AutoEdge* is false and *AdminEdge* is true,
 - S4 and H4 are on a port where *AutoEdge* is false.
 
-If you start the topology and [wait about 20 seconds](#mstp:24), links to S1,
+If you start the simulation and [wait about 20 seconds](#mstp:24), links to S1,
 S2, S3, S4, H1, H2, H3, and H4 eventually forward user traffic: none of the
 flags matter.
 
@@ -923,7 +923,7 @@ much complexity: one VLAN per loop or one bridge domain per loop.
 ## How large can a network be?
 
 The maximum age, whose default value is 20, governs the maximum distance of a
-node from the root. The topology below is too big for BPDUs from R1 to reach
+bridge from the root. The topology below is too big for BPDUs from R1 to reach
 beyond S20.[^root-mac]
 
 [^root-mac]:
@@ -1218,7 +1218,7 @@ $ node --test *.test.mjs
 ```
 
 Additional JavaScript code looks for specific `<pre>` blocks containing a
-topology definition and turns them into the interactive widget. You can inspect
+topology definition and turns them into interactive widgets. You can inspect
 and modify the definition by hitting the "edit" button.
 
 There is also a cool trick to tell whether the topology has converged. After
