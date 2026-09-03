@@ -4,7 +4,7 @@ luffy.do(() => {
   const hlsVideos = [
     ...document.querySelectorAll(`video.lf-media ${hlsSource}`),
   ].map(({ parentNode }) => parentNode);
-  if (hlsVideos.length == 0) return;
+  if (hlsVideos.length === 0) return;
 
   // Enable HLS for selected videos
   luffy.load("hls.js", () => {
@@ -50,7 +50,7 @@ luffy.do(() => {
         "play",
         ({ target }) => {
           hlsVideos.forEach((ovideo) => {
-            if (target != ovideo && !ovideo.paused) ovideo.pause();
+            if (target !== ovideo && !ovideo.paused) ovideo.pause();
           });
         },
         false,
