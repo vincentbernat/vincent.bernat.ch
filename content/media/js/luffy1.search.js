@@ -160,12 +160,16 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
   function scrollToShow(elements) {
     const els = elements.filter(Boolean);
     if (els.length === 0) return;
-    let top = Infinity,
-      bottom = -Infinity;
+    let top, bottom;
     for (const el of els) {
       const rect = el.getBoundingClientRect();
       const absTop = window.scrollY + rect.top;
       const absBottom = window.scrollY + rect.bottom;
+      if (top === undefined) {
+        top = absTop;
+        bottom = absBottom;
+        continue;
+      }
       const newTop = Math.min(top, absTop);
       const newBottom = Math.max(bottom, absBottom);
       if (newBottom - newTop > window.innerHeight) break;
