@@ -8,17 +8,15 @@ luffy.do(() => {
   if (!el || !links) return;
 
   // Function to load Isso once
-  const load = (() => {
-    let done = false;
-    return () => {
-      if (done) return;
-      done = true;
+  let done = false;
+  const load = () => {
+    if (done) return;
+    done = true;
 
-      links.closest("li")?.remove();
-      luffy.load("isso.css");
-      luffy.load("isso.js");
-    };
-  })();
+    links.closest("li")?.remove();
+    luffy.load("isso.css");
+    luffy.load("isso.js");
+  };
 
   // Load if we have an anchor
   const onHashChange = () => {
@@ -30,14 +28,12 @@ luffy.do(() => {
   onHashChange();
 
   // Load when it becomes visible
-  if (window.IntersectionObserver) {
-    const footer = document.querySelector("footer");
+  const footer = document.querySelector("footer");
+  if (window.IntersectionObserver && footer) {
     const observer = new window.IntersectionObserver((entries, observer) => {
-      for (let i = 0; i < entries.length; i++) {
-        if (!entries[i].isIntersecting) continue;
+      if (entries.some((entry) => entry.isIntersecting)) {
         observer.disconnect();
         load();
-        break;
       }
     });
     observer.observe(footer);
