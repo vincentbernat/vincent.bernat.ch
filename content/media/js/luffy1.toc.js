@@ -46,6 +46,7 @@ luffy.do(() => {
 
   /* Update the classes for each element in the TOC. */
   const scrollEl = toc.querySelector("ul");
+  let scrolledTo = null;
   const apply = () => {
     const states = entries.map((e) => stateOf(e.heading));
     let lastActive = null;
@@ -59,7 +60,8 @@ luffy.do(() => {
       e.link.classList.toggle("lf-toc-future", !past && !active);
       if (active) lastActive = e.link;
     }
-    if (lastActive) {
+    if (lastActive && lastActive !== scrolledTo) {
+      scrolledTo = lastActive;
       const elTop =
         lastActive.getBoundingClientRect().top -
         scrollEl.getBoundingClientRect().top +
