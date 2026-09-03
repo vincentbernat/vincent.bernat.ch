@@ -1,61 +1,46 @@
 /* Add a copy to clipboard button for code blocks */
 
 luffy.do(() => {
-  if (!window.getSelection) {
-    return;
-  }
+  if (!navigator.clipboard) return;
 
-  const codeBlocks = document.querySelectorAll(".lf-main .codehilite");
-  for (let i = 0; i < codeBlocks.length; i++) {
-    const copyIcon = document.createElement("span");
-    copyIcon.className = "lf-copy";
-    codeBlocks[i].appendChild(copyIcon);
-  }
+  const label = document.documentElement.lang.startsWith("fr")
+    ? "Copier vers le presse-papier"
+    : "Copy to clipboard";
 
-  document.body.addEventListener("click", copy, true);
+  // Get the text of a code block.
+  const codeText = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return node.nodeValue;
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    if (getComputedStyle(node).userSelect === "none") return "";
+    let text = "";
+    for (const child of node.childNodes) text += codeText(child);
+    return text;
+  };
 
-  function copy({ target }) {
-    const t = target;
-    if (t.className === "lf-copy") {
-      // Find the sibling pre element
-      const el = t.parentNode.childNodes[0];
-      if (el.tagName === "PRE") {
-        try {
-          // Select text
-          t.blur();
-          el.contentEditable = true;
-          el.readOnly = false;
-          const selection = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents(el);
-          selection.removeAllRanges();
-          selection.addRange(range);
-          el.contentEditable = false;
-          el.readOnly = false;
+  for (const block of document.querySelectorAll(".lf-main .codehilite")) {
+    const pre = block.querySelector("pre");
+    if (!pre) continue;
 
-          // Copy
-          if (document.queryCommandEnabled("copy")) {
-            document.execCommand("copy");
-          } else {
-            throw "Cannot copy (maybe iOS)";
-          }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "lf-copy";
+    button.setAttribute("aria-label", label);
 
-          // Unselect
-          selection.removeAllRanges();
-          el.blur();
+    // Tell the user if the copy worked.
+    let timer;
+    const showMessage = (name) => {
+      clearTimeout(timer);
+      button.classList.remove("msg-copy-ok", "msg-copy-failed");
+      button.classList.add(name);
+      timer = setTimeout(() => button.classList.remove(name), 3000);
+    };
 
-          // Inform user
-          t.className = "msg-copy-ok lf-copy";
-        } catch (err) {
-          // Hint to use OS to copy
-          t.className = "msg-copy-failed lf-copy";
-        }
-
-        // Remove the message after a timeout
-        setTimeout(() => {
-          t.className = "lf-copy";
-        }, 3000);
-      }
-    }
+    button.addEventListener("click", () => {
+      navigator.clipboard.writeText(codeText(pre)).then(
+        () => showMessage("msg-copy-ok"),
+        () => showMessage("msg-copy-failed"),
+      );
+    });
+    block.appendChild(button);
   }
 });
