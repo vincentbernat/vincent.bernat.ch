@@ -35,6 +35,14 @@
     console.error("Pagefind failed to load:", e);
   }
 
+  // Escape a string before putting it inside HTML.
+  function escapeHTML(text) {
+    return String(text ?? "").replace(
+      /[&<>"']/g,
+      (c) => `&#${c.charCodeAt(0)};`,
+    );
+  }
+
   // Clear the result area.
   function clearResults() {
     results
@@ -94,8 +102,8 @@
     const author = d.meta.author || "";
     const meta = [date, author].filter(Boolean).join(" — ");
     return `<div class="lf-search-result">
-<h3><a href="${url}">${d.meta.title}</a></h3>
-${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
+<h3><a href="${escapeHTML(url)}">${escapeHTML(d.meta.title)}</a></h3>
+${meta ? `<p class="lf-search-meta">${escapeHTML(meta)}</p>` : ""}
 <p class="lf-search-excerpt">${d.excerpt}</p>
 </div>`;
   }
