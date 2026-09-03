@@ -62,17 +62,18 @@
 
   // Display a spinner during the execution of an async function.
   async function withSpinner(fn) {
-    const spinner = `
-    <div class="lf-search-spinner">
+    const spinner = document.createElement("div");
+    spinner.className = "lf-search-spinner";
+    spinner.innerHTML = `
       <div class="bounce1"></div>
       <div class="bounce2"></div>
       <div class="bounce3"></div>
-    </div>`;
-    results.insertAdjacentHTML("beforeend", spinner);
+    `;
+    results.appendChild(spinner);
     try {
       return await fn();
     } finally {
-      results.querySelector(".lf-search-spinner")?.remove();
+      spinner.remove();
     }
   }
 
