@@ -251,27 +251,36 @@ ${meta ? `<p class="lf-search-meta">${escapeHTML(meta)}</p>` : ""}
     }
   });
 
+  // Read the "q" query parameter.
+  function currentQuery() {
+    return new URLSearchParams(location.search).get("q") || "";
+  }
+
+  // Fill the input from the URL and run the search.
+  function searchFromLocation() {
+    const q = currentQuery();
+    input.value = q;
+    search(q);
+  }
+
   // On submit, run the search
   form.addEventListener("submit", (e) => {
     const q = input.value.trim();
     const url = new URL(location);
+    const same = q === currentQuery();
     url.searchParams.set("q", q);
-    history.pushState({}, "", url);
+    if (same) {
+      history.replaceState({}, "", url);
+    } else {
+      history.pushState({}, "", url);
+    }
     search(q);
     e.preventDefault();
   });
 
   // On history event, run the search
-  window.addEventListener("popstate", () => {
-    const q = new URLSearchParams(location.search).get("q") || "";
-    input.value = q;
-    search(q);
-  });
+  window.addEventListener("popstate", searchFromLocation);
 
   // On initial state, look at "q" query parameter and run search
-  const q = new URLSearchParams(location.search).get("q") || "";
-  if (q) {
-    input.value = q;
-    search(q);
-  }
+  if (currentQuery()) searchFromLocation();
 })();
