@@ -27,7 +27,7 @@ luffy.do(() => {
           return `${Math.floor(w / step) * step}`;
         })(document.documentElement.clientWidth),
       e: !!vars.event,
-      rnd: Math.random().toString(36).substr(2, 5),
+      rnd: Math.random().toString(36).slice(2, 7),
     });
     fetch(`/hit?${params}`, { keepalive: true }).catch(() => {});
   };

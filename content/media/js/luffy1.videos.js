@@ -72,7 +72,7 @@ luffy.do(() => {
     seekLink.addEventListener("click", (event) => {
       event.preventDefault();
 
-      const seekTo = parseInt(seekLink.hash.substr(12), 10);
+      const seekTo = parseInt(seekLink.hash.slice(12), 10);
       const videos = document.querySelectorAll("video");
 
       // Look for the nearest video before that

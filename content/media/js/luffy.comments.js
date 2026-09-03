@@ -22,7 +22,7 @@ luffy.do(() => {
 
   // Load if we have an anchor
   const onHashChange = () => {
-    if (location.hash.match("^#isso-([0-9]+|thread)$")) {
+    if (/^#isso-(\d+|thread)$/.test(location.hash)) {
       load();
     }
   };
