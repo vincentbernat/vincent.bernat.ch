@@ -12,9 +12,6 @@ window.luffy = {
       fn();
     } catch (e) {
       console.error(e);
-      try {
-        luffy.count?.({ event: "javascript-error", title: "JavaScript error" });
-      } catch (e) {}
     }
   },
   load(what, onload) {
