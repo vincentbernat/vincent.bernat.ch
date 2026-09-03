@@ -12,6 +12,7 @@
   );
   const BATCH_SIZE = 5; // number of elements to load from search
   let observer = null; // observer to check for sentinel element
+  let generation = 0; // bumped on each search to drop results of older ones
   let pagefind;
 
   // Try to load pagefind. This may fail because of CSP and/or lack of
@@ -100,13 +101,14 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
   }
 
   // Render a batch of results and add it to the result area.
-  async function renderBatch(hits, offset) {
+  async function renderBatch(hits, offset, gen) {
     const batch = hits.slice(offset, offset + BATCH_SIZE);
     if (batch.length === 0) return;
     results.querySelector(".lf-search-sentinel")?.remove();
     const data = await withSpinner(() =>
       Promise.all(batch.map((h) => h.data())),
     );
+    if (gen !== generation) return;
     results.insertAdjacentHTML("beforeend", data.map(renderResult).join(""));
     const nextOffset = offset + BATCH_SIZE;
     if (nextOffset < hits.length) {
@@ -119,6 +121,7 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
 
   // Execute a search and display results by batch.
   async function search(query) {
+    const gen = ++generation;
     clearResults();
     if (observer) observer.disconnect();
     if (!query) return;
@@ -130,6 +133,7 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
     try {
       // Run a search
       const { results: hits } = await withSpinner(() => pagefind.search(query));
+      if (gen !== generation) return;
 
       // Display results by batch
       if (hits.length === 0) {
@@ -141,11 +145,12 @@ ${meta ? `<p class="lf-search-meta">${meta}</p>` : ""}
           if (!entry.isIntersecting) continue;
           observer.unobserve(entry.target);
           const loaded = results.querySelectorAll(".lf-search-result").length;
-          renderBatch(hits, loaded);
+          renderBatch(hits, loaded, gen);
         }
       });
-      await renderBatch(hits, 0);
+      await renderBatch(hits, 0, gen);
     } catch (e) {
+      if (gen !== generation) return;
       console.error("Pagefind search failed:", e);
       showFallback(query);
     }
