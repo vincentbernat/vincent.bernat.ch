@@ -13,9 +13,9 @@ luffy.do(() => {
     });
 
   // For search
-  const searchForm =
-    document.querySelector("#lf-search-query") ||
-    document.querySelector("#lf-search-input");
+  const searchForm = document.querySelector(
+    "#lf-search-query, #lf-search-input",
+  );
 
   // For grid
   let gridState = 0;
