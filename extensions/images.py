@@ -31,7 +31,7 @@ from PIL import Image
 import diskcache
 import skia
 import langcodes
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 
 class Thumb(NamedTuple):
