@@ -3,6 +3,7 @@
 import sys
 import unicodedata
 import functools
+import emoji
 import markdown
 from markdown.extensions import codehilite
 
@@ -38,7 +39,9 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
         for glyphs in self.extract(root):
             if glyphs is None:
                 continue
-            self.glyphs |= set(glyphs)
+            self.glyphs |= {
+                g for g in set(glyphs) - self.glyphs if not emoji.is_emoji(g)
+            }
         with open(self.output, "wb") as f:
             f.write(
                 "".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)).encode(
