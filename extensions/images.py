@@ -712,20 +712,23 @@ class CoverImagePlugin(Plugin):
         def line_width(s):
             return font.measureText(s)
 
-        # Greedy wrap to determine number of lines
-        lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if line_width(test) <= max_width:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
+        def wrap(width):
+            """Greedily fit the words into lines no wider than width."""
+            lines = []
+            current = ""
+            for word in words:
+                test = f"{current} {word}".strip()
+                if line_width(test) <= width:
+                    current = test
+                else:
+                    if current:
+                        lines.append(current)
+                    current = word
+            if current:
+                lines.append(current)
+            return lines
 
+        lines = wrap(max_width)
         n = len(lines)
         if n <= 1:
             return lines
@@ -735,38 +738,12 @@ class CoverImagePlugin(Plugin):
         lo, hi = max(line_width(w) for w in words), max_width
         while lo < hi:
             mid = (lo + hi) // 2
-            # Try wrapping with mid as target width
-            trial = []
-            cur = ""
-            for word in words:
-                test = f"{cur} {word}".strip()
-                if line_width(test) <= mid:
-                    cur = test
-                else:
-                    if cur:
-                        trial.append(cur)
-                    cur = word
-            if cur:
-                trial.append(cur)
-            if len(trial) <= n:
+            if len(wrap(mid)) <= n:
                 hi = mid
             else:
                 lo = mid + 1
 
-        # Wrap with the balanced width
-        lines = []
-        current = ""
-        for word in words:
-            test = f"{current} {word}".strip()
-            if line_width(test) <= hi:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = word
-        if current:
-            lines.append(current)
-        return lines
+        return wrap(hi)
 
     @staticmethod
     def generate(resource):
