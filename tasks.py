@@ -113,13 +113,13 @@ def step(what):
 def build_dev(c, clean=False):
     """Generate dev content"""
     if clean:
-        c.run("rm -rf deploy")
-    c.run("[ ! -d deploy ] || find deploy -perm 444 -delete")
+        c.run("rm -rf .out")
+    c.run("[ ! -d .out ] || find .out -perm 444 -delete")
     c.run(f"{bwrap} -- hyde -x gen")
 
 
 @task
-def build_pagefind(c, site="deploy"):
+def build_pagefind(c, site=".out"):
     """Run pagefind indexation"""
     c.run(
         f"{bwrap} -- node_modules/pagefind/lib/runner/bin.cjs "
@@ -589,7 +589,7 @@ def links_check(c, remote=True):
 @task
 def links_fix(c):
     """Try to fix links"""
-    fp = open("linkchecker-out.csv")
+    fp = open(".linkchecker-out.csv")
     reader = csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
     seen = {}
     for row in reader:
@@ -721,8 +721,8 @@ def build(c):
 set -e
 cd ..
 NIX_PATH=fonts=$PWD/.final/media/fonts
-NIX_PATH=$NIX_PATH:monospace=$PWD/glyphs-monospace.txt
-NIX_PATH=$NIX_PATH:regular=$PWD/glyphs-regular.txt
+NIX_PATH=$NIX_PATH:monospace=$PWD/.glyphs-monospace.txt
+NIX_PATH=$NIX_PATH:regular=$PWD/.glyphs-regular.txt
 export NIX_PATH
 nix build --impure .#build.subsetFonts
 cd -

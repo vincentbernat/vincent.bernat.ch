@@ -71,13 +71,13 @@ class GlyphsExtension(markdown.Extension):
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.register(
-            RegularGlyphsTreeprocessor(glyphs["regular"], "glyphs-regular.txt"),
+            RegularGlyphsTreeprocessor(glyphs["regular"], ".glyphs-regular.txt"),
             "regularglyphs",
             -5,
         )
         # Inline code (after inline, only inline code is embedded in code)
         md.treeprocessors.register(
-            MonospaceGlyphsTreeprocessor(glyphs["monospace"], "glyphs-monospace.txt"),
+            MonospaceGlyphsTreeprocessor(glyphs["monospace"], ".glyphs-monospace.txt"),
             "monospaceglyphs2",
             15,
         )
