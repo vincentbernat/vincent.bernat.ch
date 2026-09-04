@@ -8,17 +8,13 @@ import markdown
 from markdown.extensions import codehilite
 
 glyphs = {
-    "monospace": set(
-        [
-            "\u00fb",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
-        ]
-    ),
-    "regular": set(
-        [
-            "\u2026",  # HORIZONTAL ELLIPSIS
-            "\u2019",  # RIGHT SINGLE QUOTATION MARK
-        ]
-    ),
+    "monospace": {
+        "\u00fb",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
+    },
+    "regular": {
+        "\u2026",  # HORIZONTAL ELLIPSIS
+        "\u2019",  # RIGHT SINGLE QUOTATION MARK
+    },
 }
 
 for c in range(sys.maxunicode + 1):
@@ -42,12 +38,8 @@ class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
             self.glyphs |= {
                 g for g in set(glyphs) - self.glyphs if not emoji.is_emoji(g)
             }
-        with open(self.output, "wb") as f:
-            f.write(
-                "".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)).encode(
-                    "utf-8"
-                )
-            )
+        with open(self.output, "w", encoding="utf-8") as f:
+            f.write("".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)))
 
 
 class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):

@@ -26,7 +26,7 @@ def patch():
         lang = lexer.name.lower().replace(" ", "-")
         result = previous(src, lexer, formatter)
         if isinstance(formatter, HtmlFormatter):
-            result = result.replace('class="', 'class="language-{} '.format(lang), 1)
+            result = result.replace('class="', f'class="language-{lang} ', 1)
         return result
 
     codehilite.highlight = new

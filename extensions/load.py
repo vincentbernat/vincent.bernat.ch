@@ -25,7 +25,7 @@ class LoadPlugin(Plugin):
             el.addnext(new)
 
     def text_resource_complete(self, resource, text):
-        if not resource.source_file.kind == "html":
+        if resource.source_file.kind != "html":
             return
 
         d = pq(text, parser="html")

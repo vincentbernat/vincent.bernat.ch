@@ -12,15 +12,16 @@ import base64
 import math
 import re
 import unicodedata
-import urllib
+import urllib.parse
 import xml.etree.ElementTree as ET
 import lxml.etree
 import lxml.html
 import types
 import subprocess
 import json
-from functools import cache, partial
+from functools import cache, cached_property, partial
 from fractions import Fraction
+from typing import NamedTuple
 
 from hyde.plugin import Plugin
 from fswrap import File, Folder
@@ -32,9 +33,11 @@ import skia
 import langcodes
 from PyPDF2 import PdfReader
 
-from collections import namedtuple
 
-Thumb = namedtuple("Thumb", ["path", "width", "height"])
+class Thumb(NamedTuple):
+    path: str
+    width: int
+    height: int
 
 
 class ImageThumbnailsPlugin(Plugin):
@@ -51,9 +54,6 @@ class ImageThumbnailsPlugin(Plugin):
     Thumbnails are created in the same directory as their image.
     Only supports PNG and JPG.
     """
-
-    def __init__(self, site):
-        super().__init__(site)
 
     def begin_site(self):
         config = self.site.config
@@ -98,21 +98,21 @@ class ImageFixerPlugin(Plugin):
     """
 
     def __init__(self, site):
-        super(ImageFixerPlugin, self).__init__(site)
+        super().__init__(site)
         self.cache = {}
 
     def _topx(self, x):
         """Convert a size to pixels."""
         mo = re.match(r"(?P<size>\d+(?:\.\d*)?)(?P<unit>.*)", x)
         if not mo:
-            raise ValueError("cannot convert {} to pixel".format(x))
+            raise ValueError(f"cannot convert {x} to pixel")
         unit = mo.group("unit")
         size = float(mo.group("size"))
         if unit in {"", "px"}:
             return int(size)
         if unit == "pt":
             return int(size * 4 / 3)
-        raise ValueError("unknown unit {}".format(unit))
+        raise ValueError(f"unknown unit {unit}")
 
     def _img_properties(self, image):
         """Get size for an image, and opacity: (w, h), o?."""
@@ -122,96 +122,99 @@ class ImageFixerPlugin(Plugin):
         path = self.site.config.deploy_root_path.child(image.relative_deploy_path)
         if not os.path.exists(path):
             path = image.path
-        if image.source_file.kind in {"png", "jpg", "webp", "gif"}:
-            img = Image.open(path)
-            if "P" in img.mode and any(
-                idx == img.info.get("transparency", -1) for _, idx in img.getcolors()
-            ):
-                return dict(size=img.size, opaque=False)
-            if "A" not in img.mode or img.getextrema()[-1][0] == 255:
-                # Find a dominant color
-                reduced = img.copy()
-                reduced.thumbnail((150, 150))
-                paletted = reduced.convert(
-                    "P", palette=Image.Palette.ADAPTIVE, colors=8
-                )
-                palette = paletted.getpalette()
-                color_counts = sorted(paletted.getcolors(), reverse=True)
-                palette_index = color_counts[0][1]
-                dominant = palette[palette_index * 3 : palette_index * 3 + 3]
-                # Create an image with the exact same ratio using this
-                # color
-                gcd = math.gcd(*img.size)
-                lqip = Image.new(
-                    "P", (img.size[0] // gcd, img.size[1] // gcd), tuple(dominant)
-                )
-                output = io.BytesIO()
-                lqip.save(output, "PNG", optimize=True, bits=1)
-                lqip = "data:image/png;base64,{}".format(
-                    base64.b64encode(output.getvalue()).decode("ascii")
-                )
-                return dict(size=img.size, opaque=True, lqip=lqip)
-            return dict(size=img.size, opaque=False)
-        if image.source_file.kind in {"svg"}:
-            svg = ET.parse(path).getroot()
-            return dict(
-                size=tuple(
-                    x and self._topx(x) or None
-                    for x in (
-                        svg.attrib.get("width", None),
-                        svg.attrib.get("height", None),
+        match image.source_file.kind:
+            case "png" | "jpg" | "webp" | "gif":
+                img = Image.open(path)
+                if "P" in img.mode and any(
+                    idx == img.info.get("transparency", -1)
+                    for _, idx in img.getcolors()
+                ):
+                    return {"size": img.size, "opaque": False}
+                if "A" not in img.mode or img.getextrema()[-1][0] == 255:
+                    # Find a dominant color
+                    reduced = img.copy()
+                    reduced.thumbnail((150, 150))
+                    paletted = reduced.convert(
+                        "P", palette=Image.Palette.ADAPTIVE, colors=8
                     )
-                ),
-                opaque=False,
-                interactive=svg.find(".//{http://www.w3.org/2000/svg}script")
-                is not None,
-            )
-        if image.source_file.kind in {"m3u8"}:
-            with open(path) as f:
-                w, h = max(
-                    [
+                    palette = paletted.getpalette()
+                    color_counts = sorted(paletted.getcolors(), reverse=True)
+                    palette_index = color_counts[0][1]
+                    dominant = palette[palette_index * 3 : palette_index * 3 + 3]
+                    # Create an image with the exact same ratio using this
+                    # color
+                    gcd = math.gcd(*img.size)
+                    lqip = Image.new(
+                        "P", (img.size[0] // gcd, img.size[1] // gcd), tuple(dominant)
+                    )
+                    output = io.BytesIO()
+                    lqip.save(output, "PNG", optimize=True, bits=1)
+                    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+                    return {
+                        "size": img.size,
+                        "opaque": True,
+                        "lqip": f"data:image/png;base64,{encoded}",
+                    }
+                return {"size": img.size, "opaque": False}
+            case "svg":
+                svg = ET.parse(path).getroot()
+                return {
+                    "size": tuple(
+                        (self._topx(x) or None) if x else None
+                        for x in (svg.attrib.get("width"), svg.attrib.get("height"))
+                    ),
+                    "opaque": False,
+                    "interactive": svg.find(".//{http://www.w3.org/2000/svg}script")
+                    is not None,
+                }
+            case "m3u8":
+                with open(path) as f:
+                    w, h = max(
                         (int(w), int(h))
                         for w, h in re.findall(
                             r"RESOLUTION=(\d+)x(\d+)(?:$|,)", f.read()
                         )
-                    ]
+                    )
+                    return {"size": (w, h), "opaque": True}
+            case "mp4" | "ogv":
+                p = subprocess.run(
+                    [
+                        "ffprobe",
+                        "-v",
+                        "quiet",
+                        "-print_format",
+                        "json",
+                        "-show_streams",
+                        path,
+                    ],
+                    check=True,
+                    capture_output=True,
+                    encoding="utf-8",
                 )
-                return dict(size=(w, h), opaque=True)
-        if image.source_file.kind in {"mp4", "ogv"}:
-            p = subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "quiet",
-                    "-print_format",
-                    "json",
-                    "-show_streams",
-                    path,
-                ],
-                check=True,
-                capture_output=True,
-            )
-            streams = json.loads(p.stdout.decode("ascii"))["streams"]
-            track = [t for t in streams if t["codec_type"] == "video"][0]
-            return dict(size=(track["width"], track["height"]), opaque=True)
-        if image.source_file.kind in {"pdf"}:
-            with open(path, "rb") as f:
-                pdf = PdfReader(f)
-                box = pdf.pages[0].mediabox
-                # PDF physical sizes may be skewed, notably for
-                # slides. Assume width will be around 1000.
-                ratio = Fraction(Fraction(box.width), Fraction(box.height))
-                ratio = ratio.limit_denominator(100)
-                width = 1000 // ratio.numerator * ratio.numerator
-                height = 1000 // ratio.numerator * ratio.denominator
-                return dict(size=(width, height), opaque=True)
-        return dict(size=(None, None), opaque=True)
+                streams = json.loads(p.stdout)["streams"]
+                track = next(t for t in streams if t["codec_type"] == "video")
+                return {
+                    "size": (track["width"], track["height"]),
+                    "opaque": True,
+                }
+            case "pdf":
+                with open(path, "rb") as f:
+                    pdf = PdfReader(f)
+                    box = pdf.pages[0].mediabox
+                    # PDF physical sizes may be skewed, notably for
+                    # slides. Assume width will be around 1000.
+                    ratio = Fraction(Fraction(box.width), Fraction(box.height))
+                    ratio = ratio.limit_denominator(100)
+                    width = 1000 // ratio.numerator * ratio.numerator
+                    height = 1000 // ratio.numerator * ratio.denominator
+                    return {"size": (width, height), "opaque": True}
+        return {"size": (None, None), "opaque": True}
 
     def _size(self, resource, src, width, height):
         """Determine size of an image (with cache)."""
         if src not in self.cache:
             if src.startswith(self.site.config.media_url):
-                path = src[len(self.site.config.media_url) :].lstrip("/")
+                path = src.removeprefix(self.site.config.media_url).lstrip("/")
                 path = self.site.config.media_root_path.child(path)
                 image = self.site.content.resource_from_relative_deploy_path(path)
             elif src.startswith(self.site.media_url("videos/")[:-7]):
@@ -230,10 +233,10 @@ class ImageFixerPlugin(Plugin):
                 path = resource.node.source_folder.child(src)
                 image = self.site.content.resource_from_path(path)
             if image is None:
-                self.logger.warn("[%s] has an unknown image %s" % (resource, src))
+                self.logger.warning("[%s] has an unknown image %s", resource, src)
                 return None
             self.cache[src] = self._img_properties(image)
-            self.logger.debug("Image [%s] is %s" % (src, self.cache[src]))
+            self.logger.debug("Image [%s] is %s", src, self.cache[src])
         dim = self.cache[src]["size"]
         new_width, new_height = dim
         if new_width is None or new_height is None:
@@ -260,7 +263,7 @@ class ImageFixerPlugin(Plugin):
         ).stdout.decode("ascii")
         return float(re.match(r"[\d.]+", out.strip()).group(0))
 
-    @cache
+    @cached_property
     def _page_width_px(self):
         """Compute the page width and breakpoint in pixels from CSS variables.
 
@@ -277,8 +280,8 @@ class ImageFixerPlugin(Plugin):
             "calc(var(--lf-vp-medium) * var(--lf-font-size))"
         )
         return (
-            int(round(page_width * px_per_em)),
-            int(round(breakpoint * px_per_em)),
+            round(page_width * px_per_em),
+            round(breakpoint * px_per_em),
         )
 
     def _resize(self, source, destination, factor):
@@ -286,8 +289,8 @@ class ImageFixerPlugin(Plugin):
         factor. Check for latest modification time.
         """
         if not source.startswith(self.site.config.media_url):
-            raise ValueError("[%s] cannot be resized" % source)
-        source = source[len(self.site.config.media_url) :].lstrip("/")
+            raise ValueError(f"[{source}] cannot be resized")
+        source = source.removeprefix(self.site.config.media_url).lstrip("/")
         source = self.site.config.media_root_path.child(source)
         source = self.site.content.resource_from_relative_deploy_path(source)
         if os.path.exists(os.path.join(os.path.dirname(source.path), destination)):
@@ -331,18 +334,16 @@ class ImageFixerPlugin(Plugin):
                 inner = "".join(
                     lxml.etree.tostring(child, encoding="unicode") for child in div
                 )
-                d = self._process(resource, "<div>{}</div>".format(inner))
+                d = self._process(resource, f"<div>{inner}</div>")
                 new_div = lxml.etree.fromstring(
-                    '<div xmlns="http://www.w3.org/1999/xhtml">{}</div>'.format(
-                        d.html()
-                    )
+                    f'<div xmlns="http://www.w3.org/1999/xhtml">{d.html()}</div>'
                 )
                 c.remove(div)
                 c.append(new_div)
             return lxml.etree.tostring(
                 root.getroottree(), xml_declaration=True, encoding="UTF-8"
             ).decode("utf-8")
-        if not resource.source_file.kind == "html":
+        if resource.source_file.kind != "html":
             return
 
         d = self._process(resource, text)
@@ -356,7 +357,9 @@ class ImageFixerPlugin(Plugin):
             src = img.attr.src
             src = urllib.parse.unquote(src)
             if src is None:
-                self.logger.warn("[%s] has an img tag without src attribute" % resource)
+                self.logger.warning(
+                    "[%s] has an img tag without src attribute", resource
+                )
                 continue
             if width is None or height is None:
                 wh = self._size(resource, src, width, height)
@@ -378,7 +381,7 @@ class ImageFixerPlugin(Plugin):
                     if f == factor:
                         tname = src
                     else:
-                        tname = src.replace("@{}x.".format(factor), "@{}x.".format(f))
+                        tname = src.replace(f"@{factor}x.", f"@{f}x.")
                         self._resize(src, os.path.basename(tname), float(f) / factor)
                     versions.append((tname, width * f))
                 # Use weighted geometric mean of consecutive widths instead of
@@ -388,29 +391,29 @@ class ImageFixerPlugin(Plugin):
                 srcset = []
                 for i, (path, w) in enumerate(versions):
                     if i < len(versions) - 1:
-                        w = int(round(w ** (1 - weight) * versions[i + 1][1] ** weight))
-                    srcset.append("{} {}w".format(path, w))
+                        w = round(w ** (1 - weight) * versions[i + 1][1] ** weight)
+                    srcset.append(f"{path} {w}w")
                 img.attr.src = versions[0][0]
                 img.attr.srcset = ",".join(srcset)
-                page_width_px, breakpoint_px = self._page_width_px()
+                page_width_px, breakpoint_px = self._page_width_px
                 # The image cannot display wider than its intrinsic width.
                 page_width_px = min(page_width_px, width)
                 breakpoint_px = min(breakpoint_px, width)
-                img.attr.sizes = "auto, (max-width: {}px) 100vw, {}px".format(
-                    breakpoint_px, page_width_px
+                img.attr.sizes = (
+                    f"auto, (max-width: {breakpoint_px}px) 100vw, {page_width_px}px"
                 )
 
             # Put new width/height
             if width is not None:
-                img.attr.width = "{}".format(width)
-                img.attr.height = "{}".format(height)
+                img.attr.width = f"{width}"
+                img.attr.height = f"{height}"
 
             # If image is an interactive SVG, turns into an object
             if src.endswith(".svg") and self.cache.get(src, {}).get("interactive"):
                 img[0].tag = "object"
                 img.attr("type", "image/svg+xml")
                 img.attr("data", src)
-                img.text("&#128444; {}".format(img.attr.alt or ""))
+                img.text(f"&#128444; {img.attr.alt or ''}")
                 del img.attr.src
                 del img.attr.alt
 
@@ -419,18 +422,16 @@ class ImageFixerPlugin(Plugin):
                 img[0].tag = "object"
                 img.attr("type", "application/pdf")
                 options = "&".join(
-                    [
-                        f"{k}={v}"
-                        for k, v in dict(
-                            toolbar=0,
-                            navpanes=0,
-                            scrollbar=0,
-                            view="Fit",
-                            # pdf.js in Firefox
-                            zoom="page-fit",
-                            pagemode="none",
-                        ).items()
-                    ]
+                    f"{k}={v}"
+                    for k, v in {
+                        "toolbar": 0,
+                        "navpanes": 0,
+                        "scrollbar": 0,
+                        "view": "Fit",
+                        # pdf.js in Firefox
+                        "zoom": "page-fit",
+                        "pagemode": "none",
+                    }.items()
                 )
                 img.attr("data", f"{src}#{options}")
                 fallback = pq("<a />")
@@ -447,19 +448,17 @@ class ImageFixerPlugin(Plugin):
                 img[0].set("controls", None)
                 img.attr("preload", "none")
                 img.attr("crossorigin", "anonymous")
-                img.attr(
-                    "poster", self.site.media_url("images/posters/{}.jpg".format(id))
-                )
+                img.attr("poster", self.site.media_url(f"images/posters/{id}.jpg"))
                 del img.attr.src
                 del img.attr.alt
                 # Add sources
                 m3u8 = pq("<source>")
-                m3u8.attr.src = self.site.media_url("videos/{}.m3u8".format(id))
+                m3u8.attr.src = self.site.media_url(f"videos/{id}.m3u8")
                 m3u8.attr.type = "application/vnd.apple.mpegurl"
                 img.append(m3u8)
                 progressive = pq("<source>")
                 progressive.attr.src = self.site.media_url(
-                    "videos/{}/progressive.mp4".format(id)
+                    f"videos/{id}/progressive.mp4"
                 )
                 progressive.attr.type = 'video/mp4; codecs="mp4a.40.2,avc1.4d401f"'
                 img.append(progressive)
@@ -468,11 +467,11 @@ class ImageFixerPlugin(Plugin):
                     for v in self.site.content.node_from_relative_path(
                         "media/videos"
                     ).walk_resources()
-                    if v.name.endswith(".vtt") and v.name.startswith("{}.".format(id))
+                    if v.name.endswith(".vtt") and v.name.startswith(f"{id}.")
                 ]
                 # Add chapters track if any
                 for vtt in vtts:
-                    if vtt.name != "{}.chapters.vtt".format(id):
+                    if vtt.name != f"{id}.chapters.vtt":
                         continue
                     track = pq("<track>")
                     track.attr.src = self.site.media_url(vtt.relative_path[6:])
@@ -496,14 +495,12 @@ class ImageFixerPlugin(Plugin):
                         details = langcodes.get(code).describe(code)
                         lang = details["language"]
                         del details["language"]
-                        track.attr.label = "{} ({})".format(
-                            lang, ", ".join(details.values())
-                        )
+                        track.attr.label = f"{lang} ({', '.join(details.values())})"
                     img.append(track)
 
             # If image is a video not in /videos turn into a simple
             # video tag like an animated GIF.
-            elif src.endswith(".mp4") or src.endswith(".ogv"):
+            elif src.endswith((".mp4", ".ogv")):
                 img[0].tag = "video"
                 for attr in "muted loop autoplay playsinline controls".split():
                     img[0].set(attr, None)
@@ -534,10 +531,8 @@ class ImageFixerPlugin(Plugin):
                 inner.addClass("lf-media-inner")
                 outer.addClass("lf-media-outer")
                 if width is not None:
-                    inner.css.padding_bottom = "{:.3f}%".format(
-                        float(height) * 100.0 / width
-                    )
-                    outer.css.width = "{}px".format(width)
+                    inner.css.padding_bottom = f"{height * 100.0 / width:.3f}%"
+                    outer.css.width = f"{width}px"
                 outer.append(inner)
 
                 # Check opacity
@@ -545,11 +540,9 @@ class ImageFixerPlugin(Plugin):
                     opaque = self.cache[src]["opaque"]
                     if opaque:
                         img.addClass("lf-opaque")
-                        try:
-                            bg = "url({})".format(self.cache[src]["lqip"])
-                            img.css("background-image", bg)
-                        except KeyError:
-                            pass
+                        lqip = self.cache[src].get("lqip")
+                        if lqip is not None:
+                            img.css("background-image", f"url({lqip})")
 
                 # If we have a title, also enclose in a figure
                 figure = pq("<figure />")
@@ -595,9 +588,6 @@ class CoverImagePlugin(Plugin):
     _cache = None
     _self_hash = None
 
-    def __init__(self, site):
-        super().__init__(site)
-
     def begin_site(self):
         media_path = str(self.site.config.media_root_path)
         icon_path = os.path.join(media_path, "images", "favicon.png")
@@ -630,7 +620,7 @@ class CoverImagePlugin(Plugin):
                     continue
                 if not resource.meta.title:
                     continue
-                self.logger.debug("Adding cover_image function to [%s]" % resource)
+                self.logger.debug("Adding cover_image function to [%s]", resource)
                 resource.cover_image = types.MethodType(
                     CoverImagePlugin.cover_path, resource
                 )
@@ -650,7 +640,7 @@ class CoverImagePlugin(Plugin):
     @staticmethod
     def _render_text(text, font, color):
         """Render text to a PIL RGBA image using skia."""
-        width = int(math.ceil(font.measureText(text))) + 2
+        width = math.ceil(font.measureText(text)) + 2
         metrics = font.getMetrics()
         ascent = math.ceil(-metrics.fAscent)
         descent = math.ceil(metrics.fDescent)
@@ -819,7 +809,7 @@ class CoverImagePlugin(Plugin):
         cover_hash = ""
         if has_cover:
             with open(cover_path, "rb") as f:
-                cover_hash = hashlib.sha256(f.read()).hexdigest()
+                cover_hash = hashlib.file_digest(f, "sha256").hexdigest()
         cache_key = (title, resource.meta.author, cover_hash, cls._self_hash)
         cached = cls._cache.get(cache_key, read=True)
         if cached is not None:

@@ -1,4 +1,4 @@
-from pygments.lexer import RegexLexer, bygroups, using, include, words
+from pygments.lexer import RegexLexer, bygroups, using
 from pygments.token import Text, Comment, Punctuation, Operator, Keyword, Whitespace
 from pygments.token import Number, String, Name
 from pygments.lexers.go import GoLexer

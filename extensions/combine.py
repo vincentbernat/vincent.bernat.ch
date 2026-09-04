@@ -10,7 +10,7 @@ from hyde.ext.plugins.structure import CombinePlugin as OrigCombinePlugin
 
 class CombinePlugin(OrigCombinePlugin):
     def text_resource_complete(self, resource, text):
-        return super(CombinePlugin, self).begin_text_resource(resource, text)
+        return super().begin_text_resource(resource, text)
 
     def begin_text_resource(self, resource, text):
         pass

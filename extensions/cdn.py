@@ -24,9 +24,6 @@ def decorate_media_url(media_url):
 
 
 class CdnPlugin(Plugin):
-    def __init__(self, site):
-        super(CdnPlugin, self).__init__(site)
-
     def begin_site(self):
         """
         Initialize the plugin.

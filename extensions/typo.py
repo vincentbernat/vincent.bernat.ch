@@ -53,8 +53,9 @@ class TypographyPlugin(Plugin):
             r"""(\b[0-9,.]+)( |&nbsp;)(\w|€)"""
         )  # Cheating, nbsp already here...
         intra_tag_finder = re.compile(
-            r"(?P<prefix>(%s)?)(?P<text>([^<]*))(?P<suffix>(%s)?)"
-            % (tag_pattern, tag_pattern)
+            rf"(?P<prefix>({tag_pattern})?)"
+            rf"(?P<text>([^<]*))"
+            rf"(?P<suffix>({tag_pattern})?)"
         )
 
         def _process(groups):

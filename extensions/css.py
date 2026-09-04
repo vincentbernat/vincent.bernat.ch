@@ -3,7 +3,6 @@ CSS plugins
 """
 
 import os
-import struct
 import subprocess
 import xml.etree.ElementTree as ET
 from hyde.plugin import Plugin
@@ -53,12 +52,12 @@ class PostCSSPlugin(Plugin):
         )
         env["CSS_BASELINE_OFFSET"] = str(font_baseline_offset(font_path))
         script = os.path.join(os.path.dirname(__file__), "css.js")
-        p = subprocess.Popen(
+        p = subprocess.run(
             ["node", script, "process"],
-            stdin=subprocess.PIPE,
+            input=text,
             stdout=subprocess.PIPE,
             env=env,
+            text=True,
         )
-        stdout, _ = p.communicate(text.encode("utf-8"))
         assert p.returncode == 0, f"error while processing CSS resource {resource}"
-        return stdout.decode("utf-8")
+        return p.stdout

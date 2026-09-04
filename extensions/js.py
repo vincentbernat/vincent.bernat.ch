@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 JavaScript plugins
 """
@@ -22,7 +21,7 @@ class EsbuildPlugin(CLTransformer):
 
     def text_resource_complete(self, resource, text):
         mode = self.site.config.mode
-        if not resource.source_file.kind == "js":
+        if resource.source_file.kind != "js":
             return
 
         esbuild = self.app
@@ -38,5 +37,4 @@ class EsbuildPlugin(CLTransformer):
         if mode == "production":
             args.append("--minify")
         self.call_app(args)
-        out = target.read_all()
-        return out
+        return target.read_all()

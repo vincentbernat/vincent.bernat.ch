@@ -3,7 +3,6 @@ import jinja2
 import re
 from markupsafe import Markup
 from babel.dates import format_date
-from distutils.version import LooseVersion
 from pyquery import PyQuery as pq
 
 
@@ -54,6 +53,17 @@ def same_tag(resource, attribute, skip=0):
     return candidate
 
 
+NATURAL_RE = re.compile(r"(\d+)")
+
+
+def natural_key(value):
+    """Sort key comparing digit runs as numbers."""
+    return [
+        int(part) if index % 2 else part
+        for index, part in enumerate(NATURAL_RE.split(value))
+    ]
+
+
 def media_listing(resources, directory):
     """Version-sort media resources contained in directory."""
     resources = [
@@ -61,11 +71,7 @@ def media_listing(resources, directory):
         for r in resources
         if r.source_file.parent.path.endswith("/media/" + directory)
     ]
-    to_sort = [
-        {"resource": r, "version": LooseVersion(r.relative_path)} for r in resources
-    ]
-    to_sort.sort(key=lambda x: x["version"])
-    return [r["resource"] for r in to_sort]
+    return sorted(resources, key=lambda r: natural_key(r.relative_path))
 
 
 def mastodon_href(handle):
@@ -78,7 +84,7 @@ def mastodon_href(handle):
 @jinja2.pass_context
 def include_file(ctx, name):
     target = os.path.join(str(ctx.parent["node"]), name)
-    with open(target, "r") as f:
+    with open(target) as f:
         return Markup(f.read())
 
 

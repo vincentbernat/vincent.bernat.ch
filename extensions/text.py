@@ -143,7 +143,7 @@ class TOCPlugin(Plugin):
     """Remove whitespaces inside UL and add a disclosure to expand the TOC"""
 
     def text_resource_complete(self, resource, text):
-        if not resource.source_file.kind == "html":
+        if resource.source_file.kind != "html":
             return
         d = pq(text, parser="html")
         for toc in d.items(".toc"):

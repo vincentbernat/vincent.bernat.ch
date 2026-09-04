@@ -16,9 +16,8 @@ import subprocess
 import tempfile
 import datetime
 import contextlib
-import urllib
+import urllib.error
 import urllib.request
-import binascii
 import base64
 import fcntl
 import struct
@@ -26,6 +25,7 @@ import termios
 import invoke.runners
 import invoke.terminals
 import xml.etree.ElementTree as ET
+from itertools import batched
 
 
 # invoke gives FIONREAD a buffer of 2 bytes, but it writes an int. Python 3.14
@@ -47,7 +47,8 @@ invoke.terminals.bytes_to_read = bytes_to_read
 invoke.runners.bytes_to_read = bytes_to_read
 
 conf = "site-production.yaml"
-media = yaml.safe_load(open(conf))["media_url"]
+with open(conf) as f:
+    media = yaml.safe_load(f)["media_url"]
 hosts = [
     "web02.luffy.cx",
     "web03.luffy.cx",
@@ -68,12 +69,9 @@ bwrap = (
 
 
 def confirm(question, default=False):
-    if default:
-        suffix = "Y/n"
-    else:
-        suffix = "y/N"
+    suffix = "Y/n" if default else "y/N"
     while True:
-        response = input("{0} [{1}] ".format(question, suffix))
+        response = input(f"{question} [{suffix}] ")
         response = response.lower().strip()  # Normalize
         # Default
         if not response:
@@ -276,7 +274,7 @@ def archive(c, lang="en", pause=2):
 def screenshots(c):
     """Generate screenshots"""
     now = time.asctime().replace(" ", "-")
-    os.makedirs("screenshots/{now}".format(now=now))
+    os.makedirs(f"screenshots/{now}")
     for url in [
         "en/",
         "en/blog",
@@ -287,6 +285,7 @@ def screenshots(c):
         "en/blog/2020-old-pc-cards.html",
         "en/blog/2019-self-hosted-videos-subtitles.html",
     ]:
+        slug = url.replace("/", "-").replace(".", "-")
         for width in [320, 600, 1024, 1280, 1900]:
             c.run(
                 "chromium "
@@ -294,15 +293,10 @@ def screenshots(c):
                 "--hide-scrollbars "
                 "--screenshot "
                 "--disable-gpu "
-                "--window-size={width},2000 "
-                "http://localhost:8080/{url} "
+                f"--window-size={width},2000 "
+                f"http://localhost:8080/{url} "
                 "&& mv screenshot.png "
-                "   screenshots/{now}/{width}px-{slug}.png".format(
-                    width=width,
-                    now=now,
-                    url=url,
-                    slug=url.replace("/", "-").replace(".", "-"),
-                )
+                f"   screenshots/{now}/{width}px-{slug}.png"
             )
 
 
@@ -461,7 +455,8 @@ def video_analyze(c, video):
     print("─" * len(header))
 
     # Renditions of the master playlist: variants and alternative audio
-    lines = [line.strip() for line in open(master)]
+    with open(master) as f:
+        lines = [line.strip() for line in f]
     renditions = []
     for index, line in enumerate(lines):
         if line.startswith("#EXT-X-MEDIA:") and value(line, "URI"):
@@ -475,14 +470,15 @@ def video_analyze(c, video):
         playlist = os.path.basename(uri)
         used.add(playlist)
         segments, duration = [], 0
-        for line in open(os.path.join(directory, playlist)):
-            line = line.strip()
-            if line.startswith("#EXT-X-MAP:"):
-                segments.append(value(line, "URI"))
-            elif line.startswith("#EXTINF:"):
-                duration += float(line.split(":", 1)[1].rstrip(","))
-            elif line and not line.startswith("#"):
-                segments.append(line)
+        with open(os.path.join(directory, playlist)) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("#EXT-X-MAP:"):
+                    segments.append(value(line, "URI"))
+                elif line.startswith("#EXTINF:"):
+                    duration += float(line.split(":", 1)[1].rstrip(","))
+                elif line and not line.startswith("#"):
+                    segments.append(line)
         used.update(segments)
         if segments:
             paths = [os.path.join(directory, segment) for segment in segments]
@@ -540,14 +536,11 @@ def video_upload(c, video=None):
         if video is not None and video != directory:
             continue
         with step(f"uploading {directory}"):
+            source = os.path.join(path, directory)
             for host in hosts:
                 c.run(
-                    "rsync --delete --info=progress2 -a {directory}/ {host}:"
-                    "/data/webserver/media.bernat.ch/videos/{short}/".format(
-                        host=host,
-                        short=directory,
-                        directory=os.path.join(path, directory),
-                    ),
+                    f"rsync --delete --info=progress2 -a {source}/ {host}:"
+                    f"/data/webserver/media.bernat.ch/videos/{directory}/",
                     hide=False,
                 )
 
@@ -575,10 +568,9 @@ def fonts_update(c):
 @task
 def links_check(c, remote=True):
     """Check links"""
+    url = "https://vincent.bernat.ch/" if remote else "http://localhost:8080/"
     result = c.run(
-        "nix run .#linkchecker -- -f ./linkcheckerrc {}".format(
-            remote and "https://vincent.bernat.ch/" or "http://localhost:8080/",
-        ),
+        f"nix run .#linkchecker -- -f ./linkcheckerrc {url}",
         warn=True,
         hide=False,
     )
@@ -589,10 +581,12 @@ def links_check(c, remote=True):
 @task
 def links_fix(c):
     """Try to fix links"""
-    fp = open(".linkchecker-out.csv")
-    reader = csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
-    seen = {}
-    for row in reader:
+    with open(".linkchecker-out.csv") as fp:
+        rows = list(
+            csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
+        )
+    seen = set()
+    for row in rows:
         if row["valid"] == "True":
             if "status: 30" not in row["warningstring"]:
                 continue
@@ -612,39 +606,36 @@ def links_fix(c):
         year = datetime.datetime.now().year
         archive = {}
         mo = re.search(r"/blog/(\d+)-", row["parentname"])
-        if seen.get(row["urlname"]):
+        if row["urlname"] in seen:
             continue
         if mo:
             year = int(mo.group(1))
         archive = {
-            "a": "https://archive.today/{}/{}".format(year, row["urlname"]),
-            "w": "https://web.archive.org/web/{}/{}".format(
-                year,
-                row["urlname"],
-            ),
+            "a": f"https://archive.today/{year}/{row['urlname']}",
+            "w": f"https://web.archive.org/web/{year}/{row['urlname']}",
         }
         while True:
-            print("""
-URL:       {urlname}
-Source:    {parentname}
-Result:    {result}
-Warning:   {warningstring}
-Info:      {infostring}""".format(**row))
-            print("""
+            print(f"""
+URL:       {row["urlname"]}
+Source:    {row["parentname"]}
+Result:    {row["result"]}
+Warning:   {row["warningstring"]}
+Info:      {row["infostring"]}""")
+            print(f"""
 (c) Continue
-(b) Browse {urlname}
-(p) Browse {parentname}
+(b) Browse {row["urlname"]}
+(p) Browse {row["parentname"]}
 (r) Replace by your own URL
-(q) Quit""".format(**row))
+(q) Quit""")
             valid = "cbprq"
-            for a in archive:
-                print("({}) Browse {}".format(a, archive[a]))
-                print("({}) Replace by {}".format(a.upper(), archive[a]))
+            for a, archived in archive.items():
+                print(f"({a}) Browse {archived}")
+                print(f"({a.upper()}) Replace by {archived}")
                 valid += a
                 valid += a.upper()
             if "Redirected" in row["warningstring"]:
                 redirected = row["url"]
-                print("(R) Replace by {}".format(redirected))
+                print(f"(R) Replace by {redirected}")
                 valid += "R"
             print()
             ans = input("Command? ")
@@ -657,42 +648,36 @@ Info:      {infostring}""".format(**row))
             elif ans == "r":
                 url = input("URL? ")
                 c.run(
-                    "git grep -Fl '{}'"
-                    r"| xargs -r sed -i 's|\([( ]\){}|\1{}|g'".format(
-                        row["urlname"], row["urlname"], url
-                    )
+                    f"git grep -Fl '{row['urlname']}'"
+                    rf"| xargs -r sed -i 's|\([( ]\){row['urlname']}|\1{url}|g'"
                 )
                 break
             elif ans == "b":
-                c.run("xdg-open '{}'".format(row["urlname"]))
+                c.run(f"xdg-open '{row['urlname']}'")
             elif ans == "p":
-                c.run("xdg-open '{}'".format(row["parentname"]))
+                c.run(f"xdg-open '{row['parentname']}'")
             elif ans == "R":
                 c.run(
-                    "git grep -Fl '{}'"
-                    r"| xargs -r sed -i 's|\([( ]\){}|\1{}|g'".format(
-                        row["urlname"], row["urlname"], redirected
-                    )
+                    f"git grep -Fl '{row['urlname']}'"
+                    rf"| xargs -r sed -i 's|\([( ]\){row['urlname']}|\1{redirected}|g'"
                 )
                 break
             else:
                 found = False
-                for a in archive:
+                for a, archived in archive.items():
                     if ans == a:
-                        c.run("xdg-open '{}'".format(archive[a]))
+                        c.run(f"xdg-open '{archived}'")
                         break
                     elif ans == a.upper():
                         c.run(
-                            "git grep -Fl '{}'"
-                            "| xargs -r sed -i 's| {}| {}|g'".format(
-                                row["urlname"], row["urlname"], archive[a]
-                            )
+                            f"git grep -Fl '{row['urlname']}'"
+                            f"| xargs -r sed -i 's| {row['urlname']}| {archived}|g'"
                         )
                         found = True
                         break
                 if found:
                     break
-        seen[row["urlname"]] = True
+        seen.add(row["urlname"])
 
 
 @task
@@ -709,7 +694,7 @@ def build(c):
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
     c.run("rm -rf .final/*")
     with step("run Hyde"):
-        c.run(f"{bwrap} -- hyde -x gen -c %s" % conf)
+        c.run(f"{bwrap} -- hyde -x gen -c {conf}")
     with c.cd(".final"):
         # Remove some files
         c.run("rm media/css/common.css media/css/root.css")
@@ -731,9 +716,8 @@ rm ../result
 """)
 
         # Build index
-        with step("pagefind index"):
-            with c.cd(".."):
-                build_pagefind(c, site=".final")
+        with step("pagefind index"), c.cd(".."):
+            build_pagefind(c, site=".final")
 
         # Compute hash on various files
         with step("cache busting and SRI"):
@@ -756,14 +740,14 @@ rm ../result
                     for line in sha256.split("\n")
                 }
                 sha256 = {
-                    k: base64.b64encode(binascii.unhexlify(sha256[k])).decode("ascii")
-                    for k in sha256
+                    k: base64.b64encode(bytes.fromhex(v)).decode("ascii")
+                    for k, v in sha256.items()
                 }
                 sed_html = []
                 sed_css = []
                 for f in md5:
                     root, ext = os.path.splitext(f)
-                    newname = "%s.%s%s" % (root, md5[f], ext)
+                    newname = f"{root}.{md5[f]}{ext}"
                     os.rename(f".final/media/{f}", f".final/media/{newname}")
                     # Fix CSS
                     sed_css.append(f"s+{f})+{newname})+g")
@@ -783,24 +767,20 @@ rm ../result
                             rf"\1{media}{newname}\2,"
                             r"g"
                         )
-                while sed_css:
+                for batch in batched(sed_css, 20):
+                    exprs = " ".join(f"-e '{x}'" for x in batch)
                     c.run(
                         "find . -name '*.css' -type f -print0 | "
-                        "xargs -r0 -n10 -P5 sed -i {}".format(
-                            " ".join(("-e '{}'".format(x) for x in sed_css[:20]))
-                        )
+                        f"xargs -r0 -n10 -P5 sed -i {exprs}"
                     )
-                    sed_css = sed_css[20:]
-                while sed_html:
+                for batch in batched(sed_html, 20):
+                    exprs = " ".join(f'-e "{x}"' for x in batch)
                     c.run(
                         "(find . -name '*.html'    -print0 ; "
                         " find . -name 'atom.xml'  -print0 ; "
                         " find . -name 'atom.xslt' -print0) | "
-                        "xargs -r0 -n10 -P5 sed -i {}".format(
-                            " ".join(('-e "{}"'.format(x) for x in sed_html[:20]))
-                        )
+                        f"xargs -r0 -n10 -P5 sed -i {exprs}"
                     )
-                    sed_html = sed_html[20:]
 
         # Image optimization
         with step("optimize images"):
@@ -908,7 +888,7 @@ done
         with step(f"push media to {host}"):
             c.run(
                 "rsync --exclude=.git --copy-unsafe-links -rt "
-                ".final/media/ {}:/data/webserver/media.bernat.ch/".format(host)
+                f".final/media/ {host}:/data/webserver/media.bernat.ch/"
             )
 
     # HTML
@@ -917,9 +897,9 @@ done
             c.run(
                 "rsync --exclude=.git --exclude=media "
                 "--delete-delay --copy-unsafe-links -rt "
-                ".final/ {}:/data/webserver/vincent.bernat.ch/".format(host)
+                f".final/ {host}:/data/webserver/vincent.bernat.ch/"
             )
-            c.run("ssh {} sudo systemctl reload nginx".format(host))
+            c.run(f"ssh {host} sudo systemctl reload nginx")
 
     if clean:
         for host in hosts:
@@ -931,11 +911,11 @@ done
                     "--include='*.avif' --include='*.webp' "
                     "--exclude='*' "
                     ".final/media/images "
-                    "{}:/data/webserver/media.bernat.ch/".format(host)
+                    f"{host}:/data/webserver/media.bernat.ch/"
                 )
                 c.run(
                     "rsync --exclude=.git --copy-unsafe-links -rt "
                     "--delete-delay --exclude=videos/\\*/ "
                     ".final/media/ "
-                    "{}:/data/webserver/media.bernat.ch/".format(host)
+                    f"{host}:/data/webserver/media.bernat.ch/"
                 )
