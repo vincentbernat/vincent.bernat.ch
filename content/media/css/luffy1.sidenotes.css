@@ -61,17 +61,24 @@
 }
 
 /* Anchor-positioned sidenotes for wide viewports. See
-   https://meyerweb.com/eric/thoughts/2023/09/12/nuclear-anchored-sidenotes/ */
-@supports (anchor-name: --a) {
+   https://meyerweb.com/eric/thoughts/2023/09/12/nuclear-anchored-sidenotes/. We
+   rely on an advanced attr() allowing to use a typed attr(). It's supported
+   since Chrome 133, Firefox 155 and Safari 26.7 (or 27).
+ */
+@supports (anchor-name: attr(data-anchor type(<custom-ident>))) {
   @media (--lf-wide) {
-    .lf-main:not(.lf-sidenotes-overlap) {
+    .lf-main {
       position: relative;
+      .lf-text sup[data-anchor] {
+        anchor-name: attr(data-anchor type(<custom-ident>));
+      }
       .lf-sidenote {
         .lf-sidenote-end {
           display: none;
         }
         position: absolute;
         anchor-name: --lf-sidenote;
+        position-anchor: attr(data-anchor type(<custom-ident>));
         top: max(anchor(top), anchor(--lf-sidenote bottom, -1rlh) + 1rlh);
         left: 100%;
         width: var(--lf-sidenote-width);

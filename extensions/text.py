@@ -73,8 +73,8 @@ class FootnotesPlugin(Plugin):
             sidenote.attr.role = "note"
             sidenote.attr.class_ = "lf-sidenote"
             sidenote.attr.id = f"sidenote-{name}"
-            ref[0].set("style", f"anchor-name: --lf-sn-{name}")
-            sidenote[0].set("style", f"position-anchor: --lf-sn-{name}")
+            ref[0].set("data-anchor", f"--lf-sn-{name}")
+            sidenote[0].set("data-anchor", f"--lf-sn-{name}")
             sidenote.html(
                 f'<sup class="lf-sidenote-refmark">{ref.text()}</sup>{fn.html()}'
             )
