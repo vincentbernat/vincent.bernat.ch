@@ -49,6 +49,7 @@
                   overrides = {
                     commando.setuptools = [ ];
                     fswrap.setuptools = [ ];
+                    pygments.hatchling = [ ];
                     pygments-haproxy.setuptools = [ ];
                     pygments-ios.setuptools = [ ];
                     pygments-junos.setuptools = [ ];
