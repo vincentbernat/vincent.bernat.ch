@@ -231,57 +231,82 @@
                 optimizePng = pkgs.writeShellScript "optimize-png" ''
                   ${pngquant}/bin/pngquant --skip-if-larger --strip --quiet -o "$2" "$1" || [ $? = 98 ]
                 '';
-              in
-              pkgs.stdenvNoCC.mkDerivation {
-                name = "optimize-images";
-                src = <target>;
-                buildPhase = ''
-                  find . -type d -print0 | ${parallel} -X mkdir -p $out/{}
+                target = <target>;
+                extensions = [ ".svg" ".jpg" ".png" ".gif" ];
+                listDirs = dir: prefix: [ prefix ] ++ l.concatLists (l.mapAttrsToList
+                  (name: type:
+                    if type == "directory"
+                    then
+                      listDirs (dir + "/${name}")
+                        (if prefix == "" then name else "${prefix}/${name}")
+                    else [ ])
+                  (l.readDir dir));
+                optimizeDirectory = directory:
+                  let
+                    subdir = if directory == "" then "" else "/${directory}";
+                    safe = l.strings.sanitizeDerivationName
+                      (if directory == "" then "toplevel" else directory);
+                  in
+                  pkgs.runCommand "optimize-images-${safe}"
+                    {
+                      src = builtins.path {
+                        path = target + subdir;
+                        name = "images-${safe}";
+                        # Subdirectories have their own derivation
+                        filter = path: type:
+                          type != "directory"
+                          && l.any (ext: l.hasSuffix ext path) extensions;
+                      };
+                      # These outputs are never in a binary cache
+                      allowSubstitutes = false;
+                    } ''
+                    dest=$out${subdir}
+                    mkdir -p $dest
+                    cd $src
 
-                  # SVG (skip interactive ones containing <script>)
-                  for d in $(find . -type d); do
-                    find $d -maxdepth 1 -type f -name '*.svg' -print0 \
+                    # SVG (skip interactive ones containing <script>)
+                    find . -type f -name '*.svg' -print0 \
                       | sort -z \
                       | xargs -r0 sh -c 'grep -LZ "<script" "$@" || [ $? = 1 ]' grep \
-                      | ${parallel} -n5 ${svgo}/bin/svgo --config ${svgoConfig} -o $out/$d -i
-                  done
+                      | ${parallel} -n5 ${svgo}/bin/svgo --config ${svgoConfig} -o $dest -i
 
-                  # Convert JPG to sRGB
-                  find . -type f -name '*.jpg' -print0 \
-                    | ${parallel} ${lcms}/bin/jpgicc -q100 {} $out/{}
+                    # Convert JPG to sRGB
+                    find . -type f -name '*.jpg' -print0 \
+                      | ${parallel} ${lcms}/bin/jpgicc -q100 {} $dest/{}
 
-                  # JPG→AVIF
-                  find $out -type f -name '*.jpg' -print0 \
-                    | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 \
-                                                         --min 0 --max 63 \
-                                                         -a end-usage=q -a cq-level=21 -a tune=ssim \
-                                                    {} {}.avif
+                    # JPG→AVIF
+                    find $dest -type f -name '*.jpg' -print0 \
+                      | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 \
+                                                           --min 0 --max 63 \
+                                                           -a end-usage=q -a cq-level=21 -a tune=ssim \
+                                                      {} {}.avif
 
-                  # Optimize JPG
-                  for d in $(find $out -type d); do
-                    find $d -maxdepth 1 -type f -name '*.jpg' -print0 \
+                    # Optimize JPG
+                    find $dest -type f -name '*.jpg' -print0 \
                       | sort -z \
                       | ${parallel} -n5 ${jpegoptim}/bin/jpegoptim \
                                             --max=84 --all-progressive --strip-all --keep-icc
-                  done
 
-                  # Optimize PNG
-                  find . -type f -name '*.png' -print0 \
-                      | ${parallel} ${optimizePng} {} $out/{}
+                    # Optimize PNG
+                    find . -type f -name '*.png' -print0 \
+                        | ${parallel} ${optimizePng} {} $dest/{}
 
-                  # PNG→WebP
-                  find $out -type f -name '*.png' -print0 \
-                      | ${parallel} ${libwebp}/bin/cwebp -z 8 {} -o {}.webp
+                    # PNG→WebP
+                    find $dest -type f -name '*.png' -print0 \
+                        | ${parallel} ${libwebp}/bin/cwebp -z 8 {} -o {}.webp
 
-                  # GIF→WebP
-                  find . -type f -name '*.gif' -print0 \
-                      | ${parallel} ${libwebp}/bin/gif2webp -quiet {} -o $out/{}.webp
+                    # GIF→WebP
+                    find . -type f -name '*.gif' -print0 \
+                        | ${parallel} ${libwebp}/bin/gif2webp -quiet {} -o $dest/{}.webp
 
-                  # Optimize GIF
-                  find . -type f -name '*.gif' -print0 \
-                      | ${parallel} ${gifsicle}/bin/gifsicle --optimize=3 {} -o $out/{}
-                '';
-                installPhase = "true";
+                    # Optimize GIF
+                    find . -type f -name '*.gif' -print0 \
+                        | ${parallel} ${gifsicle}/bin/gifsicle --optimize=3 {} -o $dest/{}
+                  '';
+              in
+              pkgs.symlinkJoin {
+                name = "optimize-images";
+                paths = map optimizeDirectory (listDirs target "");
               };
             build.merriweather = pkgs.stdenvNoCC.mkDerivation {
               name = "custom-merriweather";

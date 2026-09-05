@@ -827,9 +827,13 @@ rm ../result
         # Image optimization
         with step("optimize images"):
             c.run(
-                "cd .. ; NIX_PATH=target=$PWD/.final/media/images nix build --impure .#build.optimizeImages"
+                "cd .. ; "
+                "NIX_PATH=target=$PWD/.final/media/images "
+                "nix build --max-jobs 1 --impure .#build.optimizeImages"
             )
-            c.run("cp -r --no-preserve=mode ../result/* media/images/. && rm ../result")
+            c.run(
+                "cp -rL --no-preserve=mode ../result/* media/images/. && rm ../result"
+            )
 
         # We want to prefer JPGs if their sizes are not too large.
         # The idea is that:
