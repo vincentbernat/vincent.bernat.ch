@@ -430,6 +430,7 @@
                 fonttools
                 jpegoptim
                 nginx
+                vale
               ];
               shellHook = ''
                 unset PYTHONPATH

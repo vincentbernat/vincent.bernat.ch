@@ -697,15 +697,7 @@ frontmatter_keys = (
 def build_check(c, fix=False):
     """Check content for mistakes"""
     # Check forbidden word or common typos
-    with c.cd("content/en"):
-        c.run(
-            "! git grep -Pw '((?i:"
-            "obviously|basically|simply|clearly|everyone knows|turns out"
-            "|explicitely|overriden|accross|totally|equipments"
-            ")|Thinkpad|Yubikey|Github|Clickhouse)' \\*.html",
-            hide="out",
-        )
-        c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
+    c.run("vale content/??")
     # Check frontmatters
     unordered = []
     for path in sorted(glob.glob("content/??/**/*", recursive=True)):
