@@ -54,6 +54,17 @@ For French, we follow “Lexique des règles typographiques en usage à l'Imprim
 nationale.” For English, this is “The Chicago Manual of Style” but keep
 contractions.
 
+About the author's voice:
+
+- Do not soften a blunt statement. "Avoid this type of mechanism!" must not
+  become "you may want to consider an alternative."
+- Do not delete a deadpan aside as a filler phrase. "But who cares?" carries the
+  tone, not the information.
+- Do not turn an admission of failure into a positive result. "It did not solve
+  the main issue" stays a failure.
+- Do not add enthusiasm or promotion: no "powerful", "elegant", or "seamless",
+  and no exclamation mark the author did not write.
+
 ## About the introduction
 
 The editing should follow these principles from [The Craft of Writing
