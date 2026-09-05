@@ -6,6 +6,7 @@ import time
 import yaml
 import csv
 import re
+import glob
 import json
 import shlex
 import pty
@@ -680,9 +681,22 @@ Info:      {row["infostring"]}""")
         seen.add(row["urlname"])
 
 
+frontmatter_keys = (
+    "extends "
+    "title description uuid cover "  # identity
+    "created attachments tags "  # metadata
+    "author bluesky github mastodon "  # attribution
+    "featured popular listable notitle noindex comments share "  # listing/visibility
+    "csp headers mime "  # headers
+    "css js "  # assets
+    "ai-usage"  # disclosure
+).split()
+
+
 @task
-def build(c):
-    """Build production content"""
+def build_check(c, fix=False):
+    """Check content for mistakes"""
+    # Check forbidden word or common typos
     with c.cd("content/en"):
         c.run(
             "! git grep -Pw '((?i:"
@@ -692,6 +706,42 @@ def build(c):
             hide="out",
         )
         c.run(r"! git grep -E '\"[.](\s|$)' \*.html")
+    # Check frontmatters
+    unordered = []
+    for path in sorted(glob.glob("content/??/**/*", recursive=True)):
+        if path.endswith((".yaml", ".yml")) or not os.path.isfile(path):
+            continue
+        try:
+            lines = open(path).readlines()
+            if lines[0].strip() != "---":
+                continue
+            end = next(i for i, line in enumerate(lines) if i and line.strip() == "---")
+            blocks = []
+            for line in lines[1:end]:
+                if m := re.match(r"([\w-]+):", line):
+                    blocks.append((frontmatter_keys.index(m.group(1)), []))
+                blocks[-1][1].append(line)
+            if blocks == sorted(blocks):
+                continue
+            unordered.append(path)
+            if fix:
+                with open(path, "w") as out:
+                    out.writelines(
+                        lines[:1]
+                        + [line for _, block in sorted(blocks) for line in block]
+                        + lines[end:]
+                    )
+        except Exception as e:
+            e.add_note(f"while checking {path}")
+            raise
+    if unordered and not fix:
+        raise Exit(f"unordered frontmatter: {', '.join(unordered)}")
+
+
+@task
+def build(c):
+    """Build production content"""
+    build_check(c)
     c.run("rm -rf .final/*")
     with step("run Hyde"):
         c.run(f"{bwrap} -- hyde -x gen -c {conf}")
