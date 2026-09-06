@@ -64,7 +64,7 @@ class FootnotesPlugin(Plugin):
         for ref in d.items("sup[id^='fnref:']"):
             name = ref.attr.id[6:]
             fn = sidenotes(f"li[id='fn:{name}']")
-            assert fn
+            assert fn, f"sidenote {name} does not exist"
             parents = ref.parents()
             for i in range(len(parents) - 1):
                 if parents.eq(i).has_class("lf-text"):
