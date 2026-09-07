@@ -106,6 +106,11 @@
                   '}(this, function () {' \
                   '}(typeof self !== "undefined" ? self : this, function () {'
 
+                # The @svta/cml-* packages are dev dependencies of hls.js,
+                # pinned there. Check we use the same versions.
+                ${./tools/hls-deps} check ${./package.json} \
+                  $out/node_modules/hls.js/package.json
+
                 # hls.js ships a full build and a light build. The light one has
                 # no alternate audio. Build the same as light, with alternate
                 # audio.

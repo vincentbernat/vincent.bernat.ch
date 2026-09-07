@@ -1,0 +1,43 @@
+#!/bin/sh
+# The @svta/cml-* packages are dev dependencies of hls.js, so npm does not
+# install them. We pin them in package.json instead. Both sets of versions have
+# to match.
+#
+# Usage: tools/hls-deps check|update [package.json] [hls.js package.json]
+
+set -eu
+
+ours=${2:-package.json}
+theirs=${3:-node_modules/hls.js/package.json}
+
+case ${1:-} in
+  check)
+    awk '
+      FNR == NR { if ($1 ~ /^"@svta\//) { gsub(/[",]/, "", $2); want[$1] = $2 } ; next }
+      $1 ~ /^"@svta\// {
+        gsub(/[",]/, "", $2)
+        name = $1
+        gsub(/[":]/, "", name)
+        if (!($1 in want))
+          bad = error(name ": " $2 " pinned, unused by hls.js, remove it")
+        else if ($2 != want[$1])
+          bad = error(name ": " $2 " pinned, hls.js wants " want[$1] ", run \"tools/hls-deps update\"")
+      }
+      END { exit bad + 0 }
+      function error(message) { print message > "/dev/stderr"; return 1 }
+    ' "$theirs" "$ours"
+    ;;
+  update)
+    awk '
+      FNR == NR { if ($1 ~ /^"@svta\//) { gsub(/,$/, "", $2); want[$1] = $2 } ; next }
+      $1 in want { sub(/: *"[^"]*"/, ": " want[$1]) }
+      { print }
+    ' "$theirs" "$ours" > "$ours.new"
+    mv "$ours.new" "$ours"
+    npm install --prefix "$(dirname "$ours")" --package-lock-only
+    ;;
+  *)
+    echo "usage: tools/hls-deps check|update [package.json] [hls.js package.json]" >&2
+    exit 1
+    ;;
+esac
