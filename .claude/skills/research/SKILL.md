@@ -33,7 +33,8 @@ HTML comments at the beginning.
 - Suggest topics or angles the article could address to be more complete or
   useful, notably to the target audience.
 - Suggest small modifications that would allow the article to reach a wider
-  audience.
+  audience, and easier to parse by reducing explanation debt (concepts explained
+  later in the text).
 - Propose additional references, each with a brief explanation of what it adds.
   Format them as Markdown link reference-style links ready to insert. Prefer
   primary sources (official docs, RFCs) over secondary ones.

@@ -1,0 +1,227 @@
+---
+title: "Sidenotes with CSS anchor positioning"
+description: |
+  Sidenotes positioned in the margin with CSS anchor positioning, without JavaScript.
+  On narrow viewports and older browsers, they fall back below the paragraph referencing them.
+uuid: 9bd63447-356f-49f5-aa2d-eebe807b05f4
+cover: css-sidenotes-large@2x.png
+tags:
+  - web
+ai-usage: Copyediting (Claude Fable 5.1)
+---
+
+<!-- Target audiences are bloggers. This article shows a novel technic to
+display sidenotes with CSS, while degrading properly to endnotes when not
+supported or if the viewport is too narrow. -->
+
+I am a heavy user of sidenotes:[^phd] they keep optional content next to the
+text instead of sending the reader to the bottom of the page and back. [Tufte
+CSS][] renders them without JavaScript but only accepts inline content. [CSS
+anchor positioning][], now supported by recent browsers,[^anchor-support] is an
+elegant alternative. Sidenotes can hold several blocks, still without
+JavaScript, and fall back below the paragraph referencing them on narrow
+viewports and older browsers.
+
+[^phd]: My PhD advisor told me this is unwise.
+
+[^anchor-support]:
+    The first bits of anchor positioning are [supported][mdn-anchor] from Chrome
+    125 (May 2024), Firefox 147 (January 2026), and Safari 26 (September 2025).
+
+    Before Safari 26.5, sidenotes may collide due to a [bug][] in how dependency
+    chains are handled. You can [detect this situation with some JavaScript][].
+    It is, however, not needed in the solution described here as we depend on a
+    more recent feature.
+
+In 2023, Eric Meyer demonstrated this technique in "[Nuclear Anchored
+Sidenotes][]." The main improvement over other solutions is that the notes can
+sit anywhere in the HTML document. You can place them after the paragraph
+referencing them, as regular block elements for text browsers, screen readers,
+feed readers, and reader mode to render them properly:
+
+![Sidenotes rendered in Lynx appear after the paragraph they are called
+from.]([[!!images/css-sidenotes-lynx@2x.png]] "Rendering in Lynx, a text
+browser")
+
+When the viewport is too narrow or the browser does not support CSS anchor
+positioning, you can style them so the reader can skip them or glance at them
+without losing their position in the text:
+
+![Sidenotes rendered on a narrow viewport appear with a distinctive typography
+after the paragraph they are called
+from.]([[!!images/css-sidenotes-narrow@2x.png]] "Rendering below the paragraph
+on a narrow viewport")
+
+Once the viewport is large enough, they appear in the margin, at the same
+vertical position as the matching reference mark, unless they would collide with
+a previous sidenote, as in the example below:[^runt]
+
+![Sidenotes rendered on a large viewport appear in the margin. There are two of
+them. The first one is vertically aligned with the matching reference mark,
+while the second is rendered below as it would collide with the first
+otherwise.]([[!!images/css-sidenotes-large@2x.png]] "Rendering in the margin on
+a large viewport")
+
+[^runt]:
+    If you noticed the runt in the first note, I share your pain and lament that
+    Firefox does not implement `text-wrap: pretty`.
+
+The gist of CSS anchoring is to position an element relative to another
+element—the anchor. For the sidenotes, the anchor is the reference mark. I use
+the following markup, with a data attribute to specify the anchor name:
+
+```html
+<sup id="fnref:YYY" data-anchor="--lf-sn-YYY">
+  <a href="#sidenote-YYY">1</a>
+</sup>
+```
+
+The matching note is an `<aside>` element carrying the same data attribute for
+the anchor name. We put it after the paragraph holding the reference mark:
+
+```html
+<aside role="note" id="sidenote-YYY" data-anchor="--lf-sn-YYY">
+  <sup>1</sup>
+  <p>A first paragraph.</p>
+  <p>A second paragraph.</p>
+</aside>
+```
+
+On a narrow viewport or when the browser is too old for CSS anchoring, we style
+the sidenote, which stays below its paragraph, with a muted color:
+
+```css
+aside[role="note"] {
+  margin-block: 1rlh;
+  color: #444;
+}
+```
+
+On a wide viewport and when the browser is recent enough, we move the sidenote
+to the right margin:
+
+```css hl_lines="6 10 12 14"
+@supports (anchor-name: attr(data-anchor type(<custom-ident>))) {
+  @media (min-width: 72rem) {
+    main {
+      position: relative;
+      sup[data-anchor] {
+        anchor-name: attr(data-anchor type(<custom-ident>));
+        /* → anchor-name: --lf-sn-YYY */
+      }
+      aside[role="note"][data-anchor] {
+        anchor-name: --lf-sidenote;
+        position: absolute;
+        position-anchor: attr(data-anchor type(<custom-ident>));
+        /* → position-anchor: --lf-sn-YYY */
+        top: max(anchor(top), anchor(--lf-sidenote bottom, -1rlh) + 1rlh);
+        left: 100%;
+        margin: 0 2rem;
+        width: 18rem;
+        color: inherit;
+      }
+    }
+  }
+}
+```
+
+`attr()` extracts the anchor name for the reference mark from the `data-anchor`
+attribute. It returns a string, unless we specify a CSS unit or a type, like
+here: the browser parses the data attribute as a [custom
+identifier][mdn-custom-ident], which `anchor-name` validates as a [dashed
+identifier][mdn-dash-ident], a custom identifier starting with two
+dashes.[^attr-support]
+
+[^attr-support]:
+    Typed `attr()` is [supported][mdn-attr] from Chrome 133 (February 2025),
+    Firefox 155 (September 2026), and Safari 27 (not yet released). Check [Una
+    Kravets' article][new capabilities for attr] for details. To support more
+    browsers, you can inline the anchor name and the position anchor directly in
+    the HTML:
+
+        ::html
+        <sup id="…" style="anchor-name: --lf-sn-…">
+          <a href="#sidenote-…">1</a>
+        </sup>
+
+    "[Managing Anchor Associations With Data Attributes and Advanced
+    `attr()`][managing anchor associations]," by Daniel Schwarz, explores CSS
+    anchors and typed `attr()` in more detail.
+
+The note itself is absolutely positioned past the right edge of the main block.
+It selects the matching reference mark as its anchor with `position-anchor` set
+to the value of the `data-anchor` attribute. Each note is also an anchor named
+`--lf-sidenote`. We use it to keep the next note from colliding with this one.
+
+The [`anchor()` CSS function][mdn-anchor-fn] lets us position the note's top
+edge relative to its anchor: `anchor(top)` aligns the top edge of the note with
+the top edge of the reference mark. It can also take another anchor as a
+parameter: `anchor(--lf-sidenote bottom)` would align the top edge of the note
+with the bottom edge of the closest preceding anchor named `--lf-sidenote`—so
+the previous note.[^reference] Like `attr()`, `anchor()` accepts a fallback
+value as its second parameter and use it when the named anchor does not exist.
+
+[^reference]:
+    The exact rule for the [target anchor element][] is more complex: "if an
+    ancestor of [the note] satisfies the following conditions, return the
+    nearest such element to [the note]. Otherwise, return the last element in
+    tree order that satisfies the conditions." One of these conditions is that
+    "[the candidate] is an [acceptable anchor element][] for [the note]," which
+    requires that "[the candidate] is laid out strictly before [the note],"
+    where the relevant clause is that "[the candidate] is either not absolutely
+    positioned or occurs earlier in the flat tree order than [the note]."
+
+The `top` property handles three cases, illustrated in the following diagram:
+
+![Diagram of three sidenotes anchored to their reference marks. The first one is
+aligned with the top of its own reference mark, as no note comes before it. The
+second one would overlap the first, so it takes the bottom of the first note as
+anchor and sits one line below it. The third one comes far enough down the page
+to align with its own reference mark
+again.]([[!!images/css-sidenotes-anchors.svg]] "The three cases for the vertical
+position of a note")
+
+1. The first note's top edge aligns with the top edge of its reference mark: as
+   there is no previous note, `anchor(--lf-sidenote bottom, -1rlh) + 1rlh`
+   resolves to 0 and `max()` returns `anchor(top)`.
+2. When the reference mark of a later note sits above the bottom of the previous
+   note, plus some vertical space, the note goes below the previous one to avoid
+   a collision. `max()` returns `anchor(--lf-sidenote bottom) + 1rlh`.
+3. Otherwise, the note's top edge aligns with the reference mark's top edge, as
+   `max()` returns `anchor(top)`.
+
+---
+
+Have a look at the [complete stylesheet][sidenotes css], which also adapts the
+reference mark to the location of the note: a "↓" arrow when the note sits below
+the paragraph, a "→" arrow when it moves to the margin. Gwern's "[Sidenotes In
+Web Design][gwern]" lists more implementations and their trade-offs.
+
+[Some bloggers][dan luu] aim to write a post in 30 minutes. I planned to publish
+three web-related articles this weekend. Instead, I spent an inordinate amount
+of time elsewhere: about 15 commits on the build system, a pull request to
+[update CSS highlighting for nested selectors in Pygments][pr-pygments], and a
+small correction to MDN's article on the [`anchor()` CSS function][pr-mdn]. The
+SVG illustration took a bit less than an hour and the article itself a handful
+of hours. The `attr()` function came in after I thought "inline style looks
+ugly, isn't there a better way?" But, hey, I still think this is worth it! 🎨
+
+[pr-mdn]: https://github.com/mdn/content/pull/45532 "Fix wording for return value of anchor() function"
+[pr-pygments]: https://github.com/pygments/pygments/pull/3294 "CSS: support nested rule"
+[dan luu]: https://danluu.com/bug-blind/ "Bug blindness"
+[sidenotes css]: https://github.com/vincentbernat/vincent.bernat.ch/blob/latest/content/media/css/luffy1.sidenotes.css "Stylesheet for the sidenotes of this blog"
+[gwern]: https://gwern.net/sidenote "Sidenotes In Web Design"
+[tufte css]: https://edwardtufte.github.io/tufte-css/ "Tufte CSS"
+[css anchor positioning]: https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning "CSS anchor positioning"
+[nuclear anchored sidenotes]: https://meyerweb.com/eric/thoughts/2023/09/12/nuclear-anchored-sidenotes/ "Nuclear Anchored Sidenotes"
+[detect this situation with some JavaScript]: https://github.com/vincentbernat/vincent.bernat.ch/blob/1e6299da5c95dfce6549dfb20da2cea7c9e58664/content/media/js/luffy1.sidenotes.js
+[bug]: https://bugs.webkit.org/show_bug.cgi?id=315704 "[anchor-position-1] anchor referencing an anchor of the same name does not resolve to the previous one."
+[mdn-anchor]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/anchor-name#browser_compatibility "Browser compatibility for anchor-name on MDN"
+[mdn-attr]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/attr#browser_compatibility "Browser compatibility for attr() on MDN"
+[mdn-custom-ident]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/custom-ident "<custom-ident> on MDN"
+[mdn-dash-ident]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/dashed-ident "<dashed-ident> on MDN"
+[mdn-anchor-fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/anchor "anchor() CSS function on MDN"
+[target anchor element]: https://drafts.csswg.org/css-anchor-position-1/#target-anchor-element "CSS Anchor Positioning: target anchor element"
+[acceptable anchor element]: https://drafts.csswg.org/css-anchor-position-1/#acceptable-anchor-element "CSS Anchor Positioning: acceptable anchor element"
+[new capabilities for attr]: https://una.im/advanced-attr "New capabilities for attr()"
+[managing anchor associations]: https://blog.master.dev/managing-anchor-associations-with-data-attributes-and-advanced-attr/ "Managing Anchor Associations With Data Attributes and Advanced attr()"

@@ -1,0 +1,239 @@
+---
+title: "Notes de marge avec le positionnement par ancre CSS"
+description: |
+  Des notes placées dans la marge grâce au positionnement par ancre CSS, sans JavaScript.
+  Par manque de place et les navigateurs anciens, elles sont placées sous le paragraphe qui les appelle.
+uuid: 9bd63447-356f-49f5-aa2d-eebe807b05f4
+cover: css-sidenotes-large@2x.png
+tags:
+  - web
+ai-usage: Traduit de l'anglais (Claude Fable 5.1)
+---
+
+Je fais un usage intensif des notes de marge[^phd] : elles gardent le contenu
+optionnel à côté du texte au lieu de renvoyer le lecteur en bas de page. [Tufte
+CSS][] les affiche sans JavaScript, mais n'accepte qu'un seul paragraphe. Le
+[positionnement par ancre CSS][css anchor positioning], désormais pris en charge
+par les navigateurs récents[^anchor-support], est une alternative élégante. Les
+notes peuvent contenir plusieurs blocs, toujours sans JavaScript, et se
+positionnent sous le paragraphe qui les appelle sur les fenêtres étroites et les
+navigateurs plus anciens.
+
+[^phd]: Mon directeur de thèse m'a toujours dit que c'était une mauvaise pratique.
+
+[^anchor-support]:
+    Les premières briques du positionnement par ancre sont [prises en
+    charge][mdn-anchor] à partir de Chrome 125 (mai 2024), Firefox 147 (janvier
+    2026) et Safari 26 (septembre 2025).
+
+    Avant Safari 26.5, les notes peuvent se chevaucher à cause d'un [bug][] dans
+    la gestion des chaînes de dépendances. Il est possible de [détecter cette
+    situation avec un peu de JavaScript][detect this situation with some
+    JavaScript]. Ce n'est toutefois pas nécessaire pour la solution décrite ici,
+    car elle repose sur une fonctionnalité plus récente.
+
+En 2023, Eric Meyer a présenté cette technique dans « [Nuclear Anchored
+Sidenotes][] ». Le principal avantage par rapport aux autres solutions est que
+les notes peuvent se trouver n'importe où dans le document HTML. Il est possible
+de les placer après le paragraphe qui les appelle, comme des éléments de bloc
+ordinaires, afin que les navigateurs en mode texte, les lecteurs d'écran, les
+agrégateurs de flux et le mode lecture les affichent correctement :
+
+![Les notes de marge affichées dans Lynx apparaissent après le paragraphe qui
+les appelle.]([[!!images/css-sidenotes-lynx@2x.png]] "Rendu dans Lynx, un
+navigateur en mode texte")
+
+Lorsque la fenêtre est trop étroite ou que le navigateur ne prend pas en charge
+le positionnement par ancre, il est possible de leur appliquer un style qui
+permet au lecteur de les sauter ou d'y jeter un œil sans perdre sa place dans le
+texte :
+
+![Les notes de marge affichées sur une fenêtre étroite apparaissent avec une
+typographie distincte après le paragraphe qui les
+appelle.]([[!!images/css-sidenotes-narrow@2x.png]] "Rendu sous le paragraphe sur
+une fenêtre étroite")
+
+Dès que la fenêtre est assez large, elles apparaissent dans la marge, à la même
+hauteur que l'appel de note correspondant, sauf si elles entrent en collision
+avec une note précédente, comme dans l'exemple ci-dessous[^runt] :
+
+![Les notes de marge affichées sur une fenêtre large apparaissent dans la marge.
+Il y en a deux. La première est alignée verticalement avec l'appel de note
+correspondant, tandis que la seconde est affichée plus bas, car elle entrerait
+sinon en collision avec la première.]([[!!images/css-sidenotes-large@2x.png]]
+"Rendu dans la marge sur une fenêtre large")
+
+[^runt]:
+    Si vous avez remarqué la ligne creuse à la fin de la première note, je
+    partage votre peine et regrette amèrement que Firefox n'implémente pas
+    `text-wrap: pretty`.
+
+Le principe de l'ancrage CSS est de positionner un élément par rapport à un
+autre élément, l'ancre. Pour les notes de marge, l'ancre est l'appel de note.
+J'utilise le balisage suivant, avec un attribut de données pour indiquer le nom
+de l'ancre :
+
+```html
+<sup id="fnref:YYY" data-anchor="--lf-sn-YYY">
+  <a href="#sidenote-YYY">1</a>
+</sup>
+```
+
+La note correspondante est un élément `<aside>` portant le même attribut de
+données pour le nom de l'ancre. Elle est placée après le paragraphe contenant
+l'appel de note :
+
+```html
+<aside role="note" id="sidenote-YYY" data-anchor="--lf-sn-YYY">
+  <sup>1</sup>
+  <p>Un premier paragraphe.</p>
+  <p>Un second paragraphe.</p>
+</aside>
+```
+
+Sur une fenêtre étroite ou lorsque le navigateur est trop ancien pour l'ancrage
+CSS, la note reçoit une couleur atténuée et reste sous son paragraphe :
+
+```css
+aside[role="note"] {
+  margin-block: 1rlh;
+  color: #444;
+}
+```
+
+Sur une fenêtre plus large et lorsque le navigateur est assez récent, la note
+est déplacée dans la marge de droite :
+
+```css hl_lines="6 10 12 14"
+@supports (anchor-name: attr(data-anchor type(<custom-ident>))) {
+  @media (min-width: 72rem) {
+    main {
+      position: relative;
+      sup[data-anchor] {
+        anchor-name: attr(data-anchor type(<custom-ident>));
+        /* → anchor-name: --lf-sn-YYY */
+      }
+      aside[role="note"][data-anchor] {
+        anchor-name: --lf-sidenote;
+        position: absolute;
+        position-anchor: attr(data-anchor type(<custom-ident>));
+        /* → position-anchor: --lf-sn-YYY */
+        top: max(anchor(top), anchor(--lf-sidenote bottom, -1rlh) + 1rlh);
+        left: 100%;
+        margin: 0 2rem;
+        width: 18rem;
+        color: inherit;
+      }
+    }
+  }
+}
+```
+
+`attr()` extrait le nom de l'ancre de l'appel de note depuis l'attribut
+`data-anchor`. Elle renvoie une chaîne de caractères, sauf si une unité CSS ou
+un type est précisé, comme ici : le navigateur analyse l'attribut de données
+comme un [identifiant personnalisé][mdn-custom-ident], que `anchor-name` valide
+comme un [identifiant à tirets][mdn-dash-ident], c'est-à-dire un identifiant
+personnalisé commençant par deux tirets[^attr-support].
+
+[^attr-support]:
+    La fonction `attr()` typée est [prise en charge][mdn-attr] à partir de
+    Chrome 133 (février 2025), Firefox 155 (septembre 2026) et Safari 27 (pas
+    encore publié). Consultez [l'article d'Una Kravets][new capabilities for
+    attr] pour plus de détails. Pour prendre en charge davantage de navigateurs,
+    il est possible de placer le nom de l'ancre et l'ancre de positionnement
+    directement dans le HTML :
+
+        ::html
+        <sup id="…" style="anchor-name: --lf-sn-…">
+          <a href="#sidenote-…">1</a>
+        </sup>
+
+    « [Managing Anchor Associations With Data Attributes and Advanced
+    `attr()`][managing anchor associations] », de Daniel Schwarz, explore plus
+    en détail les ancres CSS et la fonction `attr()` typée.
+
+La note elle-même est positionnée de manière absolue au-delà du bord droit du
+bloc principal. Elle choisit l'appel de note correspondant comme ancre grâce à
+`position-anchor`, dont la valeur provient de l'attribut `data-anchor`. Chaque
+note est elle-même une ancre nommée `--lf-sidenote`. Elle sert à empêcher la
+note suivante d'entrer en collision avec celle-ci.
+
+La [fonction CSS `anchor()`][mdn-anchor-fn] permet de positionner le bord
+supérieur de la note par rapport à son ancre : `anchor(top)` aligne le bord
+supérieur de la note avec le bord supérieur de l'appel de note. Elle accepte
+aussi une autre ancre en paramètre : `anchor(--lf-sidenote bottom)` alignerait
+le bord supérieur de la note avec le bord inférieur de l'ancre précédente la
+plus proche nommée `--lf-sidenote`, c'est-à-dire la note
+précédente[^reference]. Comme `attr()`, `anchor()` accepte une valeur de repli
+en second paramètre et l'utilise lorsque l'ancre nommée n'existe pas.
+
+[^reference]:
+    La règle exacte pour l'[élément d'ancrage cible][target anchor element] est
+    plus complexe : « si un ancêtre de la note satisfait les conditions
+    suivantes, renvoyer celui qui est le plus proche de la note. Sinon, renvoyer
+    le dernier élément dans l'ordre de l'arbre qui satisfait ces conditions ».
+    L'une de ces conditions est que « le candidat est un [élément d'ancrage
+    acceptable][acceptable anchor element] pour la note », ce qui exige que « le
+    candidat soit disposé strictement avant la note », la clause pertinente
+    étant que « le candidat n'est pas positionné de manière absolue ou apparaît
+    plus tôt que la note dans l'ordre de l'arbre à plat ».
+
+La propriété `top` gère trois cas, illustrés dans le schéma suivant :
+
+![Schéma de trois notes de marge ancrées à leurs appels de note. La première est
+alignée avec le haut de son propre appel de note, car aucune note ne la précède.
+La deuxième chevaucherait la première : elle prend donc le bas de la première
+note comme ancre et se place une ligne en dessous. La troisième arrive assez bas
+dans la page pour s'aligner de nouveau avec son propre appel de
+note.]([[!!images/css-sidenotes-anchors.svg]] "Les trois cas pour la position
+verticale d'une note")
+
+1. Le bord supérieur de la première note s'aligne avec le bord supérieur de son
+   appel de note : en l'absence de note précédente, `anchor(--lf-sidenote
+   bottom, -1rlh) + 1rlh` vaut 0 et `max()` renvoie `anchor(top)`.
+2. Lorsque l'appel de note d'une note ultérieure se trouve au-dessus du bas de
+   la note précédente, augmenté d'un espace vertical, la note passe sous
+   la précédente pour éviter une collision. `max()` renvoie `anchor(--lf-sidenote
+   bottom) + 1rlh`.
+3. Sinon, `max()` renvoie `anchor(top)` et le bord supérieur de la note s'aligne
+   avec le bord supérieur de l'appel de note.
+
+---
+
+Jetez un œil à la [feuille de style complète][sidenotes css], qui adapte aussi
+l'appel de note à l'emplacement de la note : une flèche « ↓ » lorsque la note se
+trouve sous le paragraphe, une flèche « → » lorsqu'elle part dans la marge.
+« [Sidenotes In Web Design][gwern] », de Gwern, recense d'autres implémentations
+et leurs compromis.
+
+[Certains blogueurs][dan luu] se fixent pour objectif d'écrire un billet en 30
+minutes. Je comptais publier trois articles liés au web ce week-end. À la place,
+j'ai passé un temps fou sur n'importe quoi : une quinzaine de changements sur le
+système de construction du site, une contribution pour [mettre à jour la
+coloration CSS des sélecteurs imbriqués dans Pygments][pr-pygments] et une
+petite correction de l'article de MDN sur la [fonction CSS `anchor()`][pr-mdn].
+L'illustration SVG a demandé un peu moins d'une heure et l'article lui-même
+quelques heures. La fonction `attr()` est arrivée après que je me suis demandé :
+« n'y-a-t-il pas plus élégant que de placer le nom de l'ancre dans un style en
+ligne ? ». Mais bon, je trouve que ça en vaut malgré tout la peine ! 🎨
+
+[pr-mdn]: https://github.com/mdn/content/pull/45532 "Fix wording for return value of anchor() function"
+[pr-pygments]: https://github.com/pygments/pygments/pull/3294 "CSS: support nested rule"
+[dan luu]: https://danluu.com/bug-blind/ "Bug blindness"
+[sidenotes css]: https://github.com/vincentbernat/vincent.bernat.ch/blob/latest/content/media/css/luffy1.sidenotes.css "Stylesheet for the sidenotes of this blog"
+[gwern]: https://gwern.net/sidenote "Sidenotes In Web Design"
+[tufte css]: https://edwardtufte.github.io/tufte-css/ "Tufte CSS"
+[css anchor positioning]: https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Anchor_positioning "CSS anchor positioning"
+[nuclear anchored sidenotes]: https://meyerweb.com/eric/thoughts/2023/09/12/nuclear-anchored-sidenotes/ "Nuclear Anchored Sidenotes"
+[detect this situation with some JavaScript]: https://github.com/vincentbernat/vincent.bernat.ch/blob/1e6299da5c95dfce6549dfb20da2cea7c9e58664/content/media/js/luffy1.sidenotes.js
+[bug]: https://bugs.webkit.org/show_bug.cgi?id=315704 "[anchor-position-1] anchor referencing an anchor of the same name does not resolve to the previous one."
+[mdn-anchor]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/anchor-name#browser_compatibility "Browser compatibility for anchor-name on MDN"
+[mdn-attr]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/attr#browser_compatibility "Browser compatibility for attr() on MDN"
+[mdn-custom-ident]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/custom-ident "<custom-ident> on MDN"
+[mdn-dash-ident]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/dashed-ident "<dashed-ident> on MDN"
+[mdn-anchor-fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/anchor "anchor() CSS function on MDN"
+[target anchor element]: https://drafts.csswg.org/css-anchor-position-1/#target-anchor-element "CSS Anchor Positioning: target anchor element"
+[acceptable anchor element]: https://drafts.csswg.org/css-anchor-position-1/#acceptable-anchor-element "CSS Anchor Positioning: acceptable anchor element"
+[new capabilities for attr]: https://una.im/advanced-attr "New capabilities for attr()"
+[managing anchor associations]: https://blog.master.dev/managing-anchor-associations-with-data-attributes-and-advanced-attr/ "Managing Anchor Associations With Data Attributes and Advanced attr()"
