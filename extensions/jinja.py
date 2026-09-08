@@ -2,6 +2,7 @@ import os
 import jinja2
 import re
 from markupsafe import Markup
+from markdown import Markdown
 from babel.dates import format_date
 from pyquery import PyQuery as pq
 
@@ -28,6 +29,21 @@ def human_date(dt, locale="en", format=None):
                 replacement = f"{ordinal_mo.group(1)}<sup>{ordinal_mo.group(2)}</sup>"
                 formatted = f"{mo.group("before")}{replacement}{mo.group("after")}"
     return formatted
+
+
+@jinja2.pass_context
+def markdown(ctx, value):
+    """Convert markdown to HTML, giving the extensions access to the resource."""
+    config = ctx.environment.config.markdown
+    extension_configs = config.extension_configs.to_dict()
+    extension_configs["extensions.markdown.shortlinks"] = {
+        "l10n": getattr(ctx["resource"].meta, "l10n", None)
+    }
+    return Markdown(
+        extensions=config.extensions,
+        extension_configs=extension_configs,
+        output_format=config.output_format,
+    ).convert(value)
 
 
 def same_tag(resource, attribute, skip=0):
