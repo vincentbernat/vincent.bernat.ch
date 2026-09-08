@@ -136,6 +136,27 @@
               '';
             };
           };
+          # Titles for RFC links.
+          rfcIndex =
+            let
+              index = pkgs.fetchurl {
+                url = "https://www.rfc-editor.org/rfc-index.xml";
+                hash = "sha256-e8O113xkXRqFLAEUBW9V/Cn3RyZsTVlhS50F6tBNqSs="; # inconvenient...
+              };
+            in
+            pkgs.runCommand "rfc-index.json.gz" { } ''
+              # Keep only the number and the title of each RFC.
+              ${pkgs.xmlstarlet}/bin/xmlstarlet sel -T \
+                -N r="https://www.rfc-editor.org/rfc-index" \
+                -t -m "//r:rfc-entry" \
+                -v "concat(substring-after(r:doc-id, 'RFC'), '=', normalize-space(r:title))" \
+                -n ${index} \
+                | ${pkgs.jq}/bin/jq -Rnc '
+                    [inputs
+                     | capture("^(?<n>[0-9]+)=(?<t>.*)$")
+                     | {(.n | tonumber | tostring): .t}] | add' \
+                | ${pkgs.gzip}/bin/gzip -9n > $out
+            '';
           jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
           fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
             dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
@@ -466,6 +487,7 @@
               shellHook = ''
                 unset PYTHONPATH
                 ln -nsfT ${nodeEnv}/node_modules node_modules
+                ln -nsfT ${rfcIndex} extensions/markdown/rfc-index.json.gz
               '';
             };
         };

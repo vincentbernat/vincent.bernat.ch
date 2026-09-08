@@ -1,9 +1,23 @@
 """Add additional schemas for URL."""
 
+import functools
+import gzip
+import json
+import os
 import re
 
 from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
+
+# Built and symlinked here by flake.nix.
+RFC_INDEX = os.path.join(os.path.dirname(__file__), "rfc-index.json.gz")
+
+
+@functools.cache
+def rfc_titles():
+    """Map RFC numbers to their titles."""
+    with gzip.open(RFC_INDEX, "rt", encoding="utf-8") as f:
+        return json.load(f)
 
 
 class ShortLinksExtension(Extension):
@@ -33,6 +47,7 @@ class ShortLinksPreprocessor(Preprocessor):
     INLINE_RE = re.compile(r"(?P<prefix>\]\()(?P<url>[^\s()]+)\)")
 
     # Links we can build a title for.
+    RFC_RE = re.compile(r"^https://www\.rfc-editor\.org/rfc/rfc(\d+)(?:#.*)?$")
     MANPAGE_RE = re.compile(
         r"^https://manpages\.debian\.org/(?:[^/]+/)*([\w.+-]+)\.(\d\w*)\.html(?:#.*)?$"
     )
@@ -43,9 +58,16 @@ class ShortLinksPreprocessor(Preprocessor):
         self.l10n = l10n
 
     def title(self, url):
-        """Build a title from a manual page or a Go package URL."""
+        """Build a title from an RFC, a manual page or a Go package URL."""
         if not self.l10n:
             return None
+        mo = self.RFC_RE.match(url)
+        if mo:
+            number = mo.group(1)
+            title = rfc_titles().get(number)
+            if title is None:
+                return None
+            return self.l10n.rfc.format(number, title)
         mo = self.MANPAGE_RE.match(url)
         if mo:
             return self.l10n.manpage.format(f"{mo.group(1)}({mo.group(2)})")
