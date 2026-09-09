@@ -4,6 +4,7 @@ import sys
 import unicodedata
 import emoji
 import markdown
+from hyde.plugin import Plugin
 from markdown.extensions import codehilite
 from pygments.formatters.html import HtmlFormatter
 
@@ -16,6 +17,10 @@ glyphs = {
         "\u2019",  # RIGHT SINGLE QUOTATION MARK
     },
 }
+outputs = {
+    "monospace": ".glyphs-monospace.txt",
+    "regular": ".glyphs-regular.txt",
+}
 
 for c in range(sys.maxunicode + 1):
     u = chr(c)
@@ -27,19 +32,14 @@ for c in range(sys.maxunicode + 1):
 
 
 class GlyphsTreeProcessor(markdown.treeprocessors.Treeprocessor):
-    def __init__(self, glyphs, output):
-        self.output = output
+    def __init__(self, glyphs):
         self.glyphs = glyphs
 
     def run(self, root):
         for glyphs in self.extract(root):
             if glyphs is None:
                 continue
-            self.glyphs |= {
-                g for g in set(glyphs) - self.glyphs if not emoji.is_emoji(g)
-            }
-        with open(self.output, "w", encoding="utf-8") as f:
-            f.write("".join(sorted(g for g in self.glyphs if ord(g) >= 0x20)))
+            self.glyphs |= set(glyphs)
 
 
 class MonospaceGlyphsTreeprocessor(GlyphsTreeProcessor):
@@ -62,8 +62,7 @@ class MonospaceGlyphsFormatter(HtmlFormatter):
 
     def format(self, tokensource, outfile):
         tokensource = list(tokensource)
-        found = {g for _, value in tokensource for g in value} - glyphs["monospace"]
-        glyphs["monospace"] |= {g for g in found if not emoji.is_emoji(g)}
+        glyphs["monospace"] |= {g for _, value in tokensource for g in value}
         return super().format(tokensource, outfile)
 
 
@@ -85,16 +84,28 @@ class GlyphsExtension(markdown.Extension):
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.register(
-            RegularGlyphsTreeprocessor(glyphs["regular"], ".glyphs-regular.txt"),
+            RegularGlyphsTreeprocessor(glyphs["regular"]),
             "regularglyphs",
             -5,
         )
         # Inline code (after inline, only inline code is embedded in code)
         md.treeprocessors.register(
-            MonospaceGlyphsTreeprocessor(glyphs["monospace"], ".glyphs-monospace.txt"),
+            MonospaceGlyphsTreeprocessor(glyphs["monospace"]),
             "monospaceglyphs",
             15,
         )
+
+
+class GlyphsPlugin(Plugin):
+    """Write the glyphs used by the site once generated."""
+
+    def site_complete(self):
+        for kind, output in outputs.items():
+            wanted = sorted(
+                g for g in glyphs[kind] if ord(g) >= 0x20 and not emoji.is_emoji(g)
+            )
+            with open(output, "w", encoding="utf-8") as f:
+                f.write("".join(wanted))
 
 
 def makeExtension(**kwargs):
