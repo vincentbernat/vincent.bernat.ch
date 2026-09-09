@@ -512,6 +512,12 @@ const { scheduleSticky } = (() => {
   // What puts an end to a topology's stay at the top of the window.
   const STOPPER = "h1, h2, h3, h4, h5, h6, .mstp-host";
 
+  // A page may hand over the choice with a checkbox. Without one, topologies
+  // are pinned.
+  const SWITCH = "input#mstp-sticky, input[id$='-mstp-sticky']";
+
+  const wanted = () => document.querySelector(SWITCH)?.checked ?? true;
+
   // How far down the window the widget may reach: the top of what comes next,
   // margin included, so the widget does not sit on the air above a heading.
   function stopAt(el) {
@@ -553,7 +559,8 @@ const { scheduleSticky } = (() => {
       const stop = els[i + 1] ? stopAt(els[i + 1]) : Infinity;
       // Above the window, and with something left of the room before the next
       // heading or topology.
-      if (w.demoOn || rect.top >= 0 || stop <= 0) return setStuck(w, null);
+      if (!wanted() || w.demoOn || rect.top >= 0 || stop <= 0)
+        return setStuck(w, null);
       setStuck(w, rect, stop);
     });
   }
@@ -573,6 +580,9 @@ const { scheduleSticky } = (() => {
 
   window.addEventListener("scroll", scheduleSticky, { passive: true });
   window.addEventListener("resize", scheduleSticky);
+  document.addEventListener("change", (ev) => {
+    if (ev.target.matches?.(SWITCH)) scheduleSticky();
+  });
 
   return { scheduleSticky };
 })();
