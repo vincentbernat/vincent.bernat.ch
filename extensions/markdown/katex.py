@@ -5,16 +5,24 @@ GitLab.
 
 """
 
+import json
 import subprocess
 
 import markdown
 
-# Read formulas from stdin, write the rendered HTML to stdout, NUL as separator.
+# Read formulas from stdin, write the answers to stdout as JSON, NUL as
+# separator.
 RENDERER = """
 var katex = require('katex');
 var split = require('split');
 process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(latex) {
-  process.stdout.write(katex.renderToString(latex));
+  var answer;
+  try {
+    answer = { html: katex.renderToString(latex) };
+  } catch (e) {
+    answer = { error: e.message };
+  }
+  process.stdout.write(JSON.stringify(answer));
   process.stdout.write('\\0');
 });
 """
@@ -41,7 +49,10 @@ def render(formula):
         if char == b"\0":
             break
         answer += char
-    return answer.decode("utf-8")
+    answer = json.loads(answer)
+    if "error" in answer:
+        raise RuntimeError(f"cannot render {formula!r}: {answer['error']}")
+    return answer["html"]
 
 
 class KaTeXPattern(markdown.inlinepatterns.InlineProcessor):
