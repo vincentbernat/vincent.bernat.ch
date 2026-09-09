@@ -2,7 +2,6 @@
 
 import sys
 import unicodedata
-import emoji
 import markdown
 from hyde.plugin import Plugin
 from markdown.extensions import codehilite
@@ -101,9 +100,7 @@ class GlyphsPlugin(Plugin):
 
     def site_complete(self):
         for kind, output in outputs.items():
-            wanted = sorted(
-                g for g in glyphs[kind] if ord(g) >= 0x20 and not emoji.is_emoji(g)
-            )
+            wanted = sorted(g for g in glyphs[kind] if ord(g) >= 0x20)
             with open(output, "w", encoding="utf-8") as f:
                 f.write("".join(wanted))
 
