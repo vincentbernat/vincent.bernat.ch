@@ -2,10 +2,10 @@
 
 import sys
 import unicodedata
-import functools
 import emoji
 import markdown
 from markdown.extensions import codehilite
+from pygments.formatters.html import HtmlFormatter
 
 glyphs = {
     "monospace": {
@@ -57,12 +57,31 @@ class RegularGlyphsTreeprocessor(GlyphsTreeProcessor):
             yield element.tail
 
 
+class MonospaceGlyphsFormatter(HtmlFormatter):
+    """Grab glyphs from highlighted code."""
+
+    def format(self, tokensource, outfile):
+        tokensource = list(tokensource)
+        found = {g for _, value in tokensource for g in value} - glyphs["monospace"]
+        glyphs["monospace"] |= {g for g in found if not emoji.is_emoji(g)}
+        return super().format(tokensource, outfile)
+
+
 class GlyphsExtension(markdown.Extension):
     def extendMarkdown(self, md):
         md.registerExtension(self)
 
-        # Patch the highlight() function to add glyphs for monospace.
-        patch_codehilite()
+        # Highlighted code is turned into raw HTML before the tree processors
+        # run, so glyphs are collected from a custom formatter. The tree
+        # processor copies the configuration when registered, while fenced_code
+        # reads it on first use: both need the formatter.
+        for extension in md.registeredExtensions:
+            if isinstance(extension, codehilite.CodeHiliteExtension):
+                extension.setConfig("pygments_formatter", MonospaceGlyphsFormatter)
+        if "hilite" in md.treeprocessors:
+            md.treeprocessors["hilite"].config[
+                "pygments_formatter"
+            ] = MonospaceGlyphsFormatter
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.register(
@@ -73,21 +92,10 @@ class GlyphsExtension(markdown.Extension):
         # Inline code (after inline, only inline code is embedded in code)
         md.treeprocessors.register(
             MonospaceGlyphsTreeprocessor(glyphs["monospace"], ".glyphs-monospace.txt"),
-            "monospaceglyphs2",
+            "monospaceglyphs",
             15,
         )
 
 
 def makeExtension(**kwargs):
     return GlyphsExtension(**kwargs)
-
-
-@functools.cache
-def patch_codehilite():
-    previous = codehilite.highlight
-
-    def new(src, lexer, formatter):
-        glyphs["monospace"] |= set(src)
-        return previous(src, lexer, formatter)
-
-    codehilite.highlight = new
