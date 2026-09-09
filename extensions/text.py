@@ -1,6 +1,4 @@
 import re
-import subprocess
-import html
 
 from pyquery import PyQuery as pq
 from hyde.plugin import Plugin
@@ -95,48 +93,6 @@ class FootnotesPlugin(Plugin):
         d(".footnote").remove()
 
         return "<!DOCTYPE html>\n" + d.outer_html()
-
-
-class LatexPlugin(Plugin):
-    """Transform LaTeX formula with KaTeX."""
-
-    JS = """
-var katex = require('katex');
-var split = require('split');
-process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(latex) {
-  process.stdout.write(katex.renderToString(latex));
-  process.stdout.write('\\0');
-});
-"""
-    RE = re.compile(r"(?<!\\)·(.+?)·", re.DOTALL)
-    PR = None
-
-    def katex_render(self, mo):
-        formula = html.unescape(mo.group(1))
-        if self.PR is None:
-            self.PR = subprocess.Popen(
-                ["node", "-e", self.JS], stdin=subprocess.PIPE, stdout=subprocess.PIPE
-            )
-        # Assume input is small enough
-        self.PR.stdin.write(formula.encode("utf-8"))
-        self.PR.stdin.write(b"\0")
-        self.PR.stdin.flush()
-        # Get answer
-        answer = b""
-        while True:
-            char = self.PR.stdout.read(1)
-            if char == b"":
-                raise RuntimeError("unexpected stream end")
-            if char == b"\0":
-                break
-            answer += char
-        answer = answer.decode("utf-8")
-        return answer
-
-    def text_resource_complete(self, resource, text):
-        if resource.source_file.kind != "html":
-            return
-        return self.RE.sub(self.katex_render, text)
 
 
 class TOCPlugin(Plugin):
