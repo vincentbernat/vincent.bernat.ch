@@ -141,7 +141,7 @@
             let
               index = pkgs.fetchurl {
                 url = "https://www.rfc-editor.org/rfc-index.xml";
-                hash = "sha256-e8O113xkXRqFLAEUBW9V/Cn3RyZsTVlhS50F6tBNqSs="; # inconvenient...
+                hash = "sha256-6+VaRjKaMNK1KZMwQMag5oOvbzpJLE0i4BiYDpXDoMM="; # inconvenient...
               };
             in
             pkgs.runCommand "rfc-index.json.gz" { } ''
