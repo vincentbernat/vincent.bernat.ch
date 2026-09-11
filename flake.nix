@@ -141,12 +141,15 @@
             let
               index = pkgs.fetchurl {
                 url = "https://web.archive.org/web/20260520171049if_/https://www.rfc-editor.org/rfc-index.xml";
-                hash = "sha256-b4L/tsjHjYTpWSBQ8drzebLbJRQ0N7qgJ0ch6O6VFfs=";
+                hash = "sha256-IJ7hVCMnqFKpwXiA6iz8Dk0gJTWByTQQRiKhBgz5uio=";
+                # archive.org sometimes serves the file gzipped, sometimes not.
+                downloadToTemp = true;
+                postFetch = "${pkgs.gzip}/bin/gzip -dcf $downloadedFile > $out";
               };
             in
             pkgs.runCommand "rfc-index.json.gz" { } ''
               # Keep only the number and the title of each RFC.
-              ${pkgs.gzip}/bin/zcat ${index} \
+              cat ${index} \
                 | ${pkgs.xmlstarlet}/bin/xmlstarlet sel -T \
                     -N r="https://www.rfc-editor.org/rfc-index" \
                     -t -m "//r:rfc-entry" \
