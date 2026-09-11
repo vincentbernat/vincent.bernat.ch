@@ -140,17 +140,18 @@
           rfcIndex =
             let
               index = pkgs.fetchurl {
-                url = "https://www.rfc-editor.org/rfc-index.xml";
-                hash = "sha256-6+VaRjKaMNK1KZMwQMag5oOvbzpJLE0i4BiYDpXDoMM="; # inconvenient...
+                url = "https://web.archive.org/web/20260520171049if_/https://www.rfc-editor.org/rfc-index.xml";
+                hash = "sha256-b4L/tsjHjYTpWSBQ8drzebLbJRQ0N7qgJ0ch6O6VFfs=";
               };
             in
             pkgs.runCommand "rfc-index.json.gz" { } ''
               # Keep only the number and the title of each RFC.
-              ${pkgs.xmlstarlet}/bin/xmlstarlet sel -T \
-                -N r="https://www.rfc-editor.org/rfc-index" \
-                -t -m "//r:rfc-entry" \
-                -v "concat(substring-after(r:doc-id, 'RFC'), '=', normalize-space(r:title))" \
-                -n ${index} \
+              ${pkgs.gzip}/bin/zcat ${index} \
+                | ${pkgs.xmlstarlet}/bin/xmlstarlet sel -T \
+                    -N r="https://www.rfc-editor.org/rfc-index" \
+                    -t -m "//r:rfc-entry" \
+                    -v "concat(substring-after(r:doc-id, 'RFC'), '=', normalize-space(r:title))" \
+                    -n \
                 | ${pkgs.jq}/bin/jq -Rnc '
                     [inputs
                      | capture("^(?<n>[0-9]+)=(?<t>.*)$")
