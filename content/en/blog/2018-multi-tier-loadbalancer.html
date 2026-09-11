@@ -4,7 +4,7 @@ description: |
   A robust and scalable load-balancing solution is composed of 3 parts:
   ECMP routing, stateless L4 and stateful L7.
 uuid: 581da3c1-85dc-4919-82c0-4c99bb61acfe
-cover: multitier-lb-l4-failure2.svg
+cover: multitier-lb/l4-failure2.svg
 attachments:
   "https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb": "Git repository"
 tags:
@@ -90,7 +90,7 @@ Being stateful, it can leverage complex load-balancing algorithms. Being the
 first point of contact with backend servers, it should ease maintenances and
 minimize impact during daily changes.
 
-![L7 load-balancers]([[!!images/multitier-lb-l7.svg]] "The last tier of the
+![L7 load-balancers]([[!!images/multitier-lb/l7.svg]] "The last tier of the
 load-balancing solution is a set of L7 load-balancers receiving user connections
 and forwarding them to the backends.")
 
@@ -194,7 +194,7 @@ associated to each path is equal, incoming flows[^flow] are load-balanced among
 the available destinations. This characteristic can be used to balance
 connections among available load-balancers:
 
-![ECMP routing]([[!!images/multitier-lb-ecmp.svg]] "ECMP routing is used as a
+![ECMP routing]([[!!images/multitier-lb/ecmp.svg]] "ECMP routing is used as a
 first tier. Flows are spread among available L7 load-balancers. Routing is
 stateless and asymmetric. Backend servers are not represented.")
 
@@ -267,7 +267,7 @@ available routes for a destination changes. The hashing algorithm used by
 routers is not consistent and flows are reshuffled among the available
 load-balancers, breaking existing connections:
 
-![Stability of ECMP routing 1/2]([[!!images/multitier-lb-ecmp-failure1.svg]]
+![Stability of ECMP routing 1/2]([[!!images/multitier-lb/ecmp-failure1.svg]]
 "ECMP routing is unstable when a change happens. An additional load-balancer is
 added to the pool and the flows are routed to different load-balancers, which do
 not have the appropriate entries in their connection tables.")
@@ -275,7 +275,7 @@ not have the appropriate entries in their connection tables.")
 Moreover, each router may choose its own routes. When a router becomes
 unavailable, the second one may route the same flows differently:
 
-![Stability of ECMP routing 2/2]([[!!images/multitier-lb-ecmp-failure2.svg]] "A
+![Stability of ECMP routing 2/2]([[!!images/multitier-lb/ecmp-failure2.svg]] "A
 router becomes unavailable and the remaining router load-balances its flows
 differently. One of them is routed to a different load-balancer, which does not
 have the appropriate entry in its connection table.")
@@ -328,7 +328,7 @@ answers directly to the clients without involving the second tier—the L4
 load-balancers. This is referred to as *direct server return* (DSR) or *direct
 routing* (DR).
 
-![Second tier: L4 load-balancing]([[!!images/multitier-lb-l4.svg]] "L4
+![Second tier: L4 load-balancing]([[!!images/multitier-lb/l4.svg]] "L4
 load-balancing with IPVS and consistent hashing as a glue between the first tier
 and the third tier. Backend servers have been omitted. Dotted lines represent
 the path for the return packets.")
@@ -443,7 +443,7 @@ If we add or remove an L4 load-balancer, existing flows are not impacted because
 each load-balancer takes the same decision, as long as they see the same set of
 L7 load-balancers:
 
-![L4 load-balancing instability 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
+![L4 load-balancing instability 1/3]([[!!images/multitier-lb/l4-failure1.svg]]
 "Losing an L4 load-balancer has no impact on existing flows. Each arrow is an
 example of flow. The dots are flow endpoints bound to the associated
 load-balancer. If they had moved to another load-balancer, connection
@@ -456,7 +456,7 @@ original destination. Similarly, if we remove an L7 load-balancer, only existing
 flows terminating at this load-balancer are impacted. Other existing connections
 will be forwarded correctly:
 
-![L4 load-balancing instability 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
+![L4 load-balancing instability 2/3]([[!!images/multitier-lb/l4-failure2.svg]]
 "Losing an L7 load-balancer only impacts the flows bound to it.")
 
 We need to have simultaneous changes on both levels to get a noticeable impact.
@@ -467,7 +467,7 @@ connections will stay bound to the right L7 load-balancer. During a planned
 change, this disruption can be minimized by adding the new L4 load-balancers
 first, waiting a few minutes, then adding the new L7 load-balancers.
 
-![L4 load-balancing instability 3/3]([[!!images/multitier-lb-l4-failure3.svg]]
+![L4 load-balancing instability 3/3]([[!!images/multitier-lb/l4-failure3.svg]]
 "Both an L4 load-balancer and an L7 load-balancer come back to life. The
 consistent hash algorithm ensures that only one fifth of the existing
 connections would be moved to the incoming L7 load-balancer. Some of them
@@ -491,7 +491,7 @@ not intended to replace the first tier as it doesn't share the same
 characteristics: load-balancing is unfair (it is not flow-based) and recovery
 from a failure is slow.
 
-![Complete load-balancing solution]([[!!images/multitier-lb-dns.svg]]
+![Complete load-balancing solution]([[!!images/multitier-lb/dns.svg]]
 "A complete load-balancing solution spanning across two datacenters.")
 
 [gdnsd][] is an authoritative-only DNS server with integrated healthchecking. It

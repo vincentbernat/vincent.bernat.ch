@@ -4,7 +4,7 @@ description: |
   Une solution de répartition de charge robuste et évolutive se compose
   en 3 parties : routage ECMP, répartition L4 et répartition L7.
 uuid: 581da3c1-85dc-4919-82c0-4c99bb61acfe
-cover: multitier-lb-l4-failure2.svg
+cover: multitier-lb/l4-failure2.svg
 attachments:
   "https://github.com/vincentbernat/network-lab/tree/master/lab-3tier-lb": "dépôt Git"
 tags:
@@ -96,7 +96,7 @@ charge. En tant que premier point de contact avec les serveurs frontaux, il doit
 faciliter les maintenances et minimiser l'impact lors des changements
 quotidiens.
 
-![Répartiteurs de charge L7]([[!!images/multitier-lb-l7.svg]] "Le dernier niveau de la
+![Répartiteurs de charge L7]([[!!images/multitier-lb/l7.svg]] "Le dernier niveau de la
 solution de répartition de charge est un ensemble d'équilibreurs de charge L7
 recevant les connexions des utilisateurs et les transférant vers les frontaux.")
 
@@ -206,7 +206,7 @@ entrants[^flow] sont répartis entre les destinations disponibles. Cette
 caractéristique peut être utilisée pour répartir les connexions entre les
 équilibreurs de charge disponibles :
 
-![Routage ECMP]([[!!images/multitier-lb-ecmp.svg]] "Le routage ECMP est utilisé
+![Routage ECMP]([[!!images/multitier-lb/ecmp.svg]] "Le routage ECMP est utilisé
 comme premier étage. Les flux sont répartis entre les équilibreurs de charge L7
 disponibles. Le routage est sans état et asymétrique. Les serveurs frontaux ne
 sont pas représentés.")
@@ -284,7 +284,7 @@ change. L'algorithme de hachage utilisé par les routeurs n'est pas cohérent et
 les flux sont redistribués entre les répartiteurs de charge disponibles, rompant
 les connexions existantes :
 
-![Stabilité du routage ECMP 1/2]([[!!images/multitier-lb-ecmp-failure1.svg]] "Le
+![Stabilité du routage ECMP 1/2]([[!!images/multitier-lb/ecmp-failure1.svg]] "Le
 routage ECMP est instable lorsqu'un changement se produit. Un équilibreur de
 charge supplémentaire est ajouté et chaque flux est acheminé vers un répartiteur
 différent qui n'a pas les entrées appropriées dans sa table de connexions.")
@@ -292,7 +292,7 @@ différent qui n'a pas les entrées appropriées dans sa table de connexions.")
 De plus, chaque routeur peut choisir ses propres chemins. Quand un routeur
 devient indisponible, le second peut router les mêmes flux différemment :
 
-![Stabilité du routage ECMP 2/2]([[!!images/multitier-lb-ecmp-failure2.svg]] "Un
+![Stabilité du routage ECMP 2/2]([[!!images/multitier-lb/ecmp-failure2.svg]] "Un
 routeur devient indisponible et le routeur restant route différemment ses flux.
 L'un d'entre eux est acheminé vers un répartiteur de charge différent qui n'a
 pas l'entrée appropriée dans sa table des connexions.")
@@ -353,7 +353,7 @@ répond aux clients directement sans impliquer le second niveau (les répartiteu
 de charge L4). Ce mécanisme est connu sous le nom de *direct server return*
 (DSR) ou *direct routing* (DR).
 
-![Second niveau : répartition L4]([[!!images/multitier-lb-l4.svg]] "Équilibrage
+![Second niveau : répartition L4]([[!!images/multitier-lb/l4.svg]] "Équilibrage
 de charge L4 avec IPVS et hachage cohérent liant le premier et le troisième
 niveau. Les serveurs frontaux ont été omis. Les lignes en pointillés
 représentent le chemin pris par les paquets retour.")
@@ -470,7 +470,7 @@ raisons :
 Si nous ajoutons ou retirons un répartiteur L4, les flux existants ne sont pas
 impactés car chaque répartiteur prend la même décision grâce au hachage cohérent :
 
-![Instabilité de la répartition L4 1/3]([[!!images/multitier-lb-l4-failure1.svg]]
+![Instabilité de la répartition L4 1/3]([[!!images/multitier-lb/l4-failure1.svg]]
 "La perte d'un équilibreur L4 n'a pas d'impact sur les flux existants. Chaque
 flèche est un exemple de flux. Les points sont des connexions liées à
 l'équilibreur de charge associé. S'ils s'étaient déplacés vers un autre
@@ -484,7 +484,7 @@ originale. De manière similaire, le retrait d'un répartiteur L7 n'impacte que
 les connexions liées à celui-ci. Les autres connexions sont routées correctement
 :
 
-![Instabilité de la répartition L4 2/3]([[!!images/multitier-lb-l4-failure2.svg]]
+![Instabilité de la répartition L4 2/3]([[!!images/multitier-lb/l4-failure2.svg]]
 "La perte d'un équilibreur L7 n'impacte que les flux qu'il hébergeait.")
 
 Seuls des changements simultanés sur les deux niveaux mènent à un impact
@@ -496,7 +496,7 @@ répartiteur L7 adéquat. Lors d'un changement planifié, cette perturbation peu
 être minimisée en ajoutant d'abord les nouveaux équilibreurs L4, en attendant
 quelques minutes puis en ajoutant les nouveaux équilibreurs L7.
 
-![Instabilité de la répartition L4 3/3]([[!!images/multitier-lb-l4-failure3.svg]]
+![Instabilité de la répartition L4 3/3]([[!!images/multitier-lb/l4-failure3.svg]]
 "Un équilibreur de charge L4 et un équilibreur de charge L7 reviennent à la vie.
 L'algorithme de hachage cohérent garantit que seul un cinquième des connexions
 existantes serait déplacé vers le nouvel équilibreur L7. Certains d'entre eux
@@ -522,7 +522,7 @@ le premier niveau car il ne partage pas les mêmes caractéristiques : la
 répartition de charge est déséquilibrée (elle n'est pas basée sur les flux) et
 la guérison après une panne est lente.
 
-![Répartition de charge globale]([[!!images/multitier-lb-dns.svg]]
+![Répartition de charge globale]([[!!images/multitier-lb/dns.svg]]
 "Une solution complète de répartition de charge sur deux centres de données.")
 
 [gdnsd][] est un serveur DNS faisant autorité avec des tests de disponibilité
