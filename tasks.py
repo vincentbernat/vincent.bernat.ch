@@ -566,6 +566,21 @@ def fonts_update(c):
         c.run("rm result")
 
 
+def links_replace(c, url, replacement):
+    """Replace an URL in the content."""
+    pattern = re.compile(
+        rf"(?:(?<=[\s(<])|^){re.escape(url)}(?=[\s)>\"']|$)", re.MULTILINE
+    )
+    files = c.run(f"git grep -Fl -e {shlex.quote(url)}", hide=True, warn=True)
+    for path in files.stdout.split():
+        with open(path) as fp:
+            content = fp.read()
+        updated = pattern.sub(lambda _: replacement, content)
+        if updated != content:
+            with open(path, "w") as fp:
+                fp.write(updated)
+
+
 @task
 def links_check(c, remote=True):
     """Check links"""
@@ -647,21 +662,14 @@ Info:      {row["infostring"]}""")
             elif ans == "q":
                 return
             elif ans == "r":
-                url = input("URL? ")
-                c.run(
-                    f"git grep -Fl '{row['urlname']}'"
-                    rf"| xargs -r sed -i 's|\([( ]\){row['urlname']}|\1{url}|g'"
-                )
+                links_replace(c, row["urlname"], input("URL? "))
                 break
             elif ans == "b":
                 c.run(f"xdg-open '{row['urlname']}'")
             elif ans == "p":
                 c.run(f"xdg-open '{row['parentname']}'")
             elif ans == "R":
-                c.run(
-                    f"git grep -Fl '{row['urlname']}'"
-                    rf"| xargs -r sed -i 's|\([( ]\){row['urlname']}|\1{redirected}|g'"
-                )
+                links_replace(c, row["urlname"], redirected)
                 break
             else:
                 found = False
@@ -670,10 +678,7 @@ Info:      {row["infostring"]}""")
                         c.run(f"xdg-open '{archived}'")
                         break
                     elif ans == a.upper():
-                        c.run(
-                            f"git grep -Fl '{row['urlname']}'"
-                            f"| xargs -r sed -i 's| {row['urlname']}| {archived}|g'"
-                        )
+                        links_replace(c, row["urlname"], archived)
                         found = True
                         break
                 if found:
