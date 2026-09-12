@@ -8,15 +8,11 @@ luffy.do(() => {
   if (!el || !links) return;
 
   // Function to load Isso once
-  let done = false;
-  const load = () => {
-    if (done) return;
-    done = true;
-
+  const load = luffy.once(() => {
     links.closest("li")?.remove();
     luffy.load("isso.css");
     luffy.load("isso.js");
-  };
+  });
 
   // Load if we have an anchor
   const onHashChange = () => {

@@ -32,15 +32,9 @@ luffy.do(() => {
     fetch(`/hit?${params}`, { keepalive: true }).catch(() => {});
   };
 
-  let sent = false;
-  const sendHit = () => {
-    if (sent) return;
-    sent = true;
-    luffy.count();
-  };
-
   /* Assume we are human if we trigger one of these interactions. pointerdown
        happen a bit before click and gives more time to send a beacon. */
+  const sendHit = luffy.once(() => luffy.count());
   ["touchmove", "mousemove", "keydown", "pointerdown"].forEach((eventName) =>
     document.addEventListener(eventName, sendHit, {
       once: true,

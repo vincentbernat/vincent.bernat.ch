@@ -14,6 +14,15 @@ window.luffy = {
       console.error(e);
     }
   },
+  once(fn) {
+    // Return a function calling `fn` only the first time.
+    let done = false;
+    return (...args) => {
+      if (done) return;
+      done = true;
+      return fn(...args);
+    };
+  },
   load(what, onload) {
     // Lazy loading of some resources. `data-src`, `data-href`, `data-integrity`
     // attributes are copied to `src`, `href`, `integrity` respectively.
