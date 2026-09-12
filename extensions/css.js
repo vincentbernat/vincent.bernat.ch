@@ -218,6 +218,21 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
+// cssnano leaves calc(-1.8rem) behind: postcss-calc only unwraps a lone
+// negative number in selectors, not in declarations. Run after cssnano, so the
+// number keeps the shorter form cssnano gave it.
+const unwrapNegativeCalc = {
+    postcssPlugin: "unwrap-negative-calc",
+    OnceExit(root) {
+        root.walkDecls((decl) => {
+            decl.value = decl.value.replace(
+                /calc\((-[\d.]+[a-z%]*)\)/gi,
+                "$1",
+            );
+        });
+    },
+};
+
 const minify = process.env.CSS_MINIFY === "true";
 const cssDirectory = path.join(__dirname, "..", "content", "media", "css");
 
@@ -284,6 +299,7 @@ function runProcess() {
                     },
                 ],
             }),
+            unwrapNegativeCalc,
         ])
             .process(input, { from: undefined })
             .then(function (result) {
