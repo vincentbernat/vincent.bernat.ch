@@ -5,6 +5,7 @@ import sys
 import time
 import yaml
 import csv
+import sqlite3
 import re
 import glob
 import json
@@ -566,6 +567,73 @@ def fonts_update(c):
         c.run("rm result")
 
 
+linkchecker_output = ".linkchecker-out.csv"
+linkchecker_database = ".linkchecker.db"
+
+
+def links_results():
+    """Read the results of the last run and tell if it reached the end."""
+    with open(linkchecker_output) as fp:
+        lines = fp.readlines()
+    rows = csv.DictReader(
+        (line for line in lines if not line.startswith("#")), delimiter=";"
+    )
+    return list(rows), any(line.startswith("# Stopped checking") for line in lines)
+
+
+def links_database():
+    """Open the database keeping the history of dead links."""
+    db = sqlite3.connect(linkchecker_database)
+    db.execute("""
+CREATE TABLE IF NOT EXISTS dead (
+  url TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  first_seen TEXT NOT NULL,
+  last_seen TEXT NOT NULL,
+  count INTEGER NOT NULL
+)""")
+    return db
+
+
+def links_record(rows, complete):
+    """Record the dead links of the last run, forget the ones back alive."""
+    today = datetime.datetime.now(datetime.UTC).date().isoformat()
+    dead = {row["urlname"]: row["result"] for row in rows if row["valid"] != "True"}
+    with contextlib.closing(links_database()) as db, db:
+        if complete:
+            # Only errors land in the CSV: a link missing from it is alive
+            # again or gone from the content. A partial run tells nothing.
+            db.execute(
+                "DELETE FROM dead WHERE url NOT IN (SELECT value FROM json_each(?))",
+                (json.dumps(list(dead)),),
+            )
+        for url, status in dead.items():
+            # Checking twice the same day should not count twice.
+            db.execute(
+                "INSERT INTO dead (url, status, first_seen, last_seen, count) "
+                "VALUES (?, ?, ?, ?, 1) "
+                "ON CONFLICT (url) DO UPDATE SET "
+                "  status = excluded.status, "
+                "  last_seen = excluded.last_seen, "
+                "  count = dead.count + 1 "
+                "WHERE dead.last_seen <> excluded.last_seen",
+                (url, status, today, today),
+            )
+
+
+def links_history(url):
+    """Tell for how long an URL has been dead."""
+    with contextlib.closing(links_database()) as db:
+        row = db.execute(
+            "SELECT first_seen, count FROM dead WHERE url = ?", (url,)
+        ).fetchone()
+    if row is None:
+        return None
+    first_seen, count = row
+    times = "once" if count == 1 else f"{count} times"
+    return f"dead since {first_seen}, {times}"
+
+
 def links_replace(c, url, replacement):
     """Replace an URL in the content."""
     pattern = re.compile(
@@ -590,6 +658,7 @@ def links_check(c, remote=True):
         warn=True,
         hide=False,
     )
+    links_record(*links_results())
     if result.failed:
         links_fix(c)
 
@@ -597,10 +666,7 @@ def links_check(c, remote=True):
 @task
 def links_fix(c):
     """Try to fix links"""
-    with open(".linkchecker-out.csv") as fp:
-        rows = list(
-            csv.DictReader(filter(lambda row: row[0] != "#", fp), delimiter=";")
-        )
+    rows, _ = links_results()
     seen = set()
     for row in rows:
         if row["valid"] == "True":
@@ -619,7 +685,7 @@ def links_fix(c):
                 continue
             if row["url"].startswith(row["urlname"]):
                 continue
-        year = datetime.datetime.now().year
+        year = datetime.datetime.now(datetime.UTC).year
         archive = {}
         mo = re.search(r"/blog/(\d+)-", row["parentname"])
         if row["urlname"] in seen:
@@ -630,6 +696,7 @@ def links_fix(c):
             "a": f"https://archive.today/{year}/{row['urlname']}",
             "w": f"https://web.archive.org/web/{year}/{row['urlname']}",
         }
+        history = links_history(row["urlname"])
         while True:
             print(f"""
 URL:       {row["urlname"]}
@@ -637,6 +704,8 @@ Source:    {row["parentname"]}
 Result:    {row["result"]}
 Warning:   {row["warningstring"]}
 Info:      {row["infostring"]}""")
+            if history:
+                print(f"History:   {history}")
             print(f"""
 (c) Continue
 (b) Browse {row["urlname"]}
