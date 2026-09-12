@@ -31,6 +31,8 @@ class FootnotesPlugin(Plugin):
     def text_resource_complete(self, resource, text):
         if resource.source_file.kind != "html":
             return
+        if getattr(resource.meta, "sidenotes", True) is False:
+            return
         d = pq(text, parser="html")
 
         # The footnote extension uses the following classes:

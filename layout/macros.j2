@@ -27,6 +27,26 @@
 </ul>
 {% endmacro %}
 
+{# Full content of the last blog posts, as in the Atom feed #}
+{% macro feed_entries(lang, count=6) %}
+{% for res in site.content|attr("walk_resources_sorted_by_time_" + lang)()|top(count) %}
+<article>
+  <header>
+    <h1><a href="{{ content_url(res.url) }}">{{ res.meta.title|e }}</a></h1>
+    <h2>
+      {{ res.meta.author|e }}
+      {{ resource_date(lang, res)|indent(6) }}
+    </h2>
+  </header>
+  <div class="lf-text">
+{% refer to res.relative_path as file -%}
+{{ file.article|clean_rss }}
+  </div>
+</article>
+
+{% endfor %}
+{% endmacro %}
+
 {# Inline list of articles, quoted as expected for the current language #}
 {% macro list_articles(articles) %}
 {%- set lang = resource.meta.language -%}

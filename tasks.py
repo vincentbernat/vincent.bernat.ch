@@ -760,8 +760,8 @@ frontmatter_keys = (
     "title description uuid cover "  # identity
     "created attachments tags "  # metadata
     "author bluesky github mastodon "  # attribution
-    "featured popular listable notitle noindex comments share "  # listing/visibility
-    "csp headers mime "  # headers
+    "featured popular listable notitle noindex comments share sidenotes "  # listing/visibility
+    "csp headers html_class mime "  # headers
     "css js "  # assets
     "ai-usage"  # disclosure
 ).split()
@@ -785,7 +785,10 @@ def build_check(c, fix=False):
             blocks = []
             for line in lines[1:end]:
                 if m := re.match(r"([\w-]+):", line):
-                    blocks.append((frontmatter_keys.index(m.group(1)), []))
+                    key = m.group(1)
+                    if key not in frontmatter_keys:
+                        raise ValueError(f"unknown key {key}")
+                    blocks.append((frontmatter_keys.index(key), []))
                 blocks[-1][1].append(line)
             if blocks == sorted(blocks):
                 continue
@@ -893,8 +896,7 @@ rm ../result
                     exprs = " ".join(f'-e "{x}"' for x in batch)
                     c.run(
                         "(find . -name '*.html'    -print0 ; "
-                        " find . -name 'atom.xml'  -print0 ; "
-                        " find . -name 'atom.xslt' -print0) | "
+                        " find . -name 'atom.xml'  -print0) | "
                         f"xargs -r0 -n10 -P5 sed -i {exprs}"
                     )
 
