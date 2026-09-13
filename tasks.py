@@ -760,7 +760,7 @@ frontmatter_keys = (
     "title description uuid cover "  # identity
     "created attachments tags "  # metadata
     "author bluesky github mastodon "  # attribution
-    "featured popular listable notitle noindex comments share sidenotes "  # listing/visibility
+    "featured popular listable notitle noindex comments share subscribe sidenotes "  # listing/visibility
     "csp headers html_class mime "  # headers
     "css js "  # assets
     "ai-usage"  # disclosure
