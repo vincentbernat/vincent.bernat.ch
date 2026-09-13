@@ -1,0 +1,23 @@
+{# -*- web -*- #}
+{% extends "base.j2" %}
+{% block article %}
+{% block intro %}{% endblock %}
+
+{% from "macros.j2" import resource_date with context %}
+{% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)()|top(6) %}
+<article>
+  <header>
+    <h1><a href="{{ content_url(res.url) }}">{{ res.meta.title|e }}</a></h1>
+    <h2>
+      {{ res.meta.author|e }}
+      {{ resource_date(resource.meta.language, res)|indent(6) }}
+    </h2>
+  </header>
+  <div class="lf-text">
+{% refer to res.relative_path as file -%}
+{{ file.article|clean_rss }}
+  </div>
+</article>
+
+{% endfor %}
+{% endblock %}

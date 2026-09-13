@@ -756,7 +756,7 @@ Info:      {row["infostring"]}""")
 
 
 frontmatter_keys = (
-    "extends "
+    "extends default_block "  # templating
     "title description uuid cover "  # identity
     "created attachments tags "  # metadata
     "author bluesky github mastodon "  # attribution
