@@ -161,7 +161,6 @@
                      | {(.n | tonumber | tostring): .t}] | add' \
                 | ${pkgs.gzip}/bin/gzip -9n > $out
             '';
-          jpegoptim = pkgs.jpegoptim.override { libjpeg = pkgs.mozjpeg; };
           fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
             dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
           });
@@ -221,8 +220,7 @@
               # Impure!
               # Optimize SVG, JPG and PNG
               let
-                inherit (pkgs) libwebp libavif pngquant lcms gifsicle;
-                inherit jpegoptim;
+                inherit (pkgs) libwebp libavif pngquant lcms gifsicle jpegli;
                 svgo = pkgs.svgo.overrideAttrs (old: {
                   patches = (old.patches or [ ]) ++ [
                     (pkgs.writeText "sax.patch" ''
@@ -261,6 +259,9 @@
                 parallel = "${pkgs.parallel}/bin/parallel --will-cite --null --halt now,fail=1 -j$(nproc)";
                 optimizePng = pkgs.writeShellScript "optimize-png" ''
                   ${pngquant}/bin/pngquant --skip-if-larger --strip --quiet -o "$2" "$1" || [ $? = 98 ]
+                '';
+                optimizeJpg = pkgs.writeShellScript "optimize-jpg" ''
+                  ${jpegli.bin}/bin/cjpegli "$1" "$1.tmp" --quiet -d 2.0 && mv "$1.tmp" "$1"
                 '';
                 target = <target>;
                 extensions = [ ".svg" ".jpg" ".png" ".gif" ];
@@ -309,14 +310,13 @@
                     find $dest -type f -name '*.jpg' -print0 \
                       | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 \
                                                            --min 0 --max 63 \
-                                                           -a end-usage=q -a cq-level=21 -a tune=ssim \
+                                                           -a end-usage=q -a cq-level=26 -a tune=iq \
                                                       {} {}.avif
 
                     # Optimize JPG
                     find $dest -type f -name '*.jpg' -print0 \
                       | sort -z \
-                      | ${parallel} -n5 ${jpegoptim}/bin/jpegoptim \
-                                            --max=84 --all-progressive --strip-all --keep-icc
+                      | ${parallel} ${optimizeJpg} {}
 
                     # Optimize PNG
                     find . -type f -name '*.png' -print0 \
@@ -484,7 +484,6 @@
                 mp4v2 # video2hls
                 resvg # SVG to PNG
                 fonttools
-                jpegoptim
                 nginx
                 vale
               ];
