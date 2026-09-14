@@ -501,7 +501,6 @@
                 # Helper tools
                 mp4v2 # video2hls
                 resvg # SVG to PNG
-                fonttools
                 nginx
                 vale
               ];
