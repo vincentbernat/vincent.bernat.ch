@@ -319,9 +319,7 @@
 
                     # JPG→AVIF
                     find $dest -type f -name '*.jpg' -print0 \
-                      | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 \
-                                                           --min 0 --max 63 \
-                                                           -a end-usage=q -a cq-level=26 -a tune=iq \
+                      | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 -q 66 -a tune=iq \
                                                       {} {}.avif
 
                     # Optimize JPG
