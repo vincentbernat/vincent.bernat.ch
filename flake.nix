@@ -499,7 +499,6 @@
                 uv
 
                 # Helper tools
-                mp4v2 # video2hls
                 resvg # SVG to PNG
                 nginx
                 vale
