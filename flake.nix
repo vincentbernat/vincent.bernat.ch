@@ -33,6 +33,9 @@
         let
           l = pkgs.lib // builtins;
 
+          fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
+            dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
+          });
           python = pkgs.python3;
           pythonEnv =
             let
@@ -90,12 +93,13 @@
                   moreOverrides
                 ]
               );
+              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild pkgs.resvg fonttools ];
             in
             (pythonSet.mkVirtualEnv "www-env" workspace.deps.default).overrideAttrs (old: {
               nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
               postFixup = (old.postFixup or "") + ''
                 wrapProgram $out/bin/hyde \
-                  --prefix PATH : ${l.makeBinPath [ pkgs.nodejs pkgs.esbuild pkgs.resvg ]}
+                  --prefix PATH : ${l.makeBinPath hydeBuildDeps}
               '';
             });
           hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
@@ -167,9 +171,6 @@
                      | {(.n | tonumber | tostring): .t}] | add' \
                 | ${pkgs.gzip}/bin/gzip -9n > $out
             '';
-          fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
-            dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
-          });
           # Compact sRGB profile to tag images.
           srgbProfile = pkgs.fetchurl (
             let
