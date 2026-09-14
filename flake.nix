@@ -318,6 +318,10 @@
                       | ${parallel} ${lcms}/bin/jpgicc -q100 {} $dest/{}
 
                     # JPG→AVIF
+                    # If we want progressive rendering, use two layers with a 1/8
+                    # preview, we could use:
+                    #   avifenc --codec aom --yuv 420 -a tune=iq --layered \
+                    #     --scaling-mode 1/8 -q 10 {} --scaling-mode:u 1 -q:u 66 {} {}.avif
                     find $dest -type f -name '*.jpg' -print0 \
                       | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 -q 66 -a tune=iq \
                                                       {} {}.avif
