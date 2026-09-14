@@ -91,7 +91,13 @@
                 ]
               );
             in
-            pythonSet.mkVirtualEnv "www-env" workspace.deps.default;
+            (pythonSet.mkVirtualEnv "www-env" workspace.deps.default).overrideAttrs (old: {
+              nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
+              postFixup = (old.postFixup or "") + ''
+                wrapProgram $out/bin/hyde \
+                  --prefix PATH : ${l.makeBinPath [ pkgs.nodejs pkgs.esbuild pkgs.resvg ]}
+              '';
+            });
           hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = ./.;
@@ -494,12 +500,9 @@
                 # Build
                 git
                 git-annex
-                nodejs
-                esbuild
                 uv
 
                 # Helper tools
-                resvg # SVG to PNG
                 nginx
                 vale
               ];
