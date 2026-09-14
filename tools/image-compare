@@ -1,0 +1,130 @@
+#!/usr/bin/env nix
+#! nix shell --inputs-from .. nixpkgs#python3 nixpkgs#jpegli nixpkgs#libavif nixpkgs#libwebp --command python3
+"""Compare image encodings side by side in a browser.
+
+Each encoding is LABEL=COMMAND. In COMMAND, {in} is replaced by the source
+image and {out} by the output path, without extension. For example:
+
+    tools/image-compare /tmp/compare \\
+        content/media/images/pc-cards/*@2x.jpg \\
+        content/media/images/awesome/keybindings.jpg \\
+        -e 'jpegli 2.0=cjpegli {in} {out}.jpg --quiet -d 2.0' \\
+        -e 'AVIF 26=avifenc --codec aom --yuv 420 --min 0 --max 63 -a end-usage=q -a cq-level=26 -a tune=iq {in} {out}.avif' \\
+        -e 'AVIF 29=avifenc --codec aom --yuv 420 --min 0 --max 63 -a end-usage=q -a cq-level=29 -a tune=iq {in} {out}.avif' \\
+        -e 'WebP 85=cwebp -quiet -q 85 -m 6 -sharp_yuv {in} -o {out}.webp'
+
+Then, open /tmp/compare/index.html.
+"""
+
+import argparse
+import concurrent.futures
+import json
+import pathlib
+import shlex
+import shutil
+import subprocess
+import urllib.parse
+
+PAGE = """<!doctype html>
+<meta charset="utf-8">
+<title>Image comparison</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #1b1b1b; color: #eee; }
+  nav { position: sticky; top: 0; z-index: 2; padding: 8px 12px; background: #111; }
+  #grid { display: grid; gap: 6px; padding: 6px;
+          grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); }
+  .panel { position: relative; height: 460px; overflow: hidden; background: #000; }
+  .panel img { position: absolute; max-width: none; transform-origin: 0 0; }
+  .panel span { position: absolute; z-index: 1; padding: 3px 8px;
+                background: rgb(0 0 0 / 75%); }
+</style>
+<nav>
+  <select id="image"></select>
+  <select id="zoom">
+    <option value="1">1 screen pixel</option>
+    <option value="2" selected>2 screen pixels</option>
+    <option value="4">4 screen pixels</option>
+  </select>
+  Move the mouse over a panel to pan all of them.
+</nav>
+<div id="grid"></div>
+<script>
+const data = DATA;
+const image = document.getElementById("image");
+const zoom = document.getElementById("zoom");
+const grid = document.getElementById("grid");
+let fx = 0.5, fy = 0.5;
+data.forEach((d, i) => image.add(new Option(d.name, i)));
+
+function place() {
+  const scale = zoom.value / devicePixelRatio;
+  for (const img of grid.querySelectorAll("img")) {
+    const pw = img.parentElement.clientWidth, ph = img.parentElement.clientHeight;
+    const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+    const x = Math.min(0, Math.max(pw - w, pw / 2 - fx * w));
+    const y = Math.min(0, Math.max(ph - h, ph / 2 - fy * h));
+    img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    img.style.imageRendering = scale > 1 ? "pixelated" : "auto";
+  }
+}
+
+function show() {
+  grid.innerHTML = data[image.value].variants.map((v) => `<div class="panel">
+    <span>${v.label} · ${Math.round(v.size / 1000)} kB</span><img src="${v.url}">
+  </div>`).join("");
+  grid.querySelectorAll("img").forEach((img) => (img.onload = place));
+}
+
+grid.addEventListener("mousemove", (e) => {
+  const panel = e.target.closest(".panel");
+  if (!panel) return;
+  const r = panel.getBoundingClientRect();
+  fx = (e.clientX - r.left) / r.width;
+  fy = (e.clientY - r.top) / r.height;
+  place();
+});
+image.addEventListener("change", show);
+zoom.addEventListener("change", place);
+addEventListener("resize", place);
+show();
+</script>
+"""
+
+parser = argparse.ArgumentParser(
+    description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+)
+parser.add_argument("output", type=pathlib.Path, help="output directory")
+parser.add_argument("images", type=pathlib.Path, nargs="+", help="source images")
+parser.add_argument(
+    "-e", dest="encodings", action="append", required=True, metavar="LABEL=COMMAND"
+)
+args = parser.parse_args()
+encodings = [e.split("=", 1) for e in args.encodings]
+directories = [args.output / f"{i}-{p.stem}" for i, p in enumerate(args.images)]
+
+commands = []
+for image, directory in zip(args.images, directories):
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True)
+    shutil.copy(image, directory / f"original{image.suffix}")
+    for i, (_, command) in enumerate(encodings):
+        command = command.replace("{in}", shlex.quote(str(image)))
+        commands.append(command.replace("{out}", shlex.quote(str(directory / str(i)))))
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    list(executor.map(lambda c: subprocess.run(c, shell=True, check=True), commands))
+
+data = []
+for image, directory in zip(args.images, directories):
+    files = [directory / f"original{image.suffix}"]
+    files += [next(directory.glob(f"{i}.*")) for i in range(len(encodings))]
+    labels = ["original"] + [label for label, _ in encodings]
+    variants = [
+        {
+            "label": label,
+            "url": urllib.parse.quote(str(f.relative_to(args.output))),
+            "size": f.stat().st_size,
+        }
+        for label, f in zip(labels, files)
+    ]
+    data.append({"name": str(image), "variants": variants})
+(args.output / "index.html").write_text(PAGE.replace("DATA", json.dumps(data)))
