@@ -1,10 +1,12 @@
 #!/usr/bin/env nix
-#! nix shell --inputs-from .. nixpkgs#python3 nixpkgs#jpegli nixpkgs#libavif nixpkgs#libwebp nixpkgs#lcms2 --command python3
+#! nix shell --inputs-from .. nixpkgs#python3 nixpkgs#jpegli nixpkgs#libavif nixpkgs#libwebp nixpkgs#lcms2 nixpkgs#exiftool --command python3
 """Compare image encodings side by side in a browser.
 
 Each encoding is LABEL=COMMAND. In COMMAND, {in} is replaced by the source
 image and {out} by the output path, without extension. Like for the website,
-JPEG images are converted to sRGB with jpgicc first. For example:
+JPEG images are converted to sRGB with jpgicc first and images without a color
+profile are tagged with the sRGB profile from $SRGB_PROFILE (set in the
+development shell). For example:
 
     tools/image-compare /tmp/compare \\
         content/media/images/pc-cards/*@2x.jpg \\
@@ -20,6 +22,7 @@ Then, open /tmp/compare/index.html.
 import argparse
 import concurrent.futures
 import json
+import os
 import pathlib
 import shlex
 import shutil
@@ -117,6 +120,15 @@ for image, directory in zip(args.images, directories):
         commands.append(command.replace("{out}", shlex.quote(str(directory / str(i)))))
 with concurrent.futures.ThreadPoolExecutor() as executor:
     list(executor.map(lambda c: subprocess.run(c, shell=True, check=True), commands))
+
+# AVIF images are always tagged. exiftool exits with 2 when all images are tagged.
+untagged = [f for d in directories for f in d.iterdir() if f.suffix != ".avif"]
+result = subprocess.run(
+    ["exiftool", "-q", "-overwrite_original", "-if", "not $ICC_Profile"]
+    + [f"-icc_profile<={os.environ['SRGB_PROFILE']}", *untagged]
+)
+if result.returncode not in (0, 2):
+    raise SystemExit(result.returncode)
 
 data = []
 for image, directory in zip(args.images, directories):

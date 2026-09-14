@@ -164,6 +164,17 @@
           fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
             dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
           });
+          # Compact sRGB profile to tag images.
+          srgbProfile = pkgs.fetchurl (
+            let
+              commit = "bdd84663061bc4ae95ca70decff54f581e27f702";
+              hash = "sha256-CoozrqZqbxVKVkLr4WjvKH5zJl2fe1HEKkXm7tus2no=";
+            in
+            {
+              inherit hash;
+              url = "https://github.com/saucecontrol/Compact-ICC-Profiles/raw/${commit}/profiles/sRGB-v2-micro.icc";
+            }
+          );
         in
         {
           apps = {
@@ -220,7 +231,7 @@
               # Impure!
               # Optimize SVG, JPG and PNG
               let
-                inherit (pkgs) libwebp libavif pngquant lcms gifsicle jpegli;
+                inherit (pkgs) libwebp libavif pngquant lcms gifsicle jpegli exiftool;
                 svgo = pkgs.svgo.overrideAttrs (old: {
                   patches = (old.patches or [ ]) ++ [
                     (pkgs.writeText "sax.patch" ''
@@ -333,6 +344,11 @@
                     # Optimize GIF
                     find . -type f -name '*.gif' -print0 \
                         | ${parallel} ${gifsicle}/bin/gifsicle --optimize=3 {} -o $dest/{}
+
+                    # Tag JPG and WebP as sRGB, as Firefox only manages colors of tagged images.
+                    find $dest -type f \( -name '*.jpg' -o -name '*.webp' \) -print0 \
+                        | ${parallel} -q -n50 ${exiftool}/bin/exiftool -q -overwrite_original \
+                                            "-icc_profile<=${srgbProfile}"
                   '';
               in
               pkgs.symlinkJoin {
@@ -379,7 +395,6 @@
                     in
                     {
                       inherit hash;
-
                       url = "https://github.com/google/fonts/raw/${commit}/ofl/${font}";
                     }
                   );
@@ -469,6 +484,7 @@
                 UV_PYTHON_DOWNLOADS = "never";
                 NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
                 PYTHONDONTWRITEBYTECODE = 1;
+                SRGB_PROFILE = "${srgbProfile}";
               };
               packages = with pkgs; [
                 pythonEnv
