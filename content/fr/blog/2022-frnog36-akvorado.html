@@ -12,14 +12,13 @@ tags:
   - talks
   - network-monitoring
   - project-akvorado
-ai-usage: Traduit de l'anglais (DeepL)
 ---
 
 Voici les diapositives que j'ai présentées pour le [FRnOG #36][] en
 septembre 2022 à propos d'[Akvorado][], un outil de collecte et de
-visualisation des flux réseau développé par [Free][]. Je n'ai pas
+visualisation des flux réseau développé par [Free][]. <del>Je n'ai pas
 encore fait d'article à son sujet sur ce blog, mais cela ne devrait
-pas tarder !
+pas tarder !</del>
 
 ![Diapositives au format PDF]([[!!files/slides-frnog36.pdf]])
 
@@ -35,9 +34,400 @@ La présentation a été enregistrée[^diction] :
 !!! "Mise à jour (01.2024)" *Akvorado* a également été présenté lors du [LACNOG
 2023][] par Saymon Araújo, ainsi qu'au [SwiNOG#38][] par Will van Gulik.
 
+# Transcription
+
+![Akvorado: a Flow Collector and Visualizer]([[!!images/2022-frnog36-akvorado/slide-01@2x.png]])
+
+Bonjour. Je vais vous présenter un outil qui s'appelle Akvorado et qui permet de
+collecter les flots et aussi de les visualiser.
+
+![Commercial solution: Kentik]([[!!images/2022-frnog36-akvorado/slide-03@2x.png]])
+
+Il y a un certain nombre de solutions qui existent déjà pour faire la même
+chose. Par exemple en solution commerciale, il y a Kentik qui est assez simple à
+mettre en place avec plein de fonctionnalités. C'est hébergé dans le cloud.
+C'est payant et ce n'est pas du tout open source.
+
+![Commercial solution: Elastiflow]([[!!images/2022-frnog36-akvorado/slide-04@2x.png]])
+
+Une autre solution commerciale : Elastiflow. Par le passé, c'était open source
+et ça ne l'est plus. Cette fois-ci, vous hébergez vous-même. Il y a une version
+gratuite qui peut prendre 4000 flots/seconde. Il faut payer si vous voulez aller
+au-delà.
+
+![DIY solution with open source]([[!!images/2022-frnog36-akvorado/slide-05@2x.png]])
+
+Et enfin il y a des solutions où vous faites vous-même avec des briques open
+source. pmacct avec RabbitMQ qui met les données dans un Elasticsearch et vous
+visualisez le résultat avec Kibana. Vous pouvez prendre GoFlow2 qui va mettre
+les données dans Kafka, qui va les stocker ensuite dans ClickHouse et vous
+pouvez utiliser Grafana pour voir le résultat ou alors vflow, Kafka, Apache
+Pinot, qui est une autre base de données par colonnes et Apache Superset pour la
+visualisation.
+
+Alors c'est gratuit et c'est libre, c'est plutôt flexible. Vous pouvez faire un
+peu ce que vous voulez du moment que vous avez les compétences. Vous devez
+l'héberger vous-même. Il faut faire des recherches. Il faut assembler tout ça,
+choisir les composants, corriger les bugs, comprendre comment ça fonctionne...
+Il faut avoir un peu de temps pour faire tout ça.
+
+![New player: Akvorado]([[!!images/2022-frnog36-akvorado/slide-06@2x.png]])
+
+Chez Free, on a développé notre propre outil qui s'appelle Akvorado, qui veut
+dire « roue à aube » en espéranto. Si vous tapez dans Google, vous êtes sûr de le
+trouver. Alors c'est un collecteur NetFlow/sFlow. Ça enrichit les données avec
+de la GeoIP, des règles de classification, des noms d'interface, ça transforme
+tout ça en Protobuf. Ça l'envoie dans Kafka pour faire tampon. Ensuite, c'est
+stocké dans ClickHouse, comme base de données. Il y a une interface web pour
+visualiser les résultats.
+
+![Selling points]([[!!images/2022-frnog36-akvorado/slide-07@2x.png]])
+
+C'est gratuit et c'est libre. C'est pas mal performant. Tout est intégré : c'est
+très facile à déployer. C'est pas aussi flexible que des solutions que vous
+feriez vous-même et où vous pouvez choisir séparément les composants. On vous
+impose l'ensemble, mais ça permet de partir plus vite. Je répète encore : il y a
+une interface web. C'est un gros plus par rapport à d'autres solutions, où vous
+devez utiliser Grafana ou Kibana pour faire ça. Vous devez l'héberger vous-même,
+ce qui peut être un plus ou un inconvénient selon votre point de vue.
+
+![Free]([[!!images/2022-frnog36-akvorado/slide-08@2x.png]])
+
+Alors c'est gratuit, c'est libre. C'est publié sous licence AGPLv3. On l'a
+développé en interne chez Free. C'est un outil interne chez nous. On ne compte
+pas le revendre ou faire des services autour. Donc ça, ça devrait rester libre
+un certain temps.
+
+![Performant]([[!!images/2022-frnog36-akvorado/slide-09@2x.png]])
+
+Au niveau des performances, j'ai moi-même été assez surpris. C'est performant
+parce que finalement, on tourne toujours, chez nous, sur une seule VM avec 1 To
+de disque, 64 Go de mémoire et 24 vCPU. Actuellement on a environ 30 000 flots
+par seconde, mais vu les ressources utilisées, on devrait pouvoir monter à 100
+000 en restant sur une seule machine et en gardant cinq années de données.
+
+Quand les données vieillissent, elles vont être agrégées sur une minute, cinq
+minutes et une heure. On va aussi perdre les IP et les ports. Les IP, c'est pas
+plus mal de ne pas les garder trop longtemps. Les expirations sont
+configurables. Dans notre configuration, on devrait arriver à garder les données
+pendant cinq ans. Le projet a moins de six mois, on verra bien si c'est vraiment
+le cas.
+
+![No assembly required]([[!!images/2022-frnog36-akvorado/slide-10@2x.png]])
+
+Un mode de déploiement possible, c'est d'utiliser Docker. Vous pouvez prendre le
+projet, faire un `docker-compose` et avoir directement quelque chose de
+fonctionnel. Vous n'avez pas besoin de connaître comment fonctionne Kafka,
+ClickHouse, même si ça peut aider par la suite. Il y a une attention toute
+particulière qui a été portée sur les opérations. Il y a beaucoup de logs,
+beaucoup de métriques. On s'arrange pour ne pas casser la configuration des
+utilisateurs lors des mises à jour, bien que ça ne marche pas toujours. Les
+migrations dans ClickHouse sont automatisées. Il y a une documentation à
+laquelle vous pouvez vous référer.
+
+![Shipped with a web frontend]([[!!images/2022-frnog36-akvorado/slide-11@2x.png]])
+
+Un gros plus c'est l'interface web. On en est assez content. Vous pouvez tester
+directement sur [demo.akvorado.net][].
+
+![Homepage]([[!!images/2022-frnog36-akvorado/slide-12@2x.png]])
+
+![Dark mode]([[!!images/2022-frnog36-akvorado/slide-13@2x.png]])
+
+Voilà la page d'accueil avec des petits widgets, un mode sombre qui le distingue
+de la concurrence.
+
+![Visualize]([[!!images/2022-frnog36-akvorado/slide-14@2x.png]])
+
+Un onglet « visualisation » qui est le nerf de la guerre. Vous pouvez voir vos
+données. Ça ressemble beaucoup à Kentik. Je ne sais pas pourquoi.
+
+![Documentation]([[!!images/2022-frnog36-akvorado/slide-15@2x.png]])
+
+La documentation est intégrée dans le produit.
+
+![Five first minutes]([[!!images/2022-frnog36-akvorado/slide-17@2x.png]])
+
+Comme je vous avais dit pour démarrer, c'est vraiment facile. Vous prenez
+l'archive sur GitHub, vous la décompressez dans un répertoire qui s'appelle
+`akvorado`, vous faites `docker-compose up` et vous pointez votre navigateur sur
+le port 8081 et vous obtenez exactement comme le site de démo. Sauf que vous
+n'avez pas encore les données. Il faut attendre un peu pour générer des fausses
+données.
+
+![Next hour]([[!!images/2022-frnog36-akvorado/slide-18@2x.png]])
+
+Bon, après si vous avez un peu plus de temps, vous virez la partie qui génère
+des données aléatoires dans la configuration d'Akvorado, qui est une
+configuration en YAML, et aussi dans le `docker-compose` qui démarre des
+services pour générer ces données. Ensuite, vous configurez tout le reste. C'est
+assez facile.
+
+![Flows]([[!!images/2022-frnog36-akvorado/slide-19@2x.png]])
+
+En ce qui concerne la configuration des flots, Akvorado accepte les flots de
+n'importe qui : c'est ouvert aux quatre vents. Vous n'avez rien à configurer,
+vous envoyez vos NetFlow/IPFIX sur le port 2055 et sFlow sur le port 6343.
+
+![SNMP]([[!!images/2022-frnog36-akvorado/slide-20@2x.png]])
+
+Ensuite, il faut configurer un petit peu SNMP. Alors c'est pas super moderne,
+mais au moins, c'est supporté par beaucoup d'équipements. C'est un petit peu
+inflexible pour le moment. Si vous envoyez des flots depuis une IP donnée,
+Akvorado va utiliser la même IP pour faire des requêtes SNMP, pour récupérer le
+nom du routeur et les interfaces. C'est obligatoire de configurer ça. Il faut
+mettre la communauté. Il faut s'assurer que vos équipements accepteront de
+répondre aux requêtes SNMP.
+
+![Router classification]([[!!images/2022-frnog36-akvorado/slide-21@2x.png]])
+
+Le deuxième point, c'est que à chaque routeur qui envoie des flots, on peut
+utiliser des règles de classification qui permettent de donner un groupe, un
+rôle, un site, une région. C'est fait à travers des règles. Ce n'est pas
+obligatoire, mais c'est un bon échauffement pour l'étape suivante, pour réviser
+un petit peu vos expressions régulières parce que ça repose beaucoup dessus.
+
+Pour le petit exemple, chez Free, on appelle nos équipements `th2-quelquechose`
+avec le nom du site en première position. La première règle dit qu'à partir du
+nom de l'exporteur, on capture ce qui est avant le tiret et ce sera le nom du
+site. Ensuite, si ça termine par `.it`, on dit que la région c'est l'Italie. Si
+ça commence par Washington, New York, la région, c'est « USA ». Si ça finit par
+`.fr`, la région, c'est la France. Il faut faire un certain nombre de règles
+comme ça, plus ou moins complexes.
+
+![Interface classification]([[!!images/2022-frnog36-akvorado/slide-22@2x.png]])
+
+Sur la même idée, on peut aussi classifier les interfaces. C'est plus important.
+C'est pas totalement obligatoire, mais c'est quand même fortement conseillé. À
+une interface, on donne une frontière qui indique si c'est une interface
+externe, interne ou si on ne sait pas. C'est important de classifier les
+interfaces sur ce critère. On peut aussi attacher un type de connectivité.
+L'idée, c'est de mettre transit, PNI, IX, etc. Un fournisseur (qui est en face).
+
+On a un peu le même genre de règles. Voici une règle un petit peu plus
+compliquée. Elle dit qu'on prend la description de l'interface. Si ça commence
+par transit, PNI, PPNI, etc., cette partie-là, ce sera la connectivité. Il
+manque `&&` à la fin parce que la règle continue. Et si ça a bien marché, on va
+prendre le deuxième mot qui sera le nom du fournisseur. Par exemple, chez Free,
+on met `Transit: Cogent` et d'autres bidules. Ici ça va capturer `Cogent`. Si
+les deux règles ont fonctionné, on considère en plus que c'est une interface
+externe. Et pour tout le reste, on considère que c'est une interface interne.
+
+![Remaining steps]([[!!images/2022-frnog36-akvorado/slide-23@2x.png]])
+
+C'est à peu près tout ce qu'il y a à faire pour le déployer chez vous. Vous
+pouvez vérifier le fonctionnement sur l'interface web. Vous pouvez regarder la
+documentation pour voir s'il y a des éléments de configuration qui vous
+intéressent. Notamment il y a une partie dépannage qui permet de voir si jamais
+il n'y a rien qui arrive, qu'est ce qui pourrait bloquer, en utilisant notamment
+les métriques.
+
+![Web UI]([[!!images/2022-frnog36-akvorado/slide-24@2x.png]])
+
+L'interface web. Elle permet de tracer différents graphiques. On choisit d'abord
+les types de graphique. Est-ce qu'on veut des courbes qui s'empilent les unes
+par dessus les autres ? Des courbes indépendantes ? Présentées sous forme de
+grille (chaque graphe a sa propre case dans une grille) ? Ou des courbes de type
+« sankey » (si vous ne savez pas ce que c'est, j'ai un exemple un peu plus loin) ?
+
+On donne une période sur laquelle on veut extraire les données. Les dimensions
+permettent de grouper les données. On peut grouper par AS, par pays, par
+fournisseur, et ainsi de suite. Et enfin, on peut mettre des filtres. Ça utilise
+un langage très proche de SQL pour les exprimer. Un petit éditeur avec de la
+complétion est là pour vous aider. Au début, c'est un peu rustre, mais avec la
+complétion, je pense qu'on s'en sort assez rapidement.
+
+![Examples]([[!!images/2022-frnog36-akvorado/slide-25@2x.png]])
+
+Quelques exemples. Ici, on a empilé les courbes. Chaque couleur représente un AS
+source. Le filtre, c'est... l'interface d'entrée a été classifiée en externe et
+le fournisseur est Cogent. Donc ça nous montre pour Cogent, ce qui arrive,
+réparti par AS. Ici, on a coché l'option « bidirectionnel ». On a ce qui entre et
+ce qui sort : automatiquement, Akvorado va inverser la requête que vous donnez
+pour faire la seconde partie du graphique.
+
+![Examples]([[!!images/2022-frnog36-akvorado/slide-26@2x.png]])
+
+Là, on a la même courbe en utilisant des lignes parce qu'empiler les courbes, ça
+vous permet très rapidement de voir le total, mais c'est un peu dur de comparer
+chacune des courbes. Tandis que si on utilise des lignes, on voit bien par
+exemple, que la courbe orange est toujours plus basse que la courbe bleue, alors
+que ce n'était pas forcément évident sur le graphique quand c'est empilé.
+
+![Examples]([[!!images/2022-frnog36-akvorado/slide-27@2x.png]])
+
+Un autre exemple, toujours en empilant. Cette fois-ci, on va classifier par «
+_Ethernet type_ » (IPv4, IPv6) et on va mettre un filtre plus compliqué. On va
+dire que la source, ça va être un des deux AS de Google, et on obtient ce
+résultat.
+
+D'autres solutions utilisent Grafana dont le langage de templating est beaucoup
+plus limité (c'est des place holders que vous mettez dans des requêtes SQL que
+vous donnez à Grafana). Si vous voulez que vos utilisateurs [...], vous avez
+besoin de créer éventuellement plusieurs versions d'un dashboard, selon le type
+de requête que vous allez faire. Si vous voulez permettre de filtrer par AS et
+par pays, vous pouvez faire des menus déroulants, mais pour certaines choses,
+vous allez devoir créer d'autres graphiques. Ici, c'est un outil qui est
+spécifiquement adapté aux flots réseau.
+
+![Examples]([[!!images/2022-frnog36-akvorado/slide-28@2x.png]])
+
+Voici l'exemple avec les « sankey ». C'est un graphique qui permet de voir par où
+passent les flots selon les différentes dimensions choisies. Chaque colonne,
+c'est une dimension. On a l'AS source, le fournisseur d'entrée, le type de
+connectivité et le port source. On voit que la plupart du trafic passe par
+Cogent qui est un transitaire et il y a deux tiers du trafic qui est issu du
+port 443. Un peu du trafic passe par un IX (le DECIX). C'est un type de
+graphique très pratique pour voir où passe votre trafic.
+
+![About AS names]([[!!images/2022-frnog36-akvorado/slide-29@2x.png]])
+
+Et d'ailleurs, à propos des noms d'AS, je ne sais pas si vous avez vu, mais je
+suis assez content : les noms d'AS sont assez propres. C'est un problème assez
+compliqué parce que, par exemple on a PeeringDB qui est assez propre mais il n'y
+a pas tous les AS. À l'inverse, on a les bases des RIR où il y a tous les AS,
+mais souvent on n'a plus le droit de les changer. Il y a des AS avec des noms
+bizarres. Par exemple Netflix s'appelle AS-SSI.
+
+J'ai fait un projet annexe dans lequel je mixe les différentes sources de
+données. Il y a des règles pour nettoyer les noms. C'est exporté sous forme de
+CSV. C'est mis à jour toutes les semaines. Vous pouvez aller récupérer vous même
+si vous en avez besoin. Ça utilise aussi DB-IP qui est une autre source que
+j'utilise à la place de l'ARIN, parce que l'ARIN n'autorise pas à récupérer les
+données qui nous permettrait d'avoir tous les AS parce que c'est interdit par
+leur licence d'utilisation.
+
+![Under the hood]([[!!images/2022-frnog36-akvorado/slide-30@2x.png]])
+
+Akvorado est un programme en trois parties. C'est écrit en Go. Il y a un « inlet
+» qui va recevoir les flux, rajouter les données supplémentaires, les
+transformer et les envoyer vers Kafka. Il y a la console pour la web UI. Il y a
+une API derrière, mais elle n'est pas documentée. Il y a un orchestrateur qui
+permet de configurer les différents composants, notamment les composants
+externes, tels que Kafka et ClickHouse. Il va les configurer, il va créer les
+tables, etc. C'est pour cette raison que ça fonctionne tout seul.
+
+Sur le dessin, vous pouvez voir comment les flux récupérés sont construits à
+partir des informations qu'on a de NetFlow et d'IPFIX, mais aussi des
+informations qui ont été extraites de SNMP. Le numéro d'AS peut provenir des
+flux ou des bases GeoIP. Le pays est issu des bases GeoIP. Les classifieurs
+rajoutent d'autres informations. C'est tout ça qui constitue le flux final qui
+est stocké dans ClickHouse.
+
+![Open source components (backend)]([[!!images/2022-frnog36-akvorado/slide-31@2x.png]])
+
+Les composants open source. On utilise GoFlow2 pour collecter les flux, Sarama
+pour Kafka. Pour les métriques, c'est le client Prometheus en Go. zerolog pour
+le logging. cobra pour la ligne de commande. Le langage d'expression pour la
+classification s'appelle `expr`. Gin en framework web. Mapstructure et validator
+pour lire les fichiers de conf et les valider.
+
+![Open source components (infrastructure)]([[!!images/2022-frnog36-akvorado/slide-32@2x.png]])
+
+Pour l'infrastructure, je n'ai pas trop détaillé. Il y a un Kafka au milieu.
+C'est très utile pour distribuer les consommateurs et les producteurs. Le
+composant qui injecte les flux peut être distribué. Vous pouvez tout mettre sur
+une même VM, mais si vous avez besoin, vous pouvez mettre plusieurs collecteurs
+NetFlow et ils écrivent tous dans le même cluster Kafka. Ça permet de
+distribuer.
+
+Et si vous voulez arrêter ClickHouse, vous pouvez l'arrêter. Vous ne perdez pas
+de données. Kafka garde tout et quand ClickHouse redémarre, il va continuer là
+où il en était. C'est toujours intéressant de mettre un Kafka au milieu. C'est
+pour ça qu'autant de projets de ce type mettent un Kafka au milieu. C'est pas
+très compliqué à administrer.
+
+ClickHouse est une base de données sous forme de colonnes. Les données sont
+stockées colonne par colonne plutôt que ligne par ligne comme dans une base SQL
+classique. Ça permet d'extraire des quantités de données très importantes, très
+rapidement. Par rapport à d'autres bases de données, il utilise du SQL qui
+ressemble à du SQL classique. On peut aller très loin, il y a plein de fonctions
+qui sont disponibles. C'est une base qui est extrêmement performante sans faire
+beaucoup d'efforts.
+
+Chez Free, on est toujours sur la VM qu'on m'a prêtée pour faire un POC et on
+tourne dessus parce qu'elle tient très bien la charge. ClickHouse n'a pas de
+soucis : c'est très rapide. Je ne peux pas vous faire une démo, mais la plupart
+des requêtes sont exécutées en moins d'une seconde, sauf dans quelques cas
+particuliers.
+
+![Open source components (frontend)]([[!!images/2022-frnog36-akvorado/slide-33@2x.png]])
+
+Il y a un frontend web qui a été plus casse pied à écrire. En JavaScript, vous
+avez des milliers de frameworks. Je vous en cite quelques-uns. Un composant
+important est celui qui gère les graphiques. C'est un composant qui s'appelle
+Apache ECharts. Il est extrêmement complet, très flexible et peu buggué. Je vous
+invite à aller voir la démo sur leur site pour vous donner une idée. Si jamais
+vous déployez des outils qui affichent des graphiques, vous devriez regarder ça
+parce que c'est pas trivial à utiliser, mais j'ai obtenu tous les graphiques que
+je voulais.
+
+![Anti-DDOS]([[!!images/2022-frnog36-akvorado/slide-34@2x.png]])
+
+Une fonctionnalité qui n'est pas encore intégrée, mais étant donné qu'on a des
+données dans ClickHouse, on peut faire assez facilement un anti-DDoS primitif.
+Comme on a toutes les données dans ClickHouse, on peut les requêter avec du SQL.
+Vous faites tourner un script qui va faire la requête toutes les dix secondes
+pour tenter de détecter les DDoS. Et ensuite à partir de ça, vous pouvez
+construire une règle Flowspec. On l'injecte dans un BIRD sur lequel tous les
+routeurs se connectent pour récupérer les règles Flowspec.
+
+![ClickHouse query]([[!!images/2022-frnog36-akvorado/slide-35@2x.png]])
+
+Voici par exemple une des requêtes qui sont faites dans ClickHouse. Elle permet
+de détecter les attaques par amplification UDP. Elle est complexe, mais prenons
+le temps de la lire. On va grouper les données minute par minute. On va prendre
+les cinq dernières minutes.
+
+On va grouper par l'adresse destination qui est l'adresse IP qui est attaquée
+(on essaie de protéger nos abonnés). Le protocole parce qu'on veut filtrer sur
+UDP. Le port source parce que c'est une amplification UDP, de type NTP, par
+exemple. Le port source est souvent fixe.
+
+On va calculer quelle quantité de données ça représente en termes d'octets par
+seconde. Un quantile est calculé sur la taille du paquet. C'est une des
+fonctionnalités très intéressantes de ClickHouse. Il permet de calculer
+facilement des quantiles. On compte les flux, on compte les adresses IP sources
+uniques, le nombre de pays uniques. À partir de tout ça, on dit s'il y a plus de
+cinquante sources ou plus de dix pays et qu'en plus ça fait plus de 200 Mbps et
+le protocole est UDP, ça ressemble beaucoup à une attaque par amplification.
+
+![FlowSpec rule]([[!!images/2022-frnog36-akvorado/slide-36@2x.png]])
+
+On va créer une règle Flowspec qui ressemble à ça. On dit que pour l'IP
+attaquée, quand le port source est 123, la longueur du paquet est 468, le
+protocole est UDP, on va dropper le paquet. En Flowspec, on droppe. On pourrait
+rate-limiter, mais cela ne sert à rien parce que les flux légitimes vont être
+noyés dans les flux illégitimes et ils seront aussi droppés. L'intérêt
+d'utiliser Flowspec, c'est que non seulement, on ne va impacter qu'un seul port,
+mais en plus, une taille de paquet spécifique et là dans le cas du NTP, les
+paquets légitimes ne feront jamais 468 octets. C'est plus petit que ça un paquet
+NTP. L'abonné sera protégé, il n'aura rien remarqué.
+
+![Future plans]([[!!images/2022-frnog36-akvorado/slide-37@2x.png]])
+
+Dans les futures fonctionnalités, on est en train de travailler sur le support
+de BGP pour obtenir les AS paths, les communautés et les AS d'origine notamment
+quand c'est des AS internes qu'on ne peut pas obtenir par GeoIP. Ça sera bientôt
+disponible. On va aussi faire la prévision de trafic, ce qui sera assez
+intéressant et peut-être la détection d'anomalies parce que ça va ensemble. Ça
+permettra de voir dans six mois où on en sera sur le trafic de tel routeur.
+
+Il y a un support des VRF qui arrivera peut-être. Nous, on n'a pas trop besoin :
+pour le moment, on ne supporte qu'une seule VRF puisqu'on utilise ça pour notre
+trafic public.
+
+Des dashboards pour éviter de devoir reconstruire toujours les mêmes requêtes.
+Cependant, vous pouvez bookmarker les URL. Dans l'URL, il y a un condensé de la
+requête qui permet de les passer à un collègue pour lui montrer le résultat
+d'une requête que vous avez construite, ou la sauvegarder quelque part.
+
+![Questions?]([[!!images/2022-frnog36-akvorado/slide-38@2x.png]])
+
 [FRnOG #36]: https://www.frnog.org/?page=meetings&lang=fr
 [Akvorado]: https://github.com/akvorado/akvorado
 [Free]: https://www.free.fr/
 [an dernier]: [[fr/blog/2021-frnog34-jerikan.html]] "FRnOG #34 : comment on a déployé un datacentre en un clic"
 [lacnog 2023]: https://www.youtube.com/watch?v=3BWSlYYV2DA
 [swinog#38]: https://www.youtube.com/watch?v=xYYhLTvBuiY
+[demo.akvorado.net]: https://demo.akvorado.net

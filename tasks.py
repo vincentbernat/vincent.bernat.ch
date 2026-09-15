@@ -771,7 +771,7 @@ frontmatter_keys = (
 def build_check(c, fix=False):
     """Check content for mistakes"""
     # Check forbidden word or common typos
-    c.run("vale content/??")
+    c.run("vale content/??", hide=False)
     # Check frontmatters
     unordered = []
     for path in sorted(glob.glob("content/??/**/*", recursive=True)):

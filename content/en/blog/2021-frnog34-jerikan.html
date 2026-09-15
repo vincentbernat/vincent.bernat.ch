@@ -30,6 +30,215 @@ subtitles.[^diction]
 
 ![]([[!!videos/2021-frnog34-jerikan.m3u8]])
 
+# Transcript
+
+![How we deployed a datacenter in one click]([[!!images/2021-frnog34-jerikan/slide-01@2x.png]])
+
+Hello! I'll tell you how we at Blade deployed a datacenter in one "click." The
+title is a little bit clickbaity because we didn't click anywhere. This is the
+joint work of the former Blade network team. My colleagues are in the room.
+
+![What's deployed?]([[!!images/2021-frnog34-jerikan/slide-02@2x.png]])
+
+The scope is just the network part of the datacenter. Edge routers, OOB
+switches, spines, leafs, console servers, two Linux servers that are central to
+the whole network management, and a LibreNMS server for the supervision.
+
+![What's configured?]([[!!images/2021-frnog34-jerikan/slide-03@2x.png]])
+
+At the end of the deployment, all that is configured: the edge routers,
+including BGP sessions, policies with transit providers and peerings, a
+BGP-based fabric, the out-of-band management fabric, the management servers
+which are also the gateway to the management network, with ZTP, firewall, NAT,
+access to console servers, the VPN to other sites, and all external systems:
+DNS, IRR, RPKI, NetBox. All this is configured automatically at the end of the
+deployment.
+
+![Steps]([[!!images/2021-frnog34-jerikan/slide-04@2x.png]])
+
+There is a first step where you have to buy space, power, cooling, racks,
+equipment, and plug it all in. Then, on the gateway servers, you install a
+Debian 10. From your laptop, you run a short command which will do the first
+step of the provisioning.
+
+Then you have to wait a little bit because all the network devices are going to
+provision themselves in ZTP. And we run the command a second time for some
+devices like Cumulus that we consider more as Linux devices than as vendor
+devices. Once they have the basic provisioning, Ansible will finalize their
+configuration. Once that's done, we tell our system team that everything is
+functional.
+
+![Source of truth]([[!!images/2021-frnog34-jerikan/slide-05@2x.png]])
+
+We have a source of truth. We chose that NetBox was not our source of truth. We
+use NetBox, but it is secondary. Our source of truth is flat files in YAML,
+versioned in Git. They include the equipment list, a classifier which, from a
+device name, gives the intrinsic properties of the device, a definition of a
+hierarchy to search for all other data, and all data files written in YAML and
+included in this hierarchy.
+
+![List of devices]([[!!images/2021-frnog34-jerikan/slide-06@2x.png]])
+
+The equipment list is just a list containing the names of all the equipment. The
+name of the equipment implies its function. This is not strictly necessary, but
+it is simpler. For example, here it's an equipment in San Francisco and `ob`
+means it's an OOB equipment.
+
+![Classifier]([[!!images/2021-frnog34-jerikan/slide-07@2x.png]])
+
+The classifier takes the name of the equipment and attaches properties to it.
+These are only properties that can be inferred from the name. There are several
+types of information: the physical location, the function of the equipment...
+The `to` are the top-of-the-rack. When they're in San Francisco, it's a
+BGP-based technology. And when they're called `-p`, it's a compute pod. They end
+up in two groups that give this information. It also deduces the OS. These are
+Facebook Wedge 100s running Cumulus. The classifier uses regexes to infer this
+information from the name.
+
+![Hierarchy definition]([[!!images/2021-frnog34-jerikan/slide-08@2x.png]])
+
+We have a definition of the hierarchy which, from the information deduced by the
+classifier, will indicate in which directories to look for the data files.
+
+![Data files]([[!!images/2021-frnog34-jerikan/slide-09@2x.png]])
+
+Finally, we have all the data files. The model is freeform. An important rule is
+not to have any repetition. If you put the same IP in two different files, there
+is a problem. Someone might change the IP at one location and forget at the
+other. We limit the models to our needs. We don't try to invent needs that we
+don't have yet. On this example, we define a peering on an IX. We give the name
+of the peering, the AS, the IPs. In this case with Blizzard, we give their macro
+to generate the filters to accept only their prefixes.
+
+![Commit by Loïc]([[!!images/2021-frnog34-jerikan/slide-10@2x.png]])
+
+It's a little hard to see but for the San Francisco datacenter, it was
+implemented in one commit. It was prepared over several weeks. The data needed
+to deploy the datacenter is spread across all these files. Some are specific to
+each equipment, often to give their IP and MAC addresses. Some are datacenter or
+rack specific. Once this commit has been accepted, the next step is to deploy
+with the commands I indicated at the beginning.
+
+![Jerikan]([[!!images/2021-frnog34-jerikan/slide-11@2x.png]])
+
+We have developed a software called Jerikan. Its function is to compile
+configuration files from the source of truth and templates. We didn't use
+Ansible for this because Ansible is quite slow when it compiles templates. It's
+a pain in the ass when you have to debug them. Jerikan answers these problems.
+It is extremely fast. We have about 600 devices. It generates the entire
+configuration, including edge routers with multi-megabyte BGP policies, in less
+than a minute.
+
+![Templates]([[!!images/2021-frnog34-jerikan/slide-12@2x.png]])
+
+At the template level, we use Jinja2 because that's what Ansible uses and that's
+what's most common. We added some functions of our own, like the `lookup()`
+function, which allows to look for data in the source of truth.
+
+![Error handling]([[!!images/2021-frnog34-jerikan/slide-13@2x.png]])
+
+This is a small example when there is an error in a template to show the
+difference with Ansible. There is an error. We get the line on which the error
+is located: line 15. We also have all the variables that are currently in the
+scope. The `info` dictionary contains `address` with two "d" and not three "d."
+This allows you to see where the error is without removing half the template.
+
+![Integration into GitLab]([[!!images/2021-frnog34-jerikan/slide-14@2x.png]])
+
+We have an integration in GitLab thanks to the use of Git. When Loïc wanted to
+prepare the deployment of San Francisco, we didn't stop working. He's doing a
+Git branch. He works on it as long as it takes. When he's ready to deploy, he
+submits a merge request to GitLab. With the team we review it. People give
+feedback. We need at least one other person to approve before we can merge.
+
+Also, GitLab will build all the configurations and show the difference from the
+configuration that is running on the hardware. When you make small changes, you
+don't really know what the impact will be. Here, we can say that this change
+will do that. It's pretty convenient to see the result.
+
+![Integration into GitLab]([[!!images/2021-frnog34-jerikan/slide-15@2x.png]])
+
+This is an example of a diff you get on a different kind of commit. We can see
+that there are added devices. There is a port that has been activated and the
+second part is about DNS.
+
+![Ansible]([[!!images/2021-frnog34-jerikan/slide-16@2x.png]])
+
+Then, we keep Ansible for the whole deployment part. We have very heterogeneous
+equipment like Dell OS 9 and HP Comware. You wouldn't want to have them on your
+network but you still have to manage them. We use a single Ansible playbook. We
+avoid to let it run unattended on all the datacenters.
+
+We make sure that the actions are idempotent: if we run the playbook three
+times, it tells us that there are no more modifications. We make the
+`--diff --check` work, namely that `--check` does not make any changes and
+`--diff` shows the expected changes. So we can do it every week and see if
+something has been changed without us knowing it and put the equipment in
+question back into compliance. And on the network devices, we deploy full
+configurations to make sure we're running exactly what we expect.
+
+![Further reading]([[!!images/2021-frnog34-jerikan/slide-17@2x.png]])
+
+If you want more information, there is a blog post with a video demo that goes
+into more detail.
+
+We put everything in a GitHub repository, which contains Jerikan, our Ansible
+playbooks and all the data for the San Francisco and South Korea datacenters
+(they don't exist anymore). This is the complete data. We didn't change the IPs.
+We didn't remove half of them. If you have enough money to buy 40 racks, you
+should be able to redeploy the same thing by typing the commands.
+
+There are also the generated configurations. If you're not interested in the
+automation part because you already have something, take a look at the generated
+configurations, including edge router configuration, BGP filters. This will show
+you what it looks like. This is quite interesting because in our industry, we
+have a lot of very simple examples and never a complete example. There, if you
+want a BGP fabric, two edge routers, you have the complete configuration.
+
+## Questions
+
+> My question was about the fact that you say you deploy everything through
+> Ansible. Did you encounter any problems? Are you using any specific modules?
+> Compared to some vendors, there are not necessarily Ansible modules available.
+> In that case, how do you proceed?
+
+It depends on the vendor. We weren't using Ansible Galaxy except for the vendor
+modules. For Juniper and Cisco, we used either the community modules or the
+vendor modules. With Juniper, we used NAPALM. For Cisco, we used the community
+module. For Cumulus, we considered it as a Linux and we didn't use a specific
+module.
+
+> For your sensitive data, you encrypt it in Git by what means?
+
+The whole Jerikan part doesn't handle any secret. We use SSH keys for the users.
+For root passwords, they are hashed and we consider that robust enough. For all
+the secrets that must be in clear text, it is Ansible that handles them and they
+are stored in a Vault. The deployment is done from our laptops. We provide
+Ansible with a Vault token. In the GitLab and templates part, there are no
+secrets.
+
+> In Jerikan, for data that is in the form of nested dictionaries, did you
+> choose a recursive merge or are you doing like Ansible with a single level?
+
+The merge is only done at the first level. We have a schema which indicates for
+some data structures how they can be merged. But when we merge them, we only do
+it at the first level.
+
+> Why didn't you use NetBox or a database and use YAML flat files?
+
+We don't use a database. We could have mixed a bit in NetBox and a bit in flat
+files. The point of doing everything in flat files is a single source of truth.
+A database is hard to fork. If you have a NetBox and you have to change
+something, then in the flat files, there is a desynchronization.
+
+Deploying a datacenter can be a month's work. Changing the schema can impact the
+work of others. The advantage of using Git is that you can do everything in one
+branch without impacting the others. It's easy to rollback. If you make a
+mistake in NetBox, it's more complicated to rollback. You can use a base for
+tests and a base for production, but you can have two people working on two
+different projects. Here, you can make as many branches as you want. We chose to
+put everything in flat files to allow us to embrace Git.
+
 [FRnOG #34]: https://www.frnog.org/?page=frnog34&lang=fr
 [Shadow]: https://shadow.tech
 [Jerikan]: https://github.com/jerikan-network/cmdb
