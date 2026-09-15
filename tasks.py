@@ -48,6 +48,10 @@ def bytes_to_read(input_):
 invoke.terminals.bytes_to_read = bytes_to_read
 invoke.runners.bytes_to_read = bytes_to_read
 
+# Show the 50 last lines on errors
+tail = invoke.runners.Result.tail
+invoke.runners.Result.tail = lambda self, stream, count=50: tail(self, stream, count)
+
 conf = "site-production.yaml"
 with open(conf) as f:
     media = yaml.safe_load(f)["media_url"]
@@ -771,7 +775,7 @@ frontmatter_keys = (
 def build_check(c, fix=False):
     """Check content for mistakes"""
     # Check forbidden word or common typos
-    c.run("vale content/??", hide=False)
+    c.run("vale content/??")
     # Check frontmatters
     unordered = []
     for path in sorted(glob.glob("content/??/**/*", recursive=True)):
