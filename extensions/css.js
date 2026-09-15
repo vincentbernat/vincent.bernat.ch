@@ -218,17 +218,16 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
-// cssnano leaves calc(-1.8rem) behind: postcss-calc only unwraps a lone
-// negative number in selectors, not in declarations. Run after cssnano, so the
-// number keeps the shorter form cssnano gave it.
+// cssnano leaves calc(-1.8rem): the reason is that for properties where
+// negative values are not valid (like width), the value with calc resolves to 0
+// while if we unwrap, it becomes invalid. We don't really care about that but
+// we care we don't want calc(). We could keep both declarations, but this does
+// not really matter.
 const unwrapNegativeCalc = {
     postcssPlugin: "unwrap-negative-calc",
     OnceExit(root) {
         root.walkDecls((decl) => {
-            decl.value = decl.value.replace(
-                /calc\((-[\d.]+[a-z%]*)\)/gi,
-                "$1",
-            );
+            decl.value = decl.value.replace(/calc\((-[\d.]+[a-z%]*)\)/gi, "$1");
         });
     },
 };
