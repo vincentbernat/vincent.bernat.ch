@@ -6,7 +6,6 @@
   const noresultsEl = document.getElementById("lf-search-noresults");
   const fallbackEl = document.getElementById("lf-search-fallback");
   const fallbackLink = document.getElementById("lf-search-fallback-link");
-  const devMode = location.pathname.endsWith(".html");
   const pageFindScript = document.querySelector(
     'script[data-name="pagefind.js"]',
   );
@@ -88,7 +87,7 @@
 
   // Render HTML for one result.
   function renderResult(d) {
-    const url = devMode ? d.url : d.url.replace(/\.html$/, "");
+    const url = d.url.replace(/\.html$/, "");
     const date = d.meta.date
       ? new Date(d.meta.date).toLocaleDateString(
           document.documentElement.lang,
