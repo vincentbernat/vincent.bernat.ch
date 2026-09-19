@@ -7,10 +7,9 @@ luffy.do(() => {
   if (hlsVideos.length === 0) return;
 
   // Video.js 10 needs MSE and a recent browser (the most recent feature it uses
-  // is CSS nesting). iPhone has only ManagedMediaSource, which Video.js does not
-  // check codecs against, and Safari plays HLS on its own.
-  // https://github.com/videojs/v10/pull/2564
-  if (!window.MediaSource || !window.CSS?.supports("selector(&)")) return;
+  // is CSS nesting).
+  const mse = window.MediaSource || window.ManagedMediaSource;
+  if (!mse || !window.CSS?.supports("selector(&)")) return;
 
   const language = document.documentElement.lang.slice(0, 2);
 
@@ -28,8 +27,6 @@ luffy.do(() => {
       video.setAttribute("playsinline", "");
       video.setAttribute("crossorigin", oldVideo.crossOrigin);
       video.setAttribute("preload", oldVideo.preload);
-      // https://github.com/videojs/v10/issues/2532
-      video.shadowRoot.querySelector("video").preload = oldVideo.preload;
       video.setAttribute("src", oldVideo.querySelector(hlsSource).src);
       video.append(...oldVideo.querySelectorAll("track"));
       video.querySelector("track[kind=chapters]")?.setAttribute("default", "");
@@ -48,10 +45,8 @@ luffy.do(() => {
         { once: true },
       );
 
-      // Drop the picture-in-picture button and its tooltip
-      skin.shadowRoot
-        .querySelectorAll("media-pip-button, #pip-tooltip")
-        .forEach((el) => el.remove());
+      // Drop the picture-in-picture button.
+      skin.shadowRoot.querySelector("media-pip-button")?.remove();
 
       skin.append(video);
       player.append(skin);
