@@ -1,0 +1,793 @@
+---
+title: "Des statistiques sans robots avec GoatCounter auto-hébergé sur NixOS"
+description: |
+  Les robots pilleurs des IA décuplaient mon nombre de visiteurs. Je ne compte
+  désormais une visite qu'après une interaction, je la mets en tampon sur chaque
+  serveur web et je sauvegarde la base SQLite avec Litestream.
+uuid: b21b425a-f934-41a5-ab76-452747c9602d
+cover: goatcounter@2x.png
+attachments:
+  "https://github.com/vincentbernat/nixops-take1": "dépôt Git pour la configuration de NixOS"
+tags:
+  - web
+  - distribution-nixos
+ai-usage: Traduit de l'anglais (Claude Fable 5.1)
+---
+
+En 2016, j'ai [retiré Google Analytics][ga-removal] de ce blog pour ne pas me
+rendre complice de la plus grande machine à aspirer les données personnelles. À
+la place, j'analysais les journaux de mes serveurs[^scrub] avec [GoAccess][].
+Depuis quelques années, les statistiques ne veulent plus rien dire, malgré mes
+tentatives pour filtrer les robots : [les robots pilleurs des IA][ai-scrapers]
+gonflent le nombre de visiteurs à environ 2 000 par jour. J'ai fini par adopter
+[GoatCounter][], une plateforme libre de mesure d'audience, respectueuse de la
+vie privée. J'ai remplacé le client JavaScript pour filtrer les robots de façon
+plus agressive et ajouté une solution de repli en CSS. Pour gagner en fiabilité,
+j'ai écrit un proxy local, installé sur chacun des cinq serveurs web qui
+hébergent ce blog. La suite de cet article détaille comment ces éléments
+s'articulent et comment je déploie l'ensemble sur NixOS. ❄️
+
+[^scrub]:
+    Nginx brouille les adresses IP avant de les enregistrer, grâce au [module
+    `ipscrub`][ipscrub].
+
+[TOC]
+
+# Pourquoi GoatCounter ?
+
+GoatCounter ne [collecte aucune donnée personnelle][collect personal data] : au
+lieu de stocker l'adresse IP du lecteur ou de s'appuyer sur des cookies, il crée
+un identifiant de session valide 8 heures à partir de l'agent utilisateur et de
+l'adresse IP. Ses fonctionnalités sont modestes, mais suffisantes pour un blog.
+Pour un aperçu de l'interface, l'auteur de GoatCounter propose une [instance
+publique][stats.arp242] pour [son site][arp242]. Une version en ligne permet de
+l'essayer avant de l'héberger soi-même. Avec un seul binaire et une base de
+données SQLite, GoatCounter est l'une des solutions auto-hébergées les plus
+légères. Parmi les alternatives respectueuses de la vie privée figurent, par
+ordre croissant de complexité, [Umami][], [Plausible][] et [Rybbit][].
+
+![Tableau de bord de GoatCounter montrant les statistiques de mon blog sur la
+semaine passée, dont l'article sur le protocole Spanning Tree avec 1 224 vues,
+ainsi que les statistiques sur les navigateurs (52 % pour Chrome, 32 % pour
+Firefox)]([[!!images/goatcounter@2x.png]])
+
+[ga-removal]: https://github.com/vincentbernat/vincent.bernat.ch/commit/4c3be65404031bf6638c1ea3d891a3ea58e0a0fc "layout: remove Google Analytics"
+[goaccess]: https://goaccess.io/ "GoAccess: Visual Web Log Analyzer"
+[ipscrub]: https://github.com/masonicboom/ipscrub "ipscrub: IP address anonymizer module for nginx"
+[goatcounter]: https://www.goatcounter.com/ "GoatCounter: open source web analytics"
+[stats.arp242]: https://stats.arp242.net "Analytics for www.arp242.net"
+[arp242]: https://www.arp242.net "Personal website of Martin Tournoij"
+[plausible]: https://plausible.io/ "Plausible Analytics: Simple, privacy-friendly Google Analytics alternative"
+[rybbit]: https://rybbit.com/ "Rybbit: Cookieless Google Analytics Replacement"
+[umami]: https://umami.is/ "Umami: Privacy-First Analytics Platform"
+[collect personal data]: https://www.goatcounter.com/help/sessions#technical-details-11181 "GoatCounter documentation: sessions"
+[ai-scrapers]: https://herman.bearblog.dev/the-great-scrape/ "The Great Scrape"
+
+# Client JavaScript sur mesure
+
+GoatCounter fournit un [petit client JavaScript][small javascript client] :
+2 189 octets une fois minifié et compressé avec gzip. Il embarque des
+fonctionnalités dont je ne me sers pas : un compteur de visites, le suivi des
+clics, divers réglages, etc. Je le remplace par cette fonction pour enregistrer
+une visite :
+
+```js
+const count = ({ event, title } = {}) => {
+  const params = new URLSearchParams({
+    p: event || location.pathname,
+    t: title || document.title,
+    r: document.referrer,
+    q: location.search,
+    s: document.documentElement.clientWidth,
+    e: !!event,
+    rnd: Math.random().toString(36).slice(2, 7),
+  });
+  fetch(`/count?${params}`, { keepalive: true }).catch(() => {});
+};
+```
+
+Pour filtrer les robots[^bot-filter], je vais plus loin en exigeant une
+interaction de l'utilisateur, une idée reprise de [Bear Blog][].
+
+[^bot-filter]:
+    GoatCounter filtre déjà certains robots grâce à leur agent utilisateur ou à
+    leur adresse IP. Mais les robots pilleurs mentent sur leur agent utilisateur
+    et se cachent derrière des [proxys résidentiels][residential proxies].
+
+```js
+let sendHit = () => (sendHit = () => {}, count());
+["touchmove", "mousemove", "keydown", "pointerdown"].forEach((eventName) =>
+  document.addEventListener(eventName, sendHit, {
+    once: true,
+    passive: true,
+  }),
+);
+```
+
+Si un lecteur a désactivé JavaScript dans son navigateur, j'enregistre la visite
+à l'aide d'une image CSS. La pseudo-classe `:hover` ne la charge qu'après une
+interaction, une autre astuce [piquée à Bear Blog][bear-css]. Environ 2 % de mes
+visiteurs entrent dans cette catégorie[^referrer].
+
+[^referrer]:
+    Sans JavaScript, impossible d'envoyer la véritable origine. J'indique
+    « NoJS » à la place.
+
+```html
+<!DOCTYPE html>
+<html lang="en" class="nojs">
+  <head>
+    <script>
+      // Le code JavaScript de ce blog requiert ES6
+      if ("noModule" in HTMLScriptElement.prototype)
+        document.documentElement.classList.remove("nojs");
+    </script>
+  </head>
+  <body>
+  <!-- ... -->
+    <style>
+      .nojs body:hover {
+        border-width: 0;
+        border-image: url('/count?p=/en/blog/2026-kpi-goodhart&t=Building...&r=NoJS&e=false');
+      }
+    </style>
+  </body>
+</html>
+```
+
+Là où GoAccess annonçait environ 2 000 visiteurs par jour, GoatCounter compte
+moins de 200 humains[^rss]. Je suppose que ces pilleurs privilégient le moindre
+effort : si le contenu est accessible sans obstacle, comme sur ce blog, ils ne
+vont pas lancer une usine à gaz qui déclencherait une page vue. Même les robots
+qui exécutent JavaScript, comme [Googlebot avec son Chromium sans
+interface][googlebot-js], [n'interagissent pas avec la page][googlebot-events]
+et ne déclenchent jamais les événements que j'écoute. La « preuve d'humanité »
+par l'interaction que j'utilise me semble pouvoir durer.
+
+[^rss]:
+    Il me manque les humains lisant le flux RSS. Je ne suis pas à l'aise avec
+    l'idée d'ajouter un [pixel transparent][tracking pixel], et les robots le
+    chargeraient sans doute, ce qui fausserait les statistiques. Je me passe de
+    compter ces lecteurs.
+
+[bear blog]: https://bearblog.dev/ "Bear Blog"
+[small javascript client]: https://github.com/arp242/goatcounter/blob/main/public/count.js "GoatCounter's JavaScript client"
+[bear-css]: https://herman.bearblog.dev/how-bear-does-analytics-with-css/ "How Bear does analytics with CSS"
+[googlebot-js]: https://developers.google.com/search/docs/crawling-indexing/javascript/javascript-seo-basics "Google Search Central: Understand the JavaScript SEO basics"
+[googlebot-events]: https://developers.google.com/search/docs/crawling-indexing/javascript/lazy-loading#:~:text=Google%20Search%20does%20not%20interact%20with%20your%20page "Google Search Central: Fix lazy-loaded content"
+[residential proxies]: https://jacob.gold/posts/residential-proxies-are-a-national-security-threat/ "Residential Proxies Are a National Security Threat"
+[tracking pixel]: https://www.goatcounter.com/help/pixel "GoatCounter documentation: tracking pixel without JavaScript"
+
+# Proxy local
+
+Cinq serveurs <del>à travers le monde</del> <ins>en Europe et en Amérique du
+Nord</ins> servent le contenu de ce site, mais GoatCounter ne tourne que sur
+l'un d'eux. Pour ne pas perdre la trace des visiteurs quand GoatCounter est
+indisponible, j'exécute un proxy local qui écoute sur le même point de
+terminaison `/count`. Sur chaque serveur, il conserve les visites en mémoire,
+avec un tampon assez grand pour tenir plusieurs jours en cas d'indisponibilité.
+Il les envoie par lots au serveur amont via le [point de terminaison authentifié
+`/api/v0/count`][api].
+
+![Serveurs sur une carte. web02 est à Paris, web03 à Helsinki, web04 à
+Nuremberg, web05 à Ashburn, web06 à
+Chicago.]([[!!images/luffy-web-servers.svg]])
+
+J'ai proposé le code du proxy dans la [*pull request* #909][pr909]. Le
+mainteneur de GoatCounter a refusé de maintenir cet amas de code pour un cas
+d'usage aussi niche. Développant moi aussi des logiciels libres, j'adopte
+souvent la même position pour mes propres projets : l'effort ponctuel d'un
+contributeur peut se transformer en engagement sur le long terme pour le
+mainteneur.
+
+J'expose le point de terminaison du proxy sur le domaine de ce site pour
+échapper aux bloqueurs de publicité. Cela donne l'impression que je ne respecte
+pas le choix du lecteur, mais comme GoatCounter respecte la vie privée, je
+trouve cela acceptable.
+
+```nginx
+location = /count {
+  access_log off;
+  proxy_pass http://127.0.0.3:8087/count;
+  proxy_pass_request_headers off;
+  proxy_set_header Accept-Language $http_accept_language;
+  proxy_set_header User-Agent $http_user_agent;
+  proxy_set_header X-Real-Ip $remote_addr;
+}
+```
+
+[pr909]: https://github.com/arp242/goatcounter/pull/909 "PR #909: add a proxy to forward page counts"
+[api]: https://www.goatcounter.com/help/api "GoatCounter documentation: API"
+
+# Déploiement sur NixOS
+
+Mes serveurs web tournent sous [NixOS][], une distribution Linux déclarative
+avec une gestion de configuration intégrée. Je gère ce petit troupeau avec
+[Colmena][], un outil de déploiement sans état pour NixOS. Ma configuration est
+disponible sur [GitHub][].
+
+[nixos]: https://nixos.org/ "Nix & NixOS: Declarative builds and deployments"
+[colmena]: https://colmena.cli.rs/ "Colmena documentation"
+[github]: https://github.com/vincentbernat/nixops-take1/ "vincentbernat/nixops-take1: Playground for NixOps"
+
+## Déployer des applications dans des conteneurs
+
+Pour une meilleure isolation, chaque application tourne dans un conteneur léger
+et éphémère, propulsé par [systemd-nspawn][]. Chaque conteneur exécute une
+instance allégée de NixOS. Un [module encapsule les options `containers` de
+NixOS][container.nix] pour éviter de répéter les mêmes options pour chaque
+application[^module]. Les conteneurs partagent la pile réseau de l'hôte :
+l'isolation supplémentaire ne vaut pas la complexité accrue. Pour les alléger,
+je désactive aussi quelques services non essentiels.
+
+[^module]:
+    Un [module NixOS][nixos module] est une fonction qui reçoit la configuration
+    de l'ensemble du système dans `config` et renvoie trois attributs :
+    
+    - `imports` liste d'autres modules à importer ;
+    - `options` déclare les réglages configurables par l'utilisateur ;
+    - `config` attribue des valeurs aux options déclarées par n'importe quel module, comme `containers` de NixOS.
+    
+    Si un module ne déclare aucune option, il est possible de renvoyer directement les attributs
+    contenus dans `config`. Si un module n'a besoin d'aucun argument, vous pouvez le
+    définir comme un simple ensemble d'attributs.
+
+```nix hl_lines="25 27 30 34 35 36"
+{ config, lib, ... }:
+let
+  cfg = config.luffy.containers;
+in
+{
+  # Réglages configurables pour notre module
+  options.luffy.containers = lib.mkOption {
+    default = { };
+    description = "Ephemeral containers sharing the host network.";
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        config = lib.mkOption {
+          type = lib.types.deferredModule;
+          default = { };
+          description = "NixOS configuration of the container.";
+        };
+      };
+    });
+  };
+
+  # Traduit nos options en conteneurs NixOS
+  config = {
+    containers = lib.mapAttrs
+      (name: container: {
+        ephemeral = true;
+        autoStart = true;
+        privateNetwork = false;
+        extraFlags = [ "--resolv-conf=replace-host" ];
+        config = {
+          imports = [ container.config ];
+          networking.firewall.enable = false;
+          system.stateVersion = config.system.stateVersion;
+          systemd.services = {
+            console-getty.enable = false;
+            systemd-logind.enable = false;
+            systemd-oomd.enable = false;
+          };
+        };
+      })
+      cfg;
+  };
+}
+```
+
+Pour configurer une instance GoatCounter tournant dans un conteneur et écoutant
+sur `127.0.0.4:8088`, nous importons le module[^import] et déclarons le
+conteneur dans l'ensemble d'attributs `config.luffy.containers` :
+
+[^import]:
+    La plupart du temps, un import explicite est inutile. NixOS [importe
+    automatiquement][module-list.nix] les modules livrés avec Nixpkgs. Pour mes
+    propres modules, [un peu de code][default.nix] les importe aussi
+    automatiquement.
+
+```nix
+{ pkgs, config, ... }: {
+  imports = [ ./modules/container.nix ];
+  config.luffy.containers.goatcounter = {
+    config = {
+      services.goatcounter = {
+        enable = true;
+        address = "127.0.0.4";
+        port = 8088;
+        proxy = true;
+      };
+    };
+  };
+}
+```
+
+Comme les conteneurs sont éphémères, il faut conserver les données persistantes
+dans des répertoires de l'hôte. Nous ajoutons une option `mounts` et demandons
+aux conteneurs de NixOS d'exposer les répertoires ainsi configurés via l'option
+`bindMounts`.
+
+```nix
+{ config, lib, ... }:
+let
+  cfg = config.luffy.containers;
+in
+{
+  options.luffy.containers = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        mounts = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = "Host directories mounted read-write at the same place.";
+        };
+      };
+    });
+  };
+
+  config = {
+    containers = lib.mapAttrs
+      (name: container: {
+        bindMounts =
+          lib.genAttrs container.mounts (path: { hostPath = path; isReadOnly = false; });
+      })
+      cfg;
+  };
+}
+```
+
+Par exemple, pour conserver la base de données de GoatCounter dans le répertoire
+`/var/db/goatcounter` de l'hôte, nous ajoutons ce répertoire à l'option `mounts`
+et modifions la définition du service pour indiquer à GoatCounter où trouver la
+base de données.
+
+```nix
+{ config, ... }:
+let
+  databaseDirectory = "/var/db/goatcounter";
+in {
+  config.luffy.containers.goatcounter = {
+    mounts = [ databaseDirectory ];
+    config = {
+      services.goatcounter = {
+        extraArgs = [ "-db=sqlite+${databaseDirectory}/db.sqlite" ];
+      };
+    };
+  };
+}
+```
+
+Un conteneur peut aussi avoir besoin de secrets. Colmena peut [envoyer des
+secrets][upload secrets] sans les stocker dans `/nix`. Nous ajoutons une option
+`keys` à nos conteneurs. Elle prend un ensemble d'attributs associant le nom de
+chaque secret à la commande qui le fournit. Ensuite, le module déclare les
+secrets requis à Colmena dans l'option `deployment.keys`, fait dépendre le
+conteneur de la présence des secrets, puis les attache au conteneur.
+
+```nix
+{ config, lib, ... }:
+let
+  cfg = config.luffy.containers;
+in
+{
+  options.luffy.containers = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule {
+      options = {
+        keys = lib.mkOption {
+          type = lib.types.attrsOf (lib.types.listOf lib.types.str);
+          default = { };
+          description = "Secrets, as a command to run locally. They are mounted in /etc.";
+        };
+      };
+    });
+  };
+
+  config = {
+    # Colmena place chaque secret dans `/var/keys` et le rend accessible
+    # au groupe "keys".
+    deployment.keys = lib.concatMapAttrs
+      (_: container: lib.mapAttrs
+        (_: keyCommand: {
+          inherit keyCommand;
+          group = "keys";
+          permissions = "0640";
+          destDir = "/var/keys";
+        })
+        container.keys)
+      cfg;
+
+    # Le conteneur ne peut démarrer que si les secrets requis sont disponibles.
+    systemd.services = lib.mapAttrs'
+      (name: container:
+        let
+          units = map (key: "${key}-key.service") (lib.attrNames container.keys);
+        in
+        lib.nameValuePair "container@${name}" {
+          requires = units;
+          after = units;
+        })
+      cfg;
+
+    # Attache chaque secret dans le conteneur.
+    containers = lib.mapAttrs
+      (name: container: {
+        bindMounts = lib.mapAttrs'
+          (key: _: lib.nameValuePair "/etc/${key}" {
+            hostPath = "/var/keys/${key}";
+            isReadOnly = true;
+          })
+          container.keys;
+      })
+      cfg;
+  };
+}
+```
+
+Par exemple, GoatCounter a besoin d'identifiants pour télécharger la base de
+données GeoIP. Je fournis une commande locale pour récupérer le secret depuis
+mon gestionnaire de mots de passe et je l'expose dans le conteneur via le
+fichier d'environnement `/etc/goatcounter.env`.
+
+```nix hl_lines="10"
+{ pkgs, config, ... }: 
+let
+  keyCommand = variable: [
+    "${pkgs.runtimeShell}"
+    "-c"
+    "pass show personal/nixops/secrets | grep '^${variable}='"
+  ];
+in {
+  config.luffy.containers.goatcounter = {
+    keys."goatcounter.env" = keyCommand "GOATCOUNTER_GEODB";
+    config = {
+      systemd.services.goatcounter.serviceConfig = {
+        EnvironmentFile = "/etc/goatcounter.env";
+        SupplementaryGroups = [ "keys" ];
+      };
+    };
+  };
+}
+```
+
+[systemd-nspawn]: man://systemd-nspawn.1
+[upload secrets]: https://colmena.cli.rs/unstable/features/keys.html "Colmena documentation: Secrets"
+[container.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/modules/container.nix "nixops-take1/modules/container.nix"
+[nixos module]: https://nixos.org/manual/nixos/stable/#sec-writing-modules "NixOS Manual: Writing NixOS Modules"
+[module-list.nix]: https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/module-list.nix "nixpkgs/nixos/modules/module-list.nix"
+[default.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/modules/default.nix "nixops-take1/modules/default.nix"
+
+## Serveur GoatCounter
+
+Nixpkgs fournit déjà un paquet pour GoatCounter. En surchargeant les attributs
+`src` et `vendorHash`, je réutilise sa définition pour ma version personnalisée
+avec le proxy :
+
+```nix
+{ goatcounter, fetchFromGitHub }:
+goatcounter.overrideAttrs (_: {
+  src = fetchFromGitHub {
+    owner = "vincentbernat";
+    repo = "goatcounter";
+    rev = "feature/proxy";
+    hash = "sha256-dJRlQlFu3tjcEgabT1LEbyFrasJlhmYu4L/T7EkoNcY=";
+  };
+  vendorHash = "sha256-c9Q5OrbZR+q6pD3SgPPWe8JUzcZco1AVUKGaV61k5DE=";
+})
+```
+
+J'ai écrit un [module NixOS][goatcounter.nix] pour encapsuler GoatCounter : la
+définition du conteneur, celle du service et les secrets. Le module accepte les
+options suivantes : `package`, `serve.enable`, `serve.listenAddress`,
+`serve.port` et `serve.databaseFile`. J'ai déjà détaillé la configuration du
+conteneur dans la section précédente. Finalement, j'ai choisi de ne pas
+réutiliser le module GoatCounter de NixOS : il est plutôt simple et le réécrire
+permet de me protéger de changements futurs inattendus.
+
+```nix
+{ config, pkgs, lib, ... }:
+let
+  cfg = config.luffy.goatcounter;
+  databaseDirectory = builtins.dirOf cfg.serve.databaseFile;
+  chown = "${pkgs.coreutils}/bin/chown -R";
+in {
+  config.luffy.containers.goatcounter = {
+    config.systemd.services.goatcounter = {
+      description = "GoatCounter Web Analytics";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        EnvironmentFile = "/etc/goatcounter.env";
+        SupplementaryGroups = [ "keys" ];
+        DynamicUser = true;
+        Restart = "always";
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe cfg.package)
+          "serve"
+          "-listen=${cfg.serve.listenAddress}:${toString cfg.serve.port}"
+          "-tls=none"
+          "-db=sqlite+${cfg.serve.databaseFile}"
+          "-automigrate"
+        ];
+        # Donne la base de données à l'utilisateur dynamique "goatcounter".
+        ExecStartPre = "+${chown} goatcounter:goatcounter ${databaseDirectory}";
+        ReadWritePaths = databaseDirectory;
+      };
+    };
+  };
+}
+```
+
+Le bout de code suivant configure GoatCounter pour écouter sur
+`127.0.0.4:8088` :
+
+```nix
+{
+  luffy.goatcounter = {
+    serve = {
+      enable = true;
+      listenAddress = "127.0.0.4";
+      port = 8088;
+    };
+  };
+}
+```
+
+La dernière étape consiste à configurer nginx pour exposer GoatCounter sur
+Internet. Je désactive le point de terminaison `/count`, car sa fonction est
+assurée par le proxy local.
+
+```nix
+{ config, ... }:
+let
+  cfg = config.luffy.goatcounter.serve;
+in
+{
+  services.nginx.virtualHosts."goatcounter.luffy.cx" = {
+    forceSSL = true;
+    locations = {
+      "/" = {
+        proxyPass = "http://${cfg.listenAddress}:${toString cfg.port}";
+      };
+      "= /count".extraConfig = ''
+        return 404;
+      '';
+    };
+  };
+}
+```
+
+[goatcounter.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/modules/goatcounter.nix "nixops-take1/modules/goatcounter.nix"
+
+## Proxy GoatCounter
+
+Le même [module NixOS][goatcounter.nix] configure le proxy local, avec les
+options suivantes : `proxy.enable`, `proxy.listenAddress`, `proxy.port` et
+`proxy.site` (le site qui reçoit les lots de pages vues). Le proxy local n'a
+aucune donnée persistante, mais il a besoin de la clé d'API pour s'authentifier
+auprès de l'instance principale de GoatCounter : son conteneur utilise l'option
+`keys`, mais pas l'option `mounts`.
+
+```nix hl_lines="8"
+{ config, pkgs, lib, ... }:
+let
+  cfg = config.luffy.goatcounter;
+  keyCommand = _: [ "…" ];
+in
+{
+  config.luffy.containers.goatcounter-proxy = {
+    keys."goatcounter-proxy.env" = keyCommand "GOATCOUNTER_API_KEY";
+    config.systemd.services.goatcounter = {
+      description = "GoatCounter Proxy.";
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        EnvironmentFile = "/etc/goatcounter-proxy.env";
+        SupplementaryGroups = [ "keys" ];
+        DynamicUser = true;
+        Restart = "always";
+        ExecStart = lib.escapeShellArgs [
+          (lib.getExe cfg.package)
+          "proxy"
+          "-site=${cfg.proxy.site}"
+          "-listen=${cfg.proxy.listenAddress}:${toString cfg.proxy.port}"
+          "-ratelimit=10/1"  # 10 requêtes par seconde par IP
+        ];
+      };
+    };
+  };
+}
+```
+
+Sur chaque serveur, j'active le proxy local avec le bout de code suivant. La
+configuration nginx présentée plus haut expose le point de terminaison `/count`
+sous le même domaine que mon blog.
+
+```nix
+{
+  luffy.goatcounter = {
+    proxy = {
+      enable = true;
+      site = "goatcounter.luffy.cx";
+      listenAddress = "127.0.0.3";
+      port = 8087;
+    };
+  };
+}
+```
+
+## Sauvegarde de la base de données SQLite avec Litestream
+
+[Litestream][] est un outil de réplication en continu pour les bases de données
+SQLite. Il compresse les changements placés dans le journal d'écriture
+anticipée (WAL) situé à côté de la base de données et les envoie vers une
+destination distante. J'encapsule sa configuration dans un [module
+NixOS][litestream.nix], qui prend un ensemble d'attributs `databases` associant
+un nom au chemin de la base de données à sauvegarder.
+
+Litestream tourne lui aussi dans un conteneur. Je monte les bases de données à
+répliquer, ainsi que les secrets pour pousser les sauvegardes vers une [*storage
+box* de Hetzner][hetzner storage box] via SFTP :
+
+```nix
+{ config, pkgs, lib, ... }:
+let
+  cfg = config.luffy.litestream;
+  databaseDirs = lib.unique (map builtins.dirOf (builtins.attrValues cfg.databases));
+in
+{
+  config = lib.mkIf (cfg.databases != { }) {
+    luffy.containers.litestream = {
+      mounts = databaseDirs;
+      keys."litestream.env" = [
+        "${pkgs.runtimeShell}"
+        "-c"
+        "pass show personal/nixops/secrets | grep '^SQLITE_BACKUP_'"
+      ];
+    };
+  };
+}
+```
+
+Dans le conteneur, je configure Litestream à travers les options
+`services.litestream` de NixOS :
+
+- des instantanés complets chaque jour, conservés 15 jours ;
+- trois [niveaux de compactage][levels of compaction] pour les transactions :
+  5 minutes, 30 minutes et 3 heures ;
+- la reprise automatique[^auto-recover] ;
+- un réplica stocké dans un répertoire portant le nom de l'hôte ;
+- des identifiants lus depuis `/etc/litestream.env` et exposés par expansion de variables.
+
+[^auto-recover]:
+    Litestream [déconseille l'option `auto-recover`][auto-recover], car elle
+    peut entraîner une perte de données. Mais je ne surveille pas assez
+    attentivement mes serveurs et je préfère des sauvegardes toujours
+    fonctionnelles à un faible risque de perdre les derniers enregistrements.
+
+[auto-recover]: https://litestream.io/reference/config/#auto-recover "Litestream: auto-recover option"
+[levels of compaction]: https://fly.io/blog/litestream-v050-is-here/ "Litestream v0.5.0 is Here"
+
+```nix
+{ config, pkgs, lib, ... }:
+let
+  cfg = config.luffy.litestream;
+in
+{
+  config.luffy.containers.litestream = {
+    config = {
+      # Les bases de données appartiennent à des utilisateurs dynamiques, dont
+      # l'UID n'est pas connu ici : Litestream tourne donc en root.
+      systemd.services.litestream.serviceConfig = {
+        User = lib.mkForce "root";
+        Group = lib.mkForce "root";
+      };
+      # Utilise le service NixOS.
+      services.litestream = {
+        enable = true;
+        environmentFile = "/etc/litestream.env";
+        settings = {
+          auto-recover = true;
+          snapshot = {
+            interval = "24h";
+            retention = "360h";
+          };
+          levels = [
+            { interval = "5m"; }
+            { interval = "30m"; }
+            { interval = "3h"; }
+          ];
+          dbs = lib.mapAttrsToList
+            (name: path: {
+              inherit path;
+              replica = {
+                type = "sftp";
+                host = "\${SQLITE_BACKUP_HOST}";
+                user = "\${SQLITE_BACKUP_USER}";
+                password = "\${SQLITE_BACKUP_PASSWORD}";
+                host-key = "\${SQLITE_BACKUP_HOSTKEY}";
+                path = "${config.networking.hostName}/${name}";
+              };
+            })
+            cfg.databases;
+        };
+      };
+    };
+  };
+}
+```
+
+Pour sauvegarder la base de données de GoatCounter, je déclare un attribut
+`goatcounter` dans `luffy.litestream.databases` avec pour valeur le chemin de la
+base de données :
+
+```nix
+{ config, ... }:
+let
+  cfg = config.luffy.goatcounter.serve;
+in
+{
+  luffy.litestream.databases.goatcounter = cfg.databaseFile;
+}
+```
+
+Sur le serveur SFTP, nous pouvons inspecter le travail de Litestream, avec les
+transactions compactées et les instantanés complets :
+
+```console
+❯ ls web02/goatcounter/ltx
+web02/goatcounter/ltx/0
+web02/goatcounter/ltx/1
+web02/goatcounter/ltx/2
+web02/goatcounter/ltx/3
+web02/goatcounter/ltx/9
+❯ ls -lh web02/goatcounter/ltx/1
+29.1K Sep  5 01:25 0000000000003f2a-0000000000003f2b.ltx
+72.4K Sep  5 02:03 0000000000003f2c-0000000000003f2d.ltx
+63.3K Sep  5 02:24 0000000000003f2e-0000000000003f2f.ltx
+[…]
+❯ ls -lh web02/goatcounter/ltx/9
+ 8.5M Sep  5 02:00 0000000000000001-0000000000003f2b.ltx
+ 8.5M Sep  6 02:03 0000000000000001-0000000000004008.ltx
+ 8.6M Sep  7 02:03 0000000000000001-00000000000043a8.ltx
+[…]
+```
+
+Nous pouvons restaurer la base de données depuis la sauvegarde avec quelques
+commandes shell. D'abord, nous arrêtons les conteneurs. Ensuite, nous mettons de
+côté la base de données endommagée, invoquons `litestream restore` depuis le bon
+environnement et redémarrons les conteneurs[^slow].
+
+[^slow]:
+    Chez moi, le processus est lent : environ 20 minutes pour une base de
+    données de 20 Mio. Vous pouvez tester en restaurant vers une copie avec
+    l'option `-o`, mais il faut tout de même arrêter le conteneur Litestream.
+
+```console
+# systemctl stop container@goatcounter container@litestream
+# mv /var/db/goatcounter/db.sqlite{,.old}
+# ( . /etc/nixos-containers/litestream.conf ; 
+>   set -a ; . /var/keys/litestream.env ; set +a ;
+>   $SYSTEM_PATH/sw/bin/litestream \
+>     restore -config $SYSTEM_PATH/etc/litestream.yml /var/db/goatcounter/db.sqlite)
+# ls -lh /var/db/goatcounter/db.sqlite
+-rw-r--r-- 1 root root 20M Sep 20 07:33 /var/db/goatcounter/db.sqlite
+# systemctl start container@goatcounter container@litestream
+```
+
+[litestream]: https://litestream.io/ "Litestream: Streaming SQLite Replication"
+[hetzner storage box]: https://www.hetzner.com/storage/storage-box/ "Hetzner Storage Box"
+[litestream.nix]: https://github.com/vincentbernat/nixops-take1/blob/master/modules/litestream.nix "nixops-take1/modules/litestream.nix"
+
+---
+
+Dix ans après [avoir retiré Google Analytics][removing google analytics], les
+statistiques en JavaScript sont de retour sur ce blog, mais sans stocker de
+cookies ni d'adresses IP, et sans se reposer sur un tiers. J'écris d'abord pour
+moi, notamment parce que cela me permet de creuser un sujet et de m'y référer
+des années plus tard. Cependant, en savoir un peu plus sur mes lecteurs humains
+est un bonus appréciable, y compris sur ceux qui n'activent pas JavaScript. 🐐
+
+[removing google analytics]: [[fr/blog/2018-blog-respect-vie-privee.html]] "Un blog plus respectueux de la vie privée"
+
+*[WAL]: Write-ahead log
+*[SFTP]: Secure File Transfer Protocol
+
