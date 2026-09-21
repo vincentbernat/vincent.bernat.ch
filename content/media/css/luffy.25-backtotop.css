@@ -9,53 +9,57 @@
 }
 
 .lf-backtotop {
-  opacity: 0.7;
   @supports (animation-timeline: scroll()) {
     animation: lf-backtotop-show linear both;
     animation-timeline: scroll();
     animation-range: 100vh 200vh;
   }
-  &:hover {
-    opacity: 1;
-  }
+  /* The disc. */
   a {
+    opacity: 0.7;
+    &:hover {
+      opacity: 1;
+    }
     position: fixed;
     text-decoration: none;
     bottom: 10px;
     right: 10px;
-  }
-  a > svg {
-    display: block;
     width: var(--lf-minimal-margin);
     height: var(--lf-minimal-margin);
-    overflow: visible; /* for the shadow */
+    border-radius: 50%;
+    background: light-dark(#fff, #000);
+    box-shadow: 1px 2px 3px #000a;
   }
-  circle {
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
     fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
     stroke-width: 2.5;
   }
-  .lf-backtotop-disc {
-    fill: light-dark(#ffffff, #000000);
-    filter: drop-shadow(
-      0 1.5px 1.5px light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.7))
-    );
+  /* The track. */
+  circle {
+    stroke: var(--lf-color-foreground);
+    stroke-width: 1;
   }
-  .lf-backtotop-track {
-    stroke: var(--lf-color-low);
-  }
-  .lf-backtotop-progress {
+  /* The ring, over the track. It starts at noon and turns clockwise. */
+  circle + circle {
     stroke: var(--lf-color-accent);
-    stroke-linecap: round;
+    stroke-dasharray: var(--lf-backtotop-length);
+    stroke-dashoffset: var(--lf-backtotop-length);
+    stroke-width: 3;
+    transform: rotate(-90deg);
     @supports (animation-timeline: view()) {
-      stroke-dasharray: var(--lf-backtotop-length);
-      stroke-dashoffset: var(--lf-backtotop-length);
       animation: lf-backtotop-fill linear both;
       animation-timeline: --lf-text-progress;
       animation-range: contain;
     }
   }
-  .lf-backtotop-arrow {
-    fill: var(--lf-color-foreground);
+  /* The arrow. */
+  path {
+    stroke: var(--lf-color-foreground);
   }
 }
 
@@ -78,14 +82,11 @@
   }
   to {
     visibility: visible;
-    opacity: 0.7;
+    opacity: 1;
   }
 }
 
 @keyframes lf-backtotop-fill {
-  from {
-    stroke-dashoffset: var(--lf-backtotop-length);
-  }
   to {
     stroke-dashoffset: 0;
   }
