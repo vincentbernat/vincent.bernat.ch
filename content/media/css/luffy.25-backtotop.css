@@ -1,6 +1,6 @@
 /* Back to top button */
 
-/* Reading progress of the main text, used to fill the icon. */
+/* Reading progress of the main text, used to fill the ring. */
 :root {
   timeline-scope: --lf-text-progress;
 }
@@ -13,7 +13,7 @@
   @supports (animation-timeline: scroll()) {
     animation: lf-backtotop-show linear both;
     animation-timeline: scroll();
-    animation-range: 100vh 400vh;
+    animation-range: 100vh 200vh;
   }
   &:hover {
     opacity: 1;
@@ -21,29 +21,41 @@
   a {
     position: fixed;
     text-decoration: none;
-    bottom: 5px;
-    right: 0;
-    &::before {
-      content: "";
-      display: block;
-      width: var(--lf-minimal-margin);
-      height: var(--lf-minimal-margin);
-      /* The gradient is twice as tall as the icon: the top half is the accent
-         color, the bottom half the regular one. Moving it up fills the icon
-         from top to bottom. */
-      background: linear-gradient(
-          var(--lf-color-accent) 50%,
-          var(--lf-color-foreground) 50%
-        )
-        bottom / 100% 200% no-repeat;
-      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M4 4h16M12 22V8M6 14l6-6 6 6'/%3E%3C/svg%3E")
-        center / contain no-repeat;
-      @supports (animation-timeline: view()) {
-        animation: lf-backtotop-fill linear both;
-        animation-timeline: --lf-text-progress;
-        animation-range: contain;
-      }
+    bottom: 10px;
+    right: 10px;
+  }
+  a > svg {
+    display: block;
+    width: var(--lf-minimal-margin);
+    height: var(--lf-minimal-margin);
+    overflow: visible; /* for the shadow */
+  }
+  circle {
+    fill: none;
+    stroke-width: 2.5;
+  }
+  .lf-backtotop-disc {
+    fill: light-dark(#ffffff, #000000);
+    filter: drop-shadow(
+      0 1.5px 1.5px light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.7))
+    );
+  }
+  .lf-backtotop-track {
+    stroke: var(--lf-color-low);
+  }
+  .lf-backtotop-progress {
+    stroke: var(--lf-color-accent);
+    stroke-linecap: round;
+    @supports (animation-timeline: view()) {
+      stroke-dasharray: var(--lf-backtotop-length);
+      stroke-dashoffset: var(--lf-backtotop-length);
+      animation: lf-backtotop-fill linear both;
+      animation-timeline: --lf-text-progress;
+      animation-range: contain;
     }
+  }
+  .lf-backtotop-arrow {
+    fill: var(--lf-color-foreground);
   }
 }
 
@@ -70,13 +82,11 @@
   }
 }
 
-/* The arrow is drawn between 3.25 and 22 in its 24-unit box. The fill sweeps
-   only this part, not the empty margins above and below. */
 @keyframes lf-backtotop-fill {
   from {
-    background-position-y: calc(100% - 3.25 / 24 * 100%);
+    stroke-dashoffset: var(--lf-backtotop-length);
   }
   to {
-    background-position-y: calc(100% - 22 / 24 * 100%);
+    stroke-dashoffset: 0;
   }
 }
