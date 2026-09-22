@@ -157,17 +157,22 @@ class ImageFixerPlugin(Plugin):
                     }
                 return {"size": img.size, "opaque": False}
             case "svg":
+                # drawio exports point to this page when text is not real text
+                drawio = "https://www.drawio.com/doc/faq/svg-export-text-problems"
+                ns = {"svg": "http://www.w3.org/2000/svg"}
+                xlink_href = "{http://www.w3.org/1999/xlink}href"
                 svg = ET.parse(path).getroot()
+                interactive = svg.find(".//svg:script", ns) is not None or any(
+                    (link.get("href") or link.get(xlink_href)) != drawio
+                    for link in svg.iterfind(".//svg:a", ns)
+                )
                 return {
                     "size": tuple(
                         (self._topx(x) or None) if x else None
                         for x in (svg.attrib.get("width"), svg.attrib.get("height"))
                     ),
                     "opaque": False,
-                    "interactive": any(
-                        svg.find(f".//{{http://www.w3.org/2000/svg}}{tag}") is not None
-                        for tag in ("script", "a")
-                    ),
+                    "interactive": interactive,
                 }
             case "m3u8":
                 with open(path) as f:
