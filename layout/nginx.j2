@@ -172,6 +172,7 @@ http {
   proxy_temp_path proxy;
   proxy_intercept_errors on;
   proxy_read_timeout 10m;
+  resolver 127.0.0.53;
 
   upstream hyde {
     server 127.0.0.1:8081;
@@ -189,8 +190,9 @@ http {
     }
 
     location @media {
+      set $upstream "media.bernat.ch";
       rewrite ^/media/(.*)$ /$1 break;
-      proxy_pass https://media.bernat.ch;
+      proxy_pass https://$upstream;
       proxy_ssl_server_name on;
     }
 
