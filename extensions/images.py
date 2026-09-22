@@ -164,8 +164,10 @@ class ImageFixerPlugin(Plugin):
                         for x in (svg.attrib.get("width"), svg.attrib.get("height"))
                     ),
                     "opaque": False,
-                    "interactive": svg.find(".//{http://www.w3.org/2000/svg}script")
-                    is not None,
+                    "interactive": any(
+                        svg.find(f".//{{http://www.w3.org/2000/svg}}{tag}") is not None
+                        for tag in ("script", "a")
+                    ),
                 }
             case "m3u8":
                 with open(path) as f:
