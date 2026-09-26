@@ -218,20 +218,6 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
-// cssnano leaves calc(-1.8rem): the reason is that for properties where
-// negative values are not valid (like width), the value with calc resolves to 0
-// while if we unwrap, it becomes invalid. We don't really care about that but
-// we care we don't want calc(). We could keep both declarations, but this does
-// not really matter.
-const unwrapNegativeCalc = {
-    postcssPlugin: "unwrap-negative-calc",
-    OnceExit(root) {
-        root.walkDecls((decl) => {
-            decl.value = decl.value.replace(/calc\((-[\d.]+[a-z%]*)\)/gi, "$1");
-        });
-    },
-};
-
 const minify = process.env.CSS_MINIFY === "true";
 const cssDirectory = path.join(__dirname, "..", "content", "media", "css");
 
@@ -291,6 +277,13 @@ function runProcess() {
                 preset: [
                     "default",
                     {
+                        /* By default, calc() stays around a resolved
+                           value: for a property where a negative value is
+                           invalid (like width), calc(-1.8rem) resolves to 0
+                           while -1.8rem makes the whole declaration invalid.
+                           This does not matter to us, we just don't want
+                           calc(). */
+                        calc: { unwrapSingleValue: true },
                         reduceIdents: false,
                         normalizeWhitespace: minify,
                         /* Sometimes, fallback values are killed. */
@@ -298,7 +291,6 @@ function runProcess() {
                     },
                 ],
             }),
-            unwrapNegativeCalc,
         ])
             .process(input, { from: undefined })
             .then(function (result) {
