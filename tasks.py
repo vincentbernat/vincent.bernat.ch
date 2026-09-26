@@ -846,6 +846,35 @@ rm ../result
         with step("pagefind index"), c.cd(".."):
             build_pagefind(c, site=".final")
 
+        # Record bundle sizes before names get a hash
+        with step("bundle sizes"):
+            bundles = sorted(
+                glob.glob("media/css/*.css", root_dir=".final")
+                + glob.glob("media/js/*.js", root_dir=".final")
+                + glob.glob("media/fonts/*.woff2", root_dir=".final")
+            )
+            sizes = []
+            for bundle in bundles:
+                quoted = shlex.quote(bundle)
+                row = [os.path.getsize(f".final/{bundle}")]
+                # compression levels are from:
+                # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/web-servers/nginx/default.nix
+                for compress in ("gzip -c -5", "brotli -c -q 5"):
+                    compressed = c.run(
+                        f"{compress} {quoted} | wc -c", hide=True
+                    ).stdout.strip()
+                    row.append(int(compressed))
+                sizes.append((bundle, row))
+            sizes.sort(key=lambda item: item[1][2], reverse=True)
+            total = [sum(column) for column in zip(*(row for _, row in sizes))]
+            sizes.append(("total", total))
+            width = max(len(name) for name, _ in sizes)
+            with open(".final/bundle-sizes.txt", "w") as f:
+                f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10}\n")
+                for name, row in sizes:
+                    columns = "".join(f" {human(size):>10}" for size in row)
+                    f.write(f"{name:<{width}}{columns}\n")
+
         # Compute hash on various files
         with step("cache busting and SRI"):
             # First fonts and images, then JS and CSS
@@ -1025,7 +1054,7 @@ done
     for host in hosts:
         with step(f"push HTML to {host}"):
             c.run(
-                "rsync --exclude=.git --exclude=media "
+                "rsync --exclude=.git --exclude=media --exclude=/bundle-sizes.txt "
                 "--delete-delay --copy-unsafe-links -rt "
                 f".final/ {host}:/data/webserver/vincent.bernat.ch/"
             )

@@ -504,6 +504,7 @@
                 uv
 
                 # Helper tools
+                brotli
                 nginx
                 pagefind
                 vale
