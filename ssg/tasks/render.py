@@ -30,7 +30,7 @@ def media(site: Site, resource: Resource) -> None:
         case "css":
             content = css.process(site, content)
         case "js":
-            content = js(site, content)
+            content = js(site, resource, content)
         case "svg":
             content = svg.process(content)
     write(site.generated[resource.media_path], content)

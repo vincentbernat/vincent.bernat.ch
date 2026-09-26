@@ -149,7 +149,6 @@
                         import "@videojs/html/video/minimal-skin";
                         import "@videojs/html/media/hls-video";' \
                     | esbuild --bundle --loader=js --format=iife \
-                      --target=es2015 \
                       --outfile=node_modules/@videojs/html/dist/videojs.bundle.js
                 )
               '';
