@@ -857,6 +857,9 @@ rm ../result
             for bundle in bundles:
                 quoted = shlex.quote(bundle)
                 row = [os.path.getsize(f".final/{bundle}")]
+                if bundle.endswith(".woff2"):
+                    sizes.append((bundle, row * 3))
+                    continue
                 # compression levels are from:
                 # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/web-servers/nginx/default.nix
                 for compress in ("gzip -c -5", "brotli -c -q 5"):
@@ -872,7 +875,10 @@ rm ../result
             with open(".final/bundle-sizes.txt", "w") as f:
                 f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10}\n")
                 for name, row in sizes:
-                    columns = "".join(f" {human(size):>10}" for size in row)
+                    cells = [human(size) for size in row]
+                    if name.endswith(".woff2"):
+                        cells[1:] = ["-", "-"]
+                    columns = "".join(f" {cell:>10}" for cell in cells)
                     f.write(f"{name:<{width}}{columns}\n")
 
         # Compute hash on various files
