@@ -59,7 +59,7 @@
     {%- set subtag = subtags[:loop.index]|join('-') -%}
     {{- fmt(resource, subtag,
             site.config.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e ~
-            site.config.tagger.tags[subtag].descr|e, not site.config.tagger.tags[subtag].order) -}}
+            site.config.tagger.tags[subtag].descr|e, site.config.tagger.tags[subtag].hidden) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
 {%- endfilter -%}
@@ -69,14 +69,13 @@
 {% macro list_tags(lang) %}
 {% set ctx = resource %}
 {% set tags = [] %}
-{% for tag, resources in site.config.tagger.tags if site.config.tagger.tags[tag].order %}
-{% do tags.append((site.config.tagger.tags[tag].order, tag)) %}
+{% for tag, info in site.config.tagger.tags if not info.hidden %}
+{% do tags.append(tag) %}
 {% endfor %}
 {% set top = [] %}
 {% set depth = [0] %}
 <div class="toc"><ul>
-{%- for tag in tags|sort if tag[1]|string != "outdated" %}
-{%- set tag = tag[1]|string -%}
+{%- for tag in tags if tag != "outdated" %}
 {%- if top and tag.startswith(top[-1]) and depth[-1] == 0 -%}
 <ul>
 {%- do depth.append(1) -%}
@@ -93,8 +92,7 @@
 {%- endfor -%}
 </ul></div>
 <div class="lf-list-tags">
-{% for tag in tags|sort %}
-{% set tag = tag[1] %}
+{% for tag in tags %}
 {% set rr = [] %}
 {% for resource in site.content|attr("walk_resources_sorted_by_time")()
    if resource.meta.language == lang or lang not in resource.translations|map(attribute="meta")|map(attribute="language") %}
