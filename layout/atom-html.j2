@@ -3,6 +3,15 @@
 {% block article %}
 {% block intro %}{% endblock %}
 
+{% set feed = base ~ "/" ~ resource.meta.language ~ "/blog/atom.xml" %}
+[rss]: {{ feed }}
+[FeedRabbit]: https://feedrabbit.com/?url={{ feed|urlencode }}
+[Blogtrottr]: https://blogtrottr.com/?subscribe={{ feed|urlencode }}
+[Miniflux]: https://miniflux.app/ "Miniflux"
+[NewsBlur]: https://www.newsblur.com/?url={{ feed|urlencode }} "NewsBlur"
+[Bluesky]: https://bsky.app/profile/{{ resource.meta.bluesky }}
+[Mastodon]: {{ resource.meta.mastodon|mastodon_href }}
+
 {% from "macros.j2" import resource_date with context %}
 {% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)()|top(6) %}
 <article>
