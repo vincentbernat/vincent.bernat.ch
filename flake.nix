@@ -505,6 +505,7 @@
 
                 # Helper tools
                 nginx
+                pagefind
                 vale
               ];
               shellHook = ''

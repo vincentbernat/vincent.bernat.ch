@@ -66,8 +66,11 @@ mpl_cache = os.path.expanduser("~/.cache/matplotlib")
 os.makedirs(mpl_cache, exist_ok=True)
 bwrap = (
     "bwrap "
-    "--ro-bind / / --dev /dev --proc /proc "
+    "--ro-bind /usr /usr --ro-bind /nix /nix "
+    "--symlink usr/lib64 /lib64 --symlink usr/lib /lib --symlink usr/bin /bin "
+    "--dev /dev --proc /proc "
     "--tmpfs /run --tmpfs /tmp --tmpfs /var/tmp --tmpfs $HOME "
+    "--ro-bind ~/.config/nix ~/.config/nix "
     "--bind $PWD $PWD "
     f"--bind {mpl_cache} {mpl_cache} "
     "--unshare-all --die-with-parent "
@@ -126,7 +129,7 @@ def build_dev(c, clean=False):
 def build_pagefind(c, site=".out"):
     """Run pagefind indexation"""
     c.run(
-        f"{bwrap} -- node_modules/pagefind/lib/runner/bin.cjs "
+        f"{bwrap} -- pagefind "
         f"--site {site} "
         "--exclude-selectors=.headerlink "
         "--output-subdir=media/js/pagefind"
@@ -136,7 +139,8 @@ def build_pagefind(c, site=".out"):
             "rm pagefind-component* pagefind-modular* pagefind-ui* pagefind-worker* pagefind-highlight.js"
         )
     with c.cd(f"{site}/media"):
-        c.run("mkdir -p pagefind")
+        c.run("rm -rf pagefind")
+        c.run("mkdir pagefind")
         c.run("mv js/pagefind/pagefind.js js")
         c.run("mv js/pagefind/* pagefind")
         c.run("rmdir js/pagefind")
