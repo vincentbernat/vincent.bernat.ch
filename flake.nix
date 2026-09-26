@@ -497,10 +497,6 @@
               };
               packages = with pkgs; [
                 pythonEnv
-
-                # Build
-                git
-                git-annex
                 uv
 
                 # Helper tools
