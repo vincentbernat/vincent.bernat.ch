@@ -494,6 +494,7 @@
                 NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
                 PYTHONDONTWRITEBYTECODE = 1;
                 SRGB_PROFILE = "${srgbProfile}";
+                NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
               };
               packages = with pkgs; [
                 pythonEnv
