@@ -604,11 +604,13 @@ class CoverImagePlugin(Plugin):
             .resize((128, 128), Image.Resampling.NEAREST)
         )
         typeface = skia.Typeface.MakeFromName(
-            "Noto Sans Display",
+            "Noto Sans Display SemiBold",
             skia.FontStyle(
                 600, skia.FontStyle.kNormal_Width, skia.FontStyle.kUpright_Slant
             ),
         )
+        if typeface is None:
+            raise RuntimeError("cannot find font for cover images")
         CoverImagePlugin.title_font = skia.Font(typeface, 64)
         CoverImagePlugin.author_font = skia.Font(typeface, 32)
 

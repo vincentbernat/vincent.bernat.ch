@@ -185,15 +185,14 @@
           notoSansDisplay = pkgs.runCommand "noto-sans-display" { } ''
             install -Dm444 ${pkgs.fetchurl (
               let
-                commit = "8d7e485e53e169e95e6f50f11d0cf1be04795b82";
-                hash = "sha256-3qpoFB+lrSG9F9fBH6eRg87aGbMuQP9cM4dNQvNjbd4=";
+                commit = "503d300da2bbdec7d00e0ff9078876ec7d6dbb92";
+                hash = "sha256-EGEFcWEsrYx76Qsi2ClA/5SrTgx0RlEbLkTU45qxiGU=";
               in
               {
                 inherit hash;
-                name = "NotoSansDisplay.ttf";
-                url = "https://github.com/google/fonts/raw/${commit}/ofl/notosansdisplay/NotoSansDisplay%5Bwdth,wght%5D.ttf";
+                url = "https://github.com/notofonts/noto-fonts/raw/${commit}/hinted/ttf/NotoSansDisplay/NotoSansDisplay-SemiBold.ttf";
               }
-            )} $out/share/fonts/truetype/NotoSansDisplay.ttf
+            )} $out/share/fonts/truetype/NotoSansDisplay-SemiBold.ttf
           '';
         in
         {
