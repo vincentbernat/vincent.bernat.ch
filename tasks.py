@@ -868,30 +868,57 @@ rm ../result
                     ).stdout.strip()
                     row.append(int(compressed))
                 sizes.append((bundle, row))
-            sizes.sort(key=lambda item: item[1][2], reverse=True)
-            specific = [
-                row
-                for name, row in sizes
-                if re.match(r"\d{4}-", os.path.basename(name))
-            ]
-            generic = [
-                row
-                for name, row in sizes
-                if not re.match(r"\d{4}-", os.path.basename(name))
-            ]
-            for name, rows in (
-                ("total (specific)", specific),
-                ("total (generic)", generic),
-                ("total", specific + generic),
-            ):
-                sizes.append((name, [sum(column) for column in zip(*rows)]))
+            # Count pages using each bundle, directly or through a CSS file
+            names = {bundle.removeprefix("media/"): bundle for bundle in bundles}
+            pattern = re.compile(
+                rf"(?:{re.escape(media)}|\.\./)("
+                + "|".join(re.escape(name) for name in names)
+                + r")(?![\w.-])"
+            )
+
+            def references(path):
+                with open(f".final/{path}") as f:
+                    return {names[name] for name in pattern.findall(f.read())}
+
+            nested = {
+                bundle: references(bundle)
+                for bundle in bundles
+                if bundle.endswith(".css")
+            }
+            pages = glob.glob("**/*.html", root_dir=".final", recursive=True)
+            counts = dict.fromkeys(bundles, 0)
+            for page in pages:
+                found = references(page)
+                for bundle in found.copy():
+                    found |= nested.get(bundle, set())
+                for bundle in found:
+                    counts[bundle] += 1
+            sizes.sort(key=lambda item: (counts[item[0]], item[1][2]), reverse=True)
+            totals = []
+            for percent in (100, 90, 50, 10, 5, 1):
+                rows = [
+                    row
+                    for name, row in sizes
+                    if counts[name] * 100 >= percent * len(pages)
+                ]
+                total = [sum(row[i] for row in rows) for i in range(3)]
+                totals.append((f"total ({percent}%)", total))
+            totals.append(
+                ("total", [sum(row[i] for _, row in sizes) for i in range(3)])
+            )
+            sizes += totals
             width = max(len(name) for name, _ in sizes)
             with open(".final/bundle-sizes.txt", "w") as f:
-                f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10}\n")
+                f.write(
+                    f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10}"
+                    f" {'pages':>10}\n"
+                )
                 for name, row in sizes:
                     cells = [human(size) for size in row]
                     if name.endswith(".woff2"):
                         cells[1:] = ["-", "-"]
+                    if name in counts:
+                        cells.append(f"{counts[name] * 100 / len(pages):.1f}%")
                     columns = "".join(f" {cell:>10}" for cell in cells)
                     f.write(f"{name:<{width}}{columns}\n")
 
