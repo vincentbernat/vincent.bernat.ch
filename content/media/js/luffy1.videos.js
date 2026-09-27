@@ -6,10 +6,15 @@ luffy.do(() => {
   ].map(({ parentNode }) => parentNode);
   if (hlsVideos.length === 0) return;
 
-  // Video.js 10 needs MSE and a recent browser (the most recent feature it uses
-  // is CSS nesting).
+  // Video.js 10 needs MSE and a recent browser (the most recent features it
+  // uses are @scope and CSS nesting). We also compile it to ES2022 to minimize
+  // the bundle size, but that's a far lower floor, no need to test. Browsers
+  // not matching the gate will fallback either to native HLS or to the
+  // progressive MP4 video.
+  //
+  // https://videojs.org/docs/framework/html/guides/browser-support
   const mse = window.MediaSource || window.ManagedMediaSource;
-  if (!mse || !window.CSS?.supports("selector(&)")) return;
+  if (!mse || !window.CSSScopeRule || !CSS.supports("selector(&)")) return;
 
   const language = document.documentElement.lang.slice(0, 2);
 
