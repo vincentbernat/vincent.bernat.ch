@@ -182,6 +182,19 @@
               url = "https://github.com/saucecontrol/Compact-ICC-Profiles/raw/${commit}/profiles/sRGB-v2-micro.icc";
             }
           );
+          notoSansDisplay = pkgs.runCommand "noto-sans-display" { } ''
+            install -Dm444 ${pkgs.fetchurl (
+              let
+                commit = "8d7e485e53e169e95e6f50f11d0cf1be04795b82";
+                hash = "sha256-3qpoFB+lrSG9F9fBH6eRg87aGbMuQP9cM4dNQvNjbd4=";
+              in
+              {
+                inherit hash;
+                name = "NotoSansDisplay.ttf";
+                url = "https://github.com/google/fonts/raw/${commit}/ofl/notosansdisplay/NotoSansDisplay%5Bwdth,wght%5D.ttf";
+              }
+            )} $out/share/fonts/truetype/NotoSansDisplay.ttf
+          '';
         in
         {
           apps = {
@@ -495,6 +508,16 @@
                 PYTHONDONTWRITEBYTECODE = 1;
                 SRGB_PROFILE = "${srgbProfile}";
                 NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
+                FONTCONFIG_FILE = "${pkgs.runCommand "fonts.conf" { } ''
+                  sed '/<dir prefix="xdg">/d' ${pkgs.makeFontsConf {
+                    fontDirectories = with pkgs; [
+                      notoSansDisplay
+                      dejavu_fonts
+                    ];
+                    impureFontDirectories = [ ];
+                    includes = [ ];
+                  }} > $out
+                ''}";
               };
               packages = with pkgs; [
                 pythonEnv
