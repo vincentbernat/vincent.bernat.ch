@@ -120,20 +120,36 @@
         scrollbar-width: none;
         scroll-behavior: smooth;
         padding-top: 1rlh;
-        padding-left: 0;
+        padding-left: 0.8em;
       }
+      /* Line on the left for active entries. */
       a {
-        transition: opacity 0.5s;
-        &.lf-toc-future {
-          opacity: 0.6;
+        display: block;
+        position: relative;
+        &::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: -0.8em;
+          width: 2px;
         }
-        &.lf-toc-past {
-          opacity: 0.3;
+        &.lf-toc-active::before {
+          background-color: var(--lf-color-accent);
         }
-        &.lf-toc-active,
-        &:hover,
-        &:active {
-          opacity: 1;
+
+        /* With anchor positioning, the line is positioned from the sticky list
+           and anchored to its link for the vertical position. */
+        @supports (anchor-scope: --lf-toc-link) {
+          position: static;
+          anchor-name: --lf-toc-link;
+          anchor-scope: --lf-toc-link;
+          &::before {
+            position-anchor: --lf-toc-link;
+            top: anchor(top);
+            bottom: anchor(bottom);
+            left: 0;
+          }
         }
       }
     }
