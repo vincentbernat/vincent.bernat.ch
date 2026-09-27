@@ -869,8 +869,22 @@ rm ../result
                     row.append(int(compressed))
                 sizes.append((bundle, row))
             sizes.sort(key=lambda item: item[1][2], reverse=True)
-            total = [sum(column) for column in zip(*(row for _, row in sizes))]
-            sizes.append(("total", total))
+            specific = [
+                row
+                for name, row in sizes
+                if re.match(r"\d{4}-", os.path.basename(name))
+            ]
+            generic = [
+                row
+                for name, row in sizes
+                if not re.match(r"\d{4}-", os.path.basename(name))
+            ]
+            for name, rows in (
+                ("total (specific)", specific),
+                ("total (generic)", generic),
+                ("total", specific + generic),
+            ):
+                sizes.append((name, [sum(column) for column in zip(*rows)]))
             width = max(len(name) for name, _ in sizes)
             with open(".final/bundle-sizes.txt", "w") as f:
                 f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10}\n")
