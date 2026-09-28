@@ -1,6 +1,7 @@
 import os
 import jinja2
 import re
+import tomllib
 from markupsafe import Markup
 from markdown import Markdown
 from babel.dates import format_date
@@ -102,6 +103,13 @@ def include_file(ctx, name):
     target = os.path.join(str(ctx.parent["node"]), name)
     with open(target) as f:
         return Markup(f.read())
+
+
+@jinja2.pass_context
+def reuse(ctx):
+    target = os.path.join(str(ctx["site"].sitepath), "REUSE.toml")
+    with open(target, "rb") as f:
+        return tomllib.load(f)
 
 
 class ReadingTime(int):

@@ -1,0 +1,42 @@
+{# -*- web -*- #}
+{% extends "base.j2" %}
+{% block article %}
+{% block intro %}{% endblock %}
+
+---
+
+{% set data = reuse() %}
+{% set lang = resource.meta.language %}
+{% for annotation in data.annotations %}
+{% set paths = [annotation.path] if annotation.path is string else annotation.path %}
+{% set holders = annotation["SPDX-FileCopyrightText"]|default([]) %}
+{% set holders = [holders] if holders is string else holders %}
+{% set items = [] %}
+{% for holder in holders %}
+{% if holder.endswith(">") and " <" in holder %}
+{% set name, url = holder[:-1].split(" <", 1) %}
+{% do items.append("[{}]({})".format(name, url)) %}
+{% else %}
+{% do items.append(holder) %}
+{% endif %}
+{% endfor %}
+{% set license = [] %}
+{% for token in annotation["SPDX-License-Identifier"].split() %}
+{% if token in data.labels %}
+{% do license.append(data.labels[token][lang]) %}
+{% elif token in ["AND", "OR", "WITH"] %}
+{% do license.append(token) %}
+{% else %}
+{% do license.append("[{0}](https://spdx.org/licenses/{0}.html)".format(token)) %}
+{% endif %}
+{% endfor %}
+{% do items.append(license|join(" ")) %}
+{% if annotation.note %}
+{% do items.append(annotation.note[lang]) %}
+{% endif %}
+{% if annotation.source %}
+{% do items.append("[source]({})".format(annotation.source)) %}
+{% endif %}
+ - {% for path in paths %}`{{ path }}`{% if not loop.last %}, {% endif %}{% endfor %}: {{ items|join(", ") }}
+{% endfor %}
+{% endblock %}
