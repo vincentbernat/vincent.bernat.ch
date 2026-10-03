@@ -218,6 +218,33 @@ const resolveCustomPropsInMediaCalc = {
     },
 };
 
+// Resolve :root variables in custom properties declared outside :root (for
+// example, to style Video.js). postcss-custom-properties removes the :root
+// declarations but does not resolve these ones.
+const resolveRootVarsInCustomProps = {
+    postcssPlugin: "resolve-root-vars-in-custom-props",
+    Once(root) {
+        const vars = collectRootVars(root);
+        root.walkDecls(/^--/, (decl) => {
+            if (decl.parent.selector === ":root") return;
+            let value = decl.value;
+            let changed = true;
+            while (changed) {
+                changed = false;
+                value = value.replace(
+                    /var\(\s*(--[\w-]+)\s*\)/g,
+                    (match, name) => {
+                        if (vars[name] === undefined) return match;
+                        changed = true;
+                        return vars[name];
+                    },
+                );
+            }
+            decl.value = value;
+        });
+    },
+};
+
 const minify = process.env.CSS_MINIFY === "true";
 const cssDirectory = path.join(__dirname, "..", "..", "content", "media", "css");
 
@@ -268,6 +295,7 @@ function runProcess() {
             lfFontScale /* could be implemented with round, baseline 2024 */,
             rlhUnit /* baseline 2023 */,
             postcssMixins /* https://drafts.csswg.org/css-mixins/ */,
+            resolveRootVarsInCustomProps /* because root.css is not part of the bundle */,
             postcssCustomProperties({ preserve: false }) /* baseline 2016 */,
             postcssLogical /* baseline 2021 */,
             lightDarkFallback /* baseline 2024 */,
