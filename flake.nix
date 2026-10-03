@@ -146,7 +146,7 @@
                 (
                   cd $out
                   echo 'import "@videojs/html/video/player";
-                        import "@videojs/html/video/minimal-skin";
+                        import "@videojs/html/video/neutral-skin";
                         import "@videojs/html/media/hls-video";' \
                     | esbuild --bundle --loader=js --format=iife \
                       --outfile=node_modules/@videojs/html/dist/videojs.bundle.js

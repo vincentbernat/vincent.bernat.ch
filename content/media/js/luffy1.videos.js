@@ -6,25 +6,30 @@ luffy.do(() => {
   ].map(({ parentNode }) => parentNode);
   if (hlsVideos.length === 0) return;
 
-  // Video.js 10 needs MSE and a recent browser (the most recent features it
-  // uses are @scope and CSS nesting). We also compile it to ES2022 to minimize
-  // the bundle size, but that's a far lower floor, no need to test. Browsers
-  // not matching the gate will fallback either to native HLS or to the
-  // progressive MP4 video.
+  // Video.js 10 needs MSE and a recent browser: :has() for Firefox 121,
+  // color-mix() and oklch() for Chrome 111, adoptedStyleSheets for Safari 16.4
+  // (it also covers ES2022). Browsers not matching the gate will fallback
+  // either to native HLS or to the progressive MP4 video.
   //
   // https://videojs.org/docs/framework/html/guides/browser-support
   const mse = window.MediaSource || window.ManagedMediaSource;
-  if (!mse || !window.CSSScopeRule || !CSS.supports("selector(&)")) return;
+  if (
+    !mse ||
+    !CSS.supports("selector(:has(a))") ||
+    !CSS.supports("color", "color-mix(in oklch, red, red)") ||
+    !("adoptedStyleSheets" in Document.prototype)
+  )
+    return;
 
   const language = document.documentElement.lang.slice(0, 2);
 
   luffy.load("videojs.js", () => {
     const videos = hlsVideos.map((oldVideo) => {
       // <media-i18n> takes the language from the document, <video-player>
-      // owns the state, <video-minimal-skin> draws the controls.
+      // owns the state, <video-neutral-skin> draws the controls.
       const i18n = document.createElement("media-i18n");
       const player = document.createElement("video-player");
-      const skin = document.createElement("video-minimal-skin");
+      const skin = document.createElement("video-neutral-skin");
       const video = document.createElement("hls-video");
 
       skin.className = oldVideo.className;
@@ -102,7 +107,7 @@ luffy.do(() => {
 
           // Scroll element into view if needed. An <hls-video> has no box of
           // its own, the skin around it has one.
-          const box = videos[i].closest("video-minimal-skin") ?? videos[i];
+          const box = videos[i].closest("video-neutral-skin") ?? videos[i];
           const rect = box.getBoundingClientRect();
           if (
             rect.top >= 0 &&
