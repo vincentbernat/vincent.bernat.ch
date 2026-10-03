@@ -138,6 +138,11 @@
                   sed -i '/() => import(/{ /locales\/fr\.js/!d }' load-locale.js
                 )
 
+                # SPF turns an audio-only variant into a "Default" audio track,
+                # even when an EXT-X-MEDIA rendition already uses the same
+                # playlist. Merge the variant into the rendition in this case.
+                patch -p1 -d $out/node_modules/@videojs/spf < ${./tools/patches/videojs-spf-audio-only.patch}
+
                 # Video.js ships one module per component. Bundle the video
                 # preset together with the HLS media element, which runs on
                 # SPF, the Video.js streaming engine. Wrap it in a function:
