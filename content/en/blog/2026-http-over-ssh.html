@@ -1,0 +1,304 @@
+---
+title: "Self-hosted HTTP tunnels with SSH and nginx"
+description: |
+  No extra software to install: OpenSSH remote forwarding and nginx's
+  secure_link module give you a shareable HTTPS URL with an expiring token.
+uuid: 0490dd53-a95f-4f0d-8b68-863d4aa81ddd
+tags:
+  - web
+ai-usage: Copyediting (Claude Opus 5.5)
+---
+
+<!--
+  Target audiences:
+    - People already using a commercial tool for that, including Cloudflare
+      quick tunnels or ngrok. They can self-host their own alternative.
+    - People using a self-hosted version but requiring to install a server-side
+      software or a client-side software. They can have a simpler setup.
+    - People not using such a tool (a bit unlikely).
+-->
+
+A friend wants to proofread your work-in-progress blog post, but its preview
+only runs on `localhost:8080`. [Several tools][] can help. Some run as a
+commercial service, like [ngrok][] or [Cloudflare Quick Tunnels][]. Some are
+self-hostable but require a specific client, like [frp][] or [localtunnel][].
+Some only require a plain SSH client but rely on a specific SSH server, like
+[sish][]. Let's implement a self-hosted solution with only *OpenSSH* and
+*nginx*!
+
+```console
+$ ssh -R 0:localhost:8080 http-over-ssh
+Allocated port 41535 for remote forward to localhost:8080
+https://6J3jK1WmB15c6WmjW_X-Wg--1789928654@p41535.ssh.luffy.cx/
+```
+
+[several tools]: https://github.com/anderspitman/awesome-tunneling "awesome-tunneling: a list of tunneling software and services"
+[ngrok]: https://ngrok.com/ "ngrok"
+[cloudflare quick tunnels]: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/ "Quick Tunnels with TryCloudflare"
+[frp]: https://github.com/fatedier/frp "frp: a fast reverse proxy"
+[localtunnel]: https://github.com/localtunnel/localtunnel "localtunnel: expose your localhost to the world"
+[sish]: https://docs.ssi.sh/ "sish: host public web services on localhost"
+
+# Basic setup
+
+First, we forward connections from a port on a remote server to your local
+service:
+
+```console
+$ ssh -N -R 0:localhost:8080 web02.luffy.cx
+Allocated port 41535 for remote forward to localhost:8080
+```
+
+When you specify `0` as the remote port, the server allocates a free port.
+Then, we configure nginx to proxy requests from `https://p41535.ssh.luffy.cx` to
+`http://127.0.0.1:41535`:
+
+```nginx
+server {
+  listen 0.0.0.0:443 ssl ;
+  listen [::0]:443 ssl ;
+  server_name ~^p(?<port>\d\d\d\d\d)\.ssh\.luffy\.cx$;
+  location / {
+    proxy_pass http://127.0.0.1:$port;
+  }
+}
+```
+
+We also need to add DNS records for `*.ssh.luffy.cx` and get a wildcard
+certificate through [Let's Encrypt][]:
+
+```zone
+*.ssh.luffy.cx.               CNAME web02.luffy.cx.
+ssh.luffy.cx.                 CAA   0 issuewild "letsencrypt.org"
+_acme-challenge.ssh.luffy.cx  CNAME ssh.luffy.cx.acme.luffy.cx.
+```
+
+`acme.luffy.cx` is a zone hosted on Route 53. I use it for [ACME DNS-01
+challenges][dns-01], both for wildcard certificates and for domains served by
+several web servers. In my case, NixOS [gets the certificates
+automatically][nixos acme].
+
+[let's encrypt]: https://letsencrypt.org/
+[dns-01]: https://letsencrypt.org/docs/challenge-types/#dns-01-challenge "DNS-01 challenge"
+[nixos acme]: https://wiki.nixos.org/wiki/ACME "ACME on the NixOS Wiki"
+
+# Access control
+
+The port is the only "secret"[^port] keeping the content confidential. Other
+forwarding solutions add a random string to the domain name to prevent an
+intruder from enumerating the possible values.
+
+[^port]:
+    Since the kernel allocates it from the local port range, its entropy is
+    low. Moreover, we lose one more bit because the kernel [favors odd
+    ports][] when it picks a random free port.
+    
+        ::console
+        $ sysctl -n net.ipv4.ip_local_port_range \
+        >   | awk '{print $1"—"$2" ≈ "log($2-$1+1)/log(2)" bits"}'
+        32768—60999 ≈ 14.785 bits
+
+Thanks to [`ngx_http_secure_link_module`][secure_link_module], we can secure
+this setup a bit. This module computes a hash[^md5] over a set of values,
+including a secret, and compares it with the hash from the request. The hash is
+base64-encoded, so we cannot put it in the domain name, which is
+case-insensitive. Instead, we put it in the URL as a username, along with its
+expiration timestamp:[^expiration]
+
+```text
+https://6J3jK1WmB15c6WmjW_X-Wg--1789928654@p41535.ssh.luffy.cx/en/blog
+        ╰─────────┬──────────╯  ╰───┬────╯  ╰─┬─╯             ╰──┬───╯
+                hash             expires    port               path
+```
+
+[^md5]:
+    The module relies on MD5. Its security is weak but good enough for this
+    use.
+
+[^expiration]:
+    We need an expiration date because a later session could reuse the port,
+    and we have no way to detect this case.
+
+
+The client sends the username to the server with [HTTP basic
+authentication][basic]. This works with most HTTP clients, including `curl`.
+Nginx exposes the username in the `$remote_user` variable. The module expects
+the hash and the expiration timestamp separated by a comma. We use a `map`
+directive to extract the two parts from `$remote_user` and join them with a
+comma.[^comma] We also give the module the string to hash. It contains the
+expiration timestamp, the port, and a secret:
+
+```nginx
+map $remote_user $httpssh_link {
+  "~^([-_A-Za-z0-9]{22})--([0-9]+)$" "$1,$2";
+}
+server {
+  # […]
+  location / {
+    secure_link $httpssh_link;
+    secure_link_md5 "$secure_link_expires $port ZuPerS3cr3!";
+  }
+}
+```
+
+[^comma]:
+    The username could use a comma directly instead of a double dash. But some
+    applications do not recognize the URL correctly, making it harder to share.
+
+The module returns the status of the check in the `$secure_link` variable:
+
+- empty if the hashes do not match,
+- `"0"` if they match but the link has expired, or
+- `"1"` otherwise.
+
+If the hash is incorrect or missing, we return a 401 error with a
+`WWW-Authenticate` header to ask for credentials. If the link has expired, we
+return a 410 error. We remove the `Authorization` header before forwarding the
+request and add a few directives to [proxy WebSocket connections][websockets].
+Here is the complete configuration:[^security]
+
+```nginx
+map $remote_user $httpssh_link {
+  "~^([-_A-Za-z0-9]{22})--([0-9]+)$" "$1,$2";
+}
+server {
+  listen 0.0.0.0:443 ssl ;
+  listen [::0]:443 ssl ;
+  server_name ~^p(?<port>\d\d\d\d\d)\.ssh\.luffy\.cx$;
+  location / {
+    secure_link $httpssh_link;
+    secure_link_md5 "$secure_link_expires $port ZuPerS3cr3!";
+    if ($secure_link = "") {
+      add_header WWW-Authenticate 'Basic realm="tunnel"' always;
+      return 401;
+    }
+    if ($secure_link = "0") {
+      return 410;
+    }
+    proxy_pass http://127.0.0.1:$port;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Authorization "";
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_buffering off;
+    proxy_read_timeout 30m;
+  }
+}
+```
+
+[^security]:
+    This configuration exposes any TCP port listening on `127.0.0.1` or
+    `0.0.0.0` to anyone with the secret, bypassing most firewall rules. You
+    could strengthen it by limiting the `server_name` regex to the ephemeral
+    port range.
+
+[secure_link_module]: https://nginx.org/en/docs/http/ngx_http_secure_link_module.html "Module ngx_http_secure_link_module for nginx"
+[basic]: rfc://7617
+[favors odd ports]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/net/ipv4/inet_connection_sock.c?h=v7.2#n349 "net/ipv4/inet_connection_sock.c"
+[websockets]: https://nginx.org/en/docs/http/websocket.html "nginx documentation: WebSocket proxying"
+
+I think you are now asking yourself the obvious question: "How should I generate
+the hash?" Easy peasy!
+
+```console
+$ expires=$(( $(date +%s) + 86400 ))
+$ port=41535
+$ secret='ZuPerS3cr3!'
+$ printf '%s %s %s' "$expires" "$port" "$secret" \
+>   | openssl md5 -binary \
+>   | openssl base64 \
+>   | tr +/ -_ | tr -d =
+6J3jK1WmB15c6WmjW_X-Wg
+```
+
+Well, I suppose you are now saying: "Vincent, this is not very convenient! I'll stick
+with ngrok if you don't mind." Okay, I hear you. Let's write a helper script.
+
+# Helper script
+
+The main difficulty is finding the ephemeral port that OpenSSH allocates, as it
+does not appear in any environment variable.[^env] To work around this obstacle,
+we look for the ancestor `sshd-session` processes:[^sshd-session]
+
+```sh
+pids=$(
+  pid=$$
+  while [ "$pid" -gt 1 ]; do
+    line=$(ps -o comm=,pid=,ppid= -p "$pid")
+    echo "$line"
+    pid=${line##* }
+  done | awk '$1 == "sshd-session" { printf "pid=%s,\n", $2 }'
+)
+if [ -z "$pids" ]; then
+  echo "not an ssh session" >&2
+  exit 1
+fi
+```
+
+[^env]:
+    One SSH session can contain several tunnels, and the client can add or
+    remove them at any time. This is unlike tun device forwarding (`ssh -w`),
+    which gets its own `SSH_TUNNEL` environment variable.
+
+[^sshd-session]:
+    Since OpenSSH 9.8, `sshd-session` is the name of the helper handling the
+    session. With older versions, look for `sshd` instead.
+
+Then, we get the listening ports associated with these `sshd-session`
+processes:[^sudo]
+
+```sh
+ports=$(sudo -n ss --listening --numeric --tcp --processes --no-header \
+  | grep -F "$pids" \
+  | awk '{ print $4 }' | awk -F: '{ print $NF }' \
+  | sort -un)
+if [ -z "$ports" ]; then
+  echo "no forwarded port, use ssh -R 0:localhost:PORT" >&2
+  exit 1
+fi
+```
+
+[^sudo]: 
+    We need `sudo` because the `sshd-session` process dropped its privileges.
+    The kernel then marks it as not dumpable, and its [`/proc/PID/fd` directory
+    belongs to root][proc_pid]. Without access to this directory, `ss` cannot
+    find which process owns a socket.
+
+[proc_pid]: man://proc_pid.5
+
+Finally, we display the URLs and keep the session open:
+
+```sh
+lifetime=86400
+secret='ZuPerS3cr3!'
+expires=$(( $(date +%s) + lifetime ))
+for port in $ports; do
+  token=$(printf '%s %s %s' "$expires" "$port" "$secret" \
+            | openssl md5 -binary \
+            | openssl base64 \
+            | tr +/ -_ | tr -d =)
+  echo "https://$token--$expires@p$port.ssh.luffy.cx/"
+done
+sleep infinity
+```
+
+I install this script as `http-over-ssh` on the server and add this entry to my
+`~/.ssh/config`:
+
+```ssh-config
+Host http-over-ssh
+  Hostname web02.luffy.cx
+  RemoteCommand http-over-ssh
+  ControlPath none
+```
+
+With this solution, I only rely on OpenSSH and nginx, two pieces of software
+already running on this server. One short command gives me a self-hosted tunnel
+and a URL to share. To try it, grab the [complete helper script][helper], which
+includes a few minor improvements. If you run NixOS, as any person of taste
+would, have a look at my [`http-over-ssh.nix`][nix] instead. ❄️
+
+[nix]: https://github.com/vincentbernat/nixops-take1/blob/master/tags/http-over-ssh.nix "nixops-take1/tags/http-over-ssh.nix at master"
+[helper]: https://github.com/vincentbernat/nixops-take1/blob/master/tags/http-over-ssh.sh "nixops-take1/tags/http-over-ssh.sh at master"

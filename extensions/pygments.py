@@ -6,7 +6,13 @@ from pygments.lexers.shell import BashSessionLexer
 from pygments.lexers import LEXERS
 from hyde.plugin import Plugin
 
-__all__ = ["PigeonLexer", "LezerLexer", "WiresharkLexer", "HurlLexer"]
+__all__ = [
+    "PigeonLexer",
+    "LezerLexer",
+    "WiresharkLexer",
+    "HurlLexer",
+    "SshConfigLexer",
+]
 
 # To easily test:
 """
@@ -174,6 +180,31 @@ class HurlLexer(RegexLexer):
             (r"[><=!]+", Operator),
             (r"\b\d+\b", Number.Integer),
             (r"\s+", Whitespace),
+            (r".", Text),
+        ],
+    }
+
+
+class SshConfigLexer(RegexLexer):
+    name = "SSH config"
+    aliases = ["ssh-config", "sshd-config"]
+
+    tokens = {
+        "root": [
+            # Comments
+            (r"#.*$", Comment.Single),
+            # Directives opening a block
+            (r"^([^\S\n]*)(Host|Match)\b", bygroups(Whitespace, Keyword)),
+            # Any other word starting a line is a directive
+            (r"^([^\S\n]*)(\w+)", bygroups(Whitespace, Name.Attribute)),
+            # Values
+            (r'"[^"]*"', String.Double),
+            (r"\b(yes|no)\b", Keyword.Constant),
+            (r"(?<![\w.])\d+(?![\w.])", Number.Integer),
+            (r"[=,]", Punctuation),
+            # Remaining
+            (r"[^\S\n]+", Whitespace),
+            (r"\n", Whitespace),
             (r".", Text),
         ],
     }
