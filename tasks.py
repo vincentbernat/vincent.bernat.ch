@@ -566,8 +566,8 @@ def fonts_update(c):
             "install -m 0644 result/Iosevka*.woff2 content/media/fonts/iosevka-custom-regular.woff2"
         )
         c.run("rm result")
-    with step("building Merriweather"):
-        c.run("nix build .#build.merriweather")
+    with step("building Literata"):
+        c.run("nix build .#build.literata")
         c.run("install -m 0644 result/*.woff2 content/media/fonts/")
         c.run("rm result")
     with step("building Baskerville"):

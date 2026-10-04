@@ -210,7 +210,7 @@
   // Set initial values
   window.addEventListener("load", () => {
     for (let font of document.fonts) {
-      if (font.family === "Fallback for Merriweather") {
+      if (font.family === "Fallback for Literata") {
         for (let name of [
           "ascentOverride",
           "descentOverride",

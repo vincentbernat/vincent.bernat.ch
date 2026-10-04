@@ -17,10 +17,6 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    merriweather = {
-      url = "github:SorkinType/Merriweather";
-      flake = false;
-    };
     # hyde = {
     #   url = "path:/home/bernat/code/perso/hyde";
     #   flake = false;
@@ -228,22 +224,24 @@
                   mkdir $out
                   subset iosevka-custom-regular ${monospace} \
                     --layout-features= --desubroutinize --no-hinting
-                  subset merriweather ${regular} \
-                    --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum \
+                  subset literata ${regular} \
+                    --layout-features=ccmp,mark,kern,liga,onum,tnum \
                     --desubroutinize
-                  subset merriweather-italic ${regular} \
-                    --layout-features=ccmp,mark,mkmk,kern,liga,clig,calt,ss01,onum,tnum \
+                  subset literata-italic ${regular} \
+                    --layout-features=ccmp,mark,kern,liga,onum,tnum \
                     --desubroutinize
                 '';
                 # For Iosevka, no features needed as there is none except locl,
                 # frac, numr, dnom, onum and we don't use them.
 
-                # For Merriweather, we keep kern (+2KB and +2.5KB) since it helps with
-                # quality. liga, clig, calt are small. ccmp, mark and mkmk are not
-                # used, but may become useful in the future. ss01, onum, tnum are
-                # explicitely used in CSS. frac, numr, dnom are not used. sups,
-                # subs, sinf not useful with HTML. smcp, c2sc, case, ordn, salt,
-                # zero are not useful (no small caps). aalt is big (8KB).
+                # For Literata, we keep kern since it helps with quality. liga is
+                # small. ccmp and mark are not used, but may become useful in the
+                # future. onum, tnum are explicitely used in CSS. lnum and pnum
+                # are not needed as lining and proportional digits are the
+                # default. ss01 (Greek) and ss02 (arrows) are not useful. frac,
+                # numr, dnom are not used. sups, subs, sinf not useful with HTML.
+                # smcp, c2sc, case, cpsp, ordn, dlig, zero are not useful. aalt is
+                # big.
                 installPhase = "true";
               };
             build.optimizeImages =
@@ -376,29 +374,53 @@
                 name = "optimize-images";
                 paths = map optimizeDirectory (listDirs target "");
               };
-            build.merriweather = pkgs.stdenvNoCC.mkDerivation {
-              name = "custom-merriweather";
+            build.literata = pkgs.stdenvNoCC.mkDerivation {
+              name = "custom-literata";
               dontUnpack = true;
-              # The underline thickness of merriweather is too thin. It has a
-              # value of 90. This could be fixed in CSS with
-              # text-decoration-thickness (baseline 2021), but we can also fix
-              # it directly in the font.
-              buildPhase = ''
-                fix() {
-                  original=$1
-                  target=$2
-                  echo Fix $1 to $2
-                  ${fonttools}/bin/ttx -o - ${inputs.merriweather}/fonts/otf/$original.otf \
-                    > $target.ttx
-                  ${pkgs.xmlstarlet}/bin/xmlstarlet \
-                    ed -u /ttFont/post/underlineThickness/@value -v 150 $target.ttx \
-                    > $target-fixed.ttx
-                  ${fonttools}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
-                }
-                mkdir $out
-                fix Merriweather-Light merriweather
-                fix Merriweather-LightItalic merriweather-italic
-              '';
+              # Keep only weight 350 and optical size 18 (body text is 16px to
+              # 20px). The underline thickness is too thin. It has a value of
+              # 50. This could be fixed in CSS with text-decoration-thickness
+              # (baseline 2021), but we can also fix it directly in the font.
+              buildPhase =
+                let
+                  literata = { style, hash }: pkgs.fetchurl (
+                    let
+                      commit = "0c2761b727a1b3a7cffd313c37f0f5163dfc7a63";
+                      font = "fonts/variable/Literata${style}%5Bopsz,wght%5D.ttf";
+                    in
+                    {
+                      inherit hash;
+                      name = "Literata${style}.ttf";
+                      url = "https://github.com/googlefonts/literata/raw/${commit}/${font}";
+                    }
+                  );
+                  regular = literata {
+                    style = "";
+                    hash = "sha256-tBE4yTcxEvMqu1icwi6GdLBu1ASLDFE76SK90m8nREA=";
+                  };
+                  italic = literata {
+                    style = "-Italic";
+                    hash = "sha256-1IPfrrqcv0znHTKlLuZd+C9+NbFf/40QEc2yQtH81GU=";
+                  };
+                in
+                ''
+                  fix() {
+                    original=$1
+                    target=$2
+                    echo Fix $1 to $2
+                    ${fonttools}/bin/fonttools varLib.instancer \
+                      -o $target.ttf $original \
+                      wght=350 opsz=18
+                    ${fonttools}/bin/ttx -o - $target.ttf > $target.ttx
+                    ${pkgs.xmlstarlet}/bin/xmlstarlet \
+                      ed -u /ttFont/post/underlineThickness/@value -v 75 $target.ttx \
+                      > $target-fixed.ttx
+                    ${fonttools}/bin/ttx -o $out/$target.woff2 --flavor=woff2 $target-fixed.ttx
+                  }
+                  mkdir $out
+                  fix ${regular} literata
+                  fix ${italic} literata-italic
+                '';
               installPhase = "true";
             };
             build.baskerville = pkgs.stdenvNoCC.mkDerivation {
@@ -475,9 +497,9 @@
                         css = "normal";
                       };
                       metricOverride = {
-                        cap = 790;
-                        ascender = 790;
-                        xHeight = 570;
+                        cap = 700;
+                        ascender = 750;
+                        xHeight = 500;
                         leading = 1500; /* Box drawing characters will connect */
                       };
                     };

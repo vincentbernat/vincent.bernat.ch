@@ -44,7 +44,7 @@ class PostCSSPlugin(Plugin):
             "content",
             "media",
             "fonts",
-            "merriweather.woff2",
+            "literata.woff2",
         )
         env = os.environ.copy()
         env["CSS_MINIFY"] = (
