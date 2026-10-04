@@ -1,57 +1,65 @@
 ---
-title: "Bidouiller le compilateur Go pour convertir efficacement les IPv4 en IPv6"
+title: "Hacking the Go compiler to efficiently map IPv4 to IPv6"
 description: |
-  Les mainteneurs de Go ont refusé netip.Addr.Map() en estimant que le compilateur devrait plutôt
-  optimiser netip.AddrFrom16(ip.As16()). Est-ce difficile à mettre en œuvre ?
+  Go maintainers declined netip.Addr.Map() saying the compiler should optimize
+  netip.AddrFrom16(ip.As16()) instead. How difficult is it to implement?
 uuid: ffadd128-f4c3-4afd-bbc9-c9b71a509bae
+alias: /en/blog/2026-go-compiler-optimization-netip
 attachments:
   "https://github.com/vincentbernat/go-netip-addrto6": Git repository
 tags:
   - programming-go
-ai-usage: Traduit de l'anglais (Claude Opus 5.5)
+ai-usage: Copyediting (Claude Opus 5.5)
 ---
 
 {% macro go_source(file, commit="1e963f82914ddfb47820034c5c85205a362ed73f") %}https://github.com/golang/go/{{ "tree" if file.endswith("/") else "blob" }}/{{ commit }}/{{ file.rstrip("/") }}{% endmacro %}
 
-[`netip.Addr`](go://netip.addr) expose une méthode
-[`Unmap()`](go://netip.addr.Unmap) qui renvoie l'adresse IPv4 contenue dans une
-[adresse IPv6 représentant une IPv4][rfc4291] (*IPv4-mapped IPv6 address*). À
-partir de `::ffff:203.0.113.10` ou de `::ffff:cb00:710a`, elle renvoie
-`203.0.113.10`[^why]. Il n'existe pas de méthode `Map()` ou `To6()` pour
-l'opération inverse. Une telle méthode est triviale à écrire, mais les
-mainteneurs de Go l'ont [refusée][rejected] au motif que les utilisateurs
-devraient écrire `netip.AddrFrom16(ip.As16())` et laisser le compilateur
-l'optimiser[^equiv]. Aujourd'hui, cette construction est huit fois plus lente
-qu'une méthode native. Comment apprendre au compilateur à l'optimiser ?
+<!-- Target audience:
+      - Go maintainers. Get some advices on how to proceed or convince them to
+        accept a Map()/To6() method.
+      - Go programmers not familiar with the inner of the compilers. They should
+        learn as much as I did on how this works.
+      - Programmers in general that are not familiar with compilers. Absence of
+        knowledge of Go should not prevent a user to appreciate this article
+        content.
+  -->
+
+[`netip.Addr`](go://netip.addr) features an [`Unmap()`](go://netip.addr.Unmap)
+method returning the unwrapped IPv4 contained in an [IPv4-mapped IPv6
+address][rfc4291]: from `::ffff:203.0.113.10` or `::ffff:cb00:710a`, it returns
+`203.0.113.10`.[^why] There is no `Map()` or `To6()` method for the reverse
+direction. Such a method is trivial to implement, but Go maintainers have
+[rejected][] it on the grounds that users should write
+`netip.AddrFrom16(ip.As16())` and let the compiler optimize it.[^equiv] Today,
+this pattern is eight times slower than a native method. How can we teach the
+compiler to optimize this sequence?
 
 [^why]:
-    Les adresses IPv6 représentant des IPv4 permettent de ne manipuler que des
-    adresses IPv6 dans le code et de cantonner les conversions à un périmètre
-    précis. Je les utilise dans [Akvorado][].
+    IPv4-mapped IPv6 addresses let you handle only IPv6 addresses in your code
+    and keep conversions at a few well-defined boundaries. I use them in
+    [Akvorado][].
 
 [^equiv]:
-    Ce n'est pas strictement équivalent. La valeur zéro devient `::` alors qu'il
-    serait plus logique de ne pas y toucher.
+    This is not strictly equivalent. The zero value becomes `::` while it would
+    make more sense to leave it untouched.
 
 [rejected]: https://github.com/golang/go/issues/54365#issuecomment-1570607144 "Issue #54365: proposal: net/netip: add netip.Addr.Map"
 [rfc4291]: rfc://4291#section-2.5.5.2
 
 [TOC]
 
-# Les solutions possibles
+# The alternatives
 
-Examinons trois façons d'implémenter cette conversion pour `netip.Addr`. Ma
-préférée consiste à l'ajouter à la bibliothèque standard de Go. Les mainteneurs
-de Go préfèrent une petite fonction utilitaire externe enchaînant
-`netip.AddrFrom16()` et `netip.Addr.As16()`, en espérant que le compilateur
-réussisse à l'optimiser. Le [paquet `unsafe`](go://unsafe) ouvre une troisième
-voie, avec des performances identiques à la première solution.
+Let's explore three ways to implement the map semantics for `netip.Addr`. My
+favorite is to add it to the Go standard library. Go maintainers prefer a small
+external helper chaining `netip.AddrFrom16()` and `netip.Addr.As16()`, hoping
+the compiler eventually optimizes it. The [`unsafe` package](go://unsafe)
+opens a third path, with the same performance as the first solution.
 
-## Modifier la bibliothèque standard de Go
+## Modifying the Go standard library
 
-En interne, [`netip.Addr`](go://net/netip#Addr) stocke les adresses IP sous
-forme d'une valeur de 128 bits accompagnée d'un champ supplémentaire `z` qui
-encode la famille et la zone :
+Internally, [`netip.Addr`](go://net/netip#Addr) stores any IP address as a
+128-bit value with an extra field `z` to encode the family and the zone:
 
 ```go
 type Addr struct {
@@ -60,8 +68,8 @@ type Addr struct {
 }
 
 type addrDetail struct {
-    isV6   bool   // false pour IPv4, true pour IPv6.
-    zoneV6 string // != "" seulement si IsV6 est vrai.
+    isV6   bool   // IPv4 is false, IPv6 is true.
+    zoneV6 string // != "" only if IsV6 is true.
 }
 
 var (
@@ -71,8 +79,8 @@ var (
 )
 ```
 
-[`AddrFrom4()`](go://net/netip#AddrFrom4) encode une adresse IPv4 sous la forme
-d'une adresse IPv6 représentant une IPv4 et assigne le singleton `z4` au champ `z` :
+[`AddrFrom4()`](go://net/netip#AddrFrom4) encodes an IPv4 address as an
+IPv4-mapped IPv6 address and sets `z` to the unique value `z4`:
 
 ```go
 // AddrFrom4 returns the address of the IPv4 address given by the bytes in addr.
@@ -88,8 +96,8 @@ func AddrFrom4(addr [4]byte) Addr {
 }
 ```
 
-[`Unmap()`](go://net/netip#Addr.Unmap) transforme une adresse IPv6 représentant
-une IPv4 en adresse IPv4 en assignant le singleton `z4` au champ :
+[`Unmap()`](go://net/netip#Addr.Unmap) turns an IPv4-mapped IPv6 address into an
+IPv4 address by setting the `z` field to `z4`:
 
 ```go
 func (ip Addr) Unmap() Addr {
@@ -100,9 +108,8 @@ func (ip Addr) Unmap() Addr {
 }
 ```
 
-Ajouter l'opération inverse dans la bibliothèque standard de Go est trivial : il
-suffit d'assigner au champ `z` le singleton `z6noz` quand l'adresse est une
-IPv4.
+Implementing the reverse direction inside the Go standard library is trivial: we
+set the `z` field to `z6noz` if the address is IPv4.
 
 ```go
 // To6 maps an IPv4 address to an IPv4-mapped IPv6 address. It returns an
@@ -115,11 +122,10 @@ func (ip Addr) To6() Addr {
 }
 ```
 
-## Avec une fonction utilitaire
+## As a helper
 
-Le champ `z` n'est pas accessible en dehors du paquet `net/netip`. À la place,
-nous écrivons une fonction utilitaire autour de la construction
-`netip.AddrFrom16(ip.As16())` :
+We can't access the `z` field from outside the `net/netip` package. Instead, we
+build a small helper around the `netip.AddrFrom16(ip.As16())` pattern:
 
 ```go
 // AddrTo6 maps an IPv4 address to an IPv4-mapped IPv6 address. It returns an
@@ -132,13 +138,13 @@ func AddrTo6(ip netip.Addr) netip.Addr {
 }
 ```
 
-## Avec le paquet `unsafe`
+## As an unsafe function
 
-Une autre solution utilise le paquet `unsafe` pour modifier la structure `Addr`
-par l'intermédiaire d'une structure avec le même schéma mémoire[^tests] :
+Another solution uses the `unsafe` package to alter the `Addr` struct through
+a proxy with the same memory layout:[^tests]
 
 ```go
-// addrProxy a le même schéma mémoire que netip.Addr.
+// addrProxy has the same memory layout as netip.Addr.
 type addrProxy struct {
     addr [2]uint64      // netip.uint128
     z    unsafe.Pointer // unique.Handle[netip.addrDetail]
@@ -161,22 +167,19 @@ func AddrTo6(ip netip.Addr) netip.Addr {
 ```
 
 [^tests]:
-    Pour éviter des anomalies catastrophiques si le schéma mémoire de
-    `netip.Addr` change, il faut [ajouter des tests][add tests] pour le
-    détecter. Le danger est plus important si ce code se trouve dans un paquet.
-    Il faut alors soit demander aux utilisateurs de lancer eux-mêmes les tests,
-    soit détecter le changement à l'exécution et paniquer. Placer cette
-    optimisation derrière une option de compilation permettrait de s'assurer que
-    les utilisateurs sont bien au courant de ce piège.
+    To avoid catastrophic bugs when `netip.Addr`'s layout changes, you must [add
+    tests][] to detect it. This is more dangerous if you put this code in a
+    package. Either ask users to run the tests themselves, or detect the change
+    at run time and panic. Hiding this optimization behind a build tag would
+    make users aware of this potential trap.
 
-[add tests]: https://github.com/vincentbernat/go-netip-addrto6/blob/main/ipv6_unsafe_test.go "Tests de la fonction AddrTo6() utilisant unsafe"
+[add tests]: https://github.com/vincentbernat/go-netip-addrto6/blob/main/ipv6_unsafe_test.go "Tests for unsafe AddrTo6() function"
 
-## Performances
+## Benchmarks
 
-Sur mon ordinateur, avec Go 1.27.1, la solution intégrée à la bibliothèque
-standard coûte 0,88 ns par opération, alors que celle privilégiée par les
-mainteneurs de Go coûte 7,14 ns. La solution utilisant `unsafe` égale les
-performances de la première.
+On my computer, with Go 1.27.1, the standard library solution costs 0.88 ns per
+operation, while the solution favored by Go maintainers costs 7.14 ns. The
+unsafe solution matches the performance of the first one.
 
 ```text
 goos: linux
@@ -189,65 +192,59 @@ AddrTo6/unsafe         0.8682n ± 2%
 AddrTo6/builtin        0.8775n ± 2%
 ```
 
-## Code assembleur
+## Assembly code
 
-Regardons le code assembleur que le compilateur génère pour chaque
-solution[^dis]. La solution intégrée à la bibliothèque standard ressemble à
-ceci[^inline] :
+Let's check the assembly code the compiler generates for each solution.[^dis]
+The one built into the standard library looks like this:[^inline]
 
 ```go-asm
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
- CMPQ  net/netip·z4(SB), CX     ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE   end                      ; sinon, s'arrêter ici
+ CMPQ  net/netip·z4(SB), CX     ; check "z" if this is an IPv4 address
+ JNE   end                      ; if not, stop here
  MOVQ  net/netip·z6noz(SB), CX  ; CX = netip.z6noz
 end:
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
 [^dis]:
-    J'ai produit le code assembleur avec `GOTOOLCHAIN=go1.26.8 GOAMD64=v3
-    ./go-asm '\.asm'` depuis le [dépôt associé][companion repository], puis je
-    l'ai un peu retouché pour éviter que cet article ne devienne un puits sans
-    fond. À la suite d'un malheureux enchaînement de circonstances, nous
-    naviguerons entre plusieurs versions : Go 1.27 a introduit une régression
-    qui brouille les propos de cet article.
+    I produced the assembly code with `GOTOOLCHAIN=go1.26.8 GOAMD64=v3 ./go-asm
+    '\.asm'` from the [companion repository][], then edited it a bit to keep this
+    article from turning into an endless rabbit hole. Due to an unfortunate
+    sequence of events, we switch between versions: Go 1.27 introduced a
+    regression that blurs the point of this article.
 
 [^inline]:
-    La fonction est assez courte pour que le compilateur l'intègre à l'appelant
-    (*inlining*). Le code assembleur peut donc varier selon le code qui
-    l'entoure.
+    The function is short enough for the compiler to inline it, so the assembly
+    code may vary depending on the surrounding code.
 
-Le [langage assembleur de Go][asm] n'est pas une représentation directe du
-langage machine sous-jacent : il repose sur un jeu d'instructions semi-abstrait
-dérivé de [l'assembleur de Plan 9][asm-9p]. Il dispose de quatre
-pseudo-registres : FP (*frame pointer* ou pointeur de cadre pour les arguments
-des fonctions), PC (*program counter* ou compteur ordinal), SB (*static base* ou
-pointeur de base pour les symboles globaux) et SP (*stack pointer* ou pointeur
-de la pile). Il possède aussi des registres propres à l'architecture, comme
-`AX`, `CX`, `DX`, `BX`, `SI`, `DI` et `R8` à `R15`. Les instructions qui
-stockent une donnée utilisent leur dernier argument comme destination. Les
-instructions peuvent porter un suffixe de taille explicite : `MOVB` déplace un
-octet, `MOVW` 16 bits, `MOVL` 32 bits et `MOVQ` 64 bits. Dans l'exemple
-ci-dessus, la première instruction compare la valeur de 64 bits `z4` avec le
-registre `CX`.
+Go's [assembly language][asm] is not a direct representation of the underlying
+machine language: it operates on a semi-abstract instruction set derived from
+[Plan 9's assembler][asm-9p]. It has four pseudo-registers: FP (frame pointer
+for function arguments), PC (program counter), SB (static base pointer for
+global symbols), and SP (stack pointer). It also has architecture-specific
+registers like `AX`, `CX`, `DX`, `BX`, `SI`, `DI`, and `R8` to `R15`.
+Instructions storing data use their last argument as the destination.
+Instructions can carry an explicit size suffix: `MOVB` moves a byte, `MOVW` 16
+bits, `MOVL` 32 bits, and `MOVQ` 64 bits. In the example above, the first
+instruction compares the 64-bit value `z4` with the `CX` register.
 
-La solution utilisant `unsafe` est presque identique :
+The unsafe solution looks almost the same:
 
 ```go-asm
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
- CMPQ  net/netip·z4(SB), CX  ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE   end                   ; sinon, s'arrêter ici
+ CMPQ  net/netip·z4(SB), CX  ; check "z" if this is an IPv4 address
+ JNE   end                   ; if not, stop here
  MOVQ  netipZ6noz(SB), CX    ; CX = netip.z6noz
 end:
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
-La solution utilitaire comporte beaucoup plus d'instructions. Pour comprendre
-pourquoi, examinons le code de [`As16()`](go://netip.addr.As16) et de
-[`AddrFrom16()`](go://netip.AddrFrom16). Elles sont assez courtes pour que le
-compilateur remplace leur appel par leur code.
+The helper solution has far more instructions. To understand why, let's look at
+the code for [`As16()`](go://netip.addr.As16) and
+[`AddrFrom16()`](go://netip.AddrFrom16). They are short enough for the compiler
+to inline them.
 
 ```go
 func (ip Addr) As16() (a16 [16]byte) {
@@ -267,9 +264,8 @@ func AddrFrom16(addr [16]byte) Addr {
 }
 ```
 
-On devine déjà la construction qui sera à optimiser : le code stocke l'adresse IP
-dans un tableau, le copie, puis l'en extrait. Si nous développons le code Go à
-la main, nous obtenons :
+We can already guess the pattern to optimize: the code packs the IP address into
+an array, copies it, then unpacks it. If we inline the Go code by hand, we get:
 
 ```go
 func AddrTo6(input netip.Addr) netip.Addr {
@@ -291,7 +287,7 @@ func AddrTo6(input netip.Addr) netip.Addr {
 }
 ```
 
-En tant qu'humains, nous pouvons mentalement obtenir la forme optimisée :
+As humans, we can mentally derive the optimized form:
 
 ```go
 func AddrTo6(input netip.Addr) netip.Addr {
@@ -306,35 +302,34 @@ func AddrTo6(input netip.Addr) netip.Addr {
 }
 ```
 
-Malheureusement, avec Go 1.26.8, le compilateur n'est pas assez malin pour en
-faire autant :
+Unfortunately, as of Go 1.26.8, the compiler is not smart enough to do the same:
 {: #asm-addrto6safe }
 
 ```go-asm
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
-; Réserver de la place sur la pile (32 octets) :
+; Push the stack (32 bytes):
 ;    0(SP) addr netip.uint128
 ;   16(SP) a16 [16]byte
  PUSHQ   BP
  MOVQ    SP, BP
  SUBQ    $32, SP
 
- CMPQ    net/netip·z4(SB), CX  ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE     end                   ; sinon, s'arrêter ici
+ CMPQ    net/netip·z4(SB), CX  ; check "z" if this is an IPv4 address
+ JNE     end                   ; if not, stop here
 
-; Empaquetage : byteorder.BEPutUint64(a16[:8], input.addr.hi)
-;               byteorder.BEPutUint64(a16[8:], input.addr.lo)
+; Pack: byteorder.BEPutUint64(a16[:8], input.addr.hi)
+;       byteorder.BEPutUint64(a16[8:], input.addr.lo)
  MOVBEQ  AX, net/netip·a16+16(SP)
  MOVBEQ  BX, net/netip·a16+24(SP)
 
-; addr = a16, 16 octets d'un coup via le registre vectoriel X0
+; addr = a16, 16 bytes at once through the vector register X0
  MOVUPS  net/netip·a16+16(SP), X0
  MOVUPS  X0, net/netip·addr(SP)
 
 ; CX = netip.z6noz
  MOVQ    net/netip·z6noz(SB), CX
-; Dépaquetage : output.addr.hi = byteorder.BEUint64(addr[:8])
-;               output.addr.lo = byteorder.BEUint64(addr[8:])
+; Unpack: output.addr.hi = byteorder.BEUint64(addr[:8])
+;         output.addr.lo = byteorder.BEUint64(addr[8:])
  MOVBEQ  net/netip·addr(SP), AX
  MOVBEQ  net/netip·addr+8(SP), BX
 
@@ -342,21 +337,19 @@ end:
  ADDQ    $32, SP
  POPQ    BP
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
-Le compilateur s'en sort honorablement avec la manipulation des octets : les
-huit écritures d'un octet provenant de `BEPutUint64()` sont remplacées par un
-unique `MOVBEQ`, qui copie un registre en inversant l'ordre de ses octets, et
-les huit lectures d'un octet de `BEUint64()` deviennent aussi un unique `MOVBEQ`
-dans l'autre sens[^amd64v3]. Il reste trois groupes d'instructions : un
-empaquetage, une copie et un dépaquetage.
+The compiler does a decent job on the byte shuffling: the eight byte stores of
+`BEPutUint64()` become a single `MOVBEQ`, which stores a register byte-swapped.
+The eight byte loads of `BEUint64()` become a single `MOVBEQ` the other way
+round.[^amd64v3] Three groups of instructions remain: a pack, a copy, and an
+unpack.
 
 [^amd64v3]:
-    `MOVBEQ` nécessite `GOAMD64=v3`, qui correspond à la [microarchitecture
-    x86-64-v3][x86-64-v3 microarchitecture] de 2013. En son absence, le
-    compilateur traduit `BEPutUint64()` en `BSWAPQ`+`MOVQ` et `BEUint64()` en
-    `MOVQ`+`BSWAPQ`.
+    `MOVBEQ` requires `GOAMD64=v3`, matching the [x86-64-v3
+    microarchitecture][] from 2013. Otherwise, the compiler translates
+    `BEPutUint64()` to `BSWAPQ`+`MOVQ` and `BEUint64()` to `MOVQ`+`BSWAPQ`.
 
 [akvorado]: https://github.com/akvorado/akvorado "Akvorado: flow collector, enricher and visualizer"
 [asm]: https://go.dev/doc/asm "A Quick Guide to Go's Assembler"
@@ -364,46 +357,43 @@ empaquetage, une copie et un dépaquetage.
 [x86-64-v3 microarchitecture]: https://en.wikipedia.org/wiki/X86-64#Microarchitecture_levels "X86-64 on Wikipedia"
 [companion repository]: https://github.com/vincentbernat/go-netip-addrto6
 
-# Bidouiller le compilateur
+# Hacking the Go compiler
 
-Le compilateur Go comporte [plusieurs phases][several phases] :
+The Go compiler has [several phases][]:
 
-Analyse syntaxique
-: Le compilateur [découpe le code source en lexèmes et
-  l'analyse][tokenizes and parses the source code]. Il construit un arbre
-  syntaxique pour chaque fichier source.
+Parsing
+: The compiler [tokenizes and parses the source code][]. It builds a syntax tree
+  for each source file.
 
-Vérification des types
-: Le compilateur [associe chaque identifiant à l'objet qu'il désigne][types2],
-  calcule les expressions constantes et infère le type de chaque expression.
+Type checking
+: The compiler [maps each identifier to the object it denotes][types2], folds
+  constants, and infers the type of every expression.
 
-Construction de l'IR
-: Le compilateur convertit l'arbre syntaxique et ses types dans une
-  [représentation intermédiaire][ir] (IR). Ce processus, appelé
-  « [*noding*][noder] », passe par un format de sérialisation nommé
-  *unified IR*.
+IR construction
+: The compiler converts the syntax tree and its types into its own [intermediate
+  representation][ir] (IR). This process, called "[noding][noder]," goes through
+  a serialization format named unified IR.
 
-*Middle end*
-: Le compilateur effectue plusieurs passes d'optimisation sur l'IR, comme la
-  [dévirtualisation][devirtualize], le [remplacement des appels de fonction par
-  leurs contenus][inline] et l'[analyse d'échappement][escape].
+Middle end
+: The compiler performs several optimization passes on the IR,
+  such as [devirtualization][devirtualize], [function call inlining][inline],
+  and [escape analysis][escape].
 
-*Walk*
-: Cette phase comporte [deux étapes][walk] : une décomposition des instructions
-  complexes en instructions plus simples et la transformation des constructions
-  Go de haut niveau, comme `switch` ou les canaux, en instructions plus
-  primitives ou en appels à des fonctions.
+Walk
+: This phase runs [two steps][walk]: order of evaluation decomposes complex
+  statements into simpler ones, and desugaring transforms higher-level Go
+  constructs, like `switch` or channels, into more primitive instructions or
+  calls to the runtime.
 
-SSA générique
-: Le compilateur [convertit l'IR][ssagen] en forme SSA (*Static Single
-  Assignment*), une représentation intermédiaire de plus bas niveau adaptée aux
-  [optimisations et règles de réécriture indépendantes de l'architecture][ssa].
+Generic SSA
+: The compiler [converts the IR][ssagen] into Static Single Assignment (SSA)
+  form, a lower-level intermediate representation suited for
+  [machine-independent optimizations and rewrite rules][ssa].
 
-Génération du code machine
-: Le compilateur réécrit la forme SSA en [variantes propres à
-  l'architecture][ssa-rules], alloue les registres et applique d'autres passes
-  d'optimisation. Pour finir, [l'assembleur][obj] transforme les instructions
-  générées en code machine.
+Machine code generation
+: The compiler rewrites the SSA form into [machine-specific variants][ssa-rules],
+  allocates registers, and applies more optimization passes. At the end, [the
+  assembler][obj] turns the generated instructions into machine code.
 
 [tokenizes and parses the source code]: {{ go_source("src/cmd/compile/internal/syntax/") }} "cmd/compile/internal/syntax"
 [types2]: {{ go_source("src/cmd/compile/internal/types2/") }} "cmd/compile/internal/types2"
@@ -418,16 +408,15 @@ Génération du code machine
 [ssa-rules]: {{ go_source("src/cmd/compile/internal/ssa/_gen/") }} "cmd/compile/internal/ssa/_gen"
 [obj]: {{ go_source("src/cmd/internal/obj/") }} "cmd/internal/obj"
 
-## Le marteau
+## The hammer
 
-Ma première idée est de remplacer les occurrences de
-`netip.AddrFrom16(ip.As16())` par `netip.Addr{addr: ip.addr, z: netip.z6noz}` le
-plus tôt possible, c'est-à-dire pendant le *noding*. Avant cela, la phase de
-vérification des types nous interdit d'accéder aux champs non exportés d'une
-structure.
+My first idea is to replace occurrences of `netip.AddrFrom16(ip.As16())` with
+`netip.Addr{addr: ip.addr, z: netip.z6noz}` as early as possible, during the
+"noding" process. Before that, the type checking phase prevents
+us from accessing unexported struct fields.
 
-Go 1.27 a introduit une option de débogage pratique pour afficher l'IR d'une
-fonction à plusieurs moments clés de la compilation :
+Go 1.27 introduced a convenient debug option to dump the IR of a function at
+interesting points during compilation:
 
 ```console
 $ GOTOOLCHAIN=go1.27.1 GOAMD64=v3 go build -a -gcflags="-d=astdump=AddrTo6Safe" .
@@ -436,8 +425,7 @@ Writing html ast output for AddrTo6Safe to AddrTo6Safe.html
 Writing html syntax output for AddrTo6Safe to AddrTo6Safe.syntax.html
 ```
 
-Dans le fichier HTML, la première colonne montre l'IR telle qu'elle sort du
-*noding* :
+In the HTML file, the first column shows the IR as it comes out of noding:
 
 ```go-ast hl_lines="19 23"
 DCLFUNC addrto6.AddrTo6Safe ABI:ABIInternal FUNC-func(netip.Addr) netip.Addr
@@ -471,9 +459,9 @@ DCLFUNC-body
 . . NAME-addrto6.ip Class:PPARAM Offset:0 OnStack Used netip.Addr
 ```
 
-Dans le corps de l'instruction `if`, nous repérons l'appel à la méthode
-`netip.Addr.As16()` et celui à la fonction `netip.AddrFrom16()`. Notre objectif
-est de les remplacer par la construction littérale d'une structure :
+In the body of the `if` statement, we spot the calls to the method
+`netip.Addr.As16()` and to the function `netip.AddrFrom16()`. Our goal is to
+patch them with a struct literal:
 
 ```go-ast
 IF-Body
@@ -488,13 +476,12 @@ IF-Body
 . . . . NAME-netip.z6noz Class:PEXTERN Offset:0 unique.Handle[net/netip.addrDetail]
 ```
 
-Dans le fichier [`reader.go` du *noder*][reader.go], la méthode `expr()`
-construit l'arbre IR d'une expression. À la fin de la branche `exprCall`, nous
-ajoutons l'appel à une fonction `rewriteAddrFrom16As16()`. Elle prend en
-paramètre le nœud courant et renvoie la structure construite en cas de succès ou
-`nil` si la réécriture n'est pas possible. D'abord, nous vérifions que nous
-avons le motif attendu : un appel à la fonction `netip.AddrFrom16()` avec, pour
-unique argument, un appel à la méthode `netip.Addr.As16()` :
+In [noder's `reader.go`][reader.go], the `expr()` method builds the IR tree for
+an expression. At the end of the `exprCall` case, we add a call to a
+`rewriteAddrFrom16As16()` function. It takes the current node and returns the
+struct literal on success, or `nil` if the rewrite is not possible. First, we
+check that we have the expected pattern: a call to the `netip.AddrFrom16()`
+function with a call to the `netip.Addr.As16()` method as its only argument:
 
 ```go
 func rewriteAddrFrom16As16(n ir.Node) ir.Node {
@@ -515,7 +502,7 @@ func rewriteAddrFrom16As16(n ir.Node) ir.Node {
 }
 ```
 
-Ensuite, nous récupérons `netip.z6noz` :
+Then, we fetch `netip.z6noz`:
 
 ```go
 z6noz, err := lookupVar(ir.StaticCalleeName(call.Fun).Sym().Pkg, "z6noz")
@@ -524,7 +511,7 @@ if err != nil {
 }
 ```
 
-Et nous construisons littéralement la structure :
+And we build the struct literal:
 
 ```go
 typ := call.Type()
@@ -547,13 +534,12 @@ lit.SetTypecheck(1)
 return lit
 ```
 
-Jetez un œil à la [modification complète][netipmap-fix2][^statement]. Nous
-pouvons la tester avec les commandes suivantes :
+Have a look at the [complete patch][netipmap-fix2].[^statement] We can test it
+with the following commands:
 
 [^statement]:
-    Quand l'appel est utilisé comme une instruction, une structure littérale
-    seule n'est pas valide. Notre modification le transforme alors en `_ =
-    netip.Addr{…}`.
+    When the call is used as a statement, a struct literal alone is invalid. The
+    patch then turns it into `_ = netip.Addr{…}`.
 
 ```console
 $ cd src
@@ -577,34 +563,32 @@ $ go test .
 ok      github.com/vincentbernat/go-netip-addrto6   0.062s
 ```
 
-Le code généré pour la fonction utilitaire est désormais le plus court
-possible !
+The generated code for the helper is now the shortest possible version!
 
 ```go-asm
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
- CMPQ    net/netip·z4(SB), CX     ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE     end                      ; sinon, s'arrêter ici
+ CMPQ    net/netip·z4(SB), CX     ; check "z" if this is an IPv4 address
+ JNE     end                      ; if not, stop here
  MOVQ    net/netip·z6noz(SB), CX  ; CX = netip.z6noz
 end:
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
-Il est peu probable que les mainteneurs de Go acceptent cette amélioration. Elle
-dépend de la structure interne de `net/netip.Addr`. C'est une bidouille peu
-élégante dans le *noder*, dont le rôle est de traduire fidèlement l'AST vérifié
-en IR. Et elle est plus difficile à maintenir que l'ajout de la méthode `To6()`.
+Go maintainers are unlikely to accept this change. It relies on the internal
+structure of `net/netip.Addr`. It's an ugly hack in the noder, whose job is to
+faithfully translate the type-checked AST into the IR. And it's harder to
+maintain than adding a `To6()` method.
 
 [reader.go]: {{ go_source("src/cmd/compile/internal/noder/reader.go") }} "reader.go"
 [several phases]: {{ go_source("src/cmd/compile/README.md") }} "Introduction to the Go compiler"
 [netipmap-fix2]: https://github.com/vincentbernat/go/commit/netipmap-fix2 "cmd/compile: optimize netip.AddrFrom16(ip.As16()) in the noder"
 
-## Le tournevis
+## The screwdriver
 
-Le bon endroit pour une telle optimisation est la [phase SSA générique][generic
-SSA phase]. L'une des dernières passes indépendantes de l'architecture est
-`memcombine`. Avec l'option de débogage adéquate, le compilateur affiche la
-forme SSA après cette passe[^html] :
+The right place for such an optimization is the [generic SSA phase][]. One of
+the last machine-independent passes is `memcombine`. With the appropriate debug
+flag, the compiler dumps the SSA form after this pass:[^html]
 
 ```console
 $ GOTOOLCHAIN=go1.26.8 GOAMD64=v3 \
@@ -618,8 +602,7 @@ AddrTo6Safe func(netip.Addr) netip.Addr
 ```
 
 [^html]:
-    Le compilateur peut aussi écrire un fichier HTML avec le résultat de chaque
-    passe :
+    The compiler can also write an HTML file with the result of each pass:
 
         ::console
         $ GOSSAFUNC=AddrTo6Safe \
@@ -627,9 +610,9 @@ AddrTo6Safe func(netip.Addr) netip.Addr
         > GOAMD64=v3 go build -a .
         dumped SSA for AddrTo6Safe,1 to ./ssa.html
 
-Le résultat de la passe `memcombine` suit la même structure que le code
-assembleur de `AddrTo6Safe()` [examiné plus haut](#asm-addrto6safe) : deux
-écritures, une copie et deux lectures que nous aimerions éliminer.
+The result of the `memcombine` pass follows the same structure as the assembly
+code for `AddrTo6Safe()` [we looked at earlier](#asm-addrto6safe): two stores,
+one move, and two loads we would like to optimize away.
 
 ```go-ssa
 ; […]
@@ -655,23 +638,22 @@ assembleur de `AddrTo6Safe()` [examiné plus haut](#asm-addrto6safe) : deux
 ; […]
 ```
 
-Chaque ligne comporte un identifiant de valeur (`v442`), une opération avec son
-type (`Bswap64 <uint64>`) et ses arguments (`v490`)[^lines]. Les valeurs sont
-les briques de base de la forme SSA et ne sont définies qu'une seule fois. Les
-paramètres entiers sont entourés par des crochets (`[8]`) et les arguments
-auxiliaires sont indiqués par des accolades (`{netip.addr}`). Les opérations qui
-écrivent en mémoire produisent un nouvel état de la mémoire. Chaque opération
-mémoire reprend l'état courant en dernier argument, ce qui permet de les
-maintenir dans l'ordre.
+Each line features a value identifier (`v442`), an operation with its type
+(`Bswap64 <uint64>`), and its arguments (`v490`).[^lines] Values are the basic
+building blocks of SSA and are defined exactly once. Square brackets enclose
+integer parameters (`[8]`) and curly braces contain auxiliary arguments
+(`{netip.addr}`). Operations writing to memory produce a new memory state. Every
+memory operation takes the current state as its last argument, which keeps them
+in order.
 
 [^lines]:
-    Les numéros de ligne du code source sont indiqués entre parenthèses, mais
-    je les ai retirés des exemples. La forme SSA comporte aussi des branches,
-    mais elles ne sont pas nécessaires pour comprendre nos optimisations.
+    Source line numbers in parentheses follow value identifiers, but I removed
+    them from the examples. The SSA form also features branches, but we don't
+    need them to understand our optimizations.
 
-### Sur le papier
+### On paper
 
-Concentrons-nous sur `output.addr.lo`, alias `v39` :
+Let's focus on `output.addr.lo`, aka `v39`:
 
 ```go-ssa
   v490 = ArgIntReg <uint64> {ip+8} [1]              ; input.addr.lo
@@ -686,12 +668,11 @@ Concentrons-nous sur `output.addr.lo`, alias `v39` :
   v39  = Bswap64 <uint64> v174                      ; output.addr.lo
 ```
 
-Pour simplifier ce code, nous pourrions appliquer trois règles de réécriture :
+To simplify this code, we could apply three rewriting rules:
 
-1. La première ajoute un raccourci pour une **lecture à travers une copie** :
-   `(Load (OffPtr [o] p) (Move p src mem)) => (Load (OffPtr [o] src) mem)`.
-   Elle s'applique à `v174` avec ses arguments `v415` et `v286` et crée une
-   nouvelle valeur `v600` :
+1. The first one adds a shortcut when **loading through a move**: `(Load (OffPtr
+   [o] p) (Move p src mem)) => (Load (OffPtr [o] src) mem)`. This matches `v174`
+   with its arguments `v415` and `v286` and creates a new value `v600`:
 
         ::go-ssa hl_lines="9 10"
           v490 = ArgIntReg <uint64> {ip+8} [1]              ; input.addr.lo
@@ -706,11 +687,10 @@ Pour simplifier ce code, nous pourrions appliquer trois règles de réécriture 
           v174 = Load <uint64> v600 v282                    ; a16[8:]
           v39  = Bswap64 <uint64> v174                      ; output.addr.lo
 
-2. La deuxième simplifie une **lecture qui suit une écriture** :
-   `(Load p (Store p x _)) => x`. La lecture est *transmise* : la valeur
-   écrite la remplace et il ne reste plus aucun accès mémoire. Elle s'applique
-   à `v174`. Elle remarque que `v600` et `v173` désignent la même adresse et
-   remplace `v174` par une copie de `v442` :
+2. The second one simplifies a **load following a store**: `(Load p (Store p x
+   _)) => x`. The load is *forwarded*: the stored value replaces it and no memory
+   access remains. It matches `v174`. It notices that `v600` and `v173` are the
+   same address and replaces `v174` with a copy of `v442`:
 
         ::go-ssa hl_lines="10"
           v490 = ArgIntReg <uint64> {ip+8} [1]              ; input.addr.lo
@@ -725,8 +705,8 @@ Pour simplifier ce code, nous pourrions appliquer trois règles de réécriture 
           v174 = Copy <uint64> v442                         ; bswap(input.addr.lo)
           v39  = Bswap64 <uint64> v174                      ; output.addr.lo
 
-3. La dernière étape **annule les deux inversions d'octets** :
-   `(Bswap64 (Bswap64 x)) => x`. `v39` devient une copie de `v490` :
+3. The last step **cancels the two byte swaps**: `(Bswap64 (Bswap64 x)) => x`.
+   `v39` becomes a copy of `v490`:
 
         ::go-ssa hl_lines="11"
           v490 = ArgIntReg <uint64> {ip+8} [1]              ; input.addr.lo
@@ -741,15 +721,14 @@ Pour simplifier ce code, nous pourrions appliquer trois règles de réécriture 
           v174 = Copy <uint64> v442                         ; bswap(input.addr.lo)
           v39  = Copy <uint64> v490                         ; output.addr.lo = input.addr.lo
 
-Si nous ignorons les valeurs inutiles pour calculer `v39`, il ne reste que
-cette forme SSA :
+If we ignore the values not needed to compute `v39`, only this SSA form remains:
 
 ```go-ssa
   v490 = ArgIntReg <uint64> {ip+8} [1]  ; input.addr.lo
   v39  = Copy <uint64> v490             ; output.addr.lo = input.addr.lo
 ```
 
-Passons à `output.addr.hi`, alias `v299` :
+Let's switch to `output.addr.hi`, aka `v299`:
 
 ```go-ssa
   v502 = ArgIntReg <uint64> {ip+0} [0]              ; input.addr.hi
@@ -764,11 +743,11 @@ Passons à `output.addr.hi`, alias `v299` :
   v299 = Bswap64 <uint64> v416                      ; output.addr.hi
 ```
 
-Pour l'éliminer, nous appliquons là aussi trois règles de réécriture :
+To optimize it away, we also apply three rewriting rules:
 
-1. La première raccourcit une **lecture à travers une copie**, mais sans
-   appliquer un décalage : `(Load p (Move p src mem)) => (Load src mem)`. Elle
-   réécrit `v416` pour utiliser les arguments de `v286` :
+1. The first one also adds a shortcut when **loading through a move**, but
+   without an offset: `(Load p (Move p src mem)) => (Load src mem)`. This rewrites `v416`
+   to use arguments from `v286`:
 
         ::go-ssa hl_lines="9"
           v502 = ArgIntReg <uint64> {ip+0} [0]              ; input.addr.hi
@@ -782,11 +761,10 @@ Pour l'éliminer, nous appliquons là aussi trois règles de réécriture :
           v416 = Load <uint64> v22 v282                     ; a16[:8]
           v299 = Bswap64 <uint64> v416                      ; output.addr.hi
 
-2. La deuxième règle **transmet une valeur écrite une étape plus tôt**, en
-   ignorant une écriture à une autre adresse quand il n'y a pas de
-   chevauchement : `(Load p (Store q _ (Store p x _))) => x`. Elle s'applique à
-   `v416` : `x` est `v542`, `p` est `v22` (`&a16`), `q` est `v173` (`&a16[8]`),
-   et `p` et `q` ne se chevauchent pas si on les considère comme des `uint64`.
+2. The second rule **forwards a value stored one step earlier**, skipping over a
+   store to another address: `(Load p (Store q _ (Store p x _))) => x`. This
+   matches `v416`: `x` is `v542`, `p` is `v22` (`&a16`), `q` is `v173`
+   (`&a16[8]`), and `p` and `q` do not overlap for `uint64`.
 
         ::go-ssa hl_lines="9"
           v502 = ArgIntReg <uint64> {ip+0} [0]              ; input.addr.hi
@@ -800,8 +778,8 @@ Pour l'éliminer, nous appliquons là aussi trois règles de réécriture :
           v416 = Copy <uint64> v542                         ; bswap(input.addr.hi)
           v299 = Bswap64 <uint64> v416                      ; output.addr.hi
 
-3. La troisième règle **annule deux inversions d'octets** :
-   `(Bswap64 (Bswap64 x)) => x`. `v299` devient une copie de `v502` :
+3. The third rule **cancels two byte swaps**: `(Bswap64 (Bswap64 x)) => x`.
+   `v299` becomes a copy of `v502`:
 
         ::go-ssa hl_lines="10"
           v502 = ArgIntReg <uint64> {ip+0} [0]              ; input.addr.hi
@@ -815,22 +793,20 @@ Pour l'éliminer, nous appliquons là aussi trois règles de réécriture :
           v416 = Copy <uint64> v542                         ; bswap(input.addr.hi)
           v299 = Copy <uint64> v502                         ; output.addr.hi = input.addr.hi
 
-Si nous retirons les valeurs inutiles pour calculer `v299`, nous obtenons la
-forme SSA suivante :
+If we remove the values not used to compute `v299`, we get this SSA form:
 
 ```go-ssa
   v502 = ArgIntReg <uint64> {ip+0} [0] ; input.addr.hi
   v299 = Copy <uint64> v502            ; output.addr.hi = input.addr.hi
 ```
 
-### En pratique
+### In practice
 
-La plupart de ces règles existent déjà dans [`generic.rules`][generic.rules].
-Elles utilisent des conditions pour valider leur contexte : `ssa.IsSamePtr()`
-pour une même adresse, `ssa.Disjoint()` pour des adresses qui ne se chevauchent
-pas. La règle qui transmet une valeur écrite à une lecture existe déjà, avec
-trois variantes qui regardent à travers plusieurs autres écritures. Voici les
-deux dont nous avons besoin :
+Most of these rules already exist in [`generic.rules`][generic.rules]. They use
+conditions to validate their context: `ssa.IsSamePtr()` for the same address,
+`ssa.Disjoint()` for addresses that do not overlap. The rule forwarding a stored
+value to a load already exists with three variants looking through several other
+stores. Here are the two we need:
 
 ```go-rules
 (Load <t1> p1 (Store {t2} p2 x _))
@@ -846,8 +822,8 @@ deux dont nous avons besoin :
     => x
 ```
 
-Go 1.27 a ajouté la règle de lecture à travers une copie dans [CL 748200][] pour
-corriger le [ticket #77720][issue #77720] :
+Go 1.27 added the rule loading through a move with [CL 748200][] to fix
+[issue #77720][]:
 
 ```go-rules
 (Load <t1> op1:(OffPtr [o1] p1) move:(Move [n] p2 src mem))
@@ -856,7 +832,7 @@ corriger le [ticket #77720][issue #77720] :
     => @move.Block (Load <t1> (OffPtr <op1.Type> [o1] src) mem)
 ```
 
-Il lui manque une variante sans application d'un décalage :
+It lacks a variant without an offset:
 
 ```go-rules
 (Load <t1> p1 move:(Move [n] p2 src mem))
@@ -866,40 +842,40 @@ Il lui manque une variante sans application d'un décalage :
     => @move.Block (Load <t1> (OffPtr <p1.Type> [0] src) mem)
 ```
 
-Il n'existe pas de règle générique pour annuler deux inversions d'octets, mais
-la [passe de traduction vers AMD64][AMD64.rules] comporte cette règle :
+There is no generic rule to cancel two byte swaps, but the [AMD64 lowering
+pass][AMD64.rules] includes this rule:
 
 ```go-rules
 (BSWAP(Q|L) (BSWAP(Q|L) p)) => p
 ```
 
-Après bascule sur la branche de développement de Go et [ajout de la règle
-manquante][netipmap-fix3], le code assembleur généré est pire qu'avec Go 1.26.8,
-même si notre règle supplémentaire améliore légèrement la situation à la fin :
+After switching to Go's development branch and [adding the missing
+rule][netipmap-fix3], the generated assembly code is worse than with Go 1.26.8,
+even though our additional rule slightly improves the situation at the end:
 
 ```go-asm hl_lines="51"
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
-; Réserver de la place sur la pile (16 octets) :
+; Push the stack (16 bytes):
 ;    0(SP) a16 [16]byte
  PUSHQ   BP
  MOVQ    SP, BP
  SUBQ    $16, SP
 
- CMPQ    net/netip·z4(SB), CX       ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE     end                        ; sinon, s'arrêter ici
+ CMPQ    net/netip·z4(SB), CX       ; check "z" if this is an IPv4 address
+ JNE     end                        ; if not, stop here
 
-; Les quatre octets transmis : la moitié basse de input.addr.lo est découpée
-; puis reconstituée dans les registres
+; The four forwarded bytes: the low half of input.addr.lo is taken apart and
+; put back together in registers
  MOVQ    BX, DX                     ; DX = input.addr.lo
  SHRQ    $24, BX                    ; BX = input.addr.lo >> 24
  MOVQ    DX, SI                     ; SI = input.addr.lo
  SHRQ    $16, DX                    ; DX = input.addr.lo >> 16
- MOVQ    SI, DI                     ; DI = input.addr.lo, gardé pour l'empaquetage
+ MOVQ    SI, DI                     ; DI = input.addr.lo, kept for the pack
  SHRQ    $8, SI                     ; SI = input.addr.lo >> 8
  MOVBLZX DIB, R8                    ; R8 = byte(input.addr.lo)
  MOVBLZX SIB, SI                    ; SI = byte(input.addr.lo >> 8)
  SHLQ    $8, SI
- ORQ     R8, SI                     ; SI = deux octets de poids faible de input.addr.lo
+ ORQ     R8, SI                     ; SI = two low bytes of input.addr.lo
  MOVBLZX DL, DX                     ; DX = byte(input.addr.lo >> 16)
  SHLQ    $16, DX
  ORQ     SI, DX
@@ -907,12 +883,12 @@ même si notre règle supplémentaire améliore légèrement la situation à la 
  SHLQ    $24, BX
  ORQ     DX, BX                     ; BX = input.addr.lo & 0xffffffff
 
-; Empaquetage : byteorder.BEPutUint64(a16[:8], input.addr.hi)
-;               byteorder.BEPutUint64(a16[8:], input.addr.lo)
+; Pack: byteorder.BEPutUint64(a16[:8], input.addr.hi)
+;       byteorder.BEPutUint64(a16[8:], input.addr.lo)
  MOVBEQ  AX, net/netip·a16(SP)
  MOVBEQ  DI, net/netip·a16+8(SP)
 
-; Les quatre autres octets de input.addr.lo, lus un par un dans a16
+; The four other bytes of input.addr.lo, read one by one from a16
  MOVBLZX net/netip·a16+11(SP), DX   ; a16[11]
  SHLQ    $32, DX
  ORQ     DX, BX
@@ -929,25 +905,23 @@ même si notre règle supplémentaire améliore légèrement la situation à la 
  MOVQ    net/netip·z6noz(SB), CX
 ; output.addr.hi = byteorder.BEUint64(a16[:8])
  MOVBEQ  net/netip·a16(SP), AX
-; output.addr.lo assemblé à partir des étapes précédentes
+; output.addr.lo assembled from the previous steps
  ORQ     DX, BX
 
 end:
  LEAVEQ
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
-C'est la règle de lecture à travers une copie, ajoutée dans Go 1.27, qui a
-introduit cette régression.
+The rule loading through a move, added in Go 1.27, introduced this regression.
 
-### Dans le désordre
+### Out of order
 
-Ne baissons pas les bras ! En réalité, les règles de réécriture s'exécutent
-avant `memcombine`, notamment dans la passe `late opt`. À ce stade, le
-compilateur a remplacé les appels de `BEPutUint64()` et de `BEUint64()` par
-seize écritures et seize lectures d'un octet, conformément à leur [code
-source](go://internal/byteorder#BEUint64) :
+Let's not give up now! In reality, the rewriting rules run before `memcombine`,
+notably in the `late opt` pass. At this point, the inlined versions of
+`BEPutUint64()` and `BEUint64()` still expand to sixteen byte stores and sixteen
+byte loads, matching their [source code](go://internal/byteorder#BEUint64):
 
 ```go
 func BEUint64(b []byte) uint64 {
@@ -957,8 +931,8 @@ func BEUint64(b []byte) uint64 {
 }
 ```
 
-Suivons deux octets de `output.addr.lo` : `addr[15]` et `addr[11]`. Voici une
-forme SSA simplifiée avant la passe `late opt` :
+Let's follow two bytes of `output.addr.lo`: `addr[15]` and `addr[11]`. Here is
+a simplified SSA form before `late opt`:
 
 ```go-ssa
   v273 = Trunc64to8 <byte> v490                     ; byte(input.addr.lo)
@@ -978,9 +952,9 @@ forme SSA simplifiée avant la passe `late opt` :
   v481 = Load <byte> v479 v286                      ; addr[11]
 ```
 
-La première règle lit à travers la copie : `(Load (OffPtr [o] p) (Move p src
-mem)) => (Load (OffPtr [o] src) mem)`. Elle s'applique aux deux lectures, qui
-lisent désormais `a16` avec l'état de la mémoire précédant la copie :
+The first rule loads through the move: `(Load (OffPtr [o] p) (Move p src mem))
+=> (Load (OffPtr [o] src) mem)`. It matches both loads, which now read `a16`
+with the memory state before the copy:
 
 ```go-ssa
   v600 = OffPtr <*byte> [15] v22 ; &a16[15]
@@ -989,11 +963,10 @@ lisent désormais `a16` avec l'état de la mémoire précédant la copie :
   v481 = Load <byte> v601 v282   ; a16[11]
 ```
 
-La deuxième règle raccourcit une lecture qui suit une écriture : `(Load p (Store
-p x _)) => x`. Elle s'applique à `v435`, puisque `v282` écrit `a16[15]`. Elle ne
-s'applique pas à `v481` : `v235` écrit `a16[11]` quatre écritures plus tôt dans
-la chaîne, alors que les variantes de cette règle ne remontent au maximum qu'à
-trois écritures.
+The second rule shortcuts a load following a store: `(Load p (Store p x _)) =>
+x`. It matches `v435`, as `v282` stores `a16[15]`. It does not match `v481`:
+`v235` stores `a16[11]` four stores earlier in the chain, while the variants of
+this rule look through three stores at most.
 
 ```go-ssa hl_lines="1"
   v435 = Copy <byte> v273        ; byte(input.addr.lo)
@@ -1001,20 +974,19 @@ trois écritures.
   v481 = Load <byte> v601 v282   ; a16[11]
 ```
 
-Il en va de même pour les autres octets : la règle transmet les quatre derniers
-octets écrits, de `a16[12]` à `a16[15]`. Les douze autres lectures continuent de
-lire `a16` au lieu de `addr`.
+The same happens to the other bytes: the rule forwards the four bytes stored
+last, `a16[12]` to `a16[15]`. The twelve other loads now read `a16` instead of
+`addr`.
 
-`BEUint64()` devient une chaîne de `Or64`, chacun plaçant un octet à sa place.
-`memcombine` est une [passe écrite en Go][memcombine], et non un ensemble de
-règles de réécriture. Elle part du dernier `Or64` de la chaîne et collecte
-jusqu'à huit termes. Si chaque terme est la lecture d'un octet, étendue à 64
-bits et décalée, et si les huit lectures portent sur des adresses consécutives à
-partir du même pointeur avec le même état de la mémoire, elle remplace toute la
-chaîne par une unique lecture de 64 bits et une inversion d'octets. Sinon, elle
-réessaie avec quatre termes, puis deux ainsi qu'à partir de chaque `Or64`
-intermédiaire. Voici la boucle qui vérifie chaque terme dans une version
-simplifiée de `combineLoads()` :
+`BEUint64()` becomes a chain of `Or64`, each one adding a byte shifted into
+place. `memcombine` is a [pass written in Go][memcombine], not a set of rewrite
+rules. It starts from the last `Or64` of the chain and collects up to eight
+terms. If each term is a byte load, extended to 64 bits and shifted, and if the
+eight loads read consecutive addresses from the same pointer with the same
+memory state, it replaces the whole chain with a single 64-bit load and a byte
+swap. Otherwise, it tries again with four, then two terms, and from each
+intermediate `Or64`. Here is the loop checking each term in a simplified version
+of `combineLoads()`:
 
 ```go
 for i := int64(0); i < n; i++ {
@@ -1041,8 +1013,8 @@ for i := int64(0); i < n; i++ {
 }
 ```
 
-Pour `output.addr.hi`, les huit lectures portent sur `a16` avec le même état de
-la mémoire, `v282` :
+For `output.addr.hi`, the eight loads read `a16` with the same memory state
+`v282`:
 
 ```go-ssa
   v13  = Load <byte> v22 v282               ; a16[0]
@@ -1057,56 +1029,54 @@ la mémoire, `v282` :
   v329 = ZeroExt8to64 <uint64> v196         ; uint64(a16[6])
   v330 = Lsh64x64 <uint64> [true] v329 v138 ; uint64(a16[6]) << 8
   v331 = Or64 <uint64> v319 v330            ; a16[7] | a16[6] << 8
-; […] idem pour a16[5] à a16[1]
+; […] same for a16[5] to a16[1]
   v401 = ZeroExt8to64 <uint64> v13          ; uint64(a16[0])
   v402 = Lsh64x64 <uint64> [true] v401 v55  ; uint64(a16[0]) << 56
   v403 = Or64 <uint64> v402 v391            ; | a16[0] << 56 = output.addr.hi
 ```
 
-`memcombine` les fusionne en une seule lecture et une inversion :
+`memcombine` merges them into one load and a swap:
 
 ```go-ssa
   v286 = Load <uint64> v22 v282   ; a16[:8]
   v285 = Bswap64 <uint64> v286    ; output.addr.hi
 ```
 
-Pour `output.addr.lo`, voici la chaîne que voit `memcombine` après
-`late opt` :
+For `output.addr.lo`, here is the chain `memcombine` sees after `late opt`:
 
 ```go-ssa
-  v436 = ZeroExt8to64 <uint64> v273 ; addr[15], transmis
-  v448 = Or64 <uint64> v436 v447    ; | addr[14] << 8, transmis
-  v460 = Or64 <uint64> v459 v448    ; | addr[13] << 16, transmis
-  v472 = Or64 <uint64> v471 v460    ; | addr[12] << 24, transmis
-  v484 = Or64 <uint64> v483 v472    ; | a16[11] << 32, lu
-  v496 = Or64 <uint64> v495 v484    ; | a16[10] << 40, lu
-  v508 = Or64 <uint64> v507 v496    ; | a16[9] << 48, lu
-  v520 = Or64 <uint64> v519 v508    ; | a16[8] << 56, lu
+  v436 = ZeroExt8to64 <uint64> v273 ; addr[15], forwarded
+  v448 = Or64 <uint64> v436 v447    ; | addr[14] << 8, forwarded
+  v460 = Or64 <uint64> v459 v448    ; | addr[13] << 16, forwarded
+  v472 = Or64 <uint64> v471 v460    ; | addr[12] << 24, forwarded
+  v484 = Or64 <uint64> v483 v472    ; | a16[11] << 32, loaded
+  v496 = Or64 <uint64> v495 v484    ; | a16[10] << 40, loaded
+  v508 = Or64 <uint64> v507 v496    ; | a16[9] << 48, loaded
+  v520 = Or64 <uint64> v519 v508    ; | a16[8] << 56, loaded
 ```
 
-À partir de `v520`, quatre des huit termes sont des octets transmis et non des
-lectures en mémoire : `memcombine` ne peut pas les combiner. Elle ne fusionne
-pas non plus les quatre lectures restantes, car elles reposent sur les octets
-transmis.
+From `v520`, four of the eight terms are forwarded bytes, not loads from memory,
+and `memcombine` can't combine them. It doesn't merge the four remaining loads
+either, as they sit on top of the forwarded bytes.
 
-### Remise en ordre
+### Back in order
 
-En résumé, les règles de réécriture s'exécutent trop tôt pour être efficaces. Il
-existe un contournement rapide : exécuter une première passe `memcombine` avant
-`late opt`. Après [cette modification][netipmap-fix4], le code généré pour la
-fonction utilitaire redevient le plus court possible :
+In summary, the rewriting rules run too early to be effective. A quick
+workaround exists: run an earlier round of `memcombine` before `late opt`. After
+[this change][netipmap-fix4], the generated code for the helper is back to the
+shortest possible version:
 
 ```go-asm
 // AX = input.addr.hi, BX = input.addr.lo, CX = input.z
- CMPQ    net/netip·z4(SB), CX     ; vérifier avec "z" s'il s'agit d'une adresse IPv4
- JNE     end                      ; sinon, s'arrêter ici
+ CMPQ    net/netip·z4(SB), CX     ; check "z" if this is an IPv4 address
+ JNE     end                      ; if not, stop here
  MOVQ    net/netip·z6noz(SB), CX  ; CX = netip.z6noz
 end:
  RET
-// valeur de retour = Addr{hi: AX, lo: BX, z: CX}
+// return value = Addr{hi: AX, lo: BX, z: CX}
 ```
 
-Et les mesures de performance le confirment ! ✌️
+And the benchmark confirms it! ✌️
 
 ```text
 goos: linux
@@ -1129,21 +1099,19 @@ AddrTo6/builtin       0.8871n ±  2%   0.8785n ± 1%        ~ (p=0.310 n=6)
 [netipmap-fix3]: https://github.com/vincentbernat/go/commit/netipmap-fix3 "cmd/compile/internal/ssa: forward small offset-less Load through Move"
 [netipmap-fix4]: https://github.com/vincentbernat/go/commit/netipmap-fix4 "cmd/compile/internal/ssacompile: run memcombine before late opt"
 
-# Prochaine étape
+# Next steps
 
-Je pense que les mainteneurs de Go rejetteront cette modification à cause de la
-passe `memcombine` supplémentaire. À la place, je compte publier cet article et
-relancer le sujet à la suite du [ticket #54365][issue #54365]. Soit la complexité du
-problème et la régression de Go 1.27 convainquent les mainteneurs qu'il est plus
-simple et efficace d'ajouter une méthode `To6()`, soit ils me conseillent sur la
-marche à suivre. Dans tous les cas, creuser ce sujet m'a beaucoup appris sur le
-compilateur Go ! ⚙️
+I think Go maintainers would reject this change because of the additional
+`memcombine` pass. Instead, I plan to publish this blog post and bring up the
+subject again as a follow-up to [issue #54365][]. Either the sheer complexity and
+the Go 1.27 regression convince the maintainers that adding a `To6()` method is
+simpler and more efficient, or they advise me on how to move forward. Either
+way, digging into this subject taught me a lot about the Go compiler! ⚙️
 
-!!! "Mise à jour (10.2026)" J'ai ouvert le [ticket #81994][issue #81994] pour
-proposer la méthode `Addr.To6()`. Mettez un 👍 si vous voulez la voir dans Go !
+!!! "Update (2026-10)" I opened [issue #81994][] to propose `Addr.To6()`. Give it a 👍 if you want it in Go!
 
 [issue #54365]: https://github.com/golang/go/issues/54365 "proposal: net/netip: add netip.Addr.Map · Issue #54365 · golang/go"
 [issue #81994]: https://github.com/golang/go/issues/81994 "proposal: net/netip: add netip.Addr.To6() · Issue #81994 · golang/go"
 
-*[IR]: Intermediate Representation (représentation intermédiaire)
+*[IR]: Intermediate Representation
 *[SSA]: Static Single Assignment

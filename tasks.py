@@ -766,7 +766,7 @@ Info:      {row["infostring"]}""")
 
 frontmatter_keys = (
     "extends default_block "  # templating
-    "title description uuid cover "  # identity
+    "title description uuid alias cover "  # identity
     "created attachments tags "  # metadata
     "author bluesky github mastodon "  # attribution
     "featured popular listable notitle noindex comments share subscribe sidenotes "  # listing/visibility
