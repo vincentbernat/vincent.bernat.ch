@@ -83,7 +83,7 @@ nix flake update nixpkgs
 Easy rebase of a WIP progress + checkout:
 
 ```
-git rebase latest article/something
+git rebase main article/something
 ```
 
 ## LLM skills
