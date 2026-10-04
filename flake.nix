@@ -89,7 +89,7 @@
                   moreOverrides
                 ]
               );
-              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild pkgs.firefox fonttools ];
+              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild fonttools ];
             in
             (pythonSet.mkVirtualEnv "www-env" workspace.deps.default).overrideAttrs (old: {
               nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
