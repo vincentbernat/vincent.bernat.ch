@@ -89,7 +89,7 @@
                   moreOverrides
                 ]
               );
-              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild pkgs.resvg fonttools ];
+              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild pkgs.firefox fonttools ];
             in
             (pythonSet.mkVirtualEnv "www-env" workspace.deps.default).overrideAttrs (old: {
               nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
@@ -534,6 +534,7 @@
                     fontDirectories = with pkgs; [
                       notoSansDisplay
                       dejavu_fonts
+                      liberation_ttf
                     ];
                     impureFontDirectories = [ ];
                     includes = [ ];

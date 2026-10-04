@@ -19,6 +19,8 @@ import lxml.html
 import types
 import subprocess
 import json
+import pathlib
+import tempfile
 from functools import cache, cached_property, partial
 from fractions import Fraction
 from typing import NamedTuple
@@ -27,7 +29,7 @@ from hyde.plugin import Plugin
 from fswrap import File, Folder
 
 from pyquery import PyQuery as pq
-from PIL import Image
+from PIL import Image, ImageChops
 import diskcache
 import skia
 import langcodes
@@ -594,6 +596,7 @@ class CoverImagePlugin(Plugin):
     author_font = None
     _cache = None
     _self_hash = None
+    _firefox_profile = None
 
     def begin_site(self):
         media_path = str(self.site.config.media_root_path)
@@ -680,27 +683,59 @@ class CoverImagePlugin(Plugin):
     def _load_cover(cover_path, width):
         """Load a cover image (SVG or raster) and return as RGBA."""
         if cover_path.endswith(".svg"):
-            p = subprocess.run(
-                [
-                    "resvg",
-                    "--quiet",
-                    "--font-family",
-                    "DejaVu Sans",
-                    "--sans-serif-family",
-                    "DejaVu Sans",
-                    "--serif-family",
-                    "DejaVu Serif",
-                    "--monospace-family",
-                    "DejaVu Sans Mono",
-                    "--width",
-                    str(width * 2),
-                    cover_path,
-                    "-c",
-                ],
-                check=True,
-                capture_output=True,
-            )
-            return Image.open(io.BytesIO(p.stdout)).convert("RGBA")
+            width *= 2
+            # The screenshot has the size of the window. Use a tall window and
+            # crop the magenta background.
+            height = width * 4
+            r, g, b = CoverImagePlugin.BG_COLOR
+            src = pathlib.Path(cover_path).resolve().as_uri()
+            if CoverImagePlugin._firefox_profile is None:
+                CoverImagePlugin._firefox_profile = tempfile.TemporaryDirectory()
+                fonts = {
+                    "sans-serif": "Liberation Sans",
+                    "serif": "Liberation Serif",
+                    "monospace": "DejaVu Sans Mono",
+                }
+                with open(
+                    os.path.join(CoverImagePlugin._firefox_profile.name, "user.js"),
+                    "w",
+                ) as f:
+                    for lang in ("x-western", "x-unicode"):
+                        f.write(f'user_pref("font.default.{lang}", "sans-serif");\n')
+                        for generic, family in fonts.items():
+                            f.write(
+                                f'user_pref("font.name.{generic}.{lang}", "{family}");\n'
+                            )
+            profile = CoverImagePlugin._firefox_profile.name
+            with tempfile.TemporaryDirectory() as tmp:
+                html = os.path.join(tmp, "cover.html")
+                png = os.path.join(tmp, "cover.png")
+                with open(html, "w") as f:
+                    f.write(
+                        '<html style="background:#f0f">'
+                        '<body style="margin:0;overflow:hidden">'
+                        f'<img src="{src}" style="display:block;width:{width}px;'
+                        f'background:rgb({r},{g},{b})">'
+                    )
+                subprocess.run(
+                    [
+                        "firefox",
+                        "--headless",
+                        "--no-remote",
+                        "--profile",
+                        profile,
+                        f"--window-size={width},{height}",
+                        "--screenshot",
+                        png,
+                        pathlib.Path(html).as_uri(),
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
+                img = Image.open(png).convert("RGB")
+                magenta = Image.new("RGB", img.size, (255, 0, 255))
+                bbox = ImageChops.difference(img, magenta).getbbox()
+                return img.crop(bbox).convert("RGBA")
         return Image.open(cover_path).convert("RGBA")
 
     @staticmethod
