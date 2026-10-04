@@ -272,6 +272,18 @@
                        };
 
                        /**
+                      @@ -162,7 +163,10 @@
+                         sax.ontext = (text) => {
+                           if (current.type === 'element') {
+                             // prevent trimming of meaningful whitespace inside textual tags
+                      -      if (textElems.has(current.name)) {
+                      +      if (
+                      +        textElems.has(current.name) ||
+                      +        stack.some((e) => e.type === 'element' && e.name === 'foreignObject')
+                      +      ) {
+                               /** @type {import('./types.js').XastText} */
+                               const node = {
+                                 type: 'text',
                     '')
                   ];
                 });
