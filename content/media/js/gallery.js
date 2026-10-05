@@ -1,1 +1,1 @@
-../../../node_modules/baguettebox.js/dist/baguetteBox.js
+../../../node_modules/baguettebox.js/dist/baguetteBox.global.js

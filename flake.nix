@@ -106,11 +106,14 @@
               nativeBuildInputs = [ pkgs.esbuild ];
               postInstall = ''
                 # baguetteBox's UMD wrapper uses `this` as the global, which is
-                # undefined when loaded as an ES module. Fall back to `self`.
-                substituteInPlace $out/node_modules/baguettebox.js/dist/baguetteBox.js \
-                  --replace-fail \
-                  '}(this, function () {' \
-                  '}(typeof self !== "undefined" ? self : this, function () {'
+                # undefined when loaded as an ES module. Use the CommonJS branch
+                # instead.
+                (
+                  cd $out/node_modules/baguettebox.js
+                  echo 'self.baguetteBox = require("./dist/baguetteBox.js");' \
+                    | esbuild --bundle --format=iife --target=es2015 \
+                      --outfile=dist/baguetteBox.global.js
+                )
 
                 # The @svta/cml-* packages are dev dependencies of hls.js,
                 # pinned there. Check we use the same versions.
