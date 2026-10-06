@@ -1,0 +1,17 @@
+Issue: https://github.com/svg/svgo/issues/1678
+Fix: https://github.com/svg/svgo/pull/2064
+
+--- a/lib/parser.js
++++ b/lib/parser.js
+@@ -163,7 +163,10 @@
+   sax.ontext = (text) => {
+     if (current.type === 'element') {
+       // prevent trimming of meaningful whitespace inside textual tags
+-      if (textElems.has(current.name)) {
++      if (
++        textElems.has(current.name) ||
++        stack.some((e) => e.type === 'element' && e.name === 'foreignObject')
++      ) {
+         /** @type {import('./types.js').XastText} */
+         const node = {
+           type: 'text',

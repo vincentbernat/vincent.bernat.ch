@@ -1,0 +1,23 @@
+Issue: https://github.com/svg/svgo/issues/2218
+Fix: https://github.com/svg/svgo/pull/2224
+
+--- a/bin/svgo.js
++++ b/bin/svgo.js
+@@ -1,5 +1,7 @@
+ #!/usr/bin/env node
+ 
++import sax from 'sax'; sax.MAX_BUFFER_LENGTH = Infinity;
++
+ import colors from 'picocolors';
+ import { program } from 'commander';
+ import makeProgram from '../lib/svgo/coa.js';
+--- a/lib/parser.js
++++ b/lib/parser.js
+@@ -68,6 +68,7 @@
+   xmlns: true,
+   position: true,
+   unparsedEntities: true,
++  maxEntityCount: 4096,
+ };
+ 
+ /**

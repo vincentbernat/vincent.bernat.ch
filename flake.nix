@@ -254,40 +254,8 @@
                 inherit (pkgs) libwebp libavif pngquant lcms gifsicle jpegli exiftool;
                 svgo = pkgs.svgo.overrideAttrs (old: {
                   patches = (old.patches or [ ]) ++ [
-                    (pkgs.writeText "sax.patch" ''
-                      --- a/bin/svgo.js 2018-01-04 01:01:27.000000000 +0100
-                      +++ b/bin/svgo.js 2025-04-21 00:43:30.571001925 +0200
-                      @@ -1,5 +1,7 @@
-                       #!/usr/bin/env node
-
-                      +import sax from 'sax'; sax.MAX_BUFFER_LENGTH = Infinity;
-                      +
-                       import colors from 'picocolors';
-                       import { program } from 'commander';
-                       import makeProgram from '../lib/svgo/coa.js';
-                      --- a/lib/parser.js 2025-04-21 00:43:30.571001925 +0200
-                      +++ b/lib/parser.js 2025-04-21 00:43:30.571001925 +0200
-                      @@ -68,6 +68,7 @@
-                         xmlns: true,
-                         position: true,
-                         unparsedEntities: true,
-                      +  maxEntityCount: 4096,
-                       };
-
-                       /**
-                      @@ -162,7 +163,10 @@
-                         sax.ontext = (text) => {
-                           if (current.type === 'element') {
-                             // prevent trimming of meaningful whitespace inside textual tags
-                      -      if (textElems.has(current.name)) {
-                      +      if (
-                      +        textElems.has(current.name) ||
-                      +        stack.some((e) => e.type === 'element' && e.name === 'foreignObject')
-                      +      ) {
-                               /** @type {import('./types.js').XastText} */
-                               const node = {
-                                 type: 'text',
-                    '')
+                    ./tools/patches/svgo-limits.patch
+                    ./tools/patches/svgo-foreignobject.patch
                   ];
                 });
                 svgoConfig = pkgs.writeText "svgo.config.js" ''
