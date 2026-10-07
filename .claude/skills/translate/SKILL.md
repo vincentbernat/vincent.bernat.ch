@@ -46,6 +46,7 @@ currently editing.
   do not need italics. A term already in bold stays in bold: never combine bold
   and italics.
 - Avoid "on" as a pronoun.
+- Don't use "oxford comma" in French.
 - Use « guillemets » with a plain space inside
 - Use a plain space as thousands separator.
 - Avoid em dashes: French prose uses a colon, a comma, or even parentheses.

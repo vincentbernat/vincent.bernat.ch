@@ -116,6 +116,22 @@ func (ip Addr) To6() Addr {
 }
 ```
 
+!!! "Mise à jour (10.2026)" Plutôt que de modifier Go, nous pouvons modifier
+n'importe quel paquet, y compris ceux de la bibliothèque standard, avec l'option
+[`-overlay`][overlay] de `go build`. Dans notre cas, elle permet d'[ajouter
+`To6()` à `net/netip`][overlay-example]. Son usage reste toutefois
+contraignant[^inconvenient] : l'option attend un fichier JSON associant des
+chemins absolus dans `GOROOT` à des fichiers de remplacement et il faut la
+spécifier à chaque commande `go`.
+
+[^inconvenient]:
+    Je suppose que les mainteneurs de Go laissent cette contrainte
+    volontairement afin d'éviter que n'importe quel paquet modifie la
+    bibliothèque standard ou d'autres paquets.
+
+[overlay]: go://cmd/go#hdr-Compile_packages_and_dependencies "Documentation de go build"
+[overlay-example]: https://github.com/vincentbernat/go-netip-addrto6/commit/dcc2e1af2af48301d8e992db22d97682bda37b8c "Add an alternative using an overlay"
+
 ## Avec une fonction utilitaire
 
 Le champ `z` n'est pas accessible en dehors du paquet `net/netip`. À la place,

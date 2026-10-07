@@ -122,6 +122,20 @@ func (ip Addr) To6() Addr {
 }
 ```
 
+!!! "Update (2026-10)" Instead of patching Go, we can use the [`-overlay`
+flag][overlay] of `go build` to hijack any package, including the standard
+library. In our case, it can [add `To6()` to `net/netip`][overlay-example]. Yet
+it is cumbersome:[^inconvenient] the flag expects a JSON file mapping absolute
+paths in `GOROOT` to replacement files, and you need to add it to every `go`
+command.
+
+[^inconvenient]:
+    I suppose Go maintainers keep it inconvenient on purpose: they don't want
+    random packages to patch the standard library or other packages.
+
+[overlay]: go://cmd/go#hdr-Compile_packages_and_dependencies "go build documentation"
+[overlay-example]: https://github.com/vincentbernat/go-netip-addrto6/commit/dcc2e1af2af48301d8e992db22d97682bda37b8c "Add an alternative using an overlay"
+
 ## As a helper
 
 We can't access the `z` field from outside the `net/netip` package. Instead, we
