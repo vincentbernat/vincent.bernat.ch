@@ -138,6 +138,13 @@ d'environ 30 000 ports (cela se règle en modifiant
 connexions peuvent donc être établies vers le serveur web, soit
 environ **500 connexions par seconde**.
 
+!!! "Mise à jour (10.2026)" Cette limite est moins stricte quand les chaussettes
+dans l'état `TIME-WAIT` se trouvent côté serveur. Linux [accepte un nouveau
+segment _SYN_][tw_syn] pour un quadruplet dans l'état `TIME-WAIT` si son numéro
+de séquence est supérieur au dernier reçu pour la connexion précédente, comme le
+permet la [RFC 1122][], ou si son horodatage est plus récent, comme le décrit la
+[RFC 6191][].
+
 Si l'état `TIME-WAIT` se situe côté client, une telle situation se
 détecte facilement. L'appel à `connect()` retourne `EADDRNOTAVAIL` et
 l'application va journaliser l'erreur. Côté serveur, la situation est
@@ -280,7 +287,7 @@ différents :
         $ dmesg | grep "TCP bind hash table"
         [    0.169962] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
 
-    Chaque élément est de type `struct inet_bind_socket` qui
+    Chaque élément est de type `struct inet_bind_bucket` qui
     correspond à un port local. Une connexion dans l'état `TIME-WAIT`
     vers un serveur web correspond au port local 80 et partage donc
     son entrée avec les autres connexions du même type. D'un autre
@@ -300,10 +307,10 @@ différents :
 
 Chaque connexion (entrante ou sortante) a donc besoin d'un `struct
 tcp_timewait_sock` De plus, chaque connexion sortante est attachée à
-un `struct inet_bind_socket` dédié.
+un `struct inet_bind_bucket` dédié.
 
 La taille d'un `struct tcp_timewait_sock` est de 168 octets tandis
-qu'un `struct inet_bind_socket` occupe 48 octets :
+qu'un `struct inet_bind_bucket` occupe 48 octets :
 
     ::console
     $ sudo apt-get install linux-image-$(uname -r)-dbg
@@ -539,6 +546,7 @@ Pour terminer, voici une citation de [W. Richard Stevens][] issue de [Unix Netwo
 [Creative-Commons Attribution-Share Alike 3.0]: http://creativecommons.org/licenses/by-sa/3.0/deed.en "Creative-Commons Attribution-Share Alike 3.0 unported"
 [LaTeX Project Public License 1.3]: https://www.latex-project.org/lppl.txt "LaTeX Project Public License 1.3"
 [RFC 793]: rfc://793
+[RFC 1122]: rfc://1122
 [RFC 1323]: rfc://1323
 [RFC 1337]: rfc://1337
 [RFC 6191]: rfc://6191
@@ -546,6 +554,7 @@ Pour terminer, voici une citation de [W. Richard Stevens][] issue de [Unix Netwo
 [tcp_tw_interval]: https://web.archive.org/web/2014/http://comments.gmane.org/gmane.linux.network/244411 "[RFC PATCH net-next] tcp: introduce tcp_tw_interval to specifiy the time of TIME-WAIT"
 [sock_common]: https://elixir.bootlin.com/linux/v3.12/source/include/net/sock.h#L157 "Définition de struct sock_common"
 [inet_csk_get_port]: https://elixir.bootlin.com/linux/v3.12/source/net/ipv4/inet_connection_sock.c#L104 "Définition de inet_csk_get_port()"
+[tw_syn]: https://elixir.bootlin.com/linux/v3.12/source/net/ipv4/tcp_minisocks.c#L228 "Nouveau segment SYN accepté dans l'état TIME-WAIT"
 [twemproxy]: https://github.com/twitter/twemproxy "twemproxy: fast, light-weight proxy for memcached and redis"
 [HAProxy]: https://www.haproxy.org/ "HAProxy: The Reliable, High Performance TCP/HTTP Load Balancer"
 [Nginx]: http://nginx.org "Nginx"

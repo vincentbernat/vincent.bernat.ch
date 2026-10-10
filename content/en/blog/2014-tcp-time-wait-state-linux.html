@@ -147,6 +147,12 @@ ports (this can be changed by tuning
 connections can be established between the web server and the
 load-balancer every minute, so about **500 connections per second**.
 
+!!! "Update (2026-10)" This limit is less strict when the `TIME-WAIT` sockets
+are on the server side. Linux [accepts a new _SYN_ segment][tw_syn] for a
+quadruplet in the `TIME-WAIT` state if its sequence number is above the last one
+received for the previous connection, as allowed by [RFC 1122][], or if its
+timestamp is more recent, as described in [RFC 6191][].
+
 If the `TIME-WAIT` sockets are on the client side, such a situation is
 easy to detect. The call to `connect()` will return `EADDRNOTAVAIL`
 and the application will log some error message about that. On the
@@ -286,7 +292,7 @@ purposes):
         $ dmesg | grep "TCP bind hash table"
         [    0.169962] TCP bind hash table entries: 65536 (order: 8, 1048576 bytes)
 
-    Each element is a `struct inet_bind_socket`. There is
+    Each element is a `struct inet_bind_bucket`. There is
     one element for each locally bound port. A `TIME-WAIT` connection
     to a web server is locally bound to the port 80 and shares the
     same entry as its sibling `TIME-WAIT` connections. On the other
@@ -305,13 +311,13 @@ purposes):
     parallelism. The death row is now just a hash table.
 
 We are only concerned by the space occupied by `struct
-tcp_timewait_sock` and `struct inet_bind_socket`. There is one `struct
+tcp_timewait_sock` and `struct inet_bind_bucket`. There is one `struct
 tcp_timewait_sock` for each connection in the `TIME-WAIT` state,
-inbound or outbound. There is one dedicated `struct inet_bind_socket`
+inbound or outbound. There is one dedicated `struct inet_bind_bucket`
 for each outbound connection and none for an inbound connection.
 
 A `struct tcp_timewait_sock` is only 168 bytes while a `struct
-inet_bind_socket` is 48 bytes:
+inet_bind_bucket` is 48 bytes:
 
     ::console
     $ sudo apt-get install linux-image-$(uname -r)-dbg
@@ -553,6 +559,7 @@ And a final quote by [W. Richard Stevens][], in [Unix Network Programming][]:
 [Creative-Commons Attribution-Share Alike 3.0]: http://creativecommons.org/licenses/by-sa/3.0/deed.en "Creative-Commons Attribution-Share Alike 3.0 unported"
 [LaTeX Project Public License 1.3]: https://www.latex-project.org/lppl.txt "LaTeX Project Public License 1.3"
 [RFC 793]: rfc://793
+[RFC 1122]: rfc://1122
 [RFC 1323]: rfc://1323
 [RFC 1337]: rfc://1337
 [RFC 6191]: rfc://6191
@@ -560,6 +567,7 @@ And a final quote by [W. Richard Stevens][], in [Unix Network Programming][]:
 [tcp_tw_interval]: https://web.archive.org/web/2014/http://comments.gmane.org/gmane.linux.network/244411 "[RFC PATCH net-next] tcp: introduce tcp_tw_interval to specify the time of TIME-WAIT"
 [sock_common]: https://elixir.bootlin.com/linux/v3.12/source/include/net/sock.h#L157 "Definition of struct sock_common"
 [inet_csk_get_port]: https://elixir.bootlin.com/linux/v3.12/source/net/ipv4/inet_connection_sock.c#L104 "Definition of inet_csk_get_port()"
+[tw_syn]: https://elixir.bootlin.com/linux/v3.12/source/net/ipv4/tcp_minisocks.c#L228 "New SYN accepted in TIME-WAIT state"
 [twemproxy]: https://github.com/twitter/twemproxy "twemproxy: fast, light-weight proxy for memcached and redis"
 [HAProxy]: https://www.haproxy.org/ "HAProxy: The Reliable, High Performance TCP/HTTP Load Balancer"
 [Nginx]: http://nginx.org "Nginx"
