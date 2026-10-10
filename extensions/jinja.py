@@ -105,11 +105,89 @@ def include_file(ctx, name):
         return Markup(f.read())
 
 
+def as_list(value):
+    """Wrap a single string into a list."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    return value
+
+
 @jinja2.pass_context
-def reuse(ctx):
+def licenses(ctx, lang):
+    """List REUSE.toml annotations as (paths, items), items being Markdown."""
     target = os.path.join(str(ctx["site"].sitepath), "REUSE.toml")
     with open(target, "rb") as f:
-        return tomllib.load(f)
+        data = tomllib.load(f)
+    result = []
+    for annotation in data["annotations"]:
+        items = []
+        for holder in as_list(annotation.get("SPDX-FileCopyrightText")):
+            if holder.endswith(">") and " <" in holder:
+                name, url = holder[:-1].split(" <", 1)
+                items.append(f"[{name}]({url})")
+            else:
+                items.append(holder)
+        license = []
+        for token in annotation["SPDX-License-Identifier"].split():
+            if token in data["labels"]:
+                license.append(data["labels"][token][lang])
+            elif token in ("AND", "OR", "WITH"):
+                license.append(token)
+            else:
+                license.append(f"[{token}](https://spdx.org/licenses/{token}.html)")
+        items.append(" ".join(license))
+        if "note" in annotation:
+            items.append(annotation["note"][lang])
+        if "source" in annotation:
+            items.append(f"[source]({annotation['source']})")
+        result.append((as_list(annotation["path"]), items))
+    return result
+
+
+def in_language(resources, lang):
+    """Keep resources in lang, or without a translation in lang."""
+    return [
+        r
+        for r in resources
+        if r.meta.language == lang
+        or lang not in (t.meta.language for t in r.translations)
+    ]
+
+
+def tagged(resources, tag):
+    """Keep resources with tag or one of its subtags. Resources only tagged
+    as outdated are part of the unclassified tag."""
+    tag = str(tag)
+    result = []
+    for r in resources:
+        tags = [str(t) for t in getattr(r.meta, "tags", None) or []]
+        if any(t == tag or t.startswith(tag + "-") for t in tags) or (
+            tag == "unclassified" and tags == ["outdated"]
+        ):
+            result.append(r)
+    return result
+
+
+def tag_tree(tags):
+    """Group tags as (tag, subtags) pairs. Subtags follow their parent."""
+    result = []
+    for tag in tags:
+        if result and tag.startswith(result[-1][0] + "-"):
+            result[-1][1].append(tag)
+        else:
+            result.append((tag, []))
+    return result
+
+
+def ai_usage_emoji(entry, emojis):
+    """Get the emoji for the key matching the start of an AI usage entry."""
+    emojis = dict(emojis or {})
+    for key, emoji in emojis.items():
+        if key != "default" and entry.startswith(key):
+            return emoji
+    return emojis.get("default")
 
 
 class ReadingTime(int):
