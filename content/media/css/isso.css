@@ -1,108 +1,320 @@
----
-combine:
-  files:
-    - isso-upstream.css
-  remove: yes
-  where: top
----
+/* Imported from upstream, but anything .isso-text has been removed. */
+:root {
+    --isso-primary-text-color: #555;
+    --isso-secondary-text-color: #808080;
 
+    --isso-border: 1px solid rgba(0, 0, 0, 0.2);
+    --isso-box-shadow-color: rgba(0, 0, 0, 0.1);
+    --isso-hover-color: #606060;
+
+    --isso-link-hover-color: #111;
+    --isso-link-text-shadow-color: #aaa;
+
+    --isso-input-background-color: #fff;
+    --isso-input-outline-color: #3584e4;
+
+    --isso-button-background-color: #ddd;
+    --isso-button-border: 1px solid #ccc;
+    --isso-button-hover-background-color: #ccc;
+    --isso-button-active-background-color: #bbb;
+
+    --isso-preview-border-color: #f0f0f0;
+    --isso-preview-box-shadow-color: #888;
+    --isso-preview-background: repeating-linear-gradient(
+            -45deg,
+            #f8f8f8,
+            #f8f8f8 10px,
+            #fff 10px,
+            #fff 20px
+    );
+
+    --isso-pre-color: #4d4d4c;
+    --isso-pre-background-color: #eee;
+    --isso-pre-border-color: #ddd;
+
+    --isso-comment-divider-color: rgba(0, 0, 0, 0.1);
+    --isso-page-author-suffix-color: #2c2c2c;
+    --isso-target-fade-background-color: #eee5a1;
+}
+
+/* ========================================================================== */
+/* Generic styling                                                            */
+/* ========================================================================== */
+#isso-thread * {
+    /* Reset */
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+/* ========================================================================== */
+/* Thread heading area                                                        */
+/* ========================================================================== */
 #isso-thread {
-  font-size: 0.875rem;
-}
-
-#isso-thread > h4 {
-  font-family: inherit;
-  font-weight: inherit;
-  font-stretch: inherit;
-  margin-block: 0;
-  height: 1rlh;
-}
-
-.isso-text {
-  p {
+    padding: 0;
     margin: 0;
-  }
-  p,
-  pre,
-  ul,
-  ol,
-  blockquote {
-    clear: none;
-    margin-bottom: 1rlh;
-    &:last-child {
-      margin-bottom: 0;
-    }
-  }
 }
-
-.isso-postbox {
-  &::after {
-    content: "Use Markdown syntax to format your comment.";
+h4.isso-thread-heading {
+    color: var(--isso-primary-text-color);
+    font-weight: bold;
+}
+.isso-feedlink {
+    float: right;
+    padding-left: 1em;
+}
+.isso-feedlink a {
     font-size: 0.8em;
-    font-style: italic;
-  }
-  &:lang(fr)::after {
-    content: "Utilisez la syntaxe Markdown pour mettre en forme votre commentaire.";
-  }
-  @media (prefers-color-scheme: dark) {
-    input,
-    .isso-textarea,
-    .isso-preview {
-      color: #262523; /* Will be inverted */
-      filter: invert(100%) hue-rotate(180deg);
-    }
-  }
+    vertical-align: bottom;
 }
 
-.isso-auth-section input {
-  box-shadow: none;
-  border-radius: 0;
-}
+/* ========================================================================== */
+/* Comments                                                                   */
+/* ========================================================================== */
 
-.isso-input-wrapper {
-  margin-top: 0 !important;
-  label {
-    font-size: 0.8em;
-  }
+.isso-comment {
+    max-width: 68em;
+    margin: 0 auto;
 }
-
-.isso-post-action {
-  /* Match label height */
-  margin-top: calc(0.8em * 1.4) !important;
-  @media screen and (max-width: 600px) {
-    margin-top: 0 !important;
-  }
+.isso-preview .isso-comment {
+    padding-top: 0;
+    margin: 0;
 }
-
 .isso-comment:not(:first-of-type),
 .isso-follow-up .isso-comment {
-  border-top: none;
+    border-top: 1px solid var(--isso-comment-divider-color);
+    margin-bottom: 0.5em;
+}
+.isso-avatar {
+    display: block;
+    float: left;
+    margin: 0.95em 0.95em 0;
+}
+.isso-avatar svg {
+    max-width: 48px;
+    max-height: 48px;
+    width: 100%;
+    height: 100%;
+    border: var(--isso-border);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px var(--isso-box-shadow-color);
+}
+.isso-text-wrapper {
+    display: block;
+    padding: 0.95em;
+}
+.isso-follow-up {
+    padding-left: calc(7% + 20px);
+}
+.isso-comment-footer {
+    font-size: 0.95em;
+}
+.isso-comment-header {
+    font-size: 0.85em;
+}
+.isso-comment-header a {
+    text-decoration: none;
+}
+/* Only for comment header, spacer between up-/downvote should have no padding */
+.isso-comment-header .isso-spacer {
+    padding: 0 6px;
+}
+.isso-spacer,
+.isso-permalink,
+.isso-note,
+.isso-parent {
+    color: var(--isso-secondary-text-color);
+    font-weight: normal;
+    text-shadow: none;
+}
+.isso-spacer:hover,
+.isso-permalink:hover,
+.isso-note:hover,
+.isso-parent:hover {
+    color: var(--isso-hover-color);
+}
+.isso-note {
+    float: right;
+}
+.isso-author {
+    font-weight: bold;
+    color: var(--isso-primary-text-color);
+}
+.isso-page-author-suffix {
+    font-weight: bold;
+    color: var(--isso-page-author-suffix-color);
+}
+.isso-textarea,
+.isso-preview {
+    margin-top: 0.2em;
+    width: 100%;
+    border: 1px solid var(--isso-preview-border-color);
+    border-radius: 2px;
+    box-shadow: 0 0 2px var(--isso-box-shadow-color);
+}
+.isso-comment-footer {
+    font-size: 0.80em;
+    color: var(--isso-secondary-text-color);
+    clear: left;
+}
+.isso-feedlink,
+.isso-comment-footer a {
+    font-weight: bold;
+    text-decoration: none;
+}
+.isso-feedlink:hover,
+.isso-comment-footer a:hover {
+    color: var(--isso-link-hover-color);
+    text-shadow: var(--isso-link-text-shadow-color) 0 0 1px;
+}
+.isso-comment-footer > a {
+    position: relative;
+    top: .2em;
+}
+.isso-comment-footer > a + a {
+    padding-left: 1em;
+}
+/* Reply postbox under existing comment */
+.isso-comment .isso-postbox {
+    margin-top: 0.8em;
 }
 
-/* Highlight my own posts */
-.isso-avatar {
-  & > svg[data-hash="0bb73c4f5196"] {
-    box-shadow: 0 0 12px var(--lf-color-accent);
-    border-radius: 50%;
-  }
-  @media (prefers-color-scheme: dark) {
-    opacity: 0.9;
-  }
+/* ========================================================================== */
+/* Postbox                                                                    */
+/* ========================================================================== */
+.isso-postbox {
+    max-width: 68em;
+    margin: 0 auto 2em;
+    clear: right;
 }
-.isso-comment-header,
-.isso-comment-footer,
-.isso-comment-loader,
-.isso-postbox .isso-notification-section {
-  font-family: var(--lf-font-sansserif);
+.isso-form-wrapper {
+    display: block;
+    padding: 0;
+}
+.isso-textarea,
+.isso-preview {
+    margin: 0 0 .3em;
+    padding: .4em .8em;
+    border-radius: 3px;
+    background-color: var(--isso-input-background-color);
+    border: var(--isso-border);
+    box-shadow: 0 1px 2px var(--isso-box-shadow-color);
 }
 .isso-textarea {
-  font-family: var(--lf-font-monospace);
+    outline: 0;
+    width: 100%;
+    resize: none;
 }
-.isso-notification-section label {
-  display: flex;
-  align-items: center;
-  gap: 0.2em;
-  input[type="checkbox"] {
-    bottom: 0;
-  }
+.isso-form-wrapper input[type=checkbox] {
+    vertical-align: middle;
+    position: relative;
+    bottom: 1px;
+    margin-left: 0;
+}
+.isso-notification-section {
+    font-size: 0.90em;
+    padding-top: .3em;
+    display: none;
+    padding-bottom: 10px;
+}
+.isso-auth-section {
+    display: block;
+}
+.isso-textarea:focus,
+.isso-input-wrapper input:focus,
+.isso-auth-section input:focus {
+    outline: 2px solid var(--isso-input-outline-color);
+}
+.isso-input-wrapper {
+    display: inline-block;
+    position: relative;
+    margin: 0 1% 0 0;
+}
+.isso-input-wrapper input {
+    display: block;
+    padding: .3em 10px;
+    max-width: 100%;
+    border-radius: 3px;
+    background-color: var(--isso-input-background-color);
+    line-height: 1.4em;
+    border: var(--isso-border);
+    box-shadow: 0 1px 2px var(--isso-box-shadow-color);
+}
+.isso-input-wrapper label {
+    display: block;
+    line-height: 1.4em;
+    height: 1.4em;
+}
+.isso-post-action {
+    display: block;
+    float: right;
+    margin: 1.4em 0 0 5px;
+}
+.isso-post-action > input {
+    padding: calc(.3em - 1px);
+    border-radius: 2px;
+    border: var(--isso-button-border);
+    background-color: var(--isso-button-background-color);
+    cursor: pointer;
+    outline: 0;
+    line-height: 1.4em;
+    box-shadow: 0 1px 2px var(--isso-box-shadow-color);
+}
+.isso-post-action > input:hover {
+    background-color: var(--isso-button-hover-background-color);
+}
+.isso-post-action > input:active {
+    background-color: var(--isso-button-active-background-color);
+}
+
+/* ========================================================================== */
+/* Postbox (preview mode)                                                     */
+/* ========================================================================== */
+.isso-preview,
+.isso-post-action input[name="edit"],
+.isso-postbox.isso-preview-mode > .isso-form-wrapper input[name="preview"],
+.isso-postbox.isso-preview-mode > .isso-form-wrapper .isso-textarea {
+    display: none;
+}
+.isso-postbox.isso-preview-mode > .isso-form-wrapper .isso-preview {
+    display: block;
+}
+.isso-postbox.isso-preview-mode > .isso-form-wrapper input[name="edit"] {
+    display: inline;
+}
+.isso-preview {
+    background: var(--isso-preview-background);
+}
+
+/* ========================================================================== */
+/* Animations                                                                 */
+/* ========================================================================== */
+
+/* "target" means the comment that's being linked to, for example:
+ * https://example.com/blog/example/#isso-15
+ */
+.isso-target {
+    animation: isso-target-fade 5s ease-out;
+}
+@keyframes isso-target-fade {
+    0% { background-color: var(--isso-target-fade-background-color); }
+    /* This color should be changed when used on a dark background,
+     * maybe #3f3c1c for example
+     */
+}
+
+/* ========================================================================== */
+/* Media queries                                                              */
+/* ========================================================================== */
+@media screen and (max-width:600px) {
+    .isso-input-wrapper {
+        display: block;
+        max-width: 100%;
+        margin: 0 0 .3em;
+    }
+    .isso-input-wrapper input {
+        width: 100%;
+    }
+    .isso-post-action {
+        margin-top: 0;
+    }
 }

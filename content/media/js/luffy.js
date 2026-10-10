@@ -1,10 +1,3 @@
----
-combine:
-    files:
-      - luffy.*.js
-    where: bottom
-    remove: yes
----
 window.luffy = {
   do(fn) {
     // Create a scope, catch errors to not propagate further, allow early return.

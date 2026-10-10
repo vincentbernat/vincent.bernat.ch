@@ -188,13 +188,12 @@ def collect(site, language: str) -> tuple[list[int], list[Stream]]:
     Returns (years, streams) where streams is an ordered list of `Stream`
     tuples.
     """
-    walk = getattr(site.content, "walk_resources_sorted_by_time_" + language)
-    pages = list(walk())
+    pages = site.sorted("time_" + language)
     if not pages:
         return [], []
 
     # Pull the emoji map and "No AI" label from the pages' metadata.
-    emoji_map = pages[0].meta.ai_usage.to_dict()
+    emoji_map = dict(pages[0].meta.ai_usage)
     noai = pages[0].meta.l10n.noai
 
     # description -> {year -> count}

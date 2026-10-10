@@ -1,10 +1,8 @@
 # vincent.bernat.ch
 
 This is the source code of my website. You can find the result at
-<http://vincent.bernat.ch>. I am using [Hyde][hyde], an unmaintained static
-website generator written in Python. Likely, I would need to switch to another
-project, either [Nikola](https://getnikola.com/) or [doit](https://pydoit.org/),
-which is used by Nikola to build a SSG.
+<http://vincent.bernat.ch>. It is built by a small static site generator in
+`ssg/`, using [doit][] to track dependencies and to build in parallel.
 
 Licensing is described in `content/en/licenses.html`.
 
@@ -12,7 +10,7 @@ This site is hosted on NixOS instances. You may find the remaining
 nginx configuration on [another Git repository][nixos] (the other
 part is in `layout/nginx.j2`).
 
-[hyde]: https://github.com/hyde/hyde
+[doit]: https://pydoit.org/
 [cc1]: http://creativecommons.org/licenses/by-nc-sa/3.0/
 [cc2]: http://creativecommons.org/licenses/by/3.0/
 [nixos]: https://github.com/vincentbernat/nixops-take1/blob/master/tags/web.nix
@@ -23,7 +21,20 @@ part is in `layout/nginx.j2`).
 
 ```
 nix develop
-inv build
+doit serve            # development build, served on http://localhost:8080
+doit publish          # production build, review and commit in .final
+doit push             # deploy
+```
+
+`doit` alone builds for development (in `.out`), `doit mode=prod` for
+production (in `.final`). Builds are incremental and run in parallel in a
+sandbox. `doit list` lists the commands.
+
+To check dependencies:
+
+```
+doit info page:en/blog/2026-spanning-tree.html
+doit info page:en/blog/2026-spanning-tree.html mode=prod
 ```
 
 ### uv

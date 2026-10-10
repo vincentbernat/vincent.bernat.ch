@@ -7,7 +7,8 @@
   </style>
   <div xmlns="http://www.w3.org/1999/xhtml">
     <p>
-      {% block article -%}{%- endblock %}
+      {{ content }}
+
     </p>
   </div>
   <meta xmlns="http://www.w3.org/1999/xhtml" http-equiv="refresh" content="0; url={{ content_url(resource.meta.language + '/blog/atom.html') }}"/>
@@ -15,7 +16,7 @@
   <link href="{{base}}{{ content_url(resource.url) }}" rel="self" />
   <link href="{{base}}{{ content_url(resource.meta.language) }}" rel="alternate" />
   <id>http://www.luffy.cx{{ content_url(resource.url) }}/</id>
-{% for res in resource.node|attr("walk_resources_sorted_by_time_" + resource.meta.language)()|top(6) %}
+{% for res in resource.node.sorted("time_" + resource.meta.language)|top(6) %}
 {% if loop.first %}
   <updated>{{ res.meta.modified|xmldatetime }}</updated>
 
@@ -32,8 +33,7 @@
 
     <content type="xhtml">
       <div xmlns="http://www.w3.org/1999/xhtml">
-{% refer to res.relative_path as file -%}
-{{ file.article | clean_rss }}
+{{ article(res) | clean_rss }}
       </div>
     </content>
   </entry>

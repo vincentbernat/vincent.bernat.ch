@@ -1,0 +1,65 @@
+"""Font subsetting (production only)."""
+
+import json
+
+from . import markdown
+from .tools import run, write
+
+KINDS = ("monospace", "regular")
+
+# Fonts to subset, with the glyphs to keep and pyftsubset options. For Iosevka,
+# no features needed as there is none except locl, frac, numr, dnom, onum and
+# we don't use them.
+#
+# For Literata, we keep kern since it helps with quality. liga is small. ccmp
+# and mark are not used, but may become useful in the future. onum, tnum are
+# explicitely used in CSS. lnum and pnum are not needed as lining and
+# proportional digits are the default. ss01 (Greek) and ss02 (arrows) are not
+# useful. frac, numr, dnom are not used. sups, subs, sinf not useful with HTML.
+# smcp, c2sc, case, cpsp, ordn, dlig, zero are not useful. aalt is big.
+#
+# To look at the result: http://torinak.com/font/lsfont.html
+SUBSET = {
+    "iosevka-custom-regular": (
+        "monospace",
+        ["--layout-features=", "--desubroutinize", "--no-hinting"],
+    ),
+    "literata": (
+        "regular",
+        ["--layout-features=ccmp,mark,kern,liga,onum,tnum", "--desubroutinize"],
+    ),
+    "literata-italic": (
+        "regular",
+        ["--layout-features=ccmp,mark,kern,liga,onum,tnum", "--desubroutinize"],
+    ),
+}
+
+
+def glyphs_path(site, kind):
+    return site.mode.cache / f"glyphs-{kind}.txt"
+
+
+def glyphs(site, fragments):
+    """Collect glyphs used by all articles."""
+    result = {kind: set(markdown.BASE_GLYPHS[kind]) for kind in KINDS}
+    for fragment in fragments:
+        with open(fragment, encoding="utf-8") as f:
+            data = json.load(f)["glyphs"]
+        for kind in KINDS:
+            result[kind].update(data[kind])
+    for kind in KINDS:
+        wanted = sorted(g for g in result[kind] if ord(g) >= 0x20)
+        write(glyphs_path(site, kind), "".join(wanted))
+
+
+def subset(site, name, source, target):
+    kind, options = SUBSET[name]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    run(
+        "pyftsubset",
+        source,
+        "--flavor=woff2",
+        f"--text-file={glyphs_path(site, kind)}",
+        f"--output-file={target}",
+        *options,
+    )

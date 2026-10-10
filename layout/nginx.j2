@@ -23,12 +23,8 @@
 {% endfor %}
 {% endmacro %}
 {% macro serve(files="$uri.html $uri $uri/index.html =404") %}
-{%- if site.config.mode == "production" -%}
 try_files {{ files }};
-{%- else -%}
-proxy_pass http://hyde;
-{%- endif -%}
-{% endmacro %}
+{%- endmacro %}
 {% macro add_headers(extra={}) %}
 {% set headers = {
   "X-Content-Type-Options": "nosniff",
@@ -44,7 +40,7 @@ add_header "{{ name }}" "{{ value }}";
 {% set server %}
 index      index.html;
 error_page 404 {{ content_url('/en/404.html') }};
-expires    {% if site.config.mode == "production" %}1h{% else %}epoch{% endif %};
+expires    {% if site.mode.production %}1h{% else %}epoch{% endif %};
 absolute_redirect off;
 {{ add_headers() }}
 
@@ -53,7 +49,7 @@ location = /nginx.conf {
 }
 
 {# language selection #}
-{% for code, lang in languages %}
+{% for code in languages %}
 location /{{ code }} {
   error_page 404 {{ content_url('/' + code + '/404.html') }};
   {{ serve() }}
@@ -69,8 +65,8 @@ location {{ content_url('/' + code + '/404.html') }} {
 location = / {
   access_log off;
   log_not_found off;
-  set $lang {{ (languages|first)[0] }};
-  if ($http_accept_language ~ "(?:^|,)\s*({% for code, lang in languages %}{{ code }}{% if not loop.last %}|{% endif %}{% endfor %})\b") {
+  set $lang {{ languages|first }};
+  if ($http_accept_language ~ "(?:^|,)\s*({{ languages|join("|") }})\b") {
     set $lang $1;
   }
   {{ add_headers({"Vary": "Accept-Language"})|indent(2) }}
@@ -101,7 +97,7 @@ location ~ ^(?<canonical>.*)\.html$ {
   return 301 $canonical;
 }
 
-{% for res in resource.node.walk_resources() %}
+{% for res in resource.node.all_resources() %}
 {# handle exceptions #}
 {% set specific %}
 {% if res.meta.nolog %}
@@ -112,7 +108,7 @@ location ~ ^(?<canonical>.*)\.html$ {
   types { }
   default_type {{ res.meta.mime }};
 {% endif %}
-{% set extra_headers = res.meta.headers|default({}) %}
+{% set extra_headers = dict(res.meta.headers or {}) %}
 {% if res.meta.csp %}
 {% do extra_headers.update({"Content-Security-Policy": csp(res.meta.csp)|striptags}) %}
 {% endif %}
@@ -140,7 +136,7 @@ location /ip {
   return 200 $remote_addr;
 }
 location = /hit {
-{% if site.config.mode == "production" %}
+{% if site.mode.production %}
   access_log off;
   proxy_pass http://127.0.0.3:8087/count;
   proxy_pass_request_headers off;
@@ -156,7 +152,7 @@ location /redirect-ddg {
 }
 {% endset %}
 
-{%- if site.config.mode == "production" %}
+{%- if site.mode.production %}
 {{ server }}
 {% else %}
 {# complete configuration, to be run with "nginx -p <dir> -c <dir>/nginx.conf" #}
@@ -181,24 +177,14 @@ http {
   include mime.types;
   types_hash_max_size 2688;
 
-  upstream hyde {
-    server 127.0.0.1:8081;
-  }
-
   server {
     listen 127.0.0.1:8080;
     listen [::1]:8080;
-    root {{ site.config.deploy_root_path }};
-
-{# pagefind generated files come from disk #}
-    location /media/pagefind {
-    }
-    location = /media/js/pagefind.js {
-    }
+    root {{ site.mode.output }};
 
 {# videos come from the disk, or from the media server when missing #}
     location ~ ^/media/videos/[^/]+/ {
-      root {{ site.config.content_root_path }};
+      root {{ site.content.source }};
       try_files $uri @media;
     }
 

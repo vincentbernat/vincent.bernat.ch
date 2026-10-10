@@ -22,27 +22,27 @@
   </span>
 </li>
 {% endif %}
-{% set next = resource|attr("prev_by_time_" + resource.meta.language) %}
+{% set next = resource.prev("time_" + resource.meta.language) %}
 {% if next %}
 <li><span class="lf-sym">→</span>
     <a rel="next" href="{{ content_url(next.url) }}" class="lf-title">{{ next.meta.title|e }}</a></li>
 {% endif %}
-{% set previous = resource|attr("next_by_time_" + resource.meta.language) %}
+{% set previous = resource.next("time_" + resource.meta.language) %}
 {% if previous %}
 <li><span class="lf-sym">←</span>
     <a rel="prev" href="{{ content_url(previous.url) }}" class="lf-title">{{ previous.meta.title|e }}</a></li>
 {% endif %}
-{% set previous_related = resource|same_tag("prev_by_time_" + resource.meta.language, 1) %}
+{% set previous_related = resource|same_tag("prev", "time_" + resource.meta.language, 1) %}
 {% if previous_related %}
 <li><span class="lf-sym">💡</span>
     <a href="{{ content_url(previous_related.url) }}" class="lf-title">{{ previous_related.meta.title|e }}</a></li>
 {% endif %}
-{% set next_related = resource|same_tag("next_by_time_" + resource.meta.language, 1) %}
+{% set next_related = resource|same_tag("next", "time_" + resource.meta.language, 1) %}
 {% if next_related %}
 <li><span class="lf-sym">💡</span>
     <a href="{{ content_url(next_related.url) }}" class="lf-title">{{ next_related.meta.title|e }}</a></li>
 {% endif %}
-{% set random = resource|attr("prev_by_uuid_" + resource.meta.language) %}
+{% set random = resource.prev("uuid_" + resource.meta.language) %}
 {% if random and random.url not in [next.url, previous.url, next_related.url, previous_related.url] %}
 <li><span class="lf-sym">🎲</span>
     <a href="{{ content_url(random.url) }}" class="lf-title">{{ random.meta.title|e }}</a></li>

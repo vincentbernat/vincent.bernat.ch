@@ -1,0 +1,190 @@
+"""Tasks to build and publish the site.
+
+    doit                  # development build (in .out)
+    doit mode=prod        # production build (in .final)
+    doit serve            # serve development build
+    doit publish          # check, build for production, review and commit
+    doit push             # deploy production build
+    doit list             # other commands
+
+The build runs in a sandbox, in parallel. "doit list --all" displays the build
+tasks.
+"""
+
+import os
+import sys
+
+# doit puts this directory first in sys.path. Modules here would hide modules
+# with the same name, like html or markdown.
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+import multiprocessing  # noqa: E402
+import shutil  # noqa: E402
+
+from doit import get_var  # noqa: E402
+from doit.exceptions import TaskFailed  # noqa: E402
+
+from ssg import commands, config, lexers  # noqa: E402
+from ssg.commands import check, links, production, videos  # noqa: E402
+
+MODE = config.MODES["production" if get_var("mode") == "prod" else "development"]
+
+
+def sandbox():
+    """Run doit again in a sandbox."""
+    if shutil.which("bwrap") is None:
+        sys.exit("bwrap not found, enter the development shell with nix develop")
+    home = os.path.expanduser("~")
+    matplotlib = os.path.join(home, ".cache", "matplotlib")
+    os.makedirs(matplotlib, exist_ok=True)
+    # Firefox, to render covers, may come from the home directory
+    path = os.environ["PATH"]
+    if firefox := shutil.which("firefox"):
+        path = f"{os.path.dirname(os.path.realpath(firefox))}:{path}"
+    args = [
+        "bwrap",
+        "--ro-bind", "/usr", "/usr",
+        "--ro-bind", "/nix", "/nix",
+        "--symlink", "usr/lib64", "/lib64",
+        "--symlink", "usr/lib", "/lib",
+        "--symlink", "usr/bin", "/bin",
+        "--dev", "/dev",
+        "--proc", "/proc",
+        "--tmpfs", "/run",
+        "--tmpfs", "/tmp",
+        "--tmpfs", "/var/tmp",
+        "--tmpfs", home,
+        "--ro-bind-try", f"{home}/.config/nix", f"{home}/.config/nix",
+        "--bind", ROOT, ROOT,
+        "--bind", matplotlib, matplotlib,
+        "--chdir", ROOT,
+        "--unshare-all",
+        "--die-with-parent",
+        "--setenv", "SSG_SANDBOX", "1",
+        "--setenv", "PATH", path,
+        "--", sys.executable, "-m", "doit", *sys.argv[1:],
+    ]  # fmt: skip
+    os.execvp(args[0], args)
+
+
+def command(function, **task):
+    """Task running a command."""
+
+    def action(**kwargs):
+        try:
+            function(**kwargs)
+        except commands.Exit as e:
+            return TaskFailed(str(e))
+
+    return {"actions": [action], "uptodate": [False], "verbosity": 2} | task
+
+
+def task_serve():
+    """serve development build on http://localhost:8080"""
+    from ssg import serve
+
+    return command(serve.serve)
+
+
+def task_check():
+    """check content for mistakes"""
+    return command(
+        check.check,
+        params=[{"name": "fix", "long": "fix", "type": bool, "default": False}],
+    )
+
+
+def task_publish():
+    """check, build for production, review and commit"""
+    return command(production.publish)
+
+
+def task_push():
+    """push production build"""
+    return command(
+        production.push,
+        params=[{"name": "clean", "long": "clean", "type": bool, "default": False}],
+    )
+
+
+def task_prune_final():
+    """prune old commits from production build"""
+    return command(
+        production.prune_final,
+        params=[{"name": "before", "long": "before", "default": "1 year ago"}],
+    )
+
+
+def task_fonts_update():
+    """build fonts with Nix"""
+    return command(production.fonts_update)
+
+
+def task_video_encode():
+    """encode videos to HLS (all if none given)"""
+    return command(videos.encode, pos_arg="videos")
+
+
+def task_video_analyze():
+    """report size breakdown of encoded videos"""
+    return command(videos.analyze, pos_arg="videos")
+
+
+def task_video_upload():
+    """upload transcoded videos (all if none given)"""
+    return command(videos.upload, pos_arg="videos")
+
+
+def task_links_check():
+    """check links"""
+    return command(
+        links.check,
+        params=[{"name": "local", "long": "local", "type": bool, "default": False}],
+    )
+
+
+def task_links_fix():
+    """try to fix links"""
+    return command(links.fix)
+
+
+def task_site():
+    """build tasks (doit list --all)"""
+    if interactive:
+        # Commands build the site in another process when needed
+        return
+    from ssg.model.site import Site
+    from ssg.tasks.builder import Builder
+
+    yield from Builder(Site(MODE)).tasks()
+
+
+COMMANDS = {
+    name.removeprefix("task_")
+    for name in list(globals())
+    if name.startswith("task_") and name != "task_site"
+}
+# The first word which is neither an option nor a variable
+words = [arg for arg in sys.argv[1:] if not arg.startswith("-") and "=" not in arg]
+interactive = bool(words) and words[0] in COMMANDS
+if not interactive and not os.environ.get("SSG_SANDBOX"):
+    sandbox()
+
+
+# Workers inherit the loaded site
+multiprocessing.set_start_method("fork", force=True)
+lexers.register()
+MODE.cache.mkdir(parents=True, exist_ok=True)
+DOIT_CONFIG = {
+    "dep_file": str(MODE.cache / "doit.db"),
+    "backend": "sqlite3",
+    # Commands may be interactive: they run in this process
+    "num_process": 0 if interactive else os.cpu_count(),
+    "par_type": "process",
+    "reporter": "executed-only",
+    "default_tasks": ["prune", "pagefind"] if MODE.production else ["prune"],
+}

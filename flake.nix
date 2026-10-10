@@ -17,10 +17,6 @@
       inputs.uv2nix.follows = "uv2nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # hyde = {
-    #   url = "path:/home/bernat/code/perso/hyde";
-    #   flake = false;
-    # };
   };
   outputs = { self, flake-parts, ... }@inputs: flake-parts.lib.mkFlake { inherit inputs; }
     {
@@ -46,8 +42,6 @@
               buildSystemOverrides =
                 let
                   overrides = {
-                    commando.setuptools = [ ];
-                    fswrap.setuptools = [ ];
                     pygments.hatchling = [ ];
                     pygments-haproxy.setuptools = [ ];
                     pygments-ios.setuptools = [ ];
@@ -76,10 +70,6 @@
                     rm -rf "$out/bin"
                   '';
                 });
-              } // l.optionalAttrs (inputs ? hyde) {
-                hyde = prev.hyde.overrideAttrs (_: {
-                  src = inputs.hyde;
-                });
               };
               pythonSet = pythonBase.overrideScope (
                 l.composeManyExtensions [
@@ -89,15 +79,14 @@
                   moreOverrides
                 ]
               );
-              hydeBuildDeps = [ pkgs.nodejs pkgs.esbuild fonttools ];
             in
-            (pythonSet.mkVirtualEnv "www-env" workspace.deps.default).overrideAttrs (old: {
-              nativeBuildInputs = old.nativeBuildInputs ++ [ pkgs.makeWrapper ];
-              postFixup = (old.postFixup or "") + ''
-                wrapProgram $out/bin/hyde \
-                  --prefix PATH : ${l.makeBinPath hydeBuildDeps}
-              '';
-            });
+            pythonSet.mkVirtualEnv "www-env" workspace.deps.default;
+          svgo = pkgs.svgo.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./tools/patches/svgo-limits.patch
+              ./tools/patches/svgo-foreignobject.patch
+            ];
+          });
           hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = ./.;
@@ -202,161 +191,6 @@
             };
           };
           legacyPackages = {
-            build.subsetFonts =
-              # Impure!
-              # Subset fonts. Nice tool to quickly look at the result:
-              #  http://torinak.com/font/lsfont.html
-              let
-                monospace = <monospace>;
-                regular = <regular>;
-              in
-              pkgs.stdenvNoCC.mkDerivation {
-                name = "subset-fonts";
-                src = <fonts>;
-                buildPhase = ''
-                  subset() {
-                    font=$1
-                    glyphs=$2
-                    echo Subset $font with $glyphs
-                    shift 2
-                    ${fonttools}/bin/pyftsubset $font.woff2 --flavor=woff2 \
-                      --text-file=$glyphs \
-                      --output-file=$out/$font.woff2 \
-                      "$@"
-                  }
-                  mkdir $out
-                  subset iosevka-custom-regular ${monospace} \
-                    --layout-features= --desubroutinize --no-hinting
-                  subset literata ${regular} \
-                    --layout-features=ccmp,mark,kern,liga,onum,tnum \
-                    --desubroutinize
-                  subset literata-italic ${regular} \
-                    --layout-features=ccmp,mark,kern,liga,onum,tnum \
-                    --desubroutinize
-                '';
-                # For Iosevka, no features needed as there is none except locl,
-                # frac, numr, dnom, onum and we don't use them.
-
-                # For Literata, we keep kern since it helps with quality. liga is
-                # small. ccmp and mark are not used, but may become useful in the
-                # future. onum, tnum are explicitely used in CSS. lnum and pnum
-                # are not needed as lining and proportional digits are the
-                # default. ss01 (Greek) and ss02 (arrows) are not useful. frac,
-                # numr, dnom are not used. sups, subs, sinf not useful with HTML.
-                # smcp, c2sc, case, cpsp, ordn, dlig, zero are not useful. aalt is
-                # big.
-                installPhase = "true";
-              };
-            build.optimizeImages =
-              # Impure!
-              # Optimize SVG, JPG and PNG
-              let
-                inherit (pkgs) libwebp libavif pngquant lcms gifsicle jpegli exiftool;
-                svgo = pkgs.svgo.overrideAttrs (old: {
-                  patches = (old.patches or [ ]) ++ [
-                    ./tools/patches/svgo-limits.patch
-                    ./tools/patches/svgo-foreignobject.patch
-                  ];
-                });
-                svgoConfig = pkgs.writeText "svgo.config.js" ''
-                  module.exports = {
-                    plugins: [
-                      {
-                        name: 'preset-default',
-                      }
-                    ]
-                  };
-                '';
-                parallel = "${pkgs.parallel}/bin/parallel --will-cite --null --halt now,fail=1 -j$(nproc)";
-                optimizePng = pkgs.writeShellScript "optimize-png" ''
-                  ${pngquant}/bin/pngquant --skip-if-larger --strip --quiet -o "$2" "$1" || [ $? = 98 ]
-                '';
-                optimizeJpg = pkgs.writeShellScript "optimize-jpg" ''
-                  ${jpegli.bin}/bin/cjpegli "$1" "$1.tmp" --quiet -d 2.0 && mv "$1.tmp" "$1"
-                '';
-                target = <target>;
-                extensions = [ ".svg" ".jpg" ".png" ".gif" ];
-                listDirs = dir: prefix: [ prefix ] ++ l.concatLists (l.mapAttrsToList
-                  (name: type:
-                    if type == "directory"
-                    then
-                      listDirs (dir + "/${name}")
-                        (if prefix == "" then name else "${prefix}/${name}")
-                    else [ ])
-                  (l.readDir dir));
-                optimizeDirectory = directory:
-                  let
-                    subdir = if directory == "" then "" else "/${directory}";
-                    safe = l.strings.sanitizeDerivationName
-                      (if directory == "" then "toplevel" else directory);
-                  in
-                  pkgs.runCommand "optimize-images-${safe}"
-                    {
-                      src = builtins.path {
-                        path = target + subdir;
-                        name = "images-${safe}";
-                        # Subdirectories have their own derivation
-                        filter = path: type:
-                          type != "directory"
-                          && l.any (ext: l.hasSuffix ext path) extensions;
-                      };
-                      # These outputs are never in a binary cache
-                      allowSubstitutes = false;
-                    } ''
-                    dest=$out${subdir}
-                    mkdir -p $dest
-                    cd $src
-
-                    # SVG (skip interactive ones containing <script>)
-                    find . -type f -name '*.svg' -print0 \
-                      | sort -z \
-                      | xargs -r0 sh -c 'grep -LZ "<script" "$@" || [ $? = 1 ]' grep \
-                      | ${parallel} -n5 ${svgo}/bin/svgo --config ${svgoConfig} -o $dest -i
-
-                    # Convert JPG to sRGB
-                    find . -type f -name '*.jpg' -print0 \
-                      | ${parallel} ${lcms}/bin/jpgicc -q100 {} $dest/{}
-
-                    # JPG→AVIF
-                    # If we want progressive rendering, use two layers with a 1/8
-                    # preview, we could use:
-                    #   avifenc --codec aom --yuv 420 -a tune=iq --layered \
-                    #     --scaling-mode 1/8 -q 10 {} --scaling-mode:u 1 -q:u 66 {} {}.avif
-                    find $dest -type f -name '*.jpg' -print0 \
-                      | ${parallel} ${libavif}/bin/avifenc --codec aom --yuv 420 -q 66 -a tune=iq \
-                                                      {} {}.avif
-
-                    # Optimize JPG
-                    find $dest -type f -name '*.jpg' -print0 \
-                      | sort -z \
-                      | ${parallel} ${optimizeJpg} {}
-
-                    # Optimize PNG
-                    find . -type f -name '*.png' -print0 \
-                        | ${parallel} ${optimizePng} {} $dest/{}
-
-                    # PNG→WebP
-                    find $dest -type f -name '*.png' -print0 \
-                        | ${parallel} ${libwebp}/bin/cwebp -z 8 {} -o {}.webp
-
-                    # GIF→WebP
-                    find . -type f -name '*.gif' -print0 \
-                        | ${parallel} ${libwebp}/bin/gif2webp -quiet {} -o $dest/{}.webp
-
-                    # Optimize GIF
-                    find . -type f -name '*.gif' -print0 \
-                        | ${parallel} ${gifsicle}/bin/gifsicle --optimize=3 {} -o $dest/{}
-
-                    # Tag JPG and WebP as sRGB, as Firefox only manages colors of tagged images.
-                    find $dest -type f \( -name '*.jpg' -o -name '*.webp' \) -print0 \
-                        | ${parallel} -q -n50 ${exiftool}/bin/exiftool -q -overwrite_original \
-                                            "-icc_profile<=${srgbProfile}"
-                  '';
-              in
-              pkgs.symlinkJoin {
-                name = "optimize-images";
-                paths = map optimizeDirectory (listDirs target "");
-              };
             build.literata = pkgs.stdenvNoCC.mkDerivation {
               name = "custom-literata";
               dontUnpack = true;
@@ -528,16 +362,31 @@
                 pythonEnv
                 uv
 
-                # Helper tools
-                brotli
-                nginx
+                # Build tools
+                nodejs
+                esbuild
+                fonttools
                 pagefind
+                brotli
+
+                # Image optimization
+                svgo
+                jpegli.bin
+                libavif
+                libwebp
+                pngquant
+                lcms
+                gifsicle
+                exiftool
+
+                # Helper tools
+                nginx
                 vale
               ];
               shellHook = ''
                 unset PYTHONPATH
                 ln -nsfT ${nodeEnv}/node_modules node_modules
-                ln -nsfT ${rfcIndex} extensions/markdown/rfc-index.json.gz
+                ln -nsfT ${rfcIndex} ssg/markdown/rfc-index.json.gz
               '';
             };
         };

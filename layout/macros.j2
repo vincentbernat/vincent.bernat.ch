@@ -16,7 +16,7 @@
 {% macro list_posts(lang, start=0, end=None) %}
 <ul class="lf-list-titles">
 {% set ctx = resource %}
-{%- for resource in (site.content|attr("walk_resources_sorted_by_time")()|in_language(lang))[start:end] %}
+{%- for resource in (site.sorted("time")|in_language(lang))[start:end] %}
   {{ format_resource(ctx, resource)|indent(2) }}
 {% endfor %}
 </ul>
@@ -53,8 +53,8 @@
 {%- for subtag in subtags -%}
     {%- set subtag = subtags[:loop.index]|join('-') -%}
     {{- fmt(resource, subtag,
-            site.config.tagger.tags[subtag]|attr("descr_" + resource.meta.language)|e ~
-            site.config.tagger.tags[subtag].descr|e, site.config.tagger.tags[subtag].hidden) -}}
+            site.tags[subtag]|attr("descr_" + resource.meta.language)|e ~
+            site.tags[subtag].descr|e, site.tags[subtag].hidden) -}}
     {%- if not loop.last %} > {% endif -%}
 {%- endfor -%}
 {%- endfilter -%}
@@ -64,7 +64,7 @@
 {% macro list_tags(lang) %}
 {% set ctx = resource %}
 {% set tags = [] %}
-{% for tag, info in site.config.tagger.tags if not info.hidden %}
+{% for tag, info in site.tags.items() if not info.hidden %}
 {% do tags.append(tag) %}
 {% endfor %}
 <div class="toc"><ul>
@@ -79,7 +79,7 @@
 </ul></div>
 <div class="lf-list-tags">
 {% for tag in tags %}
-{% set rr = site.content|attr("walk_resources_sorted_by_time")()|in_language(lang)|tagged(tag) %}
+{% set rr = site.sorted("time")|in_language(lang)|tagged(tag) %}
 {% if rr and tag|string != "outdated" %}
   <div class="lf-tag" id="tag-{{tag}}">
     <h2>{{ format_tag(resource, tag|string, tagfmt_plain) }}</h2>
@@ -120,14 +120,15 @@
 {%- endif -%}
 {%- endmacro %}
 
-{# Display a photo gallery; directory may be a directory or a prefix #}
-{% macro gallery(directory, description) %}
+{# Display a photo gallery, described in the galleries metadata #}
+{% macro gallery(index) %}
+{% set directory = resource.meta.galleries[index].directory %}
+{% set description = resource.meta.galleries[index].description %}
 <div class="lf-gallery">
-{% for image in site.content.walk_resources_sorted_by_name()
-   if image.source_file.kind in ("jpg","png") and
-   (image.name.startswith(directory) or image.source_file.parent.name == directory) %}
-{% set thumb = image.thumb(height=150) %}
-<a href="{{ media_url(image.get_relative_deploy_path()[6:]) }}"><img src="{{ media_url(thumb.path[6:]) }}" height="{{ thumb.height }}" width="{{ thumb.width }}" alt="{{ description|e }}" class="lf-thumbnail"></a>
+{% for image in site.node("media/images/" + directory).sorted("name")
+   if image.kind in ("jpg","png") %}
+{% set thumb = thumbnail(image) %}
+<a href="{{ media_url(image.path[6:]) }}"><img src="{{ media_url(thumb.path[6:]) }}" height="{{ thumb.height }}" width="{{ thumb.width }}" alt="{{ description|e }}" class="lf-thumbnail"></a>
 {% endfor %}
 </div>
 {% endmacro %}
@@ -135,15 +136,50 @@
 {% macro listing(directory, nb=0) %}
 <ul class="lf-listing">
 
-{% for archive in site.content.walk_resources()|media_listing(directory) %}
+{% for archive in site.node("media/" + directory).sorted("name")|natural_sort %}
 {% if nb < 0 and loop.revindex <= -nb or nb > 0 and loop.index <= nb %}
 <li>
   <img class="lf-filetype"
-       src="{{ media_url("images/l/ext--" + archive.source_file.kind + ".svg") }}"
-       alt="{{ "[" + archive.source_file.kind + "]" }}">
-  <a href="{{ media_url(archive.get_relative_deploy_path()[6:]) }}">{{ archive.name }}</a>
+       src="{{ media_url("images/l/ext--" + archive.kind + ".svg") }}"
+       alt="{{ "[" + archive.kind + "]" }}">
+  <a href="{{ media_url(archive.path[6:]) }}">{{ archive.name }}</a>
 </li>
 {% endif %}
 {% endfor %}
 </ul>
+{% endmacro %}
+
+{# Articles of the RSS feed, with links used by the introduction #}
+{% macro rss_articles() %}
+{% set feed = base ~ "/" ~ resource.meta.language ~ "/blog/atom.xml" %}
+[rss]: {{ feed }}
+[FeedRabbit]: https://feedrabbit.com/?url={{ feed|urlencode }}
+[Blogtrottr]: https://blogtrottr.com/?subscribe={{ feed|urlencode }}
+[Miniflux]: https://miniflux.app/ "Miniflux"
+[NewsBlur]: https://www.newsblur.com/?url={{ feed|urlencode }} "NewsBlur"
+[Bluesky]: https://bsky.app/profile/{{ resource.meta.bluesky }}
+[Mastodon]: {{ resource.meta.mastodon|mastodon_href }}
+
+{% for res in resource.node.sorted("time_" + resource.meta.language)|top(6) %}
+<article>
+  <header>
+    <h1><a href="{{ content_url(res.url) }}">{{ res.meta.title|e }}</a></h1>
+    <h2>
+      {{ res.meta.author|e }}
+      {{ resource_date(resource.meta.language, res)|indent(6) }}
+    </h2>
+  </header>
+  <div class="lf-text">
+{{ article(res)|clean_rss }}
+  </div>
+</article>
+
+{% endfor %}
+{% endmacro %}
+
+{# Licenses of the files of this site #}
+{% macro license_list() %}
+{% for paths, items in licenses(resource.meta.language) %}
+ - {% for path in paths %}`{{ path }}`{% if not loop.last %}, {% endif %}{% endfor %}: {{ items|join(", ") }}
+{% endfor %}
 {% endmacro %}
