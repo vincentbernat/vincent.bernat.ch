@@ -94,6 +94,22 @@ def discard():
         shutil.rmtree(config.STAGING)
 
 
+def commit_times():
+    """Time of the last commit of each file in the production build."""
+    log = run(
+        "git -c core.quotePath=false log --no-renames --name-only --format=%x00%ct",
+        cwd=FINAL,
+        capture=True,
+    ).stdout
+    times = {}
+    for commit in log.split("\0")[1:]:
+        ts, _, names = commit.partition("\n")
+        for name in names.split("\n"):
+            if name:
+                times.setdefault(name, int(ts))
+    return times
+
+
 def push(clean=False):
     """Push built site to production."""
     with step("push to GitHub"):
@@ -101,20 +117,10 @@ def push(clean=False):
 
     # Restore timestamps (this relies on us not truncating history too often)
     with step("restore timestamps"):
-        run(
-            r"""
-git log --name-only --pretty=format:'%x00%cI' HEAD |
-awk 'BEGIN { RS = "\0"; FS = "\n" }
-     NR > 1 {
-       for (i = 2; i <= NF; i++)
-         if ($i != "" && !seen[$i]++) print $1, $i
-     }' |
-while read ts file; do
-    [ -e "$file" ] || [ -L "$file" ] && touch -d "$ts" -h "$file"
-done
-""",
-            cwd=FINAL,
-        )
+        for path, ts in commit_times().items():
+            path = FINAL / path
+            if os.path.lexists(path):
+                os.utime(path, (ts, ts), follow_symlinks=False)
 
     for host in HOSTS:
         with step(f"push media to {host}"):
