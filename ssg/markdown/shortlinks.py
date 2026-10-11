@@ -22,13 +22,20 @@ def rfc_titles():
 
 class ShortLinksExtension(Extension):
     def __init__(self, **kwargs):
-        self.config = {"l10n": [{}, "Translated strings, from the resource meta"]}
+        self.config = {
+            "l10n": [{}, "Translated strings, from the resource meta"],
+            "sources": ["", "URL of the sources of the site, from the resource meta"],
+        }
         super().__init__(**kwargs)
 
     def extendMarkdown(self, md):
         md.registerExtension(self)
         md.preprocessors.register(
-            ShortLinksPreprocessor(md, self.getConfig("l10n")), "shortlinks", 12
+            ShortLinksPreprocessor(
+                md, self.getConfig("l10n"), self.getConfig("sources")
+            ),
+            "shortlinks",
+            12,
         )
 
 
@@ -39,8 +46,12 @@ class ShortLinksPreprocessor(Preprocessor):
         "doi": "https://oadoi.org/{}",
         "sci-hub": "https://sci-hub.fr/{}",
         "go": "https://pkg.go.dev/{}",
+        # A directory ends with a slash. "@commit/" can come first.
+        "src": "{sources}/{kind}/{ref}/{path}",
     }
     RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://([\w.~;=:@+/-]+)", re.ASCII)
+
+    SRC_REF_RE = re.compile(r"@(?P<ref>[0-9a-f]{7,40})(?:/(?P<path>.*))?")
 
     # Links without a title: a reference definition or an inline link.
     DEFINITION_RE = re.compile(r"^(?P<prefix>\[[^]]+\]:[ \t]*)(?P<url>\S+)[ \t]*$")
@@ -53,9 +64,10 @@ class ShortLinksPreprocessor(Preprocessor):
     )
     GODOC_RE = re.compile(r"^https://pkg\.go\.dev/([^#?]+?)/?(?:#([^#]*))?$")
 
-    def __init__(self, md, l10n):
+    def __init__(self, md, l10n, sources):
         super().__init__(md)
         self.l10n = l10n
+        self.sources = sources
 
     def title(self, url):
         """Build a title from an RFC, a manual page or a Go package URL."""
@@ -87,7 +99,20 @@ class ShortLinksPreprocessor(Preprocessor):
         return None
 
     def expand(self, mo):
-        return self.SCHEMAS[mo.group(1)].format(mo.group(2))
+        schema, path = mo.groups()
+        if schema == "src":
+            ref = "main"
+            if m := self.SRC_REF_RE.fullmatch(path):
+                ref, path = m.group("ref", "path")
+                if path is None:
+                    return f"{self.sources}/commit/{ref}"
+            return self.SCHEMAS[schema].format(
+                sources=self.sources,
+                kind="tree" if path.endswith("/") else "blob",
+                ref=ref,
+                path=path.rstrip("/"),
+            )
+        return self.SCHEMAS[schema].format(path)
 
     def add_title(self, mo, suffix=""):
         title = self.title(mo.group("url"))

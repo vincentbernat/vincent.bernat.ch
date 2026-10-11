@@ -78,7 +78,10 @@ def render_body(site, resource):
 def render_article(site, resource):
     """Render the text of a resource, then convert it from Markdown."""
     text = render_body(site, resource)
-    return typogrify(markdown.convert(text, site, resource.meta.get("l10n")))
+    meta = resource.meta
+    return typogrify(
+        markdown.convert(text, site, meta.get("l10n"), meta.get("sources"))
+    )
 
 
 def render(site, resource, **context):

@@ -38,7 +38,7 @@ def collect(kind, values):
         collected[kind].update(values)
 
 
-def convert(text, site, l10n=None):
+def convert(text, site, l10n=None, sources=None):
     return Markdown(
         extensions=[
             CodeHiliteExtension(guess_lang=False),
@@ -47,7 +47,7 @@ def convert(text, site, l10n=None):
             admonition.makeExtension(),
             glyphs.makeExtension(),
             katex.makeExtension(),
-            shortlinks.makeExtension(l10n=l10n),
+            shortlinks.makeExtension(l10n=l10n, sources=sources),
             textlinks.makeExtension(site=site),
             html_comments.makeExtension(),
             responsive_table.makeExtension(),
