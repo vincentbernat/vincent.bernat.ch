@@ -14,6 +14,7 @@ from PIL import Image, ImageChops
 
 from .. import config, deps
 from ..tools import run
+from . import properties
 
 
 class Cover:
@@ -108,12 +109,25 @@ class Cover:
 
     def load(self, path, width):
         """Load a cover image (SVG or raster) and return as RGBA."""
-        if not str(path).endswith(".svg"):
-            return Image.open(path).convert("RGBA")
+        match pathlib.Path(path).suffix:
+            case ".svg":
+                return self.load_svg(path, width)
+            case _:
+                return self.load_raster(path)
+
+    def load_raster(self, path):
+        return Image.open(path).convert("RGBA")
+
+    def load_svg(self, path, width):
+        """Render an SVG image with Firefox, twice the given width."""
         width *= 2
-        # The screenshot has the size of the window. Use a tall window and crop
-        # the magenta background.
-        height = width * 4
+        # The screenshot has the size of the window. Use a window a bit taller
+        # than the image and crop the magenta background. If the image does
+        # not fit, try again with a tall window.
+        heights = [width * 4]
+        w, h = properties.read(str(path), "svg")["size"]
+        if w and h:
+            heights.insert(0, math.ceil(width * h / w * 1.05) + 16)
         r, g, b = self.BG_COLOR
         src = pathlib.Path(path).resolve().as_uri()
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,21 +140,24 @@ class Cover:
                     f'<img src="{src}" style="display:block;width:{width}px;'
                     f'background:rgb({r},{g},{b})">'
                 )
-            run(
-                "firefox",
-                "--headless",
-                "--no-remote",
-                "--profile",
-                self.firefox_profile,
-                f"--window-size={width},{height}",
-                "--screenshot",
-                png,
-                pathlib.Path(html).as_uri(),
-                record=False,
-            )
-            img = Image.open(png).convert("RGB")
-            magenta = Image.new("RGB", img.size, (255, 0, 255))
-            bbox = ImageChops.difference(img, magenta).getbbox()
+            for height in heights:
+                run(
+                    "firefox",
+                    "--headless",
+                    "--no-remote",
+                    "--profile",
+                    self.firefox_profile,
+                    f"--window-size={width},{height}",
+                    "--screenshot",
+                    png,
+                    pathlib.Path(html).as_uri(),
+                    record=False,
+                )
+                img = Image.open(png).convert("RGB")
+                magenta = Image.new("RGB", img.size, (255, 0, 255))
+                bbox = ImageChops.difference(img, magenta).getbbox()
+                if bbox[3] < img.height:
+                    break
             return img.crop(bbox).convert("RGBA")
 
     @functools.cache
