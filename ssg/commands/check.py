@@ -8,15 +8,16 @@ from .. import config
 from . import Exit, run
 
 FRONTMATTER_KEYS = (
-    "layout "  # templating
-    "title description uuid alias cover "  # identity
-    "created attachments galleries tags "  # metadata
-    "author bluesky github mastodon "  # attribution
-    "featured popular listable notitle noindex comments share subscribe sidenotes "  # listing/visibility
-    "csp headers html_class mime "  # headers
-    "css js "  # assets
-    "ai-usage"  # disclosure
-).split()
+    "layout",  # templating
+    "title", "description", "uuid", "alias", "cover",  # identity
+    "created", "attachments", "galleries", "tags",  # metadata
+    "author", "bluesky", "github", "mastodon",  # attribution
+    "featured", "popular", "listable", "notitle", "noindex",  # listing/visibility
+    "comments", "share", "subscribe", "sidenotes",  # listing/visibility
+    "csp", "headers", "html_class", "mime",  # headers
+    "css", "js",  # assets
+    "ai-usage",  # disclosure
+)  # fmt: skip
 
 
 def check(fix=False):
