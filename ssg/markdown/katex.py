@@ -12,20 +12,19 @@ import tempfile
 
 import markdown
 
-# Read formulas from stdin, write the answers to stdout as JSON, NUL as
-# separator.
+# Read one formula per line as a JSON string, write one answer per line as
+# JSON
 RENDERER = """
-var katex = require('katex');
-var split = require('split');
-process.stdin.pipe(split('\\0', null, { trailing: false })).on('data', function(latex) {
-  var answer;
+const katex = require("katex");
+const lines = require("readline").createInterface({ input: process.stdin });
+lines.on("line", (line) => {
+  let answer;
   try {
-    answer = { html: katex.renderToString(latex) };
+    answer = { html: katex.renderToString(JSON.parse(line)) };
   } catch (e) {
     answer = { error: e.message };
   }
-  process.stdout.write(JSON.stringify(answer));
-  process.stdout.write('\\0');
+  process.stdout.write(JSON.stringify(answer) + "\\n");
 });
 """
 
@@ -51,24 +50,18 @@ def render(formula):
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=errors,
+            encoding="utf-8",
         )
         # Stopped when the process exits, including doit workers
         multiprocessing.util.Finalize(None, stop, exitpriority=0)
-    # Assume input is small enough
-    renderer.stdin.write(formula.encode("utf-8"))
-    renderer.stdin.write(b"\0")
+    renderer.stdin.write(json.dumps(formula) + "\n")
     renderer.stdin.flush()
-    answer = b""
-    while True:
-        char = renderer.stdout.read(1)
-        if char == b"":
-            errors.seek(0)
-            message = errors.read().decode("utf-8", "replace")
-            raise RuntimeError(f"unexpected stream end: {message}")
-        if char == b"\0":
-            break
-        answer += char
-    answer = json.loads(answer)
+    line = renderer.stdout.readline()
+    if not line:
+        errors.seek(0)
+        message = errors.read().decode("utf-8", "replace")
+        raise RuntimeError(f"KaTeX renderer stopped: {message}")
+    answer = json.loads(line)
     if "error" in answer:
         raise RuntimeError(f"cannot render {formula!r}: {answer['error']}")
     return answer["html"]
