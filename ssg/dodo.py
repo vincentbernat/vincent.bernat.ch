@@ -6,6 +6,7 @@
     doit publish          # check, build for production, review and commit
     doit push             # deploy production build
     doit list             # other commands
+    doit profile=true     # profile the build (in one process)
 
 The build runs in a sandbox, in parallel. "doit list --all" displays the build
 tasks.
@@ -22,6 +23,8 @@ sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import atexit  # noqa: E402
+import cProfile  # noqa: E402
 import multiprocessing  # noqa: E402
 import shutil  # noqa: E402
 
@@ -32,6 +35,7 @@ from ssg import commands, config, lexers  # noqa: E402
 from ssg.commands import check, links, production, videos  # noqa: E402
 
 MODE = config.MODES["production" if get_var("mode") == "prod" else "development"]
+PROFILE = get_var("profile") == "true"
 
 
 def sandbox():
@@ -176,6 +180,24 @@ if not interactive and not os.environ.get("SSG_SANDBOX"):
     sandbox()
 
 
+def profile():
+    """Profile this process until it exits."""
+    profiler = cProfile.Profile()
+    path = MODE.cache / "profile.prof"
+
+    def stop():
+        profiler.disable()
+        profiler.dump_stats(path)
+        print(f"profile written to {path}", file=sys.stderr)
+
+    atexit.register(stop)
+    profiler.enable()
+
+
+if PROFILE:
+    profile()
+
+
 # Workers inherit the loaded site
 multiprocessing.set_start_method("fork", force=True)
 lexers.register()
@@ -183,8 +205,8 @@ MODE.cache.mkdir(parents=True, exist_ok=True)
 DOIT_CONFIG = {
     "dep_file": str(MODE.cache / "doit.db"),
     "backend": "sqlite3",
-    # Commands may be interactive: they run in this process
-    "num_process": 0 if interactive else os.cpu_count(),
+    # Commands may be interactive and the profiler only sees this process
+    "num_process": 0 if interactive or PROFILE else os.cpu_count(),
     "par_type": "process",
     "reporter": "executed-only",
     "default_tasks": ["prune", "pagefind"] if MODE.production else ["prune"],

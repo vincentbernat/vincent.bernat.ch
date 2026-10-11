@@ -37,6 +37,14 @@ doit info page:en/blog/2026-spanning-tree.html
 doit info page:en/blog/2026-spanning-tree.html mode=prod
 ```
 
+For profiling:
+
+```
+doit profile=true mode=prod -a
+python -m pstats .cache/ssg/production/profile.prof
+nix run nixpkgs#gprof2dot -- -f pstats .cache/ssg/production/profile.prof | dot -Tsvg -o profile.svg
+```
+
 ### uv
 
 Check oudated dependencies:
