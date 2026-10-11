@@ -112,6 +112,11 @@ def task_check() -> dict[str, Any]:
     )
 
 
+def task_lint() -> dict[str, Any]:
+    """check code with ruff and mypy"""
+    return command(check.lint)
+
+
 def task_publish() -> dict[str, Any]:
     """check, build for production, review and commit"""
     return command(production.publish)

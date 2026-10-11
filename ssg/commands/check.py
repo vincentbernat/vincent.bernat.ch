@@ -3,6 +3,7 @@
 import glob
 import os
 import re
+import sys
 
 from .. import config
 from . import Exit, run
@@ -60,3 +61,18 @@ def check(fix: bool = False) -> None:
             raise
     if unordered and not fix:
         raise Exit(f"unordered frontmatter: {', '.join(unordered)}")
+
+
+def lint() -> None:
+    """Check code with ruff and mypy."""
+    failed = [
+        command
+        for command in (
+            "ruff check ssg",
+            "ruff format --check ssg",
+            f"{sys.executable} -m mypy",
+        )
+        if run(command, cwd=config.ROOT, check=False).returncode != 0
+    ]
+    if failed:
+        raise Exit(f"failed: {', '.join(failed)}")
