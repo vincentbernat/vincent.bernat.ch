@@ -32,37 +32,67 @@ class Exit(Exception):
     pass
 
 
-# doit task creators for the commands, by task name
-TASKS: dict[str, Callable[[], dict[str, Any]]] = {}
+# Commands, by task name. "checks:vale" is part of the "checks" group, which
+# runs all of them.
+FUNCTIONS: dict[str, Callable[..., None]] = {}
+# Tasks to run before a command
+DEPENDENCIES: dict[str, list[str]] = {}
 
 
-def command[F: Callable[..., None]](name: str | None = None) -> Callable[[F], F]:
+def command[F: Callable[..., None]](
+    name: str | None = None, depends: list[str] | None = None
+) -> Callable[[F], F]:
     """Make a function a doit task. The first sentence of its docstring
     describes it. Its keyword arguments are options, flags when their default
     is a bool. An argument without default gets the other words of the command
     line."""
 
     def register(function: F) -> F:
-        def creator() -> dict[str, Any]:
-            return task(function)
-
-        TASKS[name or function.__name__] = creator
+        FUNCTIONS[name or function.__name__] = function
+        DEPENDENCIES[name or function.__name__] = depends or []
         return function
 
     return register
 
 
-def tasks() -> dict[str, Callable[[], dict[str, Any]]]:
+Creator = Callable[[], dict[str, Any] | Iterator[dict[str, Any]]]
+
+
+def tasks() -> dict[str, Creator]:
     """doit task creators of the commands defined in this package."""
     for module in pkgutil.iter_modules(__path__):
         importlib.import_module(f"{__name__}.{module.name}")
-    return TASKS
+    groups: dict[str, list[str]] = {}
+    for name in FUNCTIONS:
+        groups.setdefault(name.partition(":")[0], []).append(name)
+    return {group: creator(group, names) for group, names in groups.items()}
 
 
-def task(function: Callable[..., None]) -> dict[str, Any]:
+def creator(group: str, names: list[str]) -> Creator:
+    """doit task creator for a command or a group of commands. The docstring
+    of the module describes a group."""
+    if names == [group]:
+        return lambda: task(group)
+
+    def create() -> Iterator[dict[str, Any]]:
+        module = sys.modules[FUNCTIONS[names[0]].__module__]
+        yield {"name": None, "doc": summary(module.__doc__)}
+        for name in names:
+            yield task(name) | {"name": name.partition(":")[2]}
+
+    return create
+
+
+def summary(doc: str | None) -> str:
+    """First sentence of a docstring, starting lowercase."""
+    text = re.split(r"\.(?:\s|$)", inspect.cleandoc(doc or ""), maxsplit=1)[0]
+    text = " ".join(text.split())
+    return text[:1].lower() + text[1:]
+
+
+def task(name: str) -> dict[str, Any]:
     """doit task running a command, with options from its signature."""
-    summary = re.split(r"\.(?:\s|$)", inspect.getdoc(function) or "", maxsplit=1)[0]
-    summary = " ".join(summary.split())
+    function = FUNCTIONS[name]
     params = []
     pos_arg = None
     for parameter in inspect.signature(function).parameters.values():
@@ -86,10 +116,11 @@ def task(function: Callable[..., None]) -> dict[str, Any]:
         return None
 
     return {
-        "doc": summary[:1].lower() + summary[1:],
+        "doc": summary(function.__doc__),
         "actions": [action],
         "params": params,
         "pos_arg": pos_arg,
+        "task_dep": DEPENDENCIES[name],
         "uptodate": [False],
         "verbosity": 2,
     }

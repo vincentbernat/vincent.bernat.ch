@@ -104,7 +104,7 @@ globals().update({f"task_{name}": creator for name, creator in TASKS.items()})
 COMMANDS = set(TASKS)
 # The first word which is neither an option nor a variable
 words = [arg for arg in sys.argv[1:] if not arg.startswith("-") and "=" not in arg]
-interactive = bool(words) and words[0] in COMMANDS
+interactive = bool(words) and words[0].partition(":")[0] in COMMANDS
 listing = (
     len(sys.argv) == 4 and sys.argv[1:3] == ["list", "--template"]
     or len(sys.argv) == 2 and sys.argv[1] == "list"

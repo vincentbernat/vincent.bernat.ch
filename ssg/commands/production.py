@@ -8,16 +8,13 @@ from pathlib import Path
 
 from .. import config
 from . import FINAL, HOSTS, Exit, command, confirm, run, step
-from .check import check
 
 
-@command()
+@command(depends=["checks"])
 def publish() -> None:
-    """Check content, build for production, review changes and commit
-    them."""
+    """Build for production, review changes and commit them."""
     if run("git status --porcelain", cwd=FINAL, capture=True).stdout:
         raise Exit(f"{FINAL} has uncommitted changes")
-    check()
     # The build changes the cache through an overlay. The changes are merged
     # if the result is kept.
     discard()

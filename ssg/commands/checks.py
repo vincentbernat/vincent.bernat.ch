@@ -1,4 +1,4 @@
-"""Check content for mistakes."""
+"""Check content and code."""
 
 import glob
 import os
@@ -21,12 +21,15 @@ FRONTMATTER_KEYS = (
 )  # fmt: skip
 
 
-@command()
-def check(fix: bool = False) -> None:
-    """Check content for mistakes."""
-    # Check forbidden word or common typos
+@command("checks:vale")
+def vale() -> None:
+    """Check prose for forbidden words and common typos."""
     run("vale content/??", cwd=config.ROOT)
-    # Check frontmatters
+
+
+@command("checks:frontmatter")
+def frontmatter(fix: bool = False) -> None:
+    """Check frontmatter keys are known and ordered."""
     unordered = []
     for path in sorted(
         glob.glob(str(config.CONTENT / "??" / "**" / "*"), recursive=True)
@@ -64,9 +67,9 @@ def check(fix: bool = False) -> None:
         raise Exit(f"unordered frontmatter: {', '.join(unordered)}")
 
 
-@command()
-def lint() -> None:
-    """Check code with ruff and mypy."""
+@command("checks:python")
+def python() -> None:
+    """Check Python code with ruff and mypy."""
     failed = [
         command
         for command in (
