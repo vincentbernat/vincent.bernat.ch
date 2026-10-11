@@ -37,8 +37,9 @@ renderer = ProcessHelper("node", "-e", RENDERER)
 def render(formula: str) -> str:
     """Turn one LaTeX formula into HTML."""
     deps.tool("node")
-    renderer.send(json.dumps(formula) + "\n")
-    answer = json.loads(renderer.readline())
+    with renderer:
+        renderer.send(json.dumps(formula) + "\n")
+        answer = json.loads(renderer.readline())
     if "error" in answer:
         raise RuntimeError(f"cannot render {formula!r}: {answer['error']}")
     return answer["html"]

@@ -1,13 +1,19 @@
 """Helpers shared by the build and the commands."""
 
-import multiprocessing.util
+import contextlib
+import ctypes
 import os
+import signal
 import subprocess
 import tempfile
+import time
 from collections.abc import Mapping
-from typing import IO, Literal, overload
+from typing import IO, ClassVar, Literal, Self, overload
 
 from . import deps
+
+PR_SET_PDEATHSIG = 1
+prctl = ctypes.CDLL(None, use_errno=True).prctl
 
 
 @overload
@@ -61,53 +67,99 @@ def run(
 
 
 class ProcessHelper:
-    """A process kept running to answer requests. Each process using it,
-    including doit workers, starts its own on first use. It is stopped when
-    this process exits."""
+    """A process kept running to answer requests. Requests are made in "with"
+    blocks, from the main thread. Each process starts its own on first use. It
+    is stopped after a minute without requests, and when this process exits."""
 
-    def __init__(self, *args: str, quit: str = "") -> None:
+    IDLE = 60.0
+    # There is only one timer, for the helper unused for the longest time
+    helpers: ClassVar[list[ProcessHelper]] = []
+
+    def __init__(self, *args: str) -> None:
         self.args = args
-        # Input making the process exit, in addition to closing its input
-        self.quit = quit
-        self.pid = 0
-        self.process: subprocess.Popen[str]
+        self.process: subprocess.Popen[str] | None = None
         self.stdin: IO[str]
         self.stdout: IO[str]
         self.stderr: IO[bytes]
         self.offset = 0
+        self.busy = False
+        self.used = 0.0
+        self.helpers.append(self)
+        signal.signal(signal.SIGALRM, ProcessHelper.expired)
+
+    def __enter__(self) -> Self:
+        self.busy = True
+        try:
+            if self.process is None or self.process.poll() is not None:
+                self.stop()
+                self.start()
+        except BaseException:
+            self.busy = False
+            raise
+        return self
+
+    def __exit__(self, error: type[BaseException] | None, *args: object) -> None:
+        if error is not None:
+            # Stop it, the rest of the answer may still be waiting
+            self.stop()
+        self.used = time.monotonic()
+        self.busy = False
+        if signal.getitimer(signal.ITIMER_REAL)[0] == 0:
+            signal.setitimer(signal.ITIMER_REAL, self.IDLE)
+
+    @classmethod
+    def expired(cls, *args: object) -> None:
+        """Stop unused helpers and set the timer for the next one."""
+        now = time.monotonic()
+        delays = []
+        for helper in cls.helpers:
+            if helper.process is None or helper.busy:
+                continue
+            delay = helper.used + helper.IDLE - now
+            if delay > 0:
+                delays.append(delay)
+            else:
+                helper.stop()
+        if delays:
+            signal.setitimer(signal.ITIMER_REAL, min(delays))
+
+    @staticmethod
+    def orphaned() -> None:
+        """Kill the process when its parent exits."""
+        prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
 
     def start(self) -> None:
         # Node makes its error output non-blocking. When shared with us, our
         # own writes would fail. With a file in append mode, reading it does
         # not move where the process writes.
         stderr = tempfile.TemporaryFile("ab+")  # noqa: SIM115
-        process = subprocess.Popen(
-            self.args,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=stderr,
-            encoding="utf-8",
-        )
+        try:
+            process = subprocess.Popen(
+                self.args,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=stderr,
+                encoding="utf-8",
+                preexec_fn=self.orphaned,  # noqa: PLW1509
+            )
+        except BaseException:
+            stderr.close()
+            raise
         assert process.stdin is not None and process.stdout is not None
         self.process, self.stdin, self.stdout = process, process.stdin, process.stdout
-        self.stderr, self.offset, self.pid = stderr, 0, os.getpid()
-        pid, stdin, quit = self.pid, self.stdin, self.quit
+        self.stderr, self.offset = stderr, 0
 
-        def stop() -> None:
-            # A forked process inherits this, the process is not its own
-            if os.getpid() != pid:
-                return
-            if quit:
-                stdin.write(quit)
-            stdin.close()
-            process.wait()
-            stderr.close()
-
-        multiprocessing.util.Finalize(None, stop, exitpriority=0)
+    def stop(self) -> None:
+        if self.process is None:
+            return
+        self.process.kill()
+        self.process.wait()
+        for stream in (self.stdin, self.stdout, self.stderr):
+            with contextlib.suppress(OSError):
+                stream.close()
+        self.process = None
 
     def send(self, text: str) -> None:
-        if self.pid != os.getpid():
-            self.start()
         self.stdin.write(text)
         self.stdin.flush()
 

@@ -95,9 +95,7 @@ def image(raw: Path, target: Path) -> list[Path | str]:
 
 # Exiftool starts slowly. It keeps running and reads one argument per line.
 # Each command ends with "-execute1".
-exiftool = ProcessHelper(
-    "exiftool", "-stay_open", "True", "-@", "-", quit="-stay_open\nFalse\n"
-)
+exiftool = ProcessHelper("exiftool", "-stay_open", "True", "-@", "-")
 
 
 def tag_srgb(path: Path | str) -> None:
@@ -106,10 +104,11 @@ def tag_srgb(path: Path | str) -> None:
     profile = deps.getenv("SRGB_PROFILE")
     args = ["-q", "-overwrite_original", f"-icc_profile<={profile}", path]
     args += ["-echo3", "status=${status}", "-execute1"]
-    exiftool.send("".join(f"{arg}\n" for arg in args))
     output: list[str] = []
-    while (line := exiftool.readline()) != "{ready1}\n":
-        output.append(line)
-    errors = exiftool.errors()
+    with exiftool:
+        exiftool.send("".join(f"{arg}\n" for arg in args))
+        while (line := exiftool.readline()) != "{ready1}\n":
+            output.append(line)
+        errors = exiftool.errors()
     if output[-1:] != ["status=0\n"]:
         raise RuntimeError(f"exiftool failed on {path}:\n{errors}{''.join(output)}")
