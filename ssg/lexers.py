@@ -1,20 +1,29 @@
 from pygments.lexer import RegexLexer, bygroups, using
-from pygments.token import Text, Comment, Punctuation, Operator, Keyword, Whitespace
-from pygments.token import Number, String, Name
+from pygments.lexers import LEXERS
 from pygments.lexers.go import GoLexer
 from pygments.lexers.shell import BashSessionLexer
-from pygments.lexers import LEXERS
+from pygments.token import (
+    Comment,
+    Keyword,
+    Name,
+    Number,
+    Operator,
+    Punctuation,
+    String,
+    Text,
+    Whitespace,
+)
 
 __all__ = [
-    "PigeonLexer",
-    "LezerLexer",
-    "WiresharkLexer",
-    "HurlLexer",
-    "SshConfigLexer",
     "GoAsmLexer",
     "GoAstLexer",
-    "GoSsaLexer",
     "GoRulesLexer",
+    "GoSsaLexer",
+    "HurlLexer",
+    "LezerLexer",
+    "PigeonLexer",
+    "SshConfigLexer",
+    "WiresharkLexer",
 ]
 
 # To easily test:

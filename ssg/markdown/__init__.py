@@ -69,7 +69,7 @@ def convert(
 
 
 # Extensions use collect()
-from . import (  # noqa: E402
+from . import (
     admonition,
     codehilite_lang,
     glyphs,

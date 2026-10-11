@@ -23,18 +23,18 @@ sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-import atexit  # noqa: E402
-import cProfile  # noqa: E402
-import multiprocessing  # noqa: E402
-import shutil  # noqa: E402
-from collections.abc import Callable, Iterator  # noqa: E402
-from typing import Any  # noqa: E402
+import atexit
+import cProfile
+import multiprocessing
+import shutil
+from collections.abc import Callable, Iterator
+from typing import Any
 
-from doit import get_var  # noqa: E402
-from doit.exceptions import TaskFailed  # noqa: E402
+from doit import get_var
+from doit.exceptions import TaskFailed
 
-from ssg import commands, config, lexers  # noqa: E402
-from ssg.commands import check, links, production, videos  # noqa: E402
+from ssg import commands, config, lexers
+from ssg.commands import check, links, production, videos
 
 MODE = config.MODES["production" if get_var("mode") == "prod" else "development"]
 PROFILE = get_var("profile") == "true"

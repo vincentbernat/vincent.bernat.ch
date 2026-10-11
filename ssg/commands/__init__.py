@@ -35,6 +35,7 @@ def run(
         cwd=cwd,
         text=True,
         stdout=subprocess.PIPE if capture else None,
+        check=False,
     )
     if check and result.returncode != 0:
         raise Exit(f"command failed: {command}")

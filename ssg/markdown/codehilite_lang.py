@@ -2,9 +2,10 @@
 
 import functools
 from typing import Any
-from pygments.formatters.html import HtmlFormatter
+
 from markdown import Extension
 from markdown.extensions import codehilite
+from pygments.formatters.html import HtmlFormatter
 
 
 class CodeHiliteLangExtension(Extension):

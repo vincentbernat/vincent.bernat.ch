@@ -1,10 +1,11 @@
-from markdown.extensions import Extension
-from markdown.blockprocessors import BlockProcessor
-from markdown.treeprocessors import Treeprocessor
-import xml.etree.ElementTree as etree
 import re
+import xml.etree.ElementTree as etree
 from typing import Any
 from xml.etree.ElementTree import Element
+
+from markdown.blockprocessors import BlockProcessor
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 
 
 class AdmonitionExtension(Extension):

@@ -22,7 +22,7 @@ def python(site: Site, resource: Resource) -> str:
     """Run a Python resource. It defines `run(site, resource)` returning the
     content."""
     namespace: dict[str, Any] = {}
-    exec(resource.source_text, namespace)
+    exec(resource.source_text, namespace)  # noqa: S102
     return namespace["run"](site, resource)
 
 

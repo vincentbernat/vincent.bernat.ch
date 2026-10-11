@@ -166,4 +166,4 @@ def article(resource: Resource) -> str:
 
 
 # Register filters and functions
-from . import filters, functions  # noqa: E402, F401
+from . import filters, functions  # noqa: F401

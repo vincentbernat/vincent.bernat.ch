@@ -5,11 +5,12 @@ scroll them (while keeping display: table) and center them (while keeping them
 overflow in margins if needed).
 """
 
-from markdown import Extension
-from markdown.treeprocessors import Treeprocessor
 import xml.etree.ElementTree as etree
 from typing import Any
 from xml.etree.ElementTree import Element
+
+from markdown import Extension
+from markdown.treeprocessors import Treeprocessor
 
 
 class ResponsiveTableExtension(Extension):

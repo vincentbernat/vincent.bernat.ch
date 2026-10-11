@@ -50,7 +50,7 @@ def render(formula: str) -> str:
     if renderer is None:
         # Node makes its standard error non-blocking. When shared with us,
         # our own writes would fail.
-        errors = tempfile.TemporaryFile()
+        errors = tempfile.TemporaryFile()  # noqa: SIM115
         renderer = subprocess.Popen(
             ["node", "-e", RENDERER],
             stdin=subprocess.PIPE,

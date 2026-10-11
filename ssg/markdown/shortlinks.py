@@ -7,7 +7,7 @@ import gzip
 import json
 import os
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
@@ -46,7 +46,7 @@ class ShortLinksExtension(Extension):
 
 
 class ShortLinksPreprocessor(Preprocessor):
-    SCHEMAS = {
+    SCHEMAS: ClassVar[dict[str, str]] = {
         "rfc": "https://www.rfc-editor.org/rfc/rfc{}",
         "man": "https://manpages.debian.org/{}.html",
         "doi": "https://oadoi.org/{}",

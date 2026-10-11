@@ -32,7 +32,8 @@ def check(fix: bool = False) -> None:
         if path.endswith((".yaml", ".yml")) or not os.path.isfile(path):
             continue
         try:
-            lines = open(path, encoding="utf-8").readlines()
+            with open(path, encoding="utf-8") as f:
+                lines = f.readlines()
             if lines[0].strip() != "---":
                 continue
             end = next(i for i, line in enumerate(lines) if i and line.strip() == "---")

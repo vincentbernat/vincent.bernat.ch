@@ -149,7 +149,7 @@ def fix(site: Site, resource: Resource, d: Any) -> None:
         # Videos not in /videos are like an animated GIF
         elif src.endswith((".mp4", ".ogv")):
             img[0].tag = "video"
-            for attr in "muted loop autoplay playsinline controls".split():
+            for attr in ["muted", "loop", "autoplay", "playsinline", "controls"]:
                 img[0].set(attr, None)
             del img.attr.alt
 

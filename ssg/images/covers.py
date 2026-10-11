@@ -73,8 +73,10 @@ class Cover:
         with open(os.path.join(profile, "user.js"), "w") as f:
             for lang in ("x-western", "x-unicode"):
                 f.write(f'user_pref("font.default.{lang}", "sans-serif");\n')
-                for generic, family in fonts.items():
-                    f.write(f'user_pref("font.name.{generic}.{lang}", "{family}");\n')
+                f.writelines(
+                    f'user_pref("font.name.{generic}.{lang}", "{family}");\n'
+                    for generic, family in fonts.items()
+                )
         return profile
 
     @staticmethod
