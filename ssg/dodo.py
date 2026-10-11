@@ -169,6 +169,11 @@ def task_site():
     if interactive:
         # Commands build the site in another process when needed
         return
+    if listing:
+        from ssg.tasks import summary
+
+        yield from summary(MODE.production)
+        return
     from ssg.model.site import Site
     from ssg.tasks.builder import Builder
 
@@ -183,7 +188,11 @@ COMMANDS = {
 # The first word which is neither an option nor a variable
 words = [arg for arg in sys.argv[1:] if not arg.startswith("-") and "=" not in arg]
 interactive = bool(words) and words[0] in COMMANDS
-if not interactive and not os.environ.get("SSG_SANDBOX"):
+listing = (
+    len(sys.argv) == 4 and sys.argv[1:3] == ["list", "--template"]
+    or len(sys.argv) == 2 and sys.argv[1] == "list"
+)  # fmt: skip
+if not interactive and not listing and not os.environ.get("SSG_SANDBOX"):
     sandbox()
 
 

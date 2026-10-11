@@ -11,7 +11,7 @@ from doit.tools import config_changed
 from .. import config, deps, fonts, templates
 from ..images import covers, scales, thumbnails
 from ..media import css
-from . import files, pagefind, publish, render
+from . import GROUPS, SINGLES, files, pagefind, publish, render
 
 SSG = config.ROOT / "ssg"
 
@@ -56,23 +56,6 @@ UNPUBLISHED = tuple(f"css/{p.name}" for p in css.SHARED)
 
 # Video files are served from another server
 VIDEOS_KEPT = (".m3u8", ".vtt", ".txt")
-
-
-# Kinds with several tasks, with their description and if they are only for
-# production
-GROUPS = {
-    "copy": ("copy files as is", False),
-    "media": ("process stylesheets, scripts and other text media", False),
-    "image": ("generate images (SVG, resized images, thumbnails)", False),
-    "cover": ("generate cover images", False),
-    "article": ("render articles of blog posts", False),
-    "fragment": ("render articles of other pages", False),
-    "page": ("render pages", False),
-    "subset": ("subset fonts", True),
-    "font": ("publish fonts with a hashed name", True),
-    "asset": ("publish stylesheets and scripts with a hashed name", True),
-    "optimize": ("publish optimized images with a hashed name", True),
-}
 
 
 @functools.cache
@@ -365,7 +348,7 @@ class Builder:
         target = self.site.generated["js/pagefind.js"]
         yield {
             "basename": "pagefind-js",
-            "doc": "extract the pagefind library",
+            "doc": SINGLES["pagefind-js"][0],
             "actions": [(pagefind.extract, [target])],
             "targets": [str(target)],
             "uptodate": [environment()],
@@ -373,7 +356,7 @@ class Builder:
         pages = [str(self.out / r.path) for r in self.pages if r.kind == "html"]
         yield {
             "basename": "pagefind",
-            "doc": "build search index",
+            "doc": SINGLES["pagefind"][0],
             "actions": [(pagefind.index, [self.site])],
             "file_dep": pages,
             "task_dep": ["prune"],
@@ -385,7 +368,7 @@ class Builder:
         fragments = list(self.fragments.values())
         yield {
             "basename": "glyphs",
-            "doc": "collect glyphs used in articles",
+            "doc": SINGLES["glyphs"][0],
             "actions": [(fonts.glyphs, [self.site, fragments])],
             "file_dep": [str(f) for f in fragments]
             + [str(SSG / "fonts.py"), str(SSG / "markdown" / "__init__.py")],
@@ -453,7 +436,7 @@ class Builder:
         ]
         yield {
             "basename": "bundle-sizes",
-            "doc": "report sizes of stylesheets, scripts and fonts",
+            "doc": SINGLES["bundle-sizes"][0],
             "actions": [(publish.bundle_sizes, [self.site, bundles, target])],
             "file_dep": pages + [str(self.site.sidecar(b)) for b in bundles],
             "targets": [str(target)],
@@ -470,7 +453,7 @@ class Builder:
             kinds += ["glyphs", "bundle-sizes"]
         yield {
             "basename": "prune",
-            "doc": "remove obsolete files",
+            "doc": SINGLES["prune"][0],
             "actions": [(files.prune, [self])],
             "task_dep": kinds,
             "uptodate": [False],
