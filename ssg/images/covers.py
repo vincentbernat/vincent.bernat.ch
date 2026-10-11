@@ -1,6 +1,9 @@
 """Cover images for social networks."""
 
+import base64
 import functools
+import io
+import json
 import math
 import multiprocessing.util
 import os
@@ -10,11 +13,10 @@ import tempfile
 import unicodedata
 
 import skia
-from PIL import Image, ImageChops
+from PIL import Image
 
 from .. import config, deps
-from ..tools import run
-from . import properties
+from ..tools import ProcessHelper
 
 
 class Cover:
@@ -79,6 +81,11 @@ class Cover:
                 )
         return profile
 
+    @functools.cached_property
+    def firefox(self) -> ProcessHelper:
+        script = pathlib.Path(__file__).parent / "firefox.mjs"
+        return ProcessHelper("node", str(script), self.firefox_profile)
+
     @staticmethod
     def render_text(
         text: str, font: skia.Font, color: tuple[int, int, int]
@@ -125,46 +132,28 @@ class Cover:
     def load_svg(self, path: pathlib.Path, width: int) -> Image.Image:
         """Render an SVG image with Firefox, twice the given width."""
         width *= 2
-        # The screenshot has the size of the window. Use a window a bit taller
-        # than the image and crop the magenta background. If the image does
-        # not fit, try again with a tall window.
-        heights = [width * 4]
-        w, h = properties.read(str(path), "svg")["size"]
-        if w and h:
-            heights.insert(0, math.ceil(width * h / w * 1.05) + 16)
         r, g, b = self.BG_COLOR
         src = pathlib.Path(path).resolve().as_uri()
         with tempfile.TemporaryDirectory() as tmp:
-            html = os.path.join(tmp, "cover.html")
-            png = os.path.join(tmp, "cover.png")
-            with open(html, "w") as f:
-                f.write(
-                    '<html style="background:#f0f">'
-                    '<body style="margin:0;overflow:hidden">'
-                    f'<img src="{src}" style="display:block;width:{width}px;'
-                    f'background:rgb({r},{g},{b})">'
-                )
-            for height in heights:
-                run(
-                    "firefox",
-                    "--headless",
-                    "--no-remote",
-                    "--profile",
-                    self.firefox_profile,
-                    f"--window-size={width},{height}",
-                    "--screenshot",
-                    png,
-                    pathlib.Path(html).as_uri(),
-                    record=False,
-                )
-                img = Image.open(png).convert("RGB")
-                magenta = Image.new("RGB", img.size, (255, 0, 255))
-                bbox = ImageChops.difference(img, magenta).getbbox()
-                if bbox is None:
-                    raise RuntimeError(f"{path}: empty screenshot")
-                if bbox[3] < img.height:
-                    break
-            return img.crop(bbox).convert("RGBA")
+            html = pathlib.Path(tmp) / "cover.html"
+            html.write_text(
+                '<body style="margin:0">'
+                f'<img src="{src}" style="display:block;width:{width}px;'
+                f'background:rgb({r},{g},{b})">'
+            )
+            request = {
+                "url": html.as_uri(),
+                "width": width,
+                "height": 100,
+                "selector": "img",
+            }
+            with self.firefox:
+                self.firefox.send(json.dumps(request) + "\n")
+                answer = json.loads(self.firefox.readline())
+                if "error" in answer:
+                    errors = self.firefox.errors()
+                    raise RuntimeError(f"{path}: {answer['error']}\n{errors}")
+        return Image.open(io.BytesIO(base64.b64decode(answer["png"]))).convert("RGBA")
 
     @functools.cache
     def render_author(self, author: str) -> Image.Image:

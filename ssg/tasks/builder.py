@@ -50,7 +50,7 @@ PAGE_CSS_DEPS = [
 IMAGES = SSG / "images"
 SCALE_DEPS = [str(IMAGES / "__init__.py"), str(IMAGES / "scales.py")]
 THUMBNAIL_DEPS = [str(IMAGES / "__init__.py"), str(IMAGES / "thumbnails.py")]
-COVER_DEPS = [str(IMAGES / "covers.py")]
+COVER_DEPS = [str(IMAGES / "covers.py"), str(IMAGES / "firefox.mjs")]
 OPTIMIZE_DEPS = [str(IMAGES / "optimize.py"), str(IMAGES / "svgo.config.js")]
 FAVICON = config.CONTENT / "media" / "images" / "favicon.png"
 
