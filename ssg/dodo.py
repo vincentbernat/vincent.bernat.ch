@@ -71,8 +71,15 @@ def sandbox():
         "--die-with-parent",
         "--setenv", "SSG_SANDBOX", "1",
         "--setenv", "PATH", path,
-        "--", sys.executable, "-m", "doit", *sys.argv[1:],
     ]  # fmt: skip
+    if MODE.production and os.environ.get("SSG_STAGING"):
+        # Changes to the cache go to the staging directory
+        cache = str(MODE.cache)
+        upper = str(config.STAGING / "upper")
+        work = str(config.STAGING / "work")
+        MODE.cache.mkdir(parents=True, exist_ok=True)
+        args += ["--overlay-src", cache, "--overlay", upper, work, cache]
+    args += ["--", sys.executable, "-m", "doit", *sys.argv[1:]]
     os.execvp(args[0], args)
 
 

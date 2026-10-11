@@ -1,7 +1,8 @@
 """Build, review and deploy the production site."""
 
-import glob
 import os
+import shutil
+import stat
 import sys
 
 from .. import config
@@ -12,9 +13,16 @@ from .check import check
 def publish():
     """Check content, build for production, review changes and commit
     them."""
+    if run("git status --porcelain", cwd=FINAL, capture=True).stdout:
+        raise Exit(f"{FINAL} has uncommitted changes")
     check()
+    # The build changes the cache through an overlay. The changes are merged
+    # if the result is kept.
+    discard()
+    (config.STAGING / "upper").mkdir(parents=True)
+    (config.STAGING / "work").mkdir()
     with step("build"):
-        run(f"{sys.executable} -m doit mode=prod", cwd=config.ROOT)
+        run(f"SSG_STAGING=1 {sys.executable} -m doit mode=prod", cwd=config.ROOT)
     run("git add *", cwd=FINAL)
     run("git diff --find-renames=10% --stat HEAD || true", cwd=FINAL)
     if confirm("More diff?", default=True):
@@ -24,14 +32,66 @@ def publish():
         )
     run('git annex lock && [ -z "$(git status --porcelain)" ]', cwd=config.ROOT)
     if confirm("Keep?", default=True):
-        run('git commit -a -m "Autocommit"', cwd=FINAL)
+        merge(config.STAGING / "upper", config.MODES["production"].cache)
+        discard()
+        run(
+            '[ -z "$(git status --porcelain)" ] || git commit -a -m "Autocommit"',
+            cwd=FINAL,
+        )
     else:
         run("git reset --hard", cwd=FINAL)
         run("git clean -d -f", cwd=FINAL)
-        # Outputs are back to their previous state: next build starts over.
-        for path in glob.glob(str(config.MODES["production"].cache / "doit.db*")):
-            os.unlink(path)
+        discard()
         raise Exit("Build rollbacked")
+
+
+def merge(upper, lower):
+    """Apply the changes recorded in the upper directory of an overlay."""
+    # The database goes last. If the merge stops, it does not describe files
+    # which are not there.
+    entries = sorted(os.scandir(upper), key=lambda e: e.name.startswith("doit.db"))
+    for entry in entries:
+        target = os.path.join(lower, entry.name)
+        st = entry.stat(follow_symlinks=False)
+        replaced = opaque(entry.path)
+        if stat.S_ISCHR(st.st_mode) and st.st_rdev == 0:
+            # Deleted file or directory
+            remove(target)
+        elif (
+            not entry.is_dir(follow_symlinks=False)
+            or replaced
+            or not os.path.isdir(target)
+        ):
+            remove(target)
+            os.rename(entry.path, target)
+            if replaced:
+                os.removexattr(target, "user.overlay.opaque")
+        else:
+            merge(entry.path, target)
+
+
+def opaque(path):
+    try:
+        return os.getxattr(path, "user.overlay.opaque") == b"y"
+    except OSError:
+        return False
+
+
+def remove(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path)
+    elif os.path.lexists(path):
+        os.unlink(path)
+
+
+def discard():
+    """Remove the staging directory."""
+    # The kernel leaves a directory without permissions in the work directory
+    work = config.STAGING / "work" / "work"
+    if work.exists():
+        work.chmod(0o700)
+    if config.STAGING.exists():
+        shutil.rmtree(config.STAGING)
 
 
 def push(clean=False):

@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTENT = ROOT / "content"
 LAYOUT = ROOT / "layout"
 CACHE = ROOT / ".cache" / "ssg"
+STAGING = CACHE / "staging"
 
 BASE = "https://vincent.bernat.ch"
 LANGUAGES = {"en": "English", "fr": "français"}
