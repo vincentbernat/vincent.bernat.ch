@@ -6,16 +6,14 @@ GitLab.
 """
 
 import json
-import multiprocessing.util
 import re
-import subprocess
-import tempfile
 from typing import Any
 from xml.etree.ElementTree import Element
 
 import markdown
 
 from .. import deps
+from ..tools import ProcessHelper
 
 # Read one formula per line as a JSON string, write one answer per line as
 # JSON
@@ -33,41 +31,14 @@ lines.on("line", (line) => {
 });
 """
 
-renderer: Any = None
-errors: Any = None
-
-
-def stop() -> None:
-    renderer.stdin.close()
-    renderer.wait()
-    errors.close()
+renderer = ProcessHelper("node", "-e", RENDERER)
 
 
 def render(formula: str) -> str:
     """Turn one LaTeX formula into HTML."""
-    global renderer, errors
     deps.tool("node")
-    if renderer is None:
-        # Node makes its standard error non-blocking. When shared with us,
-        # our own writes would fail.
-        errors = tempfile.TemporaryFile()  # noqa: SIM115
-        renderer = subprocess.Popen(
-            ["node", "-e", RENDERER],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=errors,
-            encoding="utf-8",
-        )
-        # Stopped when the process exits, including doit workers
-        multiprocessing.util.Finalize(None, stop, exitpriority=0)
-    renderer.stdin.write(json.dumps(formula) + "\n")
-    renderer.stdin.flush()
-    line = renderer.stdout.readline()
-    if not line:
-        errors.seek(0)
-        message = errors.read().decode("utf-8", "replace")
-        raise RuntimeError(f"KaTeX renderer stopped: {message}")
-    answer = json.loads(line)
+    renderer.send(json.dumps(formula) + "\n")
+    answer = json.loads(renderer.readline())
     if "error" in answer:
         raise RuntimeError(f"cannot render {formula!r}: {answer['error']}")
     return answer["html"]

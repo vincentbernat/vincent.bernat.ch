@@ -1,15 +1,12 @@
 """Optimized images (production only)."""
 
-import functools
-import multiprocessing.util
 import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import IO
 
 from .. import deps
-from ..tools import run
+from ..tools import ProcessHelper, run
 
 
 def image(raw: Path, target: Path) -> list[Path | str]:
@@ -96,45 +93,23 @@ def image(raw: Path, target: Path) -> list[Path | str]:
     return outputs
 
 
-@functools.cache
-def exiftool() -> tuple[IO[str], IO[str]]:
-    """Start exiftool and return its input and output. Exiftool starts slowly.
-    It keeps running and reads one argument per line. Each command ends with
-    "-execute1"."""
-    process = subprocess.Popen(
-        ["exiftool", "-stay_open", "True", "-@", "-"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        encoding="utf-8",
-    )
-    assert process.stdin is not None and process.stdout is not None
-    # Stopped when the process exits, including doit workers
-    multiprocessing.util.Finalize(
-        None, stop, args=(process, process.stdin), exitpriority=0
-    )
-    return process.stdin, process.stdout
-
-
-def stop(process: subprocess.Popen[str], stdin: IO[str]) -> None:
-    stdin.write("-stay_open\nFalse\n")
-    stdin.close()
-    process.wait()
+# Exiftool starts slowly. It keeps running and reads one argument per line.
+# Each command ends with "-execute1".
+exiftool = ProcessHelper(
+    "exiftool", "-stay_open", "True", "-@", "-", quit="-stay_open\nFalse\n"
+)
 
 
 def tag_srgb(path: Path | str) -> None:
     """Tag as sRGB, as Firefox only manages colors of tagged images."""
     deps.tool("exiftool")
     profile = deps.getenv("SRGB_PROFILE")
-    stdin, stdout = exiftool()
     args = ["-q", "-overwrite_original", f"-icc_profile<={profile}", path]
     args += ["-echo3", "status=${status}", "-execute1"]
-    stdin.write("".join(f"{arg}\n" for arg in args))
-    stdin.flush()
+    exiftool.send("".join(f"{arg}\n" for arg in args))
     output: list[str] = []
-    while (line := stdout.readline()) != "{ready1}\n":
-        if not line:
-            raise RuntimeError(f"exiftool stopped:\n{''.join(output)}")
+    while (line := exiftool.readline()) != "{ready1}\n":
         output.append(line)
+    errors = exiftool.errors()
     if output[-1:] != ["status=0\n"]:
-        raise RuntimeError(f"exiftool failed on {path}:\n{''.join(output)}")
+        raise RuntimeError(f"exiftool failed on {path}:\n{errors}{''.join(output)}")
