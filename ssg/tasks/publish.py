@@ -7,7 +7,6 @@ import json
 import os
 import re
 
-from .. import deps
 from ..images import optimize
 from ..tools import human, run, write
 
@@ -55,10 +54,8 @@ def css(site, path, sidecar):
         prefix = mo.group(0)[: mo.start(1) - mo.start(0)]
         return prefix + new + mo.group(2) + ")"
 
-    with deps.Recorder() as recorder:
-        content = CSS_REFERENCE.sub(replace, content)
+    content = CSS_REFERENCE.sub(replace, content)
     file(site, path, sidecar, content.encode("utf-8"))
-    return {"deps": recorder.items}
 
 
 def exist(site, sidecar):

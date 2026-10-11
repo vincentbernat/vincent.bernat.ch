@@ -3,10 +3,15 @@
 import os
 import subprocess
 
+from . import deps
 
-def run(*args, input=None, env=None, text=True):
+
+def run(*args, input=None, env=None, text=True, record=True):
     """Run a command and return its output. When it fails, the error includes
-    what it printed."""
+    what it printed. The task using it depends on the tool, unless record is
+    false."""
+    if record:
+        deps.tool(str(args[0]))
     result = subprocess.run(
         [str(a) for a in args],
         input=input,

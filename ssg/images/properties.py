@@ -1,7 +1,6 @@
 """Size of images and if they are opaque or interactive."""
 
 import base64
-import functools
 import io
 import json
 import math
@@ -37,7 +36,7 @@ def get(site, image):
     return read(str(path), image.kind)
 
 
-@functools.cache
+@deps.cache
 def read(path, kind):
     match kind:
         case "png" | "jpg" | "webp" | "gif":

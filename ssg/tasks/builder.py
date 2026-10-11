@@ -4,7 +4,6 @@ import functools
 import json
 import os
 import re
-import shutil
 import sys
 
 from doit.tools import config_changed
@@ -77,16 +76,14 @@ GROUPS = {
 
 
 @functools.cache
-def environment(*tools, variables=(), **values):
+def environment(**values):
     """What a task uses from the development environment. With Nix, a new
-    version of the Python environment, the node modules or a tool has a new
-    path, and tasks using it run again."""
+    version of the Python environment or the node modules has a new path, and
+    tasks using it run again. Tools are recorded when they run."""
     result = {
         "python": sys.prefix,
         "node_modules": os.path.realpath(config.ROOT / "node_modules"),
     }
-    result |= {tool: os.path.realpath(shutil.which(tool) or tool) for tool in tools}
-    result |= {name: os.environ.get(name, "") for name in variables}
     return config_changed(result | values)
 
 
@@ -200,6 +197,18 @@ class Builder:
         return result
 
     def tasks(self):
+        """Actions record what they read, tools included. The task runs again
+        when one of them changes."""
+        for task in self.all_tasks():
+            if "actions" in task:
+                task["actions"] = [
+                    (deps.recorded, [function, *args])
+                    for function, args in task["actions"]
+                ]
+                task["uptodate"] = task.get("uptodate", []) + [self.uptodate]
+            yield task
+
+    def all_tasks(self):
         for basename, (doc, production) in GROUPS.items():
             if self.mode.production or not production:
                 yield {"basename": basename, "name": None, "doc": doc}
@@ -255,7 +264,7 @@ class Builder:
                 "actions": [(render.media, [self.site, resource])],
                 "file_dep": sorted(set(file_dep)),
                 "targets": [str(self.site.generated[path])],
-                "uptodate": [self.uptodate, environment("node", "esbuild", "ttx")],
+                "uptodate": [environment()],
             }
 
     def image_tasks(self):
@@ -304,13 +313,7 @@ class Builder:
                 "actions": [(covers.generate, [title, author, cover, target])],
                 "file_dep": file_dep,
                 "targets": [str(target)],
-                "uptodate": [
-                    environment(
-                        variables=("FONTCONFIG_FILE",),
-                        title=title,
-                        author=author,
-                    )
-                ],
+                "uptodate": [environment(title=title, author=author)],
             }
 
     def fragment_tasks(self):
@@ -332,7 +335,7 @@ class Builder:
                 ],
                 "targets": [str(target)],
                 "task_dep": [] if post else ["article"],
-                "uptodate": [self.uptodate, environment("node")],
+                "uptodate": [environment()],
             }
 
     def page_tasks(self):
@@ -355,7 +358,7 @@ class Builder:
                 "file_dep": file_dep,
                 "targets": [str(target)],
                 "task_dep": task_dep,
-                "uptodate": [self.uptodate, environment("node", "ffprobe")],
+                "uptodate": [environment()],
             }
 
     def pagefind_tasks(self):
@@ -365,7 +368,7 @@ class Builder:
             "doc": "extract the pagefind library",
             "actions": [(pagefind.extract, [target])],
             "targets": [str(target)],
-            "uptodate": [environment("pagefind")],
+            "uptodate": [environment()],
         }
         pages = [str(self.out / r.path) for r in self.pages if r.kind == "html"]
         yield {
@@ -375,7 +378,7 @@ class Builder:
             "file_dep": pages,
             "task_dep": ["prune"],
             "targets": [str(self.mode.cache / "pagefind.json")],
-            "uptodate": [(pagefind.exist, [self.site]), environment("pagefind")],
+            "uptodate": [(pagefind.exist, [self.site]), environment()],
         }
 
     def font_tasks(self):
@@ -403,23 +406,11 @@ class Builder:
                     str(SSG / "fonts.py"),
                 ],
                 "targets": [str(target)],
-                "uptodate": [environment("pyftsubset")],
+                "uptodate": [environment()],
             }
 
     def publish_tasks(self):
         """Media files get a name with a hash of their content."""
-        tools = environment(
-            "svgo",
-            "jpgicc",
-            "avifenc",
-            "cjpegli",
-            "pngquant",
-            "cwebp",
-            "gif2webp",
-            "gifsicle",
-            "exiftool",
-            variables=("SRGB_PROFILE",),
-        )
         for path in self.published:
             sidecar = self.site.sidecar(path)
             file_dep = [str(self.site.raw(path))]
@@ -429,7 +420,7 @@ class Builder:
                 basename = "optimize"
                 action = publish.image
                 file_dep += OPTIMIZE_DEPS
-                uptodate.append(tools)
+                uptodate.append(environment())
             elif path.startswith("fonts/"):
                 basename = "font"
                 action = publish.file
@@ -437,7 +428,6 @@ class Builder:
                 basename = "asset"
                 action = publish.css
                 task_dep = ["image", "font"]
-                uptodate.append(self.uptodate)
             else:
                 basename = "asset"
                 action = publish.file
@@ -467,7 +457,7 @@ class Builder:
             "actions": [(publish.bundle_sizes, [self.site, bundles, target])],
             "file_dep": pages + [str(self.site.sidecar(b)) for b in bundles],
             "targets": [str(target)],
-            "uptodate": [environment("gzip", "brotli")],
+            "uptodate": [environment()],
         }
 
     def prune_task(self):

@@ -10,6 +10,7 @@ still gives the same digest.
 import functools
 import hashlib
 import os
+import shutil
 from datetime import datetime
 
 recorder = None
@@ -22,15 +23,47 @@ class Recorder:
 
     def __init__(self):
         self.items = {}
+        self.previous = None
 
     def __enter__(self):
         global recorder
+        self.previous = recorder
         recorder = self
         return self
 
     def __exit__(self, *args):
         global recorder
-        recorder = None
+        recorder = self.previous
+
+
+def recorded(function, *args):
+    """Run a task action. Add what it read to its values, for uptodate()."""
+    with Recorder() as r:
+        result = function(*args)
+    if result is None or result is True:
+        return {"deps": r.items}
+    if isinstance(result, dict):
+        return result | {"deps": r.items}
+    return result
+
+
+def cache(function):
+    """Like functools.cache, but each call records what the first call
+    recorded."""
+
+    @functools.cache
+    def first(*args):
+        with Recorder() as r:
+            return function(*args), r.items
+
+    @functools.wraps(function)
+    def call(*args):
+        result, items = first(*args)
+        if recorder is not None:
+            recorder.items.update(items)
+        return result
+
+    return call
 
 
 def record(key, digest):
@@ -66,6 +99,26 @@ def record_code():
     """Record the build code used by a task. If it changes while the task
     runs, doit records the new code as already used."""
     record("k:", code_digest())
+
+
+@functools.cache
+def tool_path(name):
+    """Path of a tool. With Nix, a new version has a new path."""
+    return os.path.realpath(shutil.which(name) or name)
+
+
+def tool(name):
+    """Record a tool used by a task."""
+    record(f"t:{name}", tool_path(name))
+
+
+def getenv(name, default=None):
+    """Record an environment variable used by a task and return its value."""
+    value = os.environ.get(name, default)
+    if value is None:
+        raise KeyError(f"missing environment variable {name}")
+    record(f"e:{name}", value)
+    return value
 
 
 def record_file(path):
@@ -109,6 +162,10 @@ def state(site, key):
             return ",".join(r.name for r in site._tracks(what))
         case "k":
             return code_digest()
+        case "t":
+            return tool_path(what)
+        case "e":
+            return os.environ.get(what, "")
         case "y":
             return str(datetime.now().year)
     return None

@@ -1,12 +1,11 @@
 """Stylesheets, processed with PostCSS."""
 
-import functools
 import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from .. import config
+from .. import config, deps
 from ..tools import run
 
 SCRIPT = Path(__file__).parent / "css.js"
@@ -34,7 +33,7 @@ def process(site, text):
     return run("node", SCRIPT, "process", input=text, env=env)
 
 
-@functools.cache
+@deps.cache
 def value(expression):
     """Resolve a calc() expression against root.css variables to a rem
     value."""

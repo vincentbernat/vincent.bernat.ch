@@ -5,6 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from .. import deps
 from ..tools import run
 
 
@@ -59,6 +60,7 @@ def image(raw, target):
             tag_srgb(target)
         case ".png":
             # Exit code 98 when the result would be larger
+            deps.tool("pngquant")
             result = subprocess.run(
                 ["pngquant", "--skip-if-larger", "--strip", "--quiet"]
                 + ["-o", target, raw],
@@ -97,6 +99,6 @@ def tag_srgb(path):
         "exiftool",
         "-q",
         "-overwrite_original",
-        f"-icc_profile<={os.environ['SRGB_PROFILE']}",
+        f"-icc_profile<={deps.getenv('SRGB_PROFILE')}",
         path,
     )

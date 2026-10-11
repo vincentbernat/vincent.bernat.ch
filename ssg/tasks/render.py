@@ -9,34 +9,32 @@ from ..tools import write
 
 
 def media(site, resource):
-    with deps.Recorder() as recorder:
-        deps.record_resource(resource)
-        deps.record_code()
-        for source in [resource, *resource.combined]:
-            deps.record_content(source)
-        if resource.python:
-            content = python(site, resource)
-        else:
-            content = text(site, resource)
-            match resource.kind:
-                case "css":
-                    content = css.process(site, content)
-                case "js":
-                    content = js(site, content)
-                case "svg":
-                    content = svg.process(content)
+    deps.record_resource(resource)
+    deps.record_code()
+    for source in [resource, *resource.combined]:
+        deps.record_content(source)
+    if resource.python:
+        deps.getenv("FONTCONFIG_FILE", "")
+        content = python(site, resource)
+    else:
+        content = text(site, resource)
+        match resource.kind:
+            case "css":
+                content = css.process(site, content)
+            case "js":
+                content = js(site, content)
+            case "svg":
+                content = svg.process(content)
     write(site.generated[resource.media_path], content)
-    return {"deps": recorder.items}
 
 
 def fragment(site, resource, target):
     markdown.collected = {"monospace": set(), "regular": set(), "references": set()}
     try:
-        with deps.Recorder() as recorder:
-            deps.record_resource(resource)
-            deps.record_code()
-            deps.record_content(resource)
-            output = templates.render_article(site, resource)
+        deps.record_resource(resource)
+        deps.record_code()
+        deps.record_content(resource)
+        output = templates.render_article(site, resource)
         collected = markdown.collected
     finally:
         markdown.collected = None
@@ -56,7 +54,6 @@ def fragment(site, resource, target):
             ensure_ascii=False,
         ),
     )
-    return {"deps": recorder.items}
 
 
 def page(site, resource, fragment, target):
@@ -64,14 +61,12 @@ def page(site, resource, fragment, target):
     if fragment:
         with open(fragment, encoding="utf-8") as f:
             context["formatted_article"] = json.load(f)["html"]
-    with deps.Recorder() as recorder:
-        deps.record_resource(resource)
-        deps.record_code()
-        deps.record_content(resource)
-        output = templates.render(site, resource, **context)
-        if resource.kind == "html":
-            output = html.page(site, resource, output)
-        elif resource.name == "atom.xml":
-            output = html.feed(site, resource, output)
+    deps.record_resource(resource)
+    deps.record_code()
+    deps.record_content(resource)
+    output = templates.render(site, resource, **context)
+    if resource.kind == "html":
+        output = html.page(site, resource, output)
+    elif resource.name == "atom.xml":
+        output = html.feed(site, resource, output)
     write(target, output)
-    return {"deps": recorder.items}

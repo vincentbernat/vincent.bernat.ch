@@ -12,6 +12,8 @@ import tempfile
 
 import markdown
 
+from .. import deps
+
 # Read one formula per line as a JSON string, write one answer per line as
 # JSON
 RENDERER = """
@@ -41,6 +43,7 @@ def stop():
 def render(formula):
     """Turn one LaTeX formula into HTML."""
     global renderer, errors
+    deps.tool("node")
     if renderer is None:
         # Node makes its standard error non-blocking. When shared with us,
         # our own writes would fail.

@@ -12,7 +12,7 @@ import unicodedata
 import skia
 from PIL import Image, ImageChops
 
-from .. import config
+from .. import config, deps
 from ..tools import run
 
 
@@ -136,6 +136,7 @@ class Cover:
                 "--screenshot",
                 png,
                 pathlib.Path(html).as_uri(),
+                record=False,
             )
             img = Image.open(png).convert("RGB")
             magenta = Image.new("RGB", img.size, (255, 0, 255))
@@ -190,6 +191,8 @@ class Cover:
 
     def generate(self, title, author, cover, target):
         """Generate a 1200x630 OG cover image."""
+        # Fonts are found with Fontconfig
+        deps.getenv("FONTCONFIG_FILE", "")
         W, H = self.WIDTH, self.HEIGHT
         title = "".join(
             ch
