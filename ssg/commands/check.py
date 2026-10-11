@@ -6,7 +6,7 @@ import re
 import sys
 
 from .. import config
-from . import Exit, run
+from . import Exit, command, run
 
 FRONTMATTER_KEYS = (
     "layout",  # templating
@@ -21,6 +21,7 @@ FRONTMATTER_KEYS = (
 )  # fmt: skip
 
 
+@command()
 def check(fix: bool = False) -> None:
     """Check content for mistakes."""
     # Check forbidden word or common typos
@@ -63,6 +64,7 @@ def check(fix: bool = False) -> None:
         raise Exit(f"unordered frontmatter: {', '.join(unordered)}")
 
 
+@command()
 def lint() -> None:
     """Check code with ruff and mypy."""
     failed = [

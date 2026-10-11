@@ -1,11 +1,18 @@
 """Commands not related to building the site."""
 
 import contextlib
+import importlib
+import inspect
+import pkgutil
+import re
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
+
+from doit.exceptions import TaskFailed
 
 from .. import config
 
@@ -23,6 +30,69 @@ FINAL = config.MODES["production"].output
 
 class Exit(Exception):
     pass
+
+
+# doit task creators for the commands, by task name
+TASKS: dict[str, Callable[[], dict[str, Any]]] = {}
+
+
+def command[F: Callable[..., None]](name: str | None = None) -> Callable[[F], F]:
+    """Make a function a doit task. The first sentence of its docstring
+    describes it. Its keyword arguments are options, flags when their default
+    is a bool. An argument without default gets the other words of the command
+    line."""
+
+    def register(function: F) -> F:
+        def creator() -> dict[str, Any]:
+            return task(function)
+
+        TASKS[name or function.__name__] = creator
+        return function
+
+    return register
+
+
+def tasks() -> dict[str, Callable[[], dict[str, Any]]]:
+    """doit task creators of the commands defined in this package."""
+    for module in pkgutil.iter_modules(__path__):
+        importlib.import_module(f"{__name__}.{module.name}")
+    return TASKS
+
+
+def task(function: Callable[..., None]) -> dict[str, Any]:
+    """doit task running a command, with options from its signature."""
+    summary = re.split(r"\.(?:\s|$)", inspect.getdoc(function) or "", maxsplit=1)[0]
+    summary = " ".join(summary.split())
+    params = []
+    pos_arg = None
+    for parameter in inspect.signature(function).parameters.values():
+        if parameter.default is parameter.empty:
+            pos_arg = parameter.name
+            continue
+        option = {
+            "name": parameter.name,
+            "long": parameter.name,
+            "default": parameter.default,
+        }
+        if isinstance(parameter.default, bool):
+            option["type"] = bool
+        params.append(option)
+
+    def action(**kwargs: Any) -> Any:
+        try:
+            function(**kwargs)
+        except Exit as e:
+            return TaskFailed(str(e))
+        return None
+
+    return {
+        "doc": summary[:1].lower() + summary[1:],
+        "actions": [action],
+        "params": params,
+        "pos_arg": pos_arg,
+        "uptodate": [False],
+        "verbosity": 2,
+    }
 
 
 def run(

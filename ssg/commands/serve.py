@@ -14,7 +14,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from . import config
+from .. import config
+from . import command
 
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
 COLORS = {"build": "\033[36m", "nginx": "\033[35m"}
@@ -116,7 +117,9 @@ def status(message: str, color: int = 32) -> None:
     print(f"\033[34;1m▶ \033[{color};1m{message}\033[0m", flush=True)
 
 
+@command()
 def serve() -> None:
+    """Serve the development build on http://localhost:8080."""
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     output = config.MODES["development"].output
     watcher = Watcher(WATCHED)

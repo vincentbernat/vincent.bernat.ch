@@ -9,7 +9,7 @@ import shlex
 import sqlite3
 
 from .. import config
-from . import run
+from . import command, run
 
 OUTPUT = config.ROOT / ".linkchecker-out.csv"
 DATABASE = config.ROOT / ".linkchecker.db"
@@ -99,6 +99,7 @@ def replace(url: str, replacement: str) -> None:
                 fp.write(updated)
 
 
+@command("links_check")
 def check(local: bool = False) -> None:
     """Check links."""
     url = "http://localhost:8080/" if local else "https://vincent.bernat.ch/"
@@ -112,6 +113,7 @@ def check(local: bool = False) -> None:
         fix()
 
 
+@command("links_fix")
 def fix() -> None:
     """Try to fix links."""
     rows, _ = results()

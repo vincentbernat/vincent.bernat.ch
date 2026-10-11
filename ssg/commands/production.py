@@ -7,10 +7,11 @@ import sys
 from pathlib import Path
 
 from .. import config
-from . import FINAL, HOSTS, Exit, confirm, run, step
+from . import FINAL, HOSTS, Exit, command, confirm, run, step
 from .check import check
 
 
+@command()
 def publish() -> None:
     """Check content, build for production, review changes and commit
     them."""
@@ -111,6 +112,7 @@ def commit_times() -> dict[str, int]:
     return times
 
 
+@command()
 def push(clean: bool = False) -> None:
     """Push built site to production."""
     with step("push to GitHub"):
@@ -161,6 +163,7 @@ def push(clean: bool = False) -> None:
                 )
 
 
+@command()
 def prune_final(before: str = "1 year ago") -> None:
     """Prune old commits from final render."""
     out = run(
@@ -173,6 +176,7 @@ def prune_final(before: str = "1 year ago") -> None:
     run("git gc --prune=now", cwd=FINAL)
 
 
+@command()
 def fonts_update() -> None:
     """Build fonts with Nix."""
     # We can compare the metrics using http://webfont-test.com/

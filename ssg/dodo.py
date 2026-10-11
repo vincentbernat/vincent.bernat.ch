@@ -27,14 +27,12 @@ import atexit
 import cProfile
 import multiprocessing
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 from doit import get_var
-from doit.exceptions import TaskFailed
 
 from ssg import commands, config, lexers
-from ssg.commands import check, links, production, videos
 
 MODE = config.MODES["production" if get_var("mode") == "prod" else "development"]
 PROFILE = get_var("profile") == "true"
@@ -85,92 +83,6 @@ def sandbox() -> None:
     os.execvp(args[0], args)
 
 
-def command(function: Callable[..., object], **task: Any) -> dict[str, Any]:
-    """Task running a command."""
-
-    def action(**kwargs: Any) -> Any:
-        try:
-            function(**kwargs)
-        except commands.Exit as e:
-            return TaskFailed(str(e))
-
-    return {"actions": [action], "uptodate": [False], "verbosity": 2} | task
-
-
-def task_serve() -> dict[str, Any]:
-    """serve development build on http://localhost:8080"""
-    from ssg import serve
-
-    return command(serve.serve)
-
-
-def task_check() -> dict[str, Any]:
-    """check content for mistakes"""
-    return command(
-        check.check,
-        params=[{"name": "fix", "long": "fix", "type": bool, "default": False}],
-    )
-
-
-def task_lint() -> dict[str, Any]:
-    """check code with ruff and mypy"""
-    return command(check.lint)
-
-
-def task_publish() -> dict[str, Any]:
-    """check, build for production, review and commit"""
-    return command(production.publish)
-
-
-def task_push() -> dict[str, Any]:
-    """push production build"""
-    return command(
-        production.push,
-        params=[{"name": "clean", "long": "clean", "type": bool, "default": False}],
-    )
-
-
-def task_prune_final() -> dict[str, Any]:
-    """prune old commits from production build"""
-    return command(
-        production.prune_final,
-        params=[{"name": "before", "long": "before", "default": "1 year ago"}],
-    )
-
-
-def task_fonts_update() -> dict[str, Any]:
-    """build fonts with Nix"""
-    return command(production.fonts_update)
-
-
-def task_video_encode() -> dict[str, Any]:
-    """encode videos to HLS (all if none given)"""
-    return command(videos.encode, pos_arg="videos")
-
-
-def task_video_analyze() -> dict[str, Any]:
-    """report size breakdown of encoded videos"""
-    return command(videos.analyze, pos_arg="videos")
-
-
-def task_video_upload() -> dict[str, Any]:
-    """upload transcoded videos (all if none given)"""
-    return command(videos.upload, pos_arg="videos")
-
-
-def task_links_check() -> dict[str, Any]:
-    """check links"""
-    return command(
-        links.check,
-        params=[{"name": "local", "long": "local", "type": bool, "default": False}],
-    )
-
-
-def task_links_fix() -> dict[str, Any]:
-    """try to fix links"""
-    return command(links.fix)
-
-
 def task_site() -> Iterator[dict[str, Any]]:
     """build tasks (doit list --all)"""
     if interactive:
@@ -187,11 +99,9 @@ def task_site() -> Iterator[dict[str, Any]]:
     yield from Builder(Site(MODE)).tasks()
 
 
-COMMANDS = {
-    name.removeprefix("task_")
-    for name in list(globals())
-    if name.startswith("task_") and name != "task_site"
-}
+TASKS = commands.tasks()
+globals().update({f"task_{name}": creator for name, creator in TASKS.items()})
+COMMANDS = set(TASKS)
 # The first word which is neither an option nor a variable
 words = [arg for arg in sys.argv[1:] if not arg.startswith("-") and "=" not in arg]
 interactive = bool(words) and words[0] in COMMANDS
