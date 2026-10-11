@@ -68,9 +68,8 @@ class GlyphsExtension(markdown.Extension):
             if isinstance(extension, codehilite.CodeHiliteExtension):
                 extension.setConfig("pygments_formatter", MonospaceGlyphsFormatter)
         if "hilite" in md.treeprocessors:
-            md.treeprocessors["hilite"].config[
-                "pygments_formatter"
-            ] = MonospaceGlyphsFormatter
+            hilite = md.treeprocessors["hilite"]
+            hilite.config["pygments_formatter"] = MonospaceGlyphsFormatter
 
         # Regular glyphs (as late as possible)
         md.treeprocessors.register(
