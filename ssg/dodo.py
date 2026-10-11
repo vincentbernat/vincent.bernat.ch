@@ -48,6 +48,7 @@ def sandbox():
     args = [
         "bwrap",
         "--ro-bind", "/usr", "/usr",
+        "--tmpfs", "/usr/share/fontconfig",
         "--ro-bind", "/nix", "/nix",
         "--symlink", "usr/lib64", "/lib64",
         "--symlink", "usr/lib", "/lib",
