@@ -21,6 +21,10 @@ dependencies = [
     "py-spy>=0.4.1",
     "skia-python>=144.0.post2",
     "matplotlib>=3.9.4",
+    "mypy",
+    "types-Markdown",
+    "types-Pygments",
+    "types-PyYAML",
     "pypdf>=6.17.0",
     "smartypants==2.*",
     "typogrify==2.*",
@@ -45,3 +49,22 @@ bypass-selection = true
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.mypy]
+files = ["ssg"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# Libraries without type information
+[[tool.mypy.overrides]]
+module = [
+    "doit.*",
+    "lxml.*",
+    "pyquery.*",
+    "skia",
+    "smartypants",
+    "typogrify.*",
+]
+ignore_missing_imports = true

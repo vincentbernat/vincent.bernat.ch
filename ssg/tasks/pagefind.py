@@ -1,16 +1,23 @@
 """Search index."""
 
+from __future__ import annotations
+
 import json
 import os
 import re
 import shutil
 import tempfile
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..tools import run, write
 from .files import copy
 
+if TYPE_CHECKING:
+    from ..model.site import Site
 
-def extract(target):
+
+def extract(target: Path) -> None:
     """Extract the pagefind library by indexing an almost empty site."""
     with tempfile.TemporaryDirectory() as tmp:
         site = os.path.join(tmp, "site")
@@ -28,7 +35,7 @@ UNWANTED = re.compile(
 )
 
 
-def index(site):
+def index(site: Site) -> None:
     """Index the site for searching."""
     out = site.mode.output
     destination = out / "media" / "pagefind"
@@ -53,7 +60,7 @@ def index(site):
     write(site.mode.cache / "pagefind.json", json.dumps(files))
 
 
-def exist(site):
+def exist(site: Site) -> bool:
     """Check the files of the search index exist."""
     try:
         with open(site.mode.cache / "pagefind.json") as f:

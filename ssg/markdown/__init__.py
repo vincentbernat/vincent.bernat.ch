@@ -1,15 +1,22 @@
 """Markdown conversion."""
 
+from __future__ import annotations
+
 import sys
 import unicodedata
+from typing import TYPE_CHECKING
 
 from markdown import Markdown
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.extra import ExtraExtension
 from markdown.extensions.toc import TocExtension
 
+if TYPE_CHECKING:
+    from ..model.meta import Meta
+    from ..model.site import Site
+
 # Glyphs and unknown references found during conversions, when not None
-collected = None
+collected: dict[str, set[str]] | None = None
 
 # Glyphs always kept in fonts
 BASE_GLYPHS = {
@@ -29,7 +36,7 @@ for c in range(sys.maxunicode + 1):
             chars.add(chr(c))
 
 
-def collect(kind, values):
+def collect(kind: str, values: str) -> None:
     if collected is None:
         return
     if kind == "references":
@@ -38,7 +45,9 @@ def collect(kind, values):
         collected[kind].update(values)
 
 
-def convert(text, site, l10n=None, sources=None):
+def convert(
+    text: str, site: Site, l10n: Meta | None = None, sources: str | None = None
+) -> str:
     return Markdown(
         extensions=[
             CodeHiliteExtension(guess_lang=False),

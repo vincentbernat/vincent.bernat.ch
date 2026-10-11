@@ -1,9 +1,17 @@
 """Transform rendered HTML pages and feeds."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import lxml.etree
 from pyquery import PyQuery as pq
 
 from . import assets, figures, hashing, sidenotes, toc
+
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+    from ..model.site import Site
 
 ATOM_NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -11,7 +19,7 @@ ATOM_NS = {
 }
 
 
-def page(site, resource, text):
+def page(site: Site, resource: Resource, text: str) -> str:
     """Transform an HTML page."""
     d = pq(text, parser="html")
     figures.fix(site, resource, d)
@@ -24,7 +32,7 @@ def page(site, resource, text):
     return "<!DOCTYPE html>\n" + d.outer_html()
 
 
-def feed(site, resource, text):
+def feed(site: Site, resource: Resource, text: str) -> str:
     """Transform an Atom feed."""
     root = lxml.etree.fromstring(text.encode("utf-8"))
     for c in root.findall("atom:entry/atom:content", ATOM_NS):

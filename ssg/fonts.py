@@ -1,9 +1,17 @@
 """Font subsetting (production only)."""
 
+from __future__ import annotations
+
 import json
+from collections.abc import Iterable
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import markdown
 from .tools import run, write
+
+if TYPE_CHECKING:
+    from .model.site import Site
 
 KINDS = ("monospace", "regular")
 
@@ -35,11 +43,11 @@ SUBSET = {
 }
 
 
-def glyphs_path(site, kind):
+def glyphs_path(site: Site, kind: str) -> Path:
     return site.mode.cache / f"glyphs-{kind}.txt"
 
 
-def glyphs(site, fragments):
+def glyphs(site: Site, fragments: Iterable[Path]) -> None:
     """Collect glyphs used by all articles."""
     result = {kind: set(markdown.BASE_GLYPHS[kind]) for kind in KINDS}
     for fragment in fragments:
@@ -52,7 +60,7 @@ def glyphs(site, fragments):
         write(glyphs_path(site, kind), "".join(wanted))
 
 
-def subset(site, name, source, target):
+def subset(site: Site, name: str, source: Path, target: Path) -> None:
     kind, options = SUBSET[name]
     target.parent.mkdir(parents=True, exist_ok=True)
     run(

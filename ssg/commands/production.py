@@ -4,13 +4,14 @@ import os
 import shutil
 import stat
 import sys
+from pathlib import Path
 
 from .. import config
 from . import FINAL, HOSTS, Exit, confirm, run, step
 from .check import check
 
 
-def publish():
+def publish() -> None:
     """Check content, build for production, review changes and commit
     them."""
     if run("git status --porcelain", cwd=FINAL, capture=True).stdout:
@@ -45,7 +46,7 @@ def publish():
         raise Exit("Build rollbacked")
 
 
-def merge(upper, lower):
+def merge(upper: str | Path, lower: str | Path) -> None:
     """Apply the changes recorded in the upper directory of an overlay."""
     # The database goes last. If the merge stops, it does not describe files
     # which are not there.
@@ -70,21 +71,21 @@ def merge(upper, lower):
             merge(entry.path, target)
 
 
-def opaque(path):
+def opaque(path: str) -> bool:
     try:
         return os.getxattr(path, "user.overlay.opaque") == b"y"
     except OSError:
         return False
 
 
-def remove(path):
+def remove(path: str) -> None:
     if os.path.isdir(path) and not os.path.islink(path):
         shutil.rmtree(path)
     elif os.path.lexists(path):
         os.unlink(path)
 
 
-def discard():
+def discard() -> None:
     """Remove the staging directory."""
     # The kernel leaves a directory without permissions in the work directory
     work = config.STAGING / "work" / "work"
@@ -94,14 +95,14 @@ def discard():
         shutil.rmtree(config.STAGING)
 
 
-def commit_times():
+def commit_times() -> dict[str, int]:
     """Time of the last commit of each file in the production build."""
     log = run(
         "git -c core.quotePath=false log --no-renames --name-only --format=%x00%ct",
         cwd=FINAL,
         capture=True,
     ).stdout
-    times = {}
+    times: dict[str, int] = {}
     for commit in log.split("\0")[1:]:
         ts, _, names = commit.partition("\n")
         for name in names.split("\n"):
@@ -110,15 +111,15 @@ def commit_times():
     return times
 
 
-def push(clean=False):
+def push(clean: bool = False) -> None:
     """Push built site to production."""
     with step("push to GitHub"):
         run("git push github", cwd=config.ROOT)
 
     # Restore timestamps (this relies on us not truncating history too often)
     with step("restore timestamps"):
-        for path, ts in commit_times().items():
-            path = FINAL / path
+        for name, ts in commit_times().items():
+            path = FINAL / name
             if os.path.lexists(path):
                 os.utime(path, (ts, ts), follow_symlinks=False)
 
@@ -160,7 +161,7 @@ def push(clean=False):
                 )
 
 
-def prune_final(before="1 year ago"):
+def prune_final(before: str = "1 year ago") -> None:
     """Prune old commits from final render."""
     out = run(
         f"git log --before='{before}' --pretty=format:%H | head -1",
@@ -172,7 +173,7 @@ def prune_final(before="1 year ago"):
     run("git gc --prune=now", cwd=FINAL)
 
 
-def fonts_update():
+def fonts_update() -> None:
     """Build fonts with Nix."""
     # We can compare the metrics using http://webfont-test.com/
     fonts = config.CONTENT / "media" / "fonts"

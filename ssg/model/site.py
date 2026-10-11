@@ -11,6 +11,8 @@ import subprocess
 import urllib.parse
 from datetime import UTC, datetime
 from operator import attrgetter
+from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -22,47 +24,47 @@ from .resource import PYTHON, Resource
 NODEMETA = "meta.yaml"
 
 
-def read_text(path):
+def read_text(path: str | os.PathLike[str]) -> str:
     with open(path, encoding="utf-8", newline="") as f:
         return f.read()
 
 
-def encode_url(base, path):
+def encode_url(base: str, path: str) -> str:
     path = urllib.parse.quote(path.strip(), "/@")
     return base.strip().rstrip("/") + "/" + path.lstrip("/")
 
 
 class Site:
-    def __init__(self, mode):
+    def __init__(self, mode: config.Mode) -> None:
         self.mode = mode
-        self.nodes = {}
-        self.resources = {}
+        self.nodes: dict[str, Node] = {}
+        self.resources: dict[str, Resource] = {}
         # Generated media files: path relative to media to file
-        self.generated = {}
+        self.generated: dict[str, Path] = {}
         self.load()
 
     # Templates use these names
     @property
-    def content(self):
+    def content(self) -> Node:
         return self.nodes[""]
 
-    def resource(self, path):
+    def resource(self, path: str) -> Resource | None:
         resource = self.resources.get(path)
         deps.record(f"r:{path}", resource.digest if resource else "")
         return resource
 
-    def node(self, path):
+    def node(self, path: str) -> Node | None:
         return self.nodes.get(path)
 
-    def sorted(self, name):
+    def sorted(self, name: str) -> list[Resource]:
         return self.content.sorted(name)
 
-    def tracks(self, video):
+    def tracks(self, video: str) -> list[Resource]:
         """Chapters and subtitles of a video."""
         deps.record(f"v:{video}", ",".join(r.name for r in self._tracks(video)))
         return self._tracks(video)
 
-    def _tracks(self, video):
+    def _tracks(self, video: str) -> list[Resource]:
         return [
             r
             for r in self.nodes["media/videos"]._sorted("name")
@@ -70,10 +72,10 @@ class Site:
         ]
 
     @functools.cached_property
-    def tags(self):
+    def tags(self) -> dict[str, Meta]:
         return {name: Meta(value) for name, value in config.TAGS.items()}
 
-    def content_url(self, path):
+    def content_url(self, path: str) -> str:
         url = encode_url("/", path)
         parent, name = posixpath.split(url.rstrip("/"))
         if name == "index.html":
@@ -82,27 +84,27 @@ class Site:
             url = posixpath.join(parent, name[:-5])
         return url or "/"
 
-    def media_url(self, path):
+    def media_url(self, path: str) -> str:
         for prefix, url in self.mode.cdn:
             if path.startswith(prefix):
                 return encode_url(url, path[len(prefix) :])
         return encode_url(self.mode.media_url, path)
 
-    def output(self, path):
+    def output(self, path: str) -> Path:
         """Path in the output directory."""
         return self.mode.output / path
 
-    def raw(self, path):
+    def raw(self, path: str) -> Path:
         """File for a media path, before publishing it."""
         if path in self.generated:
             return self.generated[path]
         return config.CONTENT / "media" / path
 
-    def sidecar(self, path):
+    def sidecar(self, path: str) -> Path:
         """Information about a published media file."""
         return self.mode.cache / "published" / (path + ".json")
 
-    def published(self, path):
+    def published(self, path: str) -> dict[str, Any] | None:
         """Hashed name and integrity of a published media file."""
         sidecar = self.sidecar(path)
         deps.record_file(sidecar)
@@ -112,7 +114,7 @@ class Site:
         except FileNotFoundError:
             return None
 
-    def hashed(self, path):
+    def hashed(self, path: str) -> str:
         """Name of a media file with a hash of its content."""
         raw = self.raw(path)
         deps.record_file(raw)
@@ -123,7 +125,7 @@ class Site:
         root, ext = os.path.splitext(path)
         return f"{root}.{md5[:14]}{ext}"
 
-    def load(self):
+    def load(self) -> None:
         root = Node(self, "", None)
         self.nodes[""] = root
         for directory, dirnames, filenames in os.walk(config.CONTENT, followlinks=True):
@@ -150,7 +152,7 @@ class Site:
         self.load_sorters()
         self.load_tags()
 
-    def load_meta(self):
+    def load_meta(self) -> None:
         for node in self.content.walk():
             parent = node.parent.meta if node.parent else Meta(config.META)
             nodemeta = node.source / NODEMETA
@@ -162,14 +164,14 @@ class Site:
             for resource in node.resources:
                 data = None
                 if resource.text:
-                    text = resource.content
+                    text = resource.source_text
                     resource.python = text.startswith(PYTHON)
                     match = FRONTMATTER.match(text)
                     if match:
                         data = yaml.safe_load(match.group(1))
                 resource.meta = Meta(data, node.meta)
 
-    def load_dates(self):
+    def load_dates(self) -> None:
         dates = git_dates()
         for resource in self.resources.values():
             created = resource.meta.get("created")
@@ -188,7 +190,7 @@ class Site:
             if modified == "git":
                 resource.meta.modified = git_modified or mtime
 
-    def load_combine(self):
+    def load_combine(self) -> None:
         """A stylesheet or a script named foo.css is followed by the files
         named foo.*.css of the same directory, in name order."""
         for resource in self.resources.values():
@@ -206,8 +208,8 @@ class Site:
             for r in resource.combined:
                 r.processable = False
 
-    def load_translations(self):
-        uuids = {}
+    def load_translations(self) -> None:
+        uuids: dict[str, list[Resource]] = {}
         for resource in self.content.walk_resources():
             if "uuid" in resource.meta and "language" in resource.meta:
                 uuids.setdefault(resource.meta.uuid, []).append(resource)
@@ -217,7 +219,7 @@ class Site:
                     r for r in resources if r.meta.language != resource.meta.language
                 ]
 
-    def load_sorters(self):
+    def load_sorters(self) -> None:
         for name in SORTERS:
             resources = self.content._sorted(name)
             for prev, next in itertools.pairwise(resources):
@@ -227,16 +229,16 @@ class Site:
                 resources[0].neighbors[f"prev_by_{name}"] = resources[-1]
                 resources[-1].neighbors[f"next_by_{name}"] = resources[0]
 
-    def load_tags(self):
+    def load_tags(self) -> None:
         for resource in self.content._sorted("time"):
             resource.tags.extend(resource.meta.get("tags") or [])
 
 
-def ignored(name):
+def ignored(name: str) -> bool:
     return any(fnmatch.fnmatch(name, pattern) for pattern in config.IGNORE)
 
 
-def git_dates():
+def git_dates() -> dict[str, tuple[datetime, datetime]]:
     """Map paths relative to content to their creation and modification
     dates from git."""
     output = subprocess.check_output(
@@ -275,13 +277,13 @@ def git_dates():
         else:
             dates[path][1] = current
 
-    def utc(ts):
+    def utc(ts: int) -> datetime:
         return datetime.fromtimestamp(ts, UTC).replace(tzinfo=None)
 
     return {path: (utc(c), utc(m)) for path, (c, m) in dates.items()}
 
 
 @functools.cache
-def file_md5(path, digest):
+def file_md5(path: str, digest: str) -> str:
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "md5").hexdigest()

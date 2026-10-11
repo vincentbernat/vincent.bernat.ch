@@ -1,16 +1,18 @@
 """Optimized images (production only)."""
 
+import functools
 import multiprocessing.util
 import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import IO
 
 from .. import deps
 from ..tools import run
 
 
-def image(raw, target):
+def image(raw: Path, target: Path) -> list[Path | str]:
     """Write an optimized version of raw image to target. Also write AVIF or
     WebP versions when they are small enough. Return the written files."""
     os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -18,7 +20,7 @@ def image(raw, target):
         if os.path.lexists(path):
             os.unlink(path)
     kind = os.path.splitext(target)[1]
-    outputs = [target]
+    outputs: list[Path | str] = [target]
     alternative = None
     match kind:
         case ".svg":
@@ -94,38 +96,43 @@ def image(raw, target):
     return outputs
 
 
-exiftool = None
+@functools.cache
+def exiftool() -> tuple[IO[str], IO[str]]:
+    """Start exiftool and return its input and output. Exiftool starts slowly.
+    It keeps running and reads one argument per line. Each command ends with
+    "-execute1"."""
+    process = subprocess.Popen(
+        ["exiftool", "-stay_open", "True", "-@", "-"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        encoding="utf-8",
+    )
+    assert process.stdin is not None and process.stdout is not None
+    # Stopped when the process exits, including doit workers
+    multiprocessing.util.Finalize(
+        None, stop, args=(process, process.stdin), exitpriority=0
+    )
+    return process.stdin, process.stdout
 
 
-def stop():
-    exiftool.stdin.write("-stay_open\nFalse\n")
-    exiftool.stdin.close()
-    exiftool.wait()
+def stop(process: subprocess.Popen[str], stdin: IO[str]) -> None:
+    stdin.write("-stay_open\nFalse\n")
+    stdin.close()
+    process.wait()
 
 
-def tag_srgb(path):
+def tag_srgb(path: Path | str) -> None:
     """Tag as sRGB, as Firefox only manages colors of tagged images."""
-    global exiftool
     deps.tool("exiftool")
     profile = deps.getenv("SRGB_PROFILE")
-    if exiftool is None:
-        # Exiftool starts slowly. It keeps running and reads one argument per
-        # line. Each command ends with "-execute1".
-        exiftool = subprocess.Popen(
-            ["exiftool", "-stay_open", "True", "-@", "-"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            encoding="utf-8",
-        )
-        # Stopped when the process exits, including doit workers
-        multiprocessing.util.Finalize(None, stop, exitpriority=0)
+    stdin, stdout = exiftool()
     args = ["-q", "-overwrite_original", f"-icc_profile<={profile}", path]
     args += ["-echo3", "status=${status}", "-execute1"]
-    exiftool.stdin.write("".join(f"{arg}\n" for arg in args))
-    exiftool.stdin.flush()
-    output = []
-    while (line := exiftool.stdout.readline()) != "{ready1}\n":
+    stdin.write("".join(f"{arg}\n" for arg in args))
+    stdin.flush()
+    output: list[str] = []
+    while (line := stdout.readline()) != "{ready1}\n":
         if not line:
             raise RuntimeError(f"exiftool stopped:\n{''.join(output)}")
         output.append(line)

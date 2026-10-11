@@ -22,7 +22,7 @@ intra_tag = re.compile(
 )
 
 
-def fix(match):
+def fix(match: re.Match[str]) -> str:
     prefix = match.group("prefix") or ""
     text = match.group("text")
 
@@ -40,7 +40,7 @@ def fix(match):
     return prefix + text + suffix
 
 
-def typogrify(text):
+def typogrify(text: str) -> Markup:
     """Apply typography fixes outside code and formulas."""
     output = []
     for part, process in process_ignores(text, ["x-latex"]):

@@ -4,6 +4,8 @@ import contextlib
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
+from pathlib import Path
 
 from .. import config
 
@@ -23,7 +25,9 @@ class Exit(Exception):
     pass
 
 
-def run(command, cwd=None, capture=False, check=True):
+def run(
+    command: str, cwd: Path | None = None, capture: bool = False, check: bool = True
+) -> subprocess.CompletedProcess[str]:
     """Run a shell command."""
     result = subprocess.run(
         command,
@@ -37,7 +41,7 @@ def run(command, cwd=None, capture=False, check=True):
     return result
 
 
-def confirm(question, default=False):
+def confirm(question: str, default: bool = False) -> bool:
     suffix = "Y/n" if default else "y/N"
     while True:
         response = input(f"{question} [{suffix}] ").lower().strip()
@@ -51,7 +55,7 @@ def confirm(question, default=False):
 
 
 @contextlib.contextmanager
-def step(what):
+def step(what: str) -> Iterator[None]:
     green = "\033[32;1m"
     blue = "\033[34;1m"
     yellow = "\033[33;1m"

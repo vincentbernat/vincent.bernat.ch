@@ -10,7 +10,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 from . import config
 
@@ -36,16 +38,16 @@ QUIET = 0.2
 class Watcher:
     """Watch directories for changes with inotify."""
 
-    def __init__(self, directories):
+    def __init__(self, directories: Iterable[Path]) -> None:
         self.libc = ctypes.CDLL(None, use_errno=True)
         self.fd = self.libc.inotify_init1(os.O_CLOEXEC)
         if self.fd < 0:
             raise OSError(ctypes.get_errno(), "cannot initialize inotify")
-        self.directories = {}
+        self.directories: dict[int, str] = {}
         for directory in directories:
             self.add(directory)
 
-    def add(self, top):
+    def add(self, top: str | Path) -> None:
         """Watch a directory and its subdirectories."""
         if os.path.basename(top) == "__pycache__":
             return
@@ -58,7 +60,7 @@ class Watcher:
                 continue
             self.directories[wd] = directory
 
-    def changes(self, timeout):
+    def changes(self, timeout: float) -> bool:
         """Read pending events. Tell if a watched file has changed."""
         changed = False
         while select.select([self.fd], [], [], timeout)[0]:
@@ -84,14 +86,14 @@ class Watcher:
         return changed
 
 
-def forward(name, stream):
+def forward(name: str, stream: Iterable[str]) -> None:
     """Display the output of a process, with a prefix."""
     prefix = f"{COLORS[name]}{name:5}{RESET} │ "
     for line in stream:
         print(f"{prefix}{line.rstrip()}", flush=True)
 
 
-def spawn(name, args, **kwargs):
+def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
     process = subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
@@ -105,16 +107,16 @@ def spawn(name, args, **kwargs):
     return process
 
 
-def build():
+def build() -> bool:
     process = spawn("build", [sys.executable, "-m", "doit"], cwd=config.ROOT)
     return process.wait() == 0
 
 
-def status(message, color=32):
+def status(message: str, color: int = 32) -> None:
     print(f"\033[34;1m▶ \033[{color};1m{message}\033[0m", flush=True)
 
 
-def serve():
+def serve() -> None:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     output = config.MODES["development"].output
     watcher = Watcher(WATCHED)

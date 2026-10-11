@@ -26,7 +26,7 @@ class Cover:
     AUTHOR_COLOR = (100, 100, 100)
 
     @functools.cached_property
-    def icon(self):
+    def icon(self) -> Image.Image:
         icon = config.CONTENT / "media" / "images" / "favicon.png"
         return (
             Image.open(icon)
@@ -35,7 +35,7 @@ class Cover:
         )
 
     @functools.cached_property
-    def typeface(self):
+    def typeface(self) -> skia.Typeface:
         typeface = skia.Typeface.MakeFromName(
             "Noto Sans Display SemiBold",
             skia.FontStyle(
@@ -47,15 +47,15 @@ class Cover:
         return typeface
 
     @functools.cached_property
-    def title_font(self):
+    def title_font(self) -> skia.Font:
         return skia.Font(self.typeface, 64)
 
     @functools.cached_property
-    def author_font(self):
+    def author_font(self) -> skia.Font:
         return skia.Font(self.typeface, 32)
 
     @functools.cached_property
-    def firefox_profile(self):
+    def firefox_profile(self) -> str:
         profile = tempfile.mkdtemp(prefix="ssg-firefox-")
         # Removed when the process exits, including doit workers
         multiprocessing.util.Finalize(
@@ -78,7 +78,9 @@ class Cover:
         return profile
 
     @staticmethod
-    def render_text(text, font, color):
+    def render_text(
+        text: str, font: skia.Font, color: tuple[int, int, int]
+    ) -> Image.Image:
         """Render text to a PIL RGBA image using skia."""
         width = math.ceil(font.measureText(text)) + 2
         metrics = font.getMetrics()
@@ -107,7 +109,7 @@ class Cover:
         sk_img.readPixels(info, data, width * 4)
         return Image.frombytes("RGBA", (width, height), bytes(data))
 
-    def load(self, path, width):
+    def load(self, path: pathlib.Path, width: int) -> Image.Image:
         """Load a cover image (SVG or raster) and return as RGBA."""
         match pathlib.Path(path).suffix:
             case ".svg":
@@ -115,10 +117,10 @@ class Cover:
             case _:
                 return self.load_raster(path)
 
-    def load_raster(self, path):
+    def load_raster(self, path: pathlib.Path) -> Image.Image:
         return Image.open(path).convert("RGBA")
 
-    def load_svg(self, path, width):
+    def load_svg(self, path: pathlib.Path, width: int) -> Image.Image:
         """Render an SVG image with Firefox, twice the given width."""
         width *= 2
         # The screenshot has the size of the window. Use a window a bit taller
@@ -156,25 +158,27 @@ class Cover:
                 img = Image.open(png).convert("RGB")
                 magenta = Image.new("RGB", img.size, (255, 0, 255))
                 bbox = ImageChops.difference(img, magenta).getbbox()
+                if bbox is None:
+                    raise RuntimeError(f"{path}: empty screenshot")
                 if bbox[3] < img.height:
                     break
             return img.crop(bbox).convert("RGBA")
 
     @functools.cache
-    def render_author(self, author):
+    def render_author(self, author: str) -> Image.Image:
         return self.render_text(author, self.author_font, self.AUTHOR_COLOR)
 
     @staticmethod
-    def wrap_text(text, font, max_width):
+    def wrap_text(text: str, font: skia.Font, max_width: float) -> list[str]:
         """Word-wrap text to fit within max_width, then balance line widths."""
         words = text.split()
         if not words:
             return []
 
-        def line_width(s):
+        def line_width(s: str) -> float:
             return font.measureText(s)
 
-        def wrap(width):
+        def wrap(width: float) -> list[str]:
             """Greedily fit the words into lines no wider than width."""
             lines = []
             current = ""
@@ -206,11 +210,14 @@ class Cover:
 
         return wrap(hi)
 
-    def generate(self, title, author, cover, target):
+    def generate(
+        self, title: str, author: str, cover: pathlib.Path | None, target: pathlib.Path
+    ) -> None:
         """Generate a 1200x630 OG cover image."""
         # Fonts are found with Fontconfig
         deps.getenv("FONTCONFIG_FILE", "")
         W, H = self.WIDTH, self.HEIGHT
+        author = author or "???"
         title = "".join(
             ch
             for ch in title.split(" | ", 1)[0]
@@ -261,15 +268,15 @@ class Cover:
             gradient_end = block_y
             gradient_start = max(0, gradient_end - int(H * 0.35))
             overlay = Image.new("RGBA", (W, H), (*bg, 0))
-            for y in range(gradient_start, H):
-                if y < gradient_end:
+            for row_y in range(gradient_start, H):
+                if row_y < gradient_end:
                     alpha = int(
-                        255 * (y - gradient_start) / (gradient_end - gradient_start)
+                        255 * (row_y - gradient_start) / (gradient_end - gradient_start)
                     )
                 else:
                     alpha = 255
                 row = Image.new("RGBA", (W, 1), (*bg, alpha))
-                overlay.paste(row, (0, y))
+                overlay.paste(row, (0, row_y))
             img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
             # Icon vertically centered with text block
@@ -277,7 +284,7 @@ class Cover:
             img.paste(self.icon, (margin, icon_y), self.icon)
 
             # Title left-aligned, vertically centered in block
-            y = block_y + (block_h - text_block_h) // 2
+            y: float = block_y + (block_h - text_block_h) // 2
             for line in lines:
                 line_img = self.render_text(line, font, (0, 0, 0))
                 img.paste(line_img, (text_x, int(y)), line_img)
@@ -302,7 +309,7 @@ class Cover:
                 y += line_height
 
             # Branding: icon + author in upper left
-            author_img = self.render_author(author or "???")
+            author_img = self.render_author(author)
             img.paste(self.icon, (margin, margin), self.icon)
             author_y = margin + (icon_h - author_img.height) // 2
             img.paste(author_img, (margin + icon_w + margin, author_y), author_img)

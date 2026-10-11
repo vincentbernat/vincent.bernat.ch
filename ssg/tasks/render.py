@@ -1,14 +1,22 @@
 """Render pages, articles and media files."""
 
+from __future__ import annotations
+
 import json
 import sys
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .. import deps, fonts, html, markdown, templates
 from ..media import css, js, python, svg, text
 from ..tools import write
 
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+    from ..model.site import Site
 
-def media(site, resource):
+
+def media(site: Site, resource: Resource) -> None:
     deps.record_resource(resource)
     deps.record_code()
     for source in [resource, *resource.combined]:
@@ -28,7 +36,7 @@ def media(site, resource):
     write(site.generated[resource.media_path], content)
 
 
-def fragment(site, resource, target):
+def fragment(site: Site, resource: Resource, target: Path) -> bool:
     markdown.collected = {"monospace": set(), "regular": set(), "references": set()}
     try:
         deps.record_resource(resource)
@@ -54,9 +62,10 @@ def fragment(site, resource, target):
             ensure_ascii=False,
         ),
     )
+    return True
 
 
-def page(site, resource, fragment, target):
+def page(site: Site, resource: Resource, fragment: Path | None, target: Path) -> None:
     context = {}
     if fragment:
         with open(fragment, encoding="utf-8") as f:

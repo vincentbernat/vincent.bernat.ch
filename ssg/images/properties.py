@@ -1,5 +1,7 @@
 """Size of images and if they are opaque or interactive."""
 
+from __future__ import annotations
+
 import base64
 import io
 import json
@@ -7,6 +9,7 @@ import math
 import re
 import xml.etree.ElementTree as ET
 from fractions import Fraction
+from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 from pypdf import PdfReader
@@ -14,8 +17,12 @@ from pypdf import PdfReader
 from .. import deps
 from ..tools import run
 
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+    from ..model.site import Site
 
-def to_px(x):
+
+def to_px(x: str) -> int:
     """Convert a size to pixels."""
     mo = re.match(r"(?P<size>\d+(?:\.\d*)?)(?P<unit>.*)", x)
     if not mo:
@@ -29,7 +36,7 @@ def to_px(x):
     raise ValueError(f"unknown unit {unit}")
 
 
-def get(site, image):
+def get(site: Site, image: Resource) -> dict[str, Any]:
     """Size of an image and if it is opaque or interactive."""
     path = site.raw(image.path.removeprefix("media/"))
     deps.record_file(path)
@@ -37,15 +44,18 @@ def get(site, image):
 
 
 @deps.cache
-def read(path, kind):
+def read(path: str, kind: str) -> dict[str, Any]:
     match kind:
         case "png" | "jpg" | "webp" | "gif":
             img = Image.open(path)
-            if "P" in img.mode and any(
-                idx == img.info.get("transparency", -1) for _, idx in img.getcolors()
-            ):
-                return {"size": img.size, "opaque": False}
-            if "A" not in img.mode or img.getextrema()[-1][0] == 255:
+            if "P" in img.mode:
+                colors = img.getcolors()
+                if colors is None:
+                    raise ValueError(f"{path}: too many colors for a palette")
+                transparency = img.info.get("transparency", -1)
+                if any(idx == transparency for _, idx in colors):
+                    return {"size": img.size, "opaque": False}
+            if "A" not in img.mode or img.getchannel("A").getextrema()[0] == 255:
                 # Find a dominant color
                 reduced = img.copy()
                 reduced.thumbnail((150, 150))
@@ -53,17 +63,19 @@ def read(path, kind):
                     "P", palette=Image.Palette.ADAPTIVE, colors=8
                 )
                 palette = paletted.getpalette()
-                color_counts = sorted(paletted.getcolors(), reverse=True)
-                palette_index = color_counts[0][1]
-                dominant = palette[palette_index * 3 : palette_index * 3 + 3]
+                colors = paletted.getcolors()
+                index = max(colors)[1] if colors else None
+                if palette is None or not isinstance(index, int):
+                    raise ValueError(f"{path}: cannot reduce to 8 colors")
+                dominant = palette[index * 3 : index * 3 + 3]
                 # Create an image with the exact same ratio using this color
                 gcd = math.gcd(*img.size)
                 lqip = Image.new(
                     "P", (img.size[0] // gcd, img.size[1] // gcd), tuple(dominant)
                 )
-                output = io.BytesIO()
-                lqip.save(output, "PNG", optimize=True, bits=1)
-                encoded = base64.b64encode(output.getvalue()).decode("ascii")
+                buffer = io.BytesIO()
+                lqip.save(buffer, "PNG", optimize=True, bits=1)
+                encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
                 return {
                     "size": img.size,
                     "opaque": True,

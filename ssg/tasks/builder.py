@@ -1,17 +1,26 @@
 """Plan the tasks to build the site."""
 
+from __future__ import annotations
+
 import functools
 import json
 import os
 import re
 import sys
+from collections.abc import Iterator
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from doit.tools import config_changed
 
 from .. import config, deps, fonts, templates
 from ..images import covers, scales, thumbnails
 from ..media import css
-from . import GROUPS, SINGLES, files, pagefind, publish, render
+from . import GROUPS, SINGLES, Task, files, pagefind, publish, render
+
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+    from ..model.site import Site
 
 SSG = config.ROOT / "ssg"
 
@@ -59,7 +68,7 @@ VIDEOS_KEPT = (".m3u8", ".vtt", ".txt")
 
 
 @functools.cache
-def environment(**values):
+def environment(**values: str) -> config_changed:
     """What a task uses from the development environment. With Nix, a new
     version of the Python environment or the node modules has a new path, and
     tasks using it run again. Tools are recorded when they run."""
@@ -73,7 +82,7 @@ def environment(**values):
 class Builder:
     """Generate the tasks for a site."""
 
-    def __init__(self, site):
+    def __init__(self, site: Site) -> None:
         self.site = site
         self.mode = site.mode
         self.out = self.mode.output
@@ -82,13 +91,13 @@ class Builder:
         deps.code_digest()
         self.plan()
 
-    def plan(self):
+    def plan(self) -> None:
         """Sort resources and find files to generate."""
         site = self.site
         production = self.mode.production
-        self.pages = []
-        self.media = []
-        self.copies = []
+        self.pages: list[Resource] = []
+        self.media: list[Resource] = []
+        self.copies: list[Resource] = []
         for resource in site.content.walk_resources():
             if not resource.processable:
                 continue
@@ -112,10 +121,8 @@ class Builder:
                 self.copies.append(resource)
 
         # Generated media files
-        for resource in self.media:
-            if resource.text:
-                site.generated[resource.media_path] = None
-        self.fragments = {}
+        generated = [r.media_path for r in self.media if r.text]
+        self.fragments: dict[str, Path] = {}
         for resource in self.pages:
             layout = resource.meta.get("layout")
             if layout and not (config.LAYOUT / layout).is_file():
@@ -123,16 +130,13 @@ class Builder:
             if templates.is_article_layout(self.site, layout):
                 self.fragments[resource.path] = templates.fragment_path(resource)
             if resource.kind == "html":
-                site.generated[resource.cover_image()] = None
+                generated.append(resource.cover_image())
         self.resizes = self.find_resizes()
         self.thumbs = self.find_thumbs()
-        site.generated.update(dict.fromkeys(self.resizes))
-        site.generated.update(dict.fromkeys(self.thumbs))
-        site.generated["js/pagefind.js"] = None
+        generated += [*self.resizes, *self.thumbs, "js/pagefind.js"]
         if production:
-            for name in fonts.SUBSET:
-                site.generated[f"fonts/{name}.woff2"] = None
-        for path in site.generated:
+            generated += [f"fonts/{name}.woff2" for name in fonts.SUBSET]
+        for path in generated:
             if production:
                 site.generated[path] = self.mode.cache / "media" / path
             else:
@@ -145,27 +149,27 @@ class Builder:
             if path.startswith(HASHED) and path not in UNPUBLISHED
         )
 
-    def find_resizes(self):
+    def find_resizes(self) -> dict[str, tuple[Resource, float]]:
         """Smaller versions of images named foo@2x.jpg used in pages."""
-        referenced = set()
-        pattern = re.compile(r"images/[\w./@-]+@[2-9]x\.(?:jpg|png)")
+        referenced = {}
+        pattern = re.compile(r"images/[\w./@-]+@([2-9])x\.(?:jpg|png)")
         for resource in self.pages:
-            referenced.update(pattern.findall(resource.content))
+            for mo in pattern.finditer(resource.source_text):
+                referenced[mo.group(0)] = int(mo.group(1))
         result = {}
-        for path in sorted(referenced):
+        for path, factor in sorted(referenced.items()):
             source = self.site.resources.get(f"media/{path}")
             if source is None:
                 continue
-            factor = int(scales.PATTERN.match(path).group(1))
             for f, smaller in enumerate(scales.smaller(path), 1):
                 if f"media/{smaller}" not in self.site.resources:
                     result[smaller] = (source, f / factor)
         return result
 
-    def find_thumbs(self):
+    def find_thumbs(self) -> dict[str, Resource]:
         """Thumbnails of images displayed in a gallery."""
         result = {}
-        self.gallery_thumbs = {}
+        self.gallery_thumbs: dict[str, list[str]] = {}
         for resource in self.pages:
             for gallery in resource.meta.get("galleries") or []:
                 directory = gallery.directory
@@ -179,7 +183,7 @@ class Builder:
                         self.gallery_thumbs.setdefault(resource.path, []).append(path)
         return result
 
-    def tasks(self):
+    def tasks(self) -> Iterator[Task]:
         """Actions record what they read, tools included. The task runs again
         when one of them changes."""
         for task in self.all_tasks():
@@ -191,7 +195,7 @@ class Builder:
                 task["uptodate"] = task.get("uptodate", []) + [self.uptodate]
             yield task
 
-    def all_tasks(self):
+    def all_tasks(self) -> Iterator[Task]:
         for basename, (doc, production) in GROUPS.items():
             if self.mode.production or not production:
                 yield {"basename": basename, "name": None, "doc": doc}
@@ -208,7 +212,7 @@ class Builder:
             yield from self.bundle_sizes_task()
         yield from self.prune_task()
 
-    def copy_tasks(self):
+    def copy_tasks(self) -> Iterator[Task]:
         for resource in self.copies:
             target = self.out / resource.path
             if resource.simple_copy:
@@ -228,7 +232,7 @@ class Builder:
                         resource.path, resource.source, self.out / resource.path
                     )
 
-    def media_tasks(self):
+    def media_tasks(self) -> Iterator[Task]:
         for resource in self.media:
             if not resource.text:
                 continue
@@ -250,7 +254,7 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def image_tasks(self):
+    def image_tasks(self) -> Iterator[Task]:
         for path, (source, factor) in self.resizes.items():
             target = self.site.generated[path]
             yield {
@@ -272,7 +276,7 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def cover_tasks(self):
+    def cover_tasks(self) -> Iterator[Task]:
         for resource in self.pages:
             if resource.kind != "html":
                 continue
@@ -299,7 +303,7 @@ class Builder:
                 "uptodate": [environment(title=title, author=author)],
             }
 
-    def fragment_tasks(self):
+    def fragment_tasks(self) -> Iterator[Task]:
         """Render the articles. Other pages may use the articles of blog
         posts."""
         for path, target in self.fragments.items():
@@ -321,7 +325,7 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def page_tasks(self):
+    def page_tasks(self) -> Iterator[Task]:
         for resource in self.pages:
             target = self.out / resource.path
             fragment = self.fragments.get(resource.path)
@@ -344,7 +348,7 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def pagefind_tasks(self):
+    def pagefind_tasks(self) -> Iterator[Task]:
         target = self.site.generated["js/pagefind.js"]
         yield {
             "basename": "pagefind-js",
@@ -364,7 +368,7 @@ class Builder:
             "uptodate": [(pagefind.exist, [self.site]), environment()],
         }
 
-    def font_tasks(self):
+    def font_tasks(self) -> Iterator[Task]:
         fragments = list(self.fragments.values())
         yield {
             "basename": "glyphs",
@@ -392,7 +396,7 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def publish_tasks(self):
+    def publish_tasks(self) -> Iterator[Task]:
         """Media files get a name with a hash of their content."""
         for path in self.published:
             sidecar = self.site.sidecar(path)
@@ -424,7 +428,7 @@ class Builder:
                 "uptodate": uptodate,
             }
 
-    def bundle_sizes_task(self):
+    def bundle_sizes_task(self) -> Iterator[Task]:
         target = self.out / "bundle-sizes.txt"
         pages = [str(self.out / r.path) for r in self.pages if r.kind == "html"]
         bundles = [
@@ -443,7 +447,7 @@ class Builder:
             "uptodate": [environment()],
         }
 
-    def prune_task(self):
+    def prune_task(self) -> Iterator[Task]:
         kinds = ["pagefind-js"] + [
             kind
             for kind, (_, production) in GROUPS.items()
@@ -459,7 +463,7 @@ class Builder:
             "uptodate": [False],
         }
 
-    def expected(self):
+    def expected(self) -> set[str]:
         """Files expected in the output directory."""
         result = {self.out / r.path for r in self.copies + self.pages}
         if self.mode.production:
@@ -477,7 +481,7 @@ class Builder:
         return {str(p) for p in result}
 
 
-def copy_task(name, source, target):
+def copy_task(name: str, source: Path, target: Path) -> Task:
     return {
         "basename": "copy",
         "name": name,

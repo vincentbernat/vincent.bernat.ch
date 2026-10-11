@@ -4,9 +4,14 @@ Task names are "<kind>:<path>". doit also defines one task per kind to run all
 the tasks of this kind. "doit list" describes them.
 """
 
+from collections.abc import Iterator
+from typing import Any
+
+Task = dict[str, Any]
+
 # Kinds with several tasks, with their description and if they are only for
 # production
-GROUPS = {
+GROUPS: dict[str, tuple[str, bool]] = {
     "copy": ("copy files as is", False),
     "media": ("process stylesheets, scripts and other text media", False),
     "image": ("generate images (SVG, resized images, thumbnails)", False),
@@ -21,7 +26,7 @@ GROUPS = {
 }
 
 # Kinds with one task
-SINGLES = {
+SINGLES: dict[str, tuple[str, bool]] = {
     "pagefind-js": ("extract the pagefind library", False),
     "pagefind": ("build search index", False),
     "glyphs": ("collect glyphs used in articles", True),
@@ -30,7 +35,7 @@ SINGLES = {
 }
 
 
-def summary(production):
+def summary(production: bool) -> Iterator[Task]:
     """One task per kind, for "doit list" without planning the build."""
     for basename, (doc, only) in (GROUPS | SINGLES).items():
         if production or not only:

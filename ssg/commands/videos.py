@@ -61,7 +61,7 @@ ARGUMENTS = {
 #
 # Then, to normalize (where 6.4dB is the desired offset compared to max)
 #  ffmpeg -i 2021-network-cmdb.mkv -filter:a "volume=6.4dB" -c:v copy normalized.mkv
-def encode(videos):
+def encode(videos: list[str]) -> None:
     """Encode videos to HLS with video2hls. Without argument, encode the
     videos not encoded yet."""
     if videos:
@@ -73,7 +73,7 @@ def encode(videos):
             encode_one(video, True)
 
 
-def encode_one(video, skip_if_exists=False):
+def encode_one(video: str, skip_if_exists: bool = False) -> None:
     if video not in ARGUMENTS:
         raise Exit(f"unknown video {video}, add it to ARGUMENTS")
     short = os.path.splitext(video)[0]
@@ -96,27 +96,29 @@ def encode_one(video, skip_if_exists=False):
         run(f"cp {short}/chapters.vtt {short}.chapters.vtt", cwd=DIRECTORY)
 
 
-def analyze(videos):
+def analyze(videos: list[str]) -> None:
     """Report the size breakdown of encoded videos."""
     for video in videos:
         analyze_one(video)
 
 
-def analyze_one(video):
+def analyze_one(video: str) -> None:
     directory = DIRECTORY / os.path.splitext(video)[0]
     master = directory / "index.m3u8"
     if not os.path.isfile(master):
         raise Exit(f"{master} does not exist")
 
-    def value(line, key):
+    def value(line: str, key: str) -> str | None:
         """Value of one attribute of an M3U8 tag."""
         match = re.search(f'{key}="?([^",]*)', line)
         return match and match.group(1)
 
-    def measure(name, paths, duration):
+    def measure(
+        name: str, paths: list[str], duration: float
+    ) -> tuple[int, dict[str, list[int]]]:
         """Print the sizes for a set of files, return total and details."""
         # For MPEG-TS, the number of bytes taken by each PID
-        pids = {}
+        pids: dict[int, int] = {}
         if paths[0].endswith(".ts"):
             for path in paths:
                 with open(path, "rb") as f:
@@ -148,12 +150,12 @@ def analyze_one(video):
         )["streams"]
         # For each kind of stream, its payload and the space it takes once
         # packaged
-        kinds = {}
+        kinds: dict[str, list[int]] = {}
         for stream in streams:
             payload = payloads.get(stream["index"], 0)
-            kind = kinds.setdefault(stream["codec_type"], [0, 0])
-            kind[0] += payload
-            kind[1] += pids.get(int(stream.get("id", "0x0"), 16), payload)
+            sizes = kinds.setdefault(stream["codec_type"], [0, 0])
+            sizes[0] += payload
+            sizes[1] += pids.get(int(stream.get("id", "0x0"), 16), payload)
         total = sum(os.path.getsize(path) for path in paths)
         cells = ""
         for kind in ("video", "audio"):
@@ -175,10 +177,10 @@ def analyze_one(video):
     # Renditions of the master playlist: variants and alternative audio
     with open(master) as f:
         lines = [line.strip() for line in f]
-    renditions = []
+    renditions: list[tuple[str, str]] = []
     for index, line in enumerate(lines):
-        if line.startswith("#EXT-X-MEDIA:") and value(line, "URI"):
-            renditions.append((value(line, "NAME") or "audio", value(line, "URI")))
+        if line.startswith("#EXT-X-MEDIA:") and (media := value(line, "URI")):
+            renditions.append((value(line, "NAME") or "audio", media))
         elif line.startswith("#EXT-X-STREAM-INF:"):
             renditions.append((value(line, "NAME") or "video", lines[index + 1]))
 
@@ -187,12 +189,14 @@ def analyze_one(video):
     for name, uri in renditions:
         playlist = os.path.basename(uri)
         used.add(playlist)
-        segments, duration = [], 0
+        segments: list[str] = []
+        duration = 0.0
         with open(directory / playlist) as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("#EXT-X-MAP:"):
-                    segments.append(value(line, "URI"))
+                    if init := value(line, "URI"):
+                        segments.append(init)
                 elif line.startswith("#EXTINF:"):
                     duration += float(line.split(":", 1)[1].rstrip(","))
                 elif line and not line.startswith("#"):
@@ -208,12 +212,14 @@ def analyze_one(video):
     for name in leftovers:
         if name.endswith(".mp4"):
             target = str(directory / name)
-            duration = run(
-                "ffprobe -v error -of default=nw=1:nk=1 "
-                f"-show_entries format=duration {shlex.quote(target)}",
-                capture=True,
-            ).stdout
-            rows.append(measure(name, [target], float(duration)))
+            duration = float(
+                run(
+                    "ffprobe -v error -of default=nw=1:nk=1 "
+                    f"-show_entries format=duration {shlex.quote(target)}",
+                    capture=True,
+                ).stdout
+            )
+            rows.append(measure(name, [target], duration))
 
     # Totals, then where the container bytes go
     total = sum(size for size, _ in rows)
@@ -242,7 +248,7 @@ def analyze_one(video):
     print(f"{'directory':<16}{human(size):>11}")
 
 
-def upload(videos):
+def upload(videos: list[str]) -> None:
     """Upload transcoded videos. Without argument, upload all of them."""
     for directory in os.listdir(DIRECTORY):
         if not os.path.isfile(DIRECTORY / directory / "index.m3u8"):

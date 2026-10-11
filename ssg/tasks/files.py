@@ -1,32 +1,39 @@
 """Copy files, remove obsolete ones."""
 
+from __future__ import annotations
+
 import os
 import shutil
 import sys
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .builder import Builder
 
 
-def symlink(source, target):
+def symlink(source: Path, target: Path) -> None:
     os.makedirs(os.path.dirname(target), exist_ok=True)
     if os.path.lexists(target):
         os.unlink(target)
     os.symlink(source, target)
 
 
-def is_symlink(source, target):
+def is_symlink(source: Path, target: Path) -> bool:
     try:
         return os.readlink(target) == str(source)
     except OSError:
         return False
 
 
-def copy(source, target):
+def copy(source: str | os.PathLike[str], target: str | os.PathLike[str]) -> None:
     os.makedirs(os.path.dirname(target), exist_ok=True)
     if os.path.lexists(target):
         os.unlink(target)
     shutil.copyfile(source, target)
 
 
-def prune(builder):
+def prune(builder: Builder) -> None:
     """Remove files from the output directory not produced by this build."""
     out = str(builder.out)
     expected = builder.expected()

@@ -1,7 +1,10 @@
 """Functions for templates."""
 
+from __future__ import annotations
+
 import os
 import tomllib
+from typing import TYPE_CHECKING
 
 import jinja2
 from markupsafe import Markup
@@ -10,17 +13,20 @@ from .. import config, deps
 from ..images import thumbnails
 from . import jinja_global
 
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+
 
 @jinja_global
 @jinja2.pass_context
-def include_file(ctx, name):
+def include_file(ctx: jinja2.runtime.Context, name: str) -> Markup:
     target = os.path.join(ctx["node"].source, name)
     deps.record_file(target)
     with open(target, encoding="utf-8") as f:
         return Markup(f.read())
 
 
-def as_list(value):
+def as_list(value: str | list[str] | None) -> list[str]:
     """Wrap a single string into a list."""
     if value is None:
         return []
@@ -30,7 +36,7 @@ def as_list(value):
 
 
 @jinja_global
-def licenses(lang):
+def licenses(lang: str) -> list[tuple[list[str], list[str]]]:
     """List REUSE.toml annotations as (paths, items), items being Markdown."""
     target = config.ROOT / "REUSE.toml"
     deps.record_file(target)
@@ -63,6 +69,6 @@ def licenses(lang):
 
 
 @jinja_global
-def thumbnail(image):
+def thumbnail(image: Resource) -> thumbnails.Thumb:
     """Thumbnail of an image displayed in a gallery."""
     return thumbnails.info(image)

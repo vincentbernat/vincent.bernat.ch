@@ -20,7 +20,7 @@ FRONTMATTER_KEYS = (
 )  # fmt: skip
 
 
-def check(fix=False):
+def check(fix: bool = False) -> None:
     """Check content for mistakes."""
     # Check forbidden word or common typos
     run("vale content/??", cwd=config.ROOT)
@@ -36,7 +36,7 @@ def check(fix=False):
             if lines[0].strip() != "---":
                 continue
             end = next(i for i, line in enumerate(lines) if i and line.strip() == "---")
-            blocks = []
+            blocks: list[tuple[int, list[str]]] = []
             for line in lines[1:end]:
                 if m := re.match(r"([\w-]+):", line):
                     key = m.group(1)

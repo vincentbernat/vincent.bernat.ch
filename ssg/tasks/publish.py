@@ -1,17 +1,24 @@
 """Publish media files with a hashed name (production only)."""
 
+from __future__ import annotations
+
 import base64
 import glob
 import hashlib
 import json
 import os
 import re
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..images import optimize
 from ..tools import human, run, write
 
+if TYPE_CHECKING:
+    from ..model.site import Site
 
-def image(site, path, sidecar):
+
+def image(site: Site, path: str, sidecar: Path) -> None:
     raw = site.raw(path)
     name = site.hashed(path)
     outputs = optimize.image(raw, site.output(f"media/{name}"))
@@ -19,7 +26,7 @@ def image(site, path, sidecar):
     write(sidecar, json.dumps({"path": name, "files": files}))
 
 
-def file(site, path, sidecar, content=None):
+def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> None:
     if content is None:
         with open(site.raw(path), "rb") as f:
             content = f.read()
@@ -37,12 +44,12 @@ def file(site, path, sidecar, content=None):
 CSS_REFERENCE = re.compile(r"[^\s()'\"]*((?:fonts|images)/[^\s()'\"]+)(['\"]?)\)")
 
 
-def css(site, path, sidecar):
+def css(site: Site, path: str, sidecar: Path) -> None:
     """Use hashed names for fonts and images referenced in a stylesheet."""
     with open(site.raw(path), encoding="utf-8") as f:
         content = f.read()
 
-    def replace(mo):
+    def replace(mo: re.Match[str]) -> str:
         ref = mo.group(1)
         if ref.startswith("fonts/"):
             published = site.published(ref)
@@ -58,7 +65,7 @@ def css(site, path, sidecar):
     file(site, path, sidecar, content.encode("utf-8"))
 
 
-def exist(site, sidecar):
+def exist(site: Site, sidecar: Path) -> bool:
     """Check the files listed in a sidecar exist."""
     try:
         with open(sidecar) as f:
@@ -68,7 +75,7 @@ def exist(site, sidecar):
     return all(os.path.exists(site.output(f"media/{f}")) for f in files)
 
 
-def bundle_sizes(site, bundles, target):
+def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     """Sizes of scripts, stylesheets and fonts, with the share of pages using
     them."""
     out = site.mode.output
@@ -86,14 +93,19 @@ def bundle_sizes(site, bundles, target):
         sizes.append((f"media/{bundle}", row))
 
     # Count pages using each bundle, directly or through a stylesheet
-    names = {site.published(b)["path"]: f"media/{b}" for b in bundles}
+    names = {}
+    for bundle in bundles:
+        published = site.published(bundle)
+        if published is None:
+            raise ValueError(f"{bundle} is not published")
+        names[published["path"]] = f"media/{bundle}"
     pattern = re.compile(
         rf"(?:{re.escape(site.mode.media_url)}|\.\./)("
         + "|".join(re.escape(name) for name in names)
         + r")(?![\w.-])"
     )
 
-    def references(path):
+    def references(path: Path) -> set[str]:
         with open(path, encoding="utf-8") as f:
             return {names[name] for name in pattern.findall(f.read())}
 

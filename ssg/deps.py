@@ -7,36 +7,44 @@ still gives the same digest.
 
 """
 
+from __future__ import annotations
+
 import functools
 import hashlib
 import os
 import shutil
+from collections.abc import Callable, Sequence
 from datetime import datetime
+from typing import TYPE_CHECKING, Any, Self
 
-recorder = None
+if TYPE_CHECKING:
+    from .model.resource import Resource
+    from .model.site import Site
+
+recorder: Recorder | None = None
 # Files of the build code, set when planning
-code_files = ()
+code_files: Sequence[str] = ()
 
 
 class Recorder:
     """Record the reads made inside a "with" block."""
 
-    def __init__(self):
-        self.items = {}
-        self.previous = None
+    def __init__(self) -> None:
+        self.items: dict[str, str] = {}
+        self.previous: Recorder | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         global recorder
         self.previous = recorder
         recorder = self
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: object) -> None:
         global recorder
         recorder = self.previous
 
 
-def recorded(function, *args):
+def recorded(function: Callable[..., object], *args: Any) -> object:
     """Run a task action. Add what it read to its values, for uptodate()."""
     with Recorder() as r:
         result = function(*args)
@@ -47,17 +55,17 @@ def recorded(function, *args):
     return result
 
 
-def cache(function):
+def cache[R](function: Callable[..., R]) -> Callable[..., R]:
     """Like functools.cache, but each call records what the first call
     recorded."""
 
     @functools.cache
-    def first(*args):
+    def first(*args: Any) -> tuple[R, dict[str, str]]:
         with Recorder() as r:
             return function(*args), r.items
 
     @functools.wraps(function)
-    def call(*args):
+    def call(*args: Any) -> R:
         result, items = first(*args)
         if recorder is not None:
             recorder.items.update(items)
@@ -66,53 +74,53 @@ def cache(function):
     return call
 
 
-def record(key, digest):
+def record(key: str, digest: str) -> None:
     if recorder is not None:
         recorder.items[key] = digest
 
 
-def record_resource(resource):
+def record_resource(resource: Resource | None) -> None:
     if recorder is not None and resource is not None:
         recorder.items[f"r:{resource.path}"] = resource.digest
 
 
-def record_content(resource):
+def record_content(resource: Resource) -> None:
     """Record the source used by a task. If it changes while the task runs,
     doit records the new source as already built."""
     if recorder is not None:
         recorder.items[f"c:{resource.path}"] = content_digest(resource)
 
 
-def content_digest(resource):
-    return hashlib.sha1(resource.content.encode("utf-8")).hexdigest()
+def content_digest(resource: Resource) -> str:
+    return hashlib.sha1(resource.source_text.encode("utf-8")).hexdigest()
 
 
 @functools.cache
-def code_digest():
+def code_digest() -> str:
     """Digest of the build code. Computed once, before workers start."""
     return hashlib.sha1(
         "\n".join(file_digest(path) for path in code_files).encode()
     ).hexdigest()
 
 
-def record_code():
+def record_code() -> None:
     """Record the build code used by a task. If it changes while the task
     runs, doit records the new code as already used."""
     record("k:", code_digest())
 
 
 @functools.cache
-def tool_path(name):
+def tool_path(name: str) -> str:
     """Path of a tool. With Nix, a new version has a new path."""
     return os.path.realpath(shutil.which(name) or name)
 
 
-def tool(name):
+def tool(name: str) -> None:
     """Record a tool used by a task."""
     record(f"t:{name}", tool_path(name))
 
 
-def getenv(name, default=None):
+def getenv(name: str, default: str | None = None) -> str:
     """Record an environment variable used by a task and return its value."""
     value = os.environ.get(name, default)
     if value is None:
@@ -121,13 +129,13 @@ def getenv(name, default=None):
     return value
 
 
-def record_file(path):
+def record_file(path: str | os.PathLike[str]) -> None:
     if recorder is not None:
         path = str(path)
         recorder.items[f"f:{path}"] = file_digest(path)
 
 
-def file_digest(path):
+def file_digest(path: str | os.PathLike[str]) -> str:
     try:
         st = os.stat(path)
     except FileNotFoundError:
@@ -135,7 +143,7 @@ def file_digest(path):
     return f"{st.st_mtime_ns}:{st.st_size}"
 
 
-def state(site, key):
+def state(site: Site, key: str) -> str | None:
     """Current digest for a key."""
     kind, _, what = key.partition(":")
     match kind:
@@ -148,8 +156,8 @@ def state(site, key):
         case "f":
             return file_digest(what)
         case "w":
-            node, _, sorter = what.rpartition(":")
-            node = site.nodes.get(node)
+            name, _, sorter = what.rpartition(":")
+            node = site.nodes.get(name)
             return node.sorted_digest(sorter) if node else ""
         case "n":
             path, _, attr = what.rpartition(":")
@@ -171,10 +179,10 @@ def state(site, key):
     return None
 
 
-def uptodate(site):
+def uptodate(site: Site) -> Callable[[object, dict[str, Any]], bool]:
     """Build an uptodate callable for doit, using recorded values."""
 
-    def check(task, values):
+    def check(task: object, values: dict[str, Any]) -> bool:
         recorded = values.get("deps")
         if recorded is None:
             return False

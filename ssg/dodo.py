@@ -27,6 +27,8 @@ import atexit  # noqa: E402
 import cProfile  # noqa: E402
 import multiprocessing  # noqa: E402
 import shutil  # noqa: E402
+from collections.abc import Callable, Iterator  # noqa: E402
+from typing import Any  # noqa: E402
 
 from doit import get_var  # noqa: E402
 from doit.exceptions import TaskFailed  # noqa: E402
@@ -38,7 +40,7 @@ MODE = config.MODES["production" if get_var("mode") == "prod" else "development"
 PROFILE = get_var("profile") == "true"
 
 
-def sandbox():
+def sandbox() -> None:
     """Run doit again in a sandbox."""
     if shutil.which("bwrap") is None:
         sys.exit("bwrap not found, enter the development shell with nix develop")
@@ -83,10 +85,10 @@ def sandbox():
     os.execvp(args[0], args)
 
 
-def command(function, **task):
+def command(function: Callable[..., object], **task: Any) -> dict[str, Any]:
     """Task running a command."""
 
-    def action(**kwargs):
+    def action(**kwargs: Any) -> Any:
         try:
             function(**kwargs)
         except commands.Exit as e:
@@ -95,14 +97,14 @@ def command(function, **task):
     return {"actions": [action], "uptodate": [False], "verbosity": 2} | task
 
 
-def task_serve():
+def task_serve() -> dict[str, Any]:
     """serve development build on http://localhost:8080"""
     from ssg import serve
 
     return command(serve.serve)
 
 
-def task_check():
+def task_check() -> dict[str, Any]:
     """check content for mistakes"""
     return command(
         check.check,
@@ -110,12 +112,12 @@ def task_check():
     )
 
 
-def task_publish():
+def task_publish() -> dict[str, Any]:
     """check, build for production, review and commit"""
     return command(production.publish)
 
 
-def task_push():
+def task_push() -> dict[str, Any]:
     """push production build"""
     return command(
         production.push,
@@ -123,7 +125,7 @@ def task_push():
     )
 
 
-def task_prune_final():
+def task_prune_final() -> dict[str, Any]:
     """prune old commits from production build"""
     return command(
         production.prune_final,
@@ -131,27 +133,27 @@ def task_prune_final():
     )
 
 
-def task_fonts_update():
+def task_fonts_update() -> dict[str, Any]:
     """build fonts with Nix"""
     return command(production.fonts_update)
 
 
-def task_video_encode():
+def task_video_encode() -> dict[str, Any]:
     """encode videos to HLS (all if none given)"""
     return command(videos.encode, pos_arg="videos")
 
 
-def task_video_analyze():
+def task_video_analyze() -> dict[str, Any]:
     """report size breakdown of encoded videos"""
     return command(videos.analyze, pos_arg="videos")
 
 
-def task_video_upload():
+def task_video_upload() -> dict[str, Any]:
     """upload transcoded videos (all if none given)"""
     return command(videos.upload, pos_arg="videos")
 
 
-def task_links_check():
+def task_links_check() -> dict[str, Any]:
     """check links"""
     return command(
         links.check,
@@ -159,12 +161,12 @@ def task_links_check():
     )
 
 
-def task_links_fix():
+def task_links_fix() -> dict[str, Any]:
     """try to fix links"""
     return command(links.fix)
 
 
-def task_site():
+def task_site() -> Iterator[dict[str, Any]]:
     """build tasks (doit list --all)"""
     if interactive:
         # Commands build the site in another process when needed
@@ -196,12 +198,12 @@ if not interactive and not listing and not os.environ.get("SSG_SANDBOX"):
     sandbox()
 
 
-def profile():
+def profile() -> None:
     """Profile this process until it exits."""
     profiler = cProfile.Profile()
     path = MODE.cache / "profile.prof"
 
-    def stop():
+    def stop() -> None:
         profiler.disable()
         profiler.dump_stats(path)
         print(f"profile written to {path}", file=sys.stderr)

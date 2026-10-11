@@ -1,13 +1,19 @@
 """Stylesheets and scripts loaded only when a page needs them."""
 
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING, Any
 
 from lxml.html import fragment_fromstring
 
 from .. import config
 
+if TYPE_CHECKING:
+    from ..model.site import Site
 
-def load(site, d):
+
+def load(site: Site, d: Any) -> None:
     """Load additional scripts and stylesheets."""
     css_anchor = d(f'link[href="{site.media_url("css/luffy.css")}"]')
     js_anchor = d(f'script[src="{site.media_url("js/luffy.js")}"]')
@@ -39,7 +45,7 @@ def load(site, d):
     insert_after(js_anchor, js_tags)
 
 
-def insert_after(anchor, tags):
+def insert_after(anchor: Any, tags: list[str]) -> None:
     """Insert the tags right after the anchor element, keeping a 2-space
     indentation."""
     if not anchor or not tags:

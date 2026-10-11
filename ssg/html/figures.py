@@ -1,9 +1,13 @@
 """Images: sizes, responsive versions, videos, PDF and interactive SVG."""
 
+from __future__ import annotations
+
 import os
 import re
 import sys
 import urllib.parse
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Any
 
 import langcodes
 import lxml.html
@@ -12,8 +16,12 @@ from pyquery import PyQuery as pq
 from ..images import properties, scales
 from ..media import css
 
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+    from ..model.site import Site
 
-def resolve(site, resource, src):
+
+def resolve(site: Site, resource: Resource, src: str) -> Resource | None:
     """Find the resource for an image source."""
     media_url = site.mode.media_url
     cdn = [(prefix, url) for prefix, url in site.mode.cdn if src.startswith(url)]
@@ -34,7 +42,9 @@ def resolve(site, resource, src):
     return image
 
 
-def size(props, width, height):
+def size(
+    props: Mapping[str, Any] | None, width: str | None, height: str | None
+) -> tuple[int, int] | None:
     """Compute the size of an image, scaled to the provided width or height."""
     if props is None:
         return None
@@ -42,13 +52,13 @@ def size(props, width, height):
     if new_width is None or new_height is None:
         return None
     if width is not None:
-        return (width, int(width) * new_height // new_width)
+        return (int(width), int(width) * new_height // new_width)
     elif height is not None:
-        return (int(height) * new_width // new_height, height)
+        return (int(height) * new_width // new_height, int(height))
     return (new_width, new_height)
 
 
-def fix(site, resource, d):
+def fix(site: Site, resource: Resource, d: Any) -> None:
     """Add width/height to images, make them responsive, turn them into
     objects if they are interactive, into videos if they are videos."""
     for img in d.items("img"):
@@ -74,8 +84,8 @@ def fix(site, resource, d):
             factor = int(mo.group(1))
             width //= factor
             height //= factor
-            versions = scales.smaller(src) + [src]
-            versions = [(path, width * (i + 1)) for i, path in enumerate(versions)]
+            paths = scales.smaller(src) + [src]
+            versions = [(path, width * (i + 1)) for i, path in enumerate(paths)]
             # Use weighted geometric mean of consecutive widths instead of the
             # real width: bias toward the smaller value so the browser
             # upgrades sooner to the bigger image.
@@ -199,7 +209,7 @@ def fix(site, resource, d):
             parent.replace_with(lxml.html.tostring(figure[0], encoding="unicode"))
 
 
-def video(site, resource, img, src):
+def video(site: Site, resource: Resource, img: Any, src: str) -> None:
     id = os.path.splitext(os.path.basename(src))[0]
     img[0].tag = "video"
     img[0].set("controls", None)

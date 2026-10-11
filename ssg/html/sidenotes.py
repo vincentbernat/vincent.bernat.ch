@@ -1,5 +1,7 @@
 """Turn footnotes into sidenotes."""
 
+from typing import Any
+
 from pyquery import PyQuery as pq
 
 # Elements with margin-top. Sidenotes can be inserted before them.
@@ -9,14 +11,14 @@ MARGIN_TOP_CLASSES = frozenset(
 )
 
 
-def has_margin_top(el):
+def has_margin_top(el: Any) -> bool:
     if el.tag in MARGIN_TOP_TAGS:
         return True
     classes = (el.get("class") or "").split()
     return bool(MARGIN_TOP_CLASSES.intersection(classes))
 
 
-def convert(d):
+def convert(d: Any) -> None:
     """Move footnotes to sidenotes.
 
     The footnote extension uses the following classes:

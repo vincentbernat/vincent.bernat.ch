@@ -13,7 +13,13 @@ LANGUAGES = {"en": "English", "fr": "français"}
 
 
 class Mode:
-    def __init__(self, name, output, media_url, cdn=()):
+    def __init__(
+        self,
+        name: str,
+        output: str,
+        media_url: str,
+        cdn: tuple[tuple[str, str], ...] = (),
+    ) -> None:
         self.name = name
         self.output = ROOT / output
         self.cache = CACHE / name
@@ -22,7 +28,7 @@ class Mode:
         self.cdn = cdn
 
     @property
-    def production(self):
+    def production(self) -> bool:
         return self.name == "production"
 
 
@@ -83,7 +89,7 @@ LOAD = (
     ("x-latex", ["css/katex.css"], False),
 )
 
-TAGS = {
+TAGS: dict[str, dict[str, str | bool]] = {
     "network": {"descr_en": "network", "descr_fr": "réseau"},
     "network-bgp": {"descr": "BGP"},
     "network-automation": {"descr_en": "automation", "descr_fr": "automatisation"},

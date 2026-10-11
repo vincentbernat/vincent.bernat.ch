@@ -1,8 +1,12 @@
 """Filters for templates."""
 
+from __future__ import annotations
+
 import re
 import urllib.parse
-from datetime import datetime
+from collections.abc import Iterable, Mapping
+from datetime import date, datetime
+from typing import TYPE_CHECKING, Self
 
 from babel.dates import format_date
 from markupsafe import Markup
@@ -11,14 +15,17 @@ from pyquery import PyQuery as pq
 from .. import deps
 from . import jinja_filter
 
+if TYPE_CHECKING:
+    from ..model.resource import Resource
+
 
 @jinja_filter
-def urlencode(url, safe="/"):
+def urlencode(url: str, safe: str = "/") -> str:
     return urllib.parse.quote(url.encode("utf8"), safe)
 
 
 @jinja_filter
-def date_format(dt, fmt=None):
+def date_format(dt: date | None, fmt: str | None = None) -> str | date:
     if not dt:
         dt = datetime.now()
         deps.record("y:", str(dt.year))
@@ -28,7 +35,7 @@ def date_format(dt, fmt=None):
 
 
 @jinja_filter
-def xmldatetime(dt):
+def xmldatetime(dt: date | None) -> str:
     if not dt:
         dt = datetime.now()
     zprefix = "Z"
@@ -39,12 +46,12 @@ def xmldatetime(dt):
 
 
 @jinja_filter
-def top(iterable, count=3):
+def top[T](iterable: Iterable[T], count: int = 3) -> list[T]:
     return list(iterable)[:count]
 
 
 @jinja_filter
-def human_date(dt, locale="en", format=None):
+def human_date(dt: date, locale: str = "en", format: str | None = None) -> str:
     """Convert an ISO 8601 date to a more readable version."""
     if format is None:
         return format_date(dt, "MMMM yyyy", locale=locale)
@@ -69,7 +76,9 @@ def human_date(dt, locale="en", format=None):
 
 
 @jinja_filter
-def same_tag(resource, direction, sorter, skip=0):
+def same_tag(
+    resource: Resource, direction: str, sorter: str, skip: int = 0
+) -> Resource | None:
     """Returns the next resource with at least a common tag, walking with
     resource.prev() or resource.next()."""
     tags = {t for t in resource.tags if t != "outdated" and t != "unclassified"}
@@ -90,7 +99,7 @@ def same_tag(resource, direction, sorter, skip=0):
 NATURAL_RE = re.compile(r"(\d+)")
 
 
-def natural_key(value):
+def natural_key(value: str) -> list[int | str]:
     """Sort key comparing digit runs as numbers."""
     return [
         int(part) if index % 2 else part
@@ -99,13 +108,13 @@ def natural_key(value):
 
 
 @jinja_filter
-def natural_sort(resources):
+def natural_sort(resources: Iterable[Resource]) -> list[Resource]:
     """Version-sort resources."""
     return sorted(resources, key=lambda r: natural_key(r.path))
 
 
 @jinja_filter
-def mastodon_href(handle):
+def mastodon_href(handle: str) -> str:
     """Turn a mastodon handle into an href (very naive)."""
     mo = re.match(r"@(.*)@(.*)", handle)
     assert mo
@@ -113,7 +122,7 @@ def mastodon_href(handle):
 
 
 @jinja_filter
-def in_language(resources, lang):
+def in_language(resources: Iterable[Resource], lang: str) -> list[Resource]:
     """Keep resources in lang, or without a translation in lang."""
     return [
         r
@@ -124,7 +133,7 @@ def in_language(resources, lang):
 
 
 @jinja_filter
-def tagged(resources, tag):
+def tagged(resources: Iterable[Resource], tag: object) -> list[Resource]:
     """Keep resources with tag or one of its subtags. Resources only tagged
     as outdated are part of the unclassified tag."""
     tag = str(tag)
@@ -139,9 +148,9 @@ def tagged(resources, tag):
 
 
 @jinja_filter
-def tag_tree(tags):
+def tag_tree(tags: Iterable[str]) -> list[tuple[str, list[str]]]:
     """Group tags as (tag, subtags) pairs. Subtags follow their parent."""
-    result = []
+    result: list[tuple[str, list[str]]] = []
     for tag in tags:
         if result and tag.startswith(result[-1][0] + "-"):
             result[-1][1].append(tag)
@@ -151,7 +160,7 @@ def tag_tree(tags):
 
 
 @jinja_filter
-def ai_usage_emoji(entry, emojis):
+def ai_usage_emoji(entry: str, emojis: Mapping[str, str] | None) -> str | None:
     """Get the emoji for the key matching the start of an AI usage entry."""
     emojis = dict(emojis or {})
     for key, emoji in emojis.items():
@@ -163,14 +172,18 @@ def ai_usage_emoji(entry, emojis):
 class ReadingTime(int):
     """Reading time in minutes, with word count accessible via .words."""
 
-    def __new__(cls, minutes, words):
+    words: int
+
+    def __new__(cls, minutes: int, words: int) -> Self:
         obj = super().__new__(cls, minutes)
         obj.words = words
         return obj
 
 
 @jinja_filter
-def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
+def reading_time(
+    html: str, words_per_minute: int = 200, code_lines_per_minute: int = 30
+) -> ReadingTime:
     """Compute reading time in minutes from HTML."""
     d = pq(html, parser="html")
     code_blocks = d.find("pre")
@@ -186,7 +199,7 @@ def reading_time(html, words_per_minute=200, code_lines_per_minute=30):
 
 
 @jinja_filter
-def clean_rss(html):
+def clean_rss(html: str) -> Markup:
     doc = pq(html)
     doc(".when-js").remove()
     doc(".when-nojs").remove()

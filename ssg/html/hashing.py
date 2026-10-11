@@ -1,13 +1,19 @@
 """Hashed names for media files (production only)."""
 
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING, Any
 
 import lxml.etree
+
+if TYPE_CHECKING:
+    from ..model.site import Site
 
 ATTRIBUTE = re.compile(r"(data-|)[a-z]*")
 
 
-def rewrite(site, root):
+def rewrite(site: Site, root: Any) -> None:
     """Use hashed names for media files. Add integrity attributes for
     scripts, stylesheets and fonts."""
     media = site.mode.media_url
@@ -44,7 +50,7 @@ def rewrite(site, root):
                     attrib[name] = value
 
 
-def rewrite_images(site, value):
+def rewrite_images(site: Site, value: str) -> str:
     media = re.escape(site.mode.media_url)
     return re.sub(
         rf"(?:(?<=^)|(?<=,)){media}(images/[^ ,]+)(?=$| |,)",

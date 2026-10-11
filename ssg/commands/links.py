@@ -15,7 +15,7 @@ OUTPUT = config.ROOT / ".linkchecker-out.csv"
 DATABASE = config.ROOT / ".linkchecker.db"
 
 
-def results():
+def results() -> tuple[list[dict[str, str]], bool]:
     """Read the results of the last run and tell if it reached the end."""
     with open(OUTPUT, encoding="utf-8") as fp:
         lines = fp.readlines()
@@ -25,7 +25,7 @@ def results():
     return list(rows), any(line.startswith("# Stopped checking") for line in lines)
 
 
-def database():
+def database() -> sqlite3.Connection:
     """Open the database keeping the history of dead links."""
     db = sqlite3.connect(DATABASE)
     db.execute("""
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS dead (
     return db
 
 
-def record(rows, complete):
+def record(rows: list[dict[str, str]], complete: bool) -> None:
     """Record the dead links of the last run, forget the ones back alive."""
     today = datetime.datetime.now(datetime.UTC).date().isoformat()
     dead = {row["urlname"]: row["result"] for row in rows if row["valid"] != "True"}
@@ -65,7 +65,7 @@ def record(rows, complete):
             )
 
 
-def history(url):
+def history(url: str) -> str | None:
     """Tell for how long an URL has been dead."""
     with contextlib.closing(database()) as db:
         row = db.execute(
@@ -78,7 +78,7 @@ def history(url):
     return f"dead since {first_seen}, {times}"
 
 
-def replace(url, replacement):
+def replace(url: str, replacement: str) -> None:
     """Replace an URL in the content."""
     pattern = re.compile(
         rf"(?:(?<=[\s(<])|^){re.escape(url)}(?=[\s)>\"']|$)", re.MULTILINE
@@ -89,8 +89,8 @@ def replace(url, replacement):
         capture=True,
         check=False,
     )
-    for path in files.stdout.split():
-        path = config.ROOT / path
+    for name in files.stdout.split():
+        path = config.ROOT / name
         with open(path, encoding="utf-8") as fp:
             content = fp.read()
         updated = pattern.sub(lambda _: replacement, content)
@@ -99,7 +99,7 @@ def replace(url, replacement):
                 fp.write(updated)
 
 
-def check(local=False):
+def check(local: bool = False) -> None:
     """Check links."""
     url = "http://localhost:8080/" if local else "https://vincent.bernat.ch/"
     result = run(
@@ -112,7 +112,7 @@ def check(local=False):
         fix()
 
 
-def fix():
+def fix() -> None:
     """Try to fix links."""
     rows, _ = results()
     seen = set()

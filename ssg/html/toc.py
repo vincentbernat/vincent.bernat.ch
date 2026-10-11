@@ -1,9 +1,15 @@
 """Table of contents."""
 
+from __future__ import annotations
+
 import re
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..model.resource import Resource
 
 
-def fix(resource, d):
+def fix(resource: Resource, d: Any) -> None:
     """Remove whitespaces inside UL and add a disclosure to expand the TOC."""
     for element in d.items(".toc"):
         # The empty details element is only a switch: CSS uses its state to

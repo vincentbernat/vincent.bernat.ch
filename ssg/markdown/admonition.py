@@ -3,10 +3,12 @@ from markdown.blockprocessors import BlockProcessor
 from markdown.treeprocessors import Treeprocessor
 import xml.etree.ElementTree as etree
 import re
+from typing import Any
+from xml.etree.ElementTree import Element
 
 
 class AdmonitionExtension(Extension):
-    def extendMarkdown(self, md):
+    def extendMarkdown(self, md: Any) -> None:
         md.registerExtension(self)
         md.parser.blockprocessors.register(
             AdmonitionProcessor(md.parser), "shortadmonition", 105
@@ -18,25 +20,23 @@ class AdmonitionExtension(Extension):
 class AdmonitionProcessor(BlockProcessor):
     RE = re.compile(r'(?:^|\n)!!! +"(.*?)" +')
 
-    def test(self, parent, block):
-        return self.RE.search(block)
+    def test(self, parent: Element, block: str) -> bool:
+        return self.RE.search(block) is not None
 
-    def run(self, parent, blocks):
+    def run(self, parent: Element, blocks: list[str]) -> bool:
+        m = self.RE.search(blocks[0])
+        if m is None:
+            return False
         block = blocks.pop(0)
-        m = self.RE.search(block)
-
-        if m:
-            block = block[m.end() :]  # removes the first line
-
-        if m:
-            div = etree.SubElement(parent, "div")
-            div.set("class", "admonition")
-            title = m.group(1)
-            p = etree.SubElement(div, "p")
-            p.text = title
-            p.set("class", "admonition-title")
-
-        self.parser.parseChunk(div, block)
+        if m.start() > 0:
+            self.parser.parseBlocks(parent, [block[: m.start()]])
+        div = etree.SubElement(parent, "div")
+        div.set("class", "admonition")
+        p = etree.SubElement(div, "p")
+        p.text = m.group(1)
+        p.set("class", "admonition-title")
+        self.parser.parseChunk(div, block[m.end() :])
+        return True
 
 
 class AdmonitionClassProcessor(Treeprocessor):
@@ -44,7 +44,7 @@ class AdmonitionClassProcessor(Treeprocessor):
     admonition itself. This way, an attribute list at the end of an admonition
     applies to the whole block."""
 
-    def run(self, doc):
+    def run(self, doc: Element) -> None:
         for div in doc.iter("div"):
             classes = div.get("class", "").split()
             if "admonition" not in classes or not len(div):
@@ -59,5 +59,5 @@ class AdmonitionClassProcessor(Treeprocessor):
             div.set("class", " ".join(classes + moved.split()))
 
 
-def makeExtension(*args, **kwargs):
+def makeExtension(*args: Any, **kwargs: Any) -> AdmonitionExtension:
     return AdmonitionExtension(*args, **kwargs)

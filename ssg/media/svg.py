@@ -1,6 +1,7 @@
 """Normalize fonts and colors in SVG files."""
 
 import re
+from typing import Any
 
 import lxml.etree
 
@@ -57,7 +58,7 @@ COLOR_ATTRS = frozenset(
 )
 
 
-def flatten_light_dark(value):
+def flatten_light_dark(value: str) -> str:
     """Replace light-dark(A, B) calls with their first argument."""
     out = []
     pos = 0
@@ -87,7 +88,7 @@ def flatten_light_dark(value):
             pos = i
 
 
-def replacement_for(value):
+def replacement_for(value: str) -> str | None:
     key = value.strip().strip("'\"").strip().lower()
     if key in SANS_TRIGGERS:
         return SANS_STACK
@@ -96,11 +97,11 @@ def replacement_for(value):
     return None
 
 
-def rewrite_css(css):
+def rewrite_css(css: str) -> str:
     """Rewrite font-family, drop -inkscape-font-specification and
     color-scheme, flatten light-dark()."""
 
-    def sub(match):
+    def sub(match: re.Match[str]) -> str:
         stack = replacement_for(match.group(1))
         return f"font-family:{stack}" if stack else match.group(0)
 
@@ -110,14 +111,14 @@ def rewrite_css(css):
     return flatten_light_dark(css)
 
 
-def localname(tag):
+def localname(tag: object) -> str | None:
     """Local name of an element tag, or None for comments and PIs."""
     if not isinstance(tag, str):
         return None
     return tag.rsplit("}", 1)[-1]
 
 
-def replace_attr(el, name):
+def replace_attr(el: Any, name: str) -> None:
     """Rewrite an attribute holding a font name list (font-family, face)."""
     value = el.get(name)
     if value:
@@ -126,7 +127,7 @@ def replace_attr(el, name):
             el.set(name, stack)
 
 
-def process(text):
+def process(text: str) -> str:
     """Normalize fonts and colors in SVG files."""
     root = lxml.etree.fromstring(text.encode("utf-8"))
 

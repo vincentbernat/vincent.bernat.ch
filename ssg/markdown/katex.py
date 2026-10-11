@@ -7,8 +7,11 @@ GitLab.
 
 import json
 import multiprocessing.util
+import re
 import subprocess
 import tempfile
+from typing import Any
+from xml.etree.ElementTree import Element
 
 import markdown
 
@@ -30,17 +33,17 @@ lines.on("line", (line) => {
 });
 """
 
-renderer = None
-errors = None
+renderer: Any = None
+errors: Any = None
 
 
-def stop():
+def stop() -> None:
     renderer.stdin.close()
     renderer.wait()
     errors.close()
 
 
-def render(formula):
+def render(formula: str) -> str:
     """Turn one LaTeX formula into HTML."""
     global renderer, errors
     deps.tool("node")
@@ -71,20 +74,22 @@ def render(formula):
 
 
 class KaTeXPattern(markdown.inlinepatterns.InlineProcessor):
-    def __init__(self, md):
+    def __init__(self, md: Any) -> None:
         super().__init__(r"(?<!\\)\$`(.+?)`\$", md)
 
-    def handleMatch(self, m, data):
+    def handleMatch(  # type: ignore[override]
+        self, m: re.Match[str], data: str
+    ) -> tuple[Element | str | None, int | None, int | None]:
         formula = f"<x-latex>{render(m.group(1))}</x-latex>"
         return self.md.htmlStash.store(formula), m.start(0), m.end(0)
 
 
 class KaTeXExtension(markdown.Extension):
-    def extendMarkdown(self, md):
+    def extendMarkdown(self, md: Any) -> None:
         # Needs to come before backtick and escape matching: a formula is not
         # code and \ is pretty important in LaTeX
         md.inlinePatterns.register(KaTeXPattern(md), "katex", 195)
 
 
-def makeExtension(**kwargs):
+def makeExtension(**kwargs: Any) -> KaTeXExtension:
     return KaTeXExtension(**kwargs)

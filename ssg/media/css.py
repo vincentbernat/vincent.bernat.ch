@@ -1,12 +1,18 @@
 """Stylesheets, processed with PostCSS."""
 
+from __future__ import annotations
+
 import os
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .. import config, deps
 from ..tools import run
+
+if TYPE_CHECKING:
+    from ..model.site import Site
 
 SCRIPT = Path(__file__).parent / "css.js"
 SHARED = [
@@ -16,17 +22,25 @@ SHARED = [
 BASELINE_FONT = config.CONTENT / "media" / "fonts" / "literata.woff2"
 
 
-def baseline_offset(path):
+def baseline_offset(path: Path) -> float:
     """Baseline position as (ascent - descent) / (2 * upm) from OS/2 table."""
     xml = run("ttx", "-t", "OS/2", "-t", "head", "-o", "/dev/stdout", path)
     root = ET.fromstring(xml)
-    upm = int(root.find(".//head/unitsPerEm").get("value"))
-    ascent = int(root.find(".//OS_2/sTypoAscender").get("value"))
-    descent = abs(int(root.find(".//OS_2/sTypoDescender").get("value")))
+    upm = ttx_value(root, ".//head/unitsPerEm")
+    ascent = ttx_value(root, ".//OS_2/sTypoAscender")
+    descent = abs(ttx_value(root, ".//OS_2/sTypoDescender"))
     return (ascent - descent) / (2 * upm)
 
 
-def process(site, text):
+def ttx_value(root: ET.Element, path: str) -> int:
+    element = root.find(path)
+    value = element.get("value") if element is not None else None
+    if value is None:
+        raise ValueError(f"no {path} in ttx output")
+    return int(value)
+
+
+def process(site: Site, text: str) -> str:
     env = os.environ.copy()
     env["CSS_MINIFY"] = "true" if site.mode.production else "false"
     env["CSS_BASELINE_OFFSET"] = str(baseline_offset(BASELINE_FONT))
@@ -34,7 +48,7 @@ def process(site, text):
 
 
 @deps.cache
-def value(expression):
+def value(expression: str) -> float:
     """Resolve a calc() expression against root.css variables to a rem
     value."""
     out = run(
@@ -44,10 +58,13 @@ def value(expression):
         config.CONTENT / "media" / "css" / "root.css",
         expression,
     )
-    return float(re.match(r"[\d.]+", out.strip()).group(0))
+    mo = re.match(r"[\d.]+", out.strip())
+    if mo is None:
+        raise ValueError(f"cannot compute {expression}: {out}")
+    return float(mo.group(0))
 
 
-def page_width():
+def page_width() -> tuple[int, int]:
     """Page width and breakpoint in pixels.
 
     The breakpoint matches the --lf-medium media query (--lf-vp-medium scaled

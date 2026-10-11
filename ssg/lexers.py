@@ -383,7 +383,7 @@ class SshConfigLexer(RegexLexer):
 BashSessionLexer._bare_continuation = True
 
 
-def register():
+def register() -> None:
     """Make the lexers above available to Pygments."""
     for lexer in __all__:
         cls = globals()[lexer]

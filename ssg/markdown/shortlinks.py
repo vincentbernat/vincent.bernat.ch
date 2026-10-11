@@ -1,34 +1,40 @@
 """Add additional schemas for URL."""
 
+from __future__ import annotations
+
 import functools
 import gzip
 import json
 import os
 import re
+from typing import TYPE_CHECKING, Any
 
 from markdown.extensions import Extension
 from markdown.preprocessors import Preprocessor
+
+if TYPE_CHECKING:
+    from ..model.meta import Meta
 
 # Built and symlinked here by flake.nix.
 RFC_INDEX = os.path.join(os.path.dirname(__file__), "rfc-index.json.gz")
 
 
 @functools.cache
-def rfc_titles():
+def rfc_titles() -> dict[str, str]:
     """Map RFC numbers to their titles."""
     with gzip.open(RFC_INDEX, "rt", encoding="utf-8") as f:
         return json.load(f)
 
 
 class ShortLinksExtension(Extension):
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         self.config = {
             "l10n": [{}, "Translated strings, from the resource meta"],
             "sources": ["", "URL of the sources of the site, from the resource meta"],
         }
         super().__init__(**kwargs)
 
-    def extendMarkdown(self, md):
+    def extendMarkdown(self, md: Any) -> None:
         md.registerExtension(self)
         md.preprocessors.register(
             ShortLinksPreprocessor(
@@ -64,12 +70,12 @@ class ShortLinksPreprocessor(Preprocessor):
     )
     GODOC_RE = re.compile(r"^https://pkg\.go\.dev/([^#?]+?)/?(?:#([^#]*))?$")
 
-    def __init__(self, md, l10n, sources):
+    def __init__(self, md: Any, l10n: Meta | None, sources: str | None) -> None:
         super().__init__(md)
         self.l10n = l10n
         self.sources = sources
 
-    def title(self, url):
+    def title(self, url: str) -> str | None:
         """Build a title from an RFC, a manual page or a Go package URL."""
         if not self.l10n:
             return None
@@ -98,9 +104,11 @@ class ShortLinksPreprocessor(Preprocessor):
             return self.l10n.godoc.format(name)
         return None
 
-    def expand(self, mo):
+    def expand(self, mo: re.Match[str]) -> str:
         schema, path = mo.groups()
         if schema == "src":
+            if not self.sources:
+                raise ValueError(f"{mo.group(0)}: no sources in metadata")
             ref = "main"
             if m := self.SRC_REF_RE.fullmatch(path):
                 ref, path = m.group("ref", "path")
@@ -114,13 +122,13 @@ class ShortLinksPreprocessor(Preprocessor):
             )
         return self.SCHEMAS[schema].format(path)
 
-    def add_title(self, mo, suffix=""):
+    def add_title(self, mo: re.Match[str], suffix: str = "") -> str:
         title = self.title(mo.group("url"))
         if title is None:
             return mo.group(0)
         return f'{mo.group("prefix")}{mo.group("url")} "{title}"{suffix}'
 
-    def run(self, lines):
+    def run(self, lines: list[str]) -> list[str]:
         lines = [self.RE.sub(self.expand, l) for l in lines]
         lines = [self.DEFINITION_RE.sub(self.add_title, l) for l in lines]
         return [
@@ -128,5 +136,5 @@ class ShortLinksPreprocessor(Preprocessor):
         ]
 
 
-def makeExtension(*args, **kwargs):
+def makeExtension(*args: Any, **kwargs: Any) -> ShortLinksExtension:
     return ShortLinksExtension(*args, **kwargs)

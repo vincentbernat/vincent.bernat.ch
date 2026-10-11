@@ -8,18 +8,19 @@ overflow in margins if needed).
 from markdown import Extension
 from markdown.treeprocessors import Treeprocessor
 import xml.etree.ElementTree as etree
+from typing import Any
+from xml.etree.ElementTree import Element
 
 
 class ResponsiveTableExtension(Extension):
-    def extendMarkdown(self, md):
+    def extendMarkdown(self, md: Any) -> None:
         md.registerExtension(self)
         self.processor = ResponsiveTableTreeprocessor(md)
-        self.processor.config = self.getConfigs()
         md.treeprocessors.register(self.processor, "responsive-table", -10)
 
 
 class ResponsiveTableTreeprocessor(Treeprocessor):
-    def run(self, node):
+    def run(self, node: Element) -> None:
         for idx, child in enumerate(node):
             if child.tag == "table":
                 outer = etree.Element("div")
@@ -29,5 +30,5 @@ class ResponsiveTableTreeprocessor(Treeprocessor):
                 node.insert(idx, outer)
 
 
-def makeExtension(**kwargs):
+def makeExtension(**kwargs: Any) -> ResponsiveTableExtension:
     return ResponsiveTableExtension(**kwargs)
