@@ -131,8 +131,9 @@ if PROFILE:
     profile()
 
 
-# Workers inherit the loaded site
+# Workers inherit the loaded site (Python 3.14 now defaults to forkserver)
 multiprocessing.set_start_method("fork", force=True)
+
 lexers.register()
 MODE.cache.mkdir(parents=True, exist_ok=True)
 DOIT_CONFIG = {
