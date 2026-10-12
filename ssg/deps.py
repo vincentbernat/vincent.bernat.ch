@@ -48,14 +48,19 @@ class Recorder:
         recorder = self.previous
 
 
-def recorded(function: Callable[..., object], *args: Any) -> object:
-    """Run a task action. Add what it read to its values, for uptodate()."""
+def recorded(
+    function: Callable[..., object], *args: Any, dependencies: list[str]
+) -> object:
+    """Run a task action. Add what it read to its values, for uptodate(). doit
+    gives the file_dep of the task as dependencies: it already checks them."""
     with Recorder() as r:
         result = function(*args)
+    declared = {f"f:{path}" for path in dependencies}
+    items = {k: v for k, v in r.items.items() if k not in declared}
     if result is None or result is True:
-        return {"deps": r.items}
+        return {"deps": items}
     if isinstance(result, dict):
-        return result | {"deps": r.items}
+        return result | {"deps": items}
     return result
 
 
