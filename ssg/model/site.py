@@ -154,7 +154,9 @@ class Site:
             parent = node.parent.meta if node.parent else Meta(config.META)
             nodemeta = node.source / NODEMETA
             if nodemeta.is_file():
-                node.meta = Meta(yaml.safe_load(read_text(nodemeta)), parent)
+                node.meta = Meta(
+                    yaml.load(read_text(nodemeta), yaml.CSafeLoader), parent
+                )
                 self.resources[posixpath.join(node.path, NODEMETA)].processable = False
             else:
                 node.meta = Meta(None, parent)
@@ -165,7 +167,7 @@ class Site:
                     resource.python = text.startswith(PYTHON)
                     match = FRONTMATTER.match(text)
                     if match:
-                        data = yaml.safe_load(match.group(1))
+                        data = yaml.load(match.group(1), yaml.CSafeLoader)
                 resource.meta = Meta(data, node.meta)
 
     def load_dates(self) -> None:
