@@ -16,6 +16,7 @@ from typing import Any
 import yaml
 
 from .. import config, deps
+from ..tools import write
 from .meta import FRONTMATTER, Meta
 from .node import CIRCULAR, SORTERS, Node
 from .resource import PYTHON, Resource
@@ -171,7 +172,7 @@ class Site:
                 resource.meta = Meta(data, node.meta)
 
     def load_dates(self) -> None:
-        dates = git_dates()
+        dates = git_dates(self.mode.cache / "git-dates.json")
         for resource in self.resources.values():
             created = resource.meta.get("created")
             modified = resource.meta.get("modified")
@@ -237,9 +238,31 @@ def ignored(name: str) -> bool:
     return any(fnmatch.fnmatch(name, pattern) for pattern in config.IGNORE)
 
 
-def git_dates() -> dict[str, tuple[datetime, datetime]]:
+def git_dates(cache: Path) -> dict[str, tuple[datetime, datetime]]:
     """Map paths relative to content to their creation and modification
-    dates from git."""
+    dates from git. The result is kept in a cache file until HEAD changes."""
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=config.ROOT, text=True
+    ).strip()
+    try:
+        cached = json.loads(cache.read_text())
+    except FileNotFoundError, json.JSONDecodeError:
+        cached = {}
+    if cached.get("head") == head:
+        dates = cached["dates"]
+    else:
+        dates = git_timestamps()
+        write(cache, json.dumps({"head": head, "dates": dates}))
+
+    def utc(ts: int) -> datetime:
+        return datetime.fromtimestamp(ts, UTC).replace(tzinfo=None)
+
+    return {path: (utc(c), utc(m)) for path, (c, m) in dates.items()}
+
+
+def git_timestamps() -> dict[str, list[int]]:
+    """Map paths relative to content to their creation and modification
+    timestamps from git."""
     output = subprocess.check_output(
         [
             "git",
@@ -275,11 +298,7 @@ def git_dates() -> dict[str, tuple[datetime, datetime]]:
             dates[path] = [current, current]
         else:
             dates[path][1] = current
-
-    def utc(ts: int) -> datetime:
-        return datetime.fromtimestamp(ts, UTC).replace(tzinfo=None)
-
-    return {path: (utc(c), utc(m)) for path, (c, m) in dates.items()}
+    return dates
 
 
 @functools.cache
