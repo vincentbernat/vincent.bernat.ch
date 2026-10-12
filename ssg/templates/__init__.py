@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -137,11 +138,17 @@ def layout_files(site: Site, name: str) -> list[str]:
     return [str(config.LAYOUT / n) for n in sorted(referenced(site, name))]
 
 
+# Tags referencing another template
+REFERENCE_TAG = re.compile(r"\{%[-+]?\s*(?:extends|include|import|from)\b")
+
+
 @functools.cache
 def referenced(site: Site, name: str) -> frozenset[str]:
     """Layouts a template extends, includes or imports, directly or not."""
     env = environment(site)
     source = Loader(site).get_source(env, name)[0]
+    if not REFERENCE_TAG.search(source):
+        return frozenset()
     result = set()
     for ref in jinja2.meta.find_referenced_templates(env.parse(source)):
         if ref is None:
