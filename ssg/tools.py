@@ -6,10 +6,9 @@ import os
 import signal
 import subprocess
 import tempfile
-import time
 from collections.abc import Mapping
 from pathlib import Path
-from typing import IO, ClassVar, Literal, Self, overload
+from typing import IO, Literal, Self, overload
 
 from . import deps
 
@@ -69,12 +68,7 @@ def run(
 
 class ProcessHelper:
     """A process kept running to answer requests. Requests are made in "with"
-    blocks, from the main thread. Each process starts its own on first use. It
-    is stopped after a minute without requests, and when this process exits."""
-
-    IDLE = 60.0
-    # There is only one timer, for the helper unused for the longest time
-    helpers: ClassVar[list[ProcessHelper]] = []
+    blocks. Each process starts its own on first use."""
 
     def __init__(self, *args: str) -> None:
         self.args = args
@@ -83,46 +77,17 @@ class ProcessHelper:
         self.stdout: IO[str]
         self.stderr: IO[bytes]
         self.offset = 0
-        self.busy = False
-        self.used = 0.0
-        self.helpers.append(self)
-        signal.signal(signal.SIGALRM, ProcessHelper.expired)
 
     def __enter__(self) -> Self:
-        self.busy = True
-        try:
-            if self.process is None or self.process.poll() is not None:
-                self.stop()
-                self.start()
-        except BaseException:
-            self.busy = False
-            raise
+        if self.process is None or self.process.poll() is not None:
+            self.stop()
+            self.start()
         return self
 
     def __exit__(self, error: type[BaseException] | None, *args: object) -> None:
         if error is not None:
             # Stop it, the rest of the answer may still be waiting
             self.stop()
-        self.used = time.monotonic()
-        self.busy = False
-        if signal.getitimer(signal.ITIMER_REAL)[0] == 0:
-            signal.setitimer(signal.ITIMER_REAL, self.IDLE)
-
-    @classmethod
-    def expired(cls, *args: object) -> None:
-        """Stop unused helpers and set the timer for the next one."""
-        now = time.monotonic()
-        delays = []
-        for helper in cls.helpers:
-            if helper.process is None or helper.busy:
-                continue
-            delay = helper.used + helper.IDLE - now
-            if delay > 0:
-                delays.append(delay)
-            else:
-                helper.stop()
-        if delays:
-            signal.setitimer(signal.ITIMER_REAL, min(delays))
 
     @staticmethod
     def orphaned() -> None:
