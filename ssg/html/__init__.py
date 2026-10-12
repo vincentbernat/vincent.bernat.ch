@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import lxml.etree
 from pyquery import PyQuery as pq
 
-from . import assets, figures, hashing, sidenotes, toc
+from . import assets, figures, hashing, reading, sidenotes, toc
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -22,6 +22,7 @@ ATOM_NS = {
 def page(site: Site, resource: Resource, text: str) -> str:
     """Transform an HTML page."""
     d = pq(text, parser="html")
+    reading.fix(resource, d)
     figures.fix(site, resource, d)
     if resource.meta.get("sidenotes", True) is not False:
         sidenotes.convert(d)

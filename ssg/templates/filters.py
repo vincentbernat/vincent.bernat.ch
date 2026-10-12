@@ -6,7 +6,7 @@ import re
 import urllib.parse
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING
 
 from babel.dates import format_date
 from markupsafe import Markup
@@ -167,35 +167,6 @@ def ai_usage_emoji(entry: str, emojis: Mapping[str, str] | None) -> str | None:
         if key != "default" and entry.startswith(key):
             return emoji
     return emojis.get("default")
-
-
-class ReadingTime(int):
-    """Reading time in minutes, with word count accessible via .words."""
-
-    words: int
-
-    def __new__(cls, minutes: int, words: int) -> Self:
-        obj = super().__new__(cls, minutes)
-        obj.words = words
-        return obj
-
-
-@jinja_filter
-def reading_time(
-    html: str, words_per_minute: int = 200, code_lines_per_minute: int = 30
-) -> ReadingTime:
-    """Compute reading time in minutes from HTML."""
-    d = pq(html, parser="html")
-    code_blocks = d.find("pre")
-    code_lines = sum(
-        sum(1 for line in el.text_content().splitlines() if line.strip())
-        for el in code_blocks
-    )
-    code_blocks.remove()
-    d.find(".footnote").remove()
-    words = len(d.text().split())
-    minutes = round(words / words_per_minute + code_lines / code_lines_per_minute)
-    return ReadingTime(max(1, minutes), words)
 
 
 @jinja_filter
