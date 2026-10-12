@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -32,8 +33,8 @@ IN_ISDIR = 0x40000000
 EVENTS = IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
 EVENT = struct.Struct("iIII")
 
-# Wait for this delay without changes before building
-QUIET = 0.2
+# After a change, wait for this delay without changes before building again
+QUIET = 1
 
 
 class Watcher:
@@ -45,6 +46,7 @@ class Watcher:
         if self.fd < 0:
             raise OSError(ctypes.get_errno(), "cannot initialize inotify")
         self.directories: dict[int, Path] = {}
+        self.last = float("-inf")
         for directory in directories:
             self.add(directory)
 
@@ -62,12 +64,22 @@ class Watcher:
             self.directories[wd] = directory
 
     def changes(self, timeout: float) -> list[str]:
-        """Read pending events. Return the changed files."""
+        """Wait for changes and return the changed files. Return the first
+        change at once. When a change comes less than QUIET after the
+        previous one, wait until there are no more changes."""
         changed: dict[str, None] = {}
         while select.select([self.fd], [], [], timeout)[0]:
-            changed |= dict.fromkeys(self.read())
-            # Wait until there are no more changes
             timeout = QUIET if changed else 0
+            names = self.read()
+            if not names:
+                continue
+            now = time.monotonic()
+            quiet = now - self.last >= QUIET
+            self.last = now
+            changed |= dict.fromkeys(names)
+            if quiet:
+                break
+            timeout = QUIET
         return list(changed)
 
     def read(self) -> list[str]:
