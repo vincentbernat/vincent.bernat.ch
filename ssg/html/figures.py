@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import langcodes
+import lxml.etree
 import lxml.html
 from pyquery import PyQuery as pq
 
@@ -18,8 +19,19 @@ from ..images import properties, scales
 from ..media import css
 
 if TYPE_CHECKING:
+    from pyquery import PyQuery
+
     from ..model.resource import Resource
     from ..model.site import Site
+
+
+def set_flag(el: lxml.etree._Element, name: str) -> None:
+    """Set a boolean attribute. In HTML, it has no value. In XML, for feeds,
+    its value is empty."""
+    if isinstance(el, lxml.html.HtmlElement):
+        el.set(name, None)
+    else:
+        el.set(name, "")
 
 
 def resolve(site: Site, resource: Resource, src: str) -> Resource | None:
@@ -59,7 +71,7 @@ def size(
     return (new_width, new_height)
 
 
-def fix(site: Site, resource: Resource, d: Any) -> None:
+def fix(site: Site, resource: Resource, d: PyQuery) -> None:
     """Add width/height to images, make them responsive, turn them into
     objects if they are interactive, into videos if they are videos."""
     for img in d.items("img"):
@@ -151,7 +163,7 @@ def fix(site: Site, resource: Resource, d: Any) -> None:
         elif src.endswith((".mp4", ".ogv")):
             img[0].tag = "video"
             for attr in ["muted", "loop", "autoplay", "playsinline", "controls"]:
-                img[0].set(attr, None)
+                set_flag(img[0], attr)
             del img.attr.alt
 
         # Lazy load
@@ -207,13 +219,14 @@ def fix(site: Site, resource: Resource, d: Any) -> None:
             else:
                 inner.append(img)
             # Replace parent with our enclosure
-            parent.replace_with(lxml.html.tostring(figure[0], encoding="unicode"))
+            figure[0].tail = parent[0].tail
+            parent[0].getparent().replace(parent[0], figure[0])
 
 
-def video(site: Site, resource: Resource, img: Any, src: str) -> None:
+def video(site: Site, resource: Resource, img: PyQuery, src: str) -> None:
     id = PurePosixPath(src).stem
     img[0].tag = "video"
-    img[0].set("controls", None)
+    set_flag(img[0], "controls")
     img.attr("preload", "none")
     img.attr("crossorigin", "anonymous")
     img.attr("poster", site.media_url(f"images/posters/{id}.jpg"))
@@ -247,7 +260,7 @@ def video(site: Site, resource: Resource, img: Any, src: str) -> None:
         track.attr.kind = "subtitles"
         track.attr.srclang = code
         if resource.meta.language == code:
-            track[0].set("default", None)
+            set_flag(track[0], "default")
         if "-" not in code:
             track.attr.label = langcodes.get(code).autonym()
         else:

@@ -1,7 +1,6 @@
 """Normalize fonts and colors in SVG files."""
 
 import re
-from typing import Any
 
 import lxml.etree
 
@@ -118,7 +117,7 @@ def localname(tag: object) -> str | None:
     return tag.rsplit("}", 1)[-1]
 
 
-def replace_attr(el: Any, name: str) -> None:
+def replace_attr(el: lxml.etree._Element, name: str) -> None:
     """Rewrite an attribute holding a font name list (font-family, face)."""
     value = el.get(name)
     if value:
@@ -143,7 +142,7 @@ def process(text: str) -> str:
             # Deprecated XHTML <font face="..."> inside <foreignObject>.
             replace_attr(el, "face")
         for name in COLOR_ATTRS.intersection(el.attrib):
-            value = el.get(name)
+            value = el.attrib[name]
             if "light-dark" in value.lower():
                 el.set(name, flatten_light_dark(value))
         style = el.get("style")

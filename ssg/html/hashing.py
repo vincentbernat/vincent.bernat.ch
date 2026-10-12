@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import lxml.etree
 
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 ATTRIBUTE = re.compile(r"(data-|)[a-z]*")
 
 
-def rewrite(site: Site, root: Any) -> None:
+def rewrite(site: Site, root: lxml.etree._Element) -> None:
     """Use hashed names for media files. Add integrity attributes for
     scripts, stylesheets and fonts."""
     media = site.mode.media_url

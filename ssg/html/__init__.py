@@ -35,16 +35,16 @@ def page(site: Site, resource: Resource, text: str) -> str:
 def feed(site: Site, resource: Resource, text: str) -> str:
     """Transform an Atom feed."""
     root = lxml.etree.fromstring(text.encode("utf-8"))
-    for c in root.findall("atom:entry/atom:content", ATOM_NS):
-        div = c.find("xhtml:div", ATOM_NS)
-        inner = "".join(lxml.etree.tostring(child, encoding="unicode") for child in div)
-        d = pq(f"<div>{inner}</div>", parser="html")
-        figures.fix(site, resource, d)
-        new_div = lxml.etree.fromstring(
-            f'<div xmlns="http://www.w3.org/1999/xhtml">{d.html()}</div>'
-        )
-        c.remove(div)
-        c.append(new_div)
+    xhtml = ATOM_NS["xhtml"]
+    for div in root.iterfind("atom:entry/atom:content/xhtml:div", ATOM_NS):
+        # Selectors of pyquery ignore namespaces
+        for el in div.iter("{*}*"):
+            el.tag = lxml.etree.QName(el).localname
+        figures.fix(site, resource, pq(div))
+        for el in div.iter("*"):
+            name = lxml.etree.QName(el)
+            if name.namespace is None:
+                el.tag = f"{{{xhtml}}}{name.localname}"
     if site.mode.production:
         hashing.rewrite(site, root)
     return lxml.etree.tostring(
