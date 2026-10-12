@@ -42,9 +42,8 @@ modification time and the size. The kinds of recorded keys are listed in
 To check dependencies:
 
 ```
-doit info page:en/blog/2026-spanning-tree.html
-doit info page:en/blog/2026-spanning-tree.html mode=prod
 doit why page:en/blog/2026-spanning-tree.html
+doit why page:en/blog/2026-spanning-tree.html mode=prod
 ```
 
 For profiling:

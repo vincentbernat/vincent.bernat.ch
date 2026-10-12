@@ -1,50 +1,113 @@
-"""Show what build tasks recorded while running, and what changed since."""
+"""Show why build tasks would run again."""
 
-import contextlib
-import json
-import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 from doit import get_var
+from doit.dependency import Dependency, SqliteDB
+from doit.loader import generate_tasks
 
 from .. import config, deps
 from . import Exit, command
 
 
+def relative(path: str) -> str:
+    if Path(path).is_relative_to(config.ROOT):
+        return str(Path(path).relative_to(config.ROOT))
+    return path
+
+
 @command()
 def why(tasks: list[str]) -> None:
-    """Show the dependencies recorded by build tasks. Changed ones are marked
-    with "*". Use mode=prod for the production build."""
+    """Show why build tasks would run again: their file dependencies, their
+    targets, their environment and what they recorded while running. Changed
+    ones are marked with "*". Use mode=prod for the production build."""
     if not tasks:
         raise Exit("no task given, for example page:en/index.html")
+    from ..model.site import Site
+    from ..tasks.builder import Builder, Environment
+
     mode = config.MODES["production" if get_var("mode") == "prod" else "development"]
     path = mode.cache / "doit.db"
-    try:
-        db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    except sqlite3.OperationalError as e:
-        raise Exit(f"cannot open {path}: {e}") from None
-    site = None
-    with contextlib.closing(db):
-        for name in tasks:
-            row = db.execute(
-                "SELECT task_data FROM doit WHERE task_id = ?", (name,)
-            ).fetchone()
-            if row is None:
-                raise Exit(f"unknown task {name}")
-            recorded = json.loads(row[0]).get("_values_:", {}).get("deps")
-            if recorded is None:
-                print(f"{name}: nothing recorded")
-                continue
-            if site is None:
-                from ..model.site import Site
-                from ..tasks.builder import CODE
+    if not path.exists():
+        raise Exit(f"no {path}, build first")
+    site = Site(mode)
+    builder = Builder(site)
+    planned = {t.name: t for t in generate_tasks("site", builder.tasks())}
+    manager = Dependency(SqliteDB, str(path), checker_cls=deps.XXHashChecker)
+    for name in tasks:
+        task = planned.get(name)
+        if task is None:
+            raise Exit(f"unknown task {name}")
+        status = manager.get_status(task, planned, get_log=True)
+        found = status.reasons
+        values = manager.get_values(name)
+        print(f"{name}: {status.status}")
+        for line in reasons(status, values, builder.uptodate):
+            print(f"  {line}")
 
-                deps.code_files = CODE
-                site = Site(mode)
-            print(f"{name}:")
-            for key, digest in sorted(recorded.items()):
-                kind, _, what = key.partition(":")
-                if kind == "f" and Path(what).is_relative_to(config.ROOT):
-                    what = str(Path(what).relative_to(config.ROOT))
-                mark = " " if deps.state(site, key) == digest else "*"
-                print(f"{mark} {deps.KINDS.get(kind, kind):11} {what} = {digest}")
+        changed = set(found.get("changed_file_dep", []))
+        changed |= set(found.get("added_file_dep", []))
+        changed |= set(found.get("missing_file_dep", []))
+        section(
+            "file_dep", [(d in changed, relative(d)) for d in sorted(task.file_dep)]
+        )
+        missing = set(found.get("missing_target", []))
+        section("targets", [(t in missing, relative(t)) for t in task.targets])
+
+        environment: dict[str, str] = {}
+        for utd, _, _ in task.uptodate:
+            if isinstance(utd, Environment):
+                environment |= utd.config
+        previous = values.get("_config") or {}
+        section(
+            "environment",
+            [
+                (k in previous and previous[k] != v, f"{k} = {v}")
+                for k, v in sorted(environment.items())
+            ],
+        )
+
+        lines = []
+        for key, digest in sorted((values.get("deps") or {}).items()):
+            kind, _, what = key.partition(":")
+            if kind == "f":
+                what = relative(what)
+            line = f"{deps.KINDS.get(kind, kind):11} {what} = {digest}"
+            lines.append((deps.state(site, key) != digest, line))
+        section("recorded", lines)
+
+
+def section(title: str, lines: list[tuple[bool, str]]) -> None:
+    """Display a list of dependencies, with "*" for the changed ones."""
+    if not lines:
+        return
+    print(f"  {title}:")
+    for changed, line in lines:
+        print(f"  {'*' if changed else ' '} {line}")
+
+
+def reasons(status: Any, values: dict[str, Any], recorded: object) -> Iterator[str]:
+    """Reasons given by doit for a task to run again, when not displayed in a
+    section."""
+    from ..tasks.builder import Environment
+
+    found = status.reasons
+    if status.error_reason:
+        yield f"error: {status.error_reason}"
+    if found.get("has_no_dependencies"):
+        yield "no dependencies, always run"
+    for utd, _, _ in found.get("uptodate_false", []):
+        if utd is recorded:
+            continue
+        if isinstance(utd, Environment):
+            if "_config" not in values:
+                yield "environment changed (previous one unknown)"
+            continue
+        yield f"uptodate check false: {getattr(utd, '__name__', utd)}"
+    if found.get("checker_changed"):
+        before, after = found["checker_changed"]
+        yield f"file_dep checker changed from {before} to {after}"
+    for item in found.get("removed_file_dep", []):
+        yield f"removed file_dep: {relative(item)}"

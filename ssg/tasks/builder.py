@@ -8,7 +8,7 @@ import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from doit.tools import config_changed
 
@@ -66,8 +66,17 @@ UNPUBLISHED = tuple(f"css/{p.name}" for p in css.SHARED)
 VIDEOS_KEPT = (".m3u8", ".vtt", ".txt")
 
 
+class Environment(config_changed):
+    """Like config_changed, but also save the configuration, to tell later
+    what changed."""
+
+    def configure_task(self, task: Any) -> None:
+        super().configure_task(task)
+        task.value_savers.append(lambda: {"_config": self.config})
+
+
 @functools.cache
-def environment(**values: str) -> config_changed:
+def environment(**values: str) -> Environment:
     """What a task uses from the development environment. With Nix, a new
     version of the Python environment or the node modules has a new path, and
     tasks using it run again. Tools are recorded when they run."""
@@ -75,7 +84,7 @@ def environment(**values: str) -> config_changed:
         "python": sys.prefix,
         "node_modules": str((config.ROOT / "node_modules").resolve()),
     }
-    return config_changed(result | values)
+    return Environment(result | values)
 
 
 class Builder:
