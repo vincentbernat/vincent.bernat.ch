@@ -75,7 +75,7 @@ def why(tasks: list[str]) -> None:
             if kind == "f":
                 what = relative(what)
             line = f"{deps.KINDS.get(kind, kind):11} {what} = {digest}"
-            lines.append((deps.state(site, key) != digest, line))
+            lines.append((not deps.unchanged(site, key, digest), line))
         section("recorded", lines)
 
 

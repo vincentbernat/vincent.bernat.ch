@@ -136,12 +136,18 @@ def getenv(name: str, default: str | None = None) -> str:
 def record_file(path: str | os.PathLike[str]) -> None:
     if recorder is not None:
         path = str(path)
-        recorder.items[f"f:{path}"] = file_digest(path)
+        recorder.items[f"f:{path}"] = file_state(path)
 
 
 def file_hash(path: str | os.PathLike[str]) -> str:
-    """Digest of the content of a file."""
-    with Path(path).open("rb", buffering=0) as f:
+    """Digest of the content of a file. For a file in git annex, the name of the
+    link target is its key, which already identifies the content."""
+    path = Path(path)
+    if path.is_symlink():
+        target = path.readlink()
+        if "/annex/objects/" in target.as_posix():
+            return xxhash.xxh3_128_hexdigest(target.name.encode())
+    with path.open("rb", buffering=0) as f:
         # The xxhash stubs do not match the protocol expected by hashlib
         digest = hashlib.file_digest(f, xxhash.xxh3_128)  # type: ignore[arg-type]
     return digest.hexdigest()
@@ -179,13 +185,47 @@ def file_digest(path: str | os.PathLike[str]) -> str:
     return f"{st.st_mtime_ns}:{st.st_size}"
 
 
+@functools.cache
+def cached_file_hash(path: str, digest: str) -> str:
+    """Digest of the content of a file, cached as long as its modification time
+    and size, given by file_digest(), do not change."""
+    return file_hash(path)
+
+
+def file_state(path: str | os.PathLike[str]) -> str:
+    """Modification time, size and digest of the content of a file."""
+    digest = file_digest(path)
+    if not digest:
+        return ""
+    return f"{digest}:{cached_file_hash(str(path), digest)}"
+
+
+def file_unchanged(path: str, recorded: str) -> bool:
+    """Tell if a file is the same as recorded with file_state(). With the same
+    modification time, it is. With another size, it is not. Otherwise, compare
+    the content."""
+    digest = file_digest(path)
+    if not digest or not recorded:
+        return digest == recorded
+    parts = recorded.split(":")
+    if len(parts) != 3:
+        return False
+    mtime, size, content = parts
+    current_mtime, current_size = digest.split(":")
+    if current_mtime == mtime:
+        return True
+    if current_size != size:
+        return False
+    return cached_file_hash(path, digest) == content
+
+
 # Kinds of recorded keys, as handled by state(). A key is "<kind>:<name>".
 KINDS = {
     # resource path → hash of URL, metadata, tags and translations
     "r": "resource",
     # resource path → hash of its text
     "c": "content",
-    # file path → modification time and size
+    # file path → modification time, size and hash of the content
     "f": "file",
     # node path and sorter, like "en/blog:time_en" → hash of the sorted resources
     "w": "sorted",
@@ -215,7 +255,7 @@ def state(site: Site, key: str) -> str | None:
             resource = site.resources.get(what)
             return content_digest(resource) if resource and resource.text else ""
         case "f":
-            return file_digest(what)
+            return file_state(what)
         case "w":
             name, _, sorter = what.rpartition(":")
             node = site.nodes.get(name)
@@ -240,6 +280,14 @@ def state(site: Site, key: str) -> str | None:
     return None
 
 
+def unchanged(site: Site, key: str, digest: str) -> bool:
+    """Tell if a recorded key still has the same digest."""
+    kind, _, what = key.partition(":")
+    if kind == "f":
+        return file_unchanged(what, digest)
+    return state(site, key) == digest
+
+
 def uptodate(site: Site) -> Callable[[object, dict[str, Any]], bool]:
     """Build an uptodate callable for doit, using recorded values."""
 
@@ -247,6 +295,6 @@ def uptodate(site: Site) -> Callable[[object, dict[str, Any]], bool]:
         recorded = values.get("deps")
         if recorded is None:
             return False
-        return all(state(site, key) == digest for key, digest in recorded.items())
+        return all(unchanged(site, key, digest) for key, digest in recorded.items())
 
     return check

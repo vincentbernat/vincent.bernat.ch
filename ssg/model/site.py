@@ -116,7 +116,7 @@ class Site:
         raw = self.raw(path)
         deps.record_file(raw)
         try:
-            digest = file_hash(raw, deps.file_digest(raw))
+            digest = deps.cached_file_hash(str(raw), deps.file_digest(raw))
         except FileNotFoundError:
             raise ValueError(f"unknown media file {path}") from None
         root, ext = posixpath.splitext(path)
@@ -298,8 +298,3 @@ def git_timestamps() -> dict[str, list[int]]:
         else:
             dates[path][1] = current
     return dates
-
-
-@functools.cache
-def file_hash(path: Path, digest: str) -> str:
-    return deps.file_hash(path)

@@ -34,10 +34,13 @@ Each task declares the files known before it runs, like its source, as
 `file_dep`. While it runs, it also records what it reads: images, layouts, the
 metadata of other pages, tools, environment variables, and the build code. Each
 read is stored in doit's database with a digest. On the next build, the task
-runs again when one of these digests changes. For files, doit compares the
-modification time and then the content, while recorded files only use the
-modification time and the size. The kinds of recorded keys are listed in
-`ssg/deps.py`.
+runs again when one of these digests changes. The kinds of recorded keys are
+listed in `ssg/deps.py`.
+
+Declared and recorded files are compared the same way: a file with the same
+modification time did not change, a file with another size did. Otherwise, the
+digest of its content decides, with xxHash (XXH3, 128 bits). For a file in git
+annex, the name of the annex key is used instead of the content.
 
 To check dependencies:
 
