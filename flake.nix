@@ -385,8 +385,10 @@
               ];
               shellHook = ''
                 unset PYTHONPATH
-                ln -nsfT ${nodeEnv}/node_modules node_modules
-                ln -nsfT ${rfcIndex} ssg/markdown/rfc-index.json.gz
+                [ "$(readlink node_modules)" = ${nodeEnv}/node_modules ] \
+                  || ln -nsfT ${nodeEnv}/node_modules node_modules
+                [ "$(readlink ssg/markdown/rfc-index.json.gz)" = ${rfcIndex} ] \
+                  || ln -nsfT ${rfcIndex} ssg/markdown/rfc-index.json.gz
               '';
             };
         };
