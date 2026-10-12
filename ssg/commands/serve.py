@@ -45,8 +45,9 @@ EVENT = struct.Struct("iIII")
 # Editor lock and backup files, Python cache, and temporary files
 IGNORED = re.compile(r"^\.#|~$|^__pycache__$|\.tmp\.\d+\.[0-9a-f]+$")
 
-# After a change, wait for this delay without changes before building again
-QUIET = 1
+# Delay without changes before building, after a first change and after
+# a change following a recent one
+QUIET = (0.05, 1.0)
 
 
 class Watcher:
@@ -76,22 +77,22 @@ class Watcher:
             self.directories[wd] = directory
 
     def changes(self, timeout: float) -> list[str]:
-        """Wait for changes and return the changed files. Return the first
-        change at once. When a change comes less than QUIET after the
-        previous one, wait until there are no more changes."""
+        """Wait for changes and return the changed files. When a change comes
+        less than QUIET[1] after the previous one, wait until there are no more
+        changes for QUIET[1]. Otherwise, wait only for QUIET[0]."""
         changed: dict[str, None] = {}
+        delay = QUIET[1]
         while select.select([self.fd], [], [], timeout)[0]:
-            timeout = QUIET if changed else 0
+            timeout = delay if changed else 0
             names = self.read()
             if not names:
                 continue
             now = time.monotonic()
-            quiet = now - self.last >= QUIET
+            if not changed and now - self.last >= QUIET[1]:
+                delay = QUIET[0]
             self.last = now
             changed |= dict.fromkeys(names)
-            if quiet:
-                break
-            timeout = QUIET
+            timeout = delay
         return list(changed)
 
     def read(self) -> list[str]:
