@@ -110,7 +110,10 @@ def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
 
 def build() -> bool:
     process = spawn(
-        "build", [sys.executable, "-m", "doit", "prune", "pagefind"], cwd=config.ROOT
+        "build",
+        [sys.executable, "-m", "doit", "prune", "pagefind"],
+        cwd=config.ROOT,
+        env=os.environ | {"PYTHONUNBUFFERED": "1"},
     )
     return process.wait() == 0
 
