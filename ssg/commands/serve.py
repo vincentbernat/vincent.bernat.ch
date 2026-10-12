@@ -61,29 +61,36 @@ class Watcher:
                 continue
             self.directories[wd] = directory
 
-    def changes(self, timeout: float) -> bool:
-        """Read pending events. Tell if a watched file has changed."""
-        changed = False
+    def changes(self, timeout: float) -> list[str]:
+        """Read pending events. Return the changed files."""
+        changed: dict[str, None] = {}
         while select.select([self.fd], [], [], timeout)[0]:
-            data = os.read(self.fd, 65536)
-            offset = 0
-            while offset < len(data):
-                wd, mask, _, size = EVENT.unpack_from(data, offset)
-                offset += EVENT.size
-                name = os.fsdecode(data[offset : offset + size].rstrip(b"\0"))
-                offset += size
-                if mask & IN_Q_OVERFLOW:
-                    changed = True
-                    continue
-                if name.startswith(".#") or name.endswith("~"):
-                    continue
-                if name == "__pycache__":
-                    continue
-                changed = True
-                if mask & IN_ISDIR and mask & (IN_CREATE | IN_MOVED_TO):
-                    self.add(self.directories[wd] / name)
+            changed |= dict.fromkeys(self.read())
             # Wait until there are no more changes
             timeout = QUIET if changed else 0
+        return list(changed)
+
+    def read(self) -> list[str]:
+        """Read pending events. Return the changed files."""
+        changed = []
+        data = os.read(self.fd, 65536)
+        offset = 0
+        while offset < len(data):
+            wd, mask, _, size = EVENT.unpack_from(data, offset)
+            offset += EVENT.size
+            name = os.fsdecode(data[offset : offset + size].rstrip(b"\0"))
+            offset += size
+            if mask & IN_Q_OVERFLOW:
+                changed.append("(too many events)")
+                continue
+            if name.startswith(".#") or name.endswith("~"):
+                continue
+            if name == "__pycache__":
+                continue
+            path = self.directories[wd] / name
+            changed.append(str(path.relative_to(config.ROOT)))
+            if mask & IN_ISDIR and mask & (IN_CREATE | IN_MOVED_TO):
+                self.add(path)
         return changed
 
 
@@ -133,15 +140,20 @@ def serve() -> None:
         (Path(run) / "mime.types").symlink_to(os.environ["NGINX_MIME_TYPES"])
         conf = Path(run) / "nginx.conf"
         try:
-            changed = True
+            first = True
             while True:
                 if nginx is not None and nginx.poll() is not None:
                     status("nginx exited", 31)
                     return
-                if not changed:
+                if not first:
                     changed = watcher.changes(1)
-                    continue
-                changed = False
+                    if not changed:
+                        continue
+                    names = ", ".join(changed[:3])
+                    if len(changed) > 3:
+                        names += f" and {len(changed) - 3} more"
+                    status(f"changed: {names}", 33)
+                first = False
                 if not build():
                     status("build failed, waiting for changes", 31)
                     continue
