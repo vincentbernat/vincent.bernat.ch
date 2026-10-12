@@ -5,9 +5,7 @@ import functools
 import io
 import json
 import math
-import multiprocessing.util
 import pathlib
-import shutil
 import tempfile
 import unicodedata
 
@@ -58,14 +56,6 @@ class Cover:
     @functools.cached_property
     def firefox_profile(self) -> str:
         profile = tempfile.mkdtemp(prefix="ssg-firefox-")
-        # Removed when the process exits, including doit workers
-        multiprocessing.util.Finalize(
-            None,
-            shutil.rmtree,
-            args=(profile,),
-            kwargs={"ignore_errors": True},
-            exitpriority=0,
-        )
         fonts = {
             "sans-serif": "Liberation Sans",
             "serif": "Liberation Serif",

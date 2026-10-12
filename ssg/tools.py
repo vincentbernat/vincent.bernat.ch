@@ -1,9 +1,7 @@
 """Helpers shared by the build and the commands."""
 
 import contextlib
-import ctypes
 import os
-import signal
 import subprocess
 import tempfile
 from collections.abc import Mapping
@@ -11,9 +9,6 @@ from pathlib import Path
 from typing import IO, Literal, Self, overload
 
 from . import deps
-
-PR_SET_PDEATHSIG = 1
-prctl = ctypes.CDLL(None, use_errno=True).prctl
 
 
 @overload
@@ -89,11 +84,6 @@ class ProcessHelper:
             # Stop it, the rest of the answer may still be waiting
             self.stop()
 
-    @staticmethod
-    def orphaned() -> None:
-        """Kill the process when its parent exits."""
-        prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
-
     def start(self) -> None:
         # Node makes its error output non-blocking. When shared with us, our
         # own writes would fail. With a file in append mode, reading it does
@@ -106,7 +96,6 @@ class ProcessHelper:
                 stdout=subprocess.PIPE,
                 stderr=stderr,
                 encoding="utf-8",
-                preexec_fn=self.orphaned,  # noqa: PLW1509
             )
         except BaseException:
             stderr.close()

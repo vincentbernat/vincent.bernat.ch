@@ -97,7 +97,4 @@ input.on("line", async (line) => {
   }
   process.stdout.write(JSON.stringify(answer) + "\n");
 });
-input.on("close", () => {
-  firefox.kill("SIGKILL");
-  process.exit(0);
-});
+input.on("close", () => process.exit(0));
