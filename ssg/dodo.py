@@ -137,11 +137,14 @@ multiprocessing.set_start_method("fork", force=True)
 
 lexers.register()
 MODE.cache.mkdir(parents=True, exist_ok=True)
+# One worker per CPU or per 2 GiB of memory, whichever is lower
+MEMORY = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+WORKERS = max(1, min(os.cpu_count() or 1, MEMORY // 2**31))
 DOIT_CONFIG = {
     "dep_file": str(MODE.cache / "doit.db"),
     "backend": "sqlite3",
     # Commands may be interactive and the profiler only sees this process
-    "num_process": 0 if interactive or PROFILE else os.cpu_count(),
+    "num_process": 0 if interactive or PROFILE else WORKERS,
     "par_type": "process",
     "reporter": "executed-only",
     "default_tasks": ["prune", "pagefind"] if MODE.production else ["prune"],
