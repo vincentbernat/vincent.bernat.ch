@@ -30,11 +30,21 @@ doit push             # deploy
 production (in `.final`). Builds are incremental and run in parallel in a
 sandbox. `doit list` lists the commands.
 
+Each task declares the files known before it runs, like its source, as
+`file_dep`. While it runs, it also records what it reads: images, layouts, the
+metadata of other pages, tools, environment variables, and the build code. Each
+read is stored in doit's database with a digest. On the next build, the task
+runs again when one of these digests changes. For files, doit compares the
+modification time and then the content, while recorded files only use the
+modification time and the size. The kinds of recorded keys are listed in
+`ssg/deps.py`.
+
 To check dependencies:
 
 ```
 doit info page:en/blog/2026-spanning-tree.html
 doit info page:en/blog/2026-spanning-tree.html mode=prod
+doit why page:en/blog/2026-spanning-tree.html
 ```
 
 For profiling:

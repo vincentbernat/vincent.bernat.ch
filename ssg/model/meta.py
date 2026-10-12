@@ -1,10 +1,11 @@
 """Metadata, from frontmatter and meta.yaml files."""
 
-import hashlib
 import json
 import re
 from collections.abc import Mapping
 from typing import Any
+
+import xxhash
 
 FRONTMATTER = re.compile(
     r"^\s*(?:---|===)\s*\n((?:.|\n)+?)\n\s*(?:---|===)\s*\n*", re.MULTILINE
@@ -46,4 +47,4 @@ class Meta(dict[str, Any]):
 
 def digest(value: object) -> str:
     data = json.dumps(value, sort_keys=True, default=str, ensure_ascii=False)
-    return hashlib.sha1(data.encode("utf-8")).hexdigest()
+    return xxhash.xxh3_128_hexdigest(data.encode("utf-8"))

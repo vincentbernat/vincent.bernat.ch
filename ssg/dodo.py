@@ -33,7 +33,7 @@ from typing import Any
 
 from doit import get_var
 
-from ssg import commands, config, lexers
+from ssg import commands, config, deps, lexers
 
 MODE = config.MODES["production" if get_var("mode") == "prod" else "development"]
 PROFILE = get_var("profile") == "true"
@@ -143,6 +143,7 @@ WORKERS = max(1, min(os.cpu_count() or 1, MEMORY // 2**31))
 DOIT_CONFIG = {
     "dep_file": str(MODE.cache / "doit.db"),
     "backend": "sqlite3",
+    "check_file_uptodate": deps.XXHashChecker,
     # Commands may be interactive and the profiler only sees this process
     "num_process": 0 if interactive or PROFILE else WORKERS,
     "par_type": "process",

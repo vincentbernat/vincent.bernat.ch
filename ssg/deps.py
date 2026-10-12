@@ -18,6 +18,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
+import xxhash
+from doit.dependency import FileChangedChecker
+
 if TYPE_CHECKING:
     from .model.resource import Resource
     from .model.site import Site
@@ -93,20 +96,20 @@ def record_content(resource: Resource) -> None:
 
 
 def content_digest(resource: Resource) -> str:
-    return hashlib.sha1(resource.source_text.encode("utf-8")).hexdigest()
+    return xxhash.xxh3_128_hexdigest(resource.source_text.encode("utf-8"))
 
 
 @functools.cache
 def code_digest() -> str:
-    """Digest of the build code. Computed once, before workers start."""
-    return hashlib.sha1(
-        "\n".join(file_digest(path) for path in code_files).encode()
-    ).hexdigest()
+    """Digest of the build code."""
+    hasher = xxhash.xxh3_128()
+    for path in code_files:
+        hasher.update(f"{path}\0{file_hash(path)}\n".encode())
+    return hasher.hexdigest()
 
 
 def record_code() -> None:
-    """Record the build code used by a task. If it changes while the task
-    runs, doit records the new code as already used."""
+    """Record the build code used by a task."""
     record("k:", code_digest())
 
 
@@ -136,6 +139,38 @@ def record_file(path: str | os.PathLike[str]) -> None:
         recorder.items[f"f:{path}"] = file_digest(path)
 
 
+def file_hash(path: str | os.PathLike[str]) -> str:
+    """Digest of the content of a file."""
+    with Path(path).open("rb", buffering=0) as f:
+        # The xxhash stubs do not match the protocol expected by hashlib
+        digest = hashlib.file_digest(f, xxhash.xxh3_128)  # type: ignore[arg-type]
+    return digest.hexdigest()
+
+
+class XXHashChecker(FileChangedChecker):
+    """Check if a file_dep changed for doit, like its MD5 checker, but with
+    xxh3-128. A file with the same modification time did not change. Otherwise,
+    compare the size, then the content."""
+
+    def check_modified(
+        self, file_path: str, file_stat: os.stat_result, state: list[Any]
+    ) -> bool:
+        timestamp, size, digest = state
+        if file_stat.st_mtime == timestamp:
+            return False
+        if file_stat.st_size != size:
+            return True
+        return bool(digest != file_hash(file_path))
+
+    def get_state(
+        self, dep: str, current_state: list[Any] | None
+    ) -> tuple[float, int, str] | None:
+        st = Path(dep).stat()
+        if current_state and current_state[0] == st.st_mtime:
+            return None
+        return st.st_mtime, st.st_size, file_hash(dep)
+
+
 def file_digest(path: str | os.PathLike[str]) -> str:
     try:
         st = Path(path).stat()
@@ -144,17 +179,27 @@ def file_digest(path: str | os.PathLike[str]) -> str:
     return f"{st.st_mtime_ns}:{st.st_size}"
 
 
-# Kinds of recorded keys, as handled by state()
+# Kinds of recorded keys, as handled by state(). A key is "<kind>:<name>".
 KINDS = {
+    # resource path → hash of URL, metadata, tags and translations
     "r": "resource",
+    # resource path → hash of its text
     "c": "content",
+    # file path → modification time and size
     "f": "file",
+    # node path and sorter, like "en/blog:time_en" → hash of the sorted resources
     "w": "sorted",
+    # resource path and neighbor, like "…:next_by_time_en" → hash of the neighbor
     "n": "neighbor",
+    # video name → names of its chapter and subtitle files
     "v": "tracks",
+    # empty → hash of content of code files
     "k": "code",
+    # tool name → path of the tool
     "t": "tool",
+    # variable name → its value
     "e": "environment",
+    # empty → current year
     "y": "year",
 }
 
