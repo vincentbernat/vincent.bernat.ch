@@ -1,6 +1,10 @@
 """Development server: nginx serves the development build, rebuilt each time a
 source file changes."""
 
+# This does not use "doit auto" from the doit-auto1 plugin since it looks
+# unmaintained (no commit since 2022). It also needs pyinotify, which is also
+# unmaintained (not working on Python 3.14).
+
 import ctypes
 import os
 import select
