@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import xxhash
+
 from ..images import optimize
 from ..tools import human, run, write
 
@@ -28,10 +30,10 @@ def image(site: Site, path: str, sidecar: Path) -> None:
 def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> None:
     if content is None:
         content = site.raw(path).read_bytes()
-    md5 = hashlib.md5(content).hexdigest()[:14]
+    digest = xxhash.xxh3_128_hexdigest(content)[:14]
     sha256 = base64.b64encode(hashlib.sha256(content).digest()).decode("ascii")
     root, ext = posixpath.splitext(path)
-    name = f"{root}.{md5}{ext}"
+    name = f"{root}.{digest}{ext}"
     write(site.output(f"media/{name}"), content)
     write(
         sidecar,

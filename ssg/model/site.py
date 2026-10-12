@@ -2,7 +2,6 @@
 
 import fnmatch
 import functools
-import hashlib
 import itertools
 import json
 import posixpath
@@ -117,11 +116,11 @@ class Site:
         raw = self.raw(path)
         deps.record_file(raw)
         try:
-            md5 = file_md5(raw, deps.file_digest(raw))
+            digest = file_hash(raw, deps.file_digest(raw))
         except FileNotFoundError:
             raise ValueError(f"unknown media file {path}") from None
         root, ext = posixpath.splitext(path)
-        return f"{root}.{md5[:14]}{ext}"
+        return f"{root}.{digest[:14]}{ext}"
 
     def load(self) -> None:
         root = Node(self, "", None)
@@ -302,6 +301,5 @@ def git_timestamps() -> dict[str, list[int]]:
 
 
 @functools.cache
-def file_md5(path: Path, digest: str) -> str:
-    with path.open("rb") as f:
-        return hashlib.file_digest(f, "md5").hexdigest()
+def file_hash(path: Path, digest: str) -> str:
+    return deps.file_hash(path)
