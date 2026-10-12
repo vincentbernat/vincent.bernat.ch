@@ -7,6 +7,7 @@ source file changes."""
 
 import ctypes
 import os
+import re
 import select
 import signal
 import struct
@@ -36,6 +37,9 @@ IN_Q_OVERFLOW = 0x00004000
 IN_ISDIR = 0x40000000
 EVENTS = IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
 EVENT = struct.Struct("iIII")
+
+# Editor lock and backup files, Python cache, and temporary files
+IGNORED = re.compile(r"^\.#|~$|^__pycache__$|\.tmp\.\d+\.[0-9a-f]+$")
 
 # After a change, wait for this delay without changes before building again
 QUIET = 1
@@ -99,9 +103,7 @@ class Watcher:
             if mask & IN_Q_OVERFLOW:
                 changed.append("(too many events)")
                 continue
-            if name.startswith(".#") or name.endswith("~"):
-                continue
-            if name == "__pycache__":
+            if IGNORED.search(name):
                 continue
             path = self.directories[wd] / name
             changed.append(str(path.relative_to(config.ROOT)))
