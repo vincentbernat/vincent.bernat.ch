@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Iterable
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,9 @@ from . import command
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
 COLORS = {"build": "\033[36m", "nginx": "\033[35m"}
 RESET = "\033[0m"
+
+# Port for reload events, nginx proxies /_reload to it
+RELOAD_PORT = 8081
 
 # From linux/inotify.h
 IN_CLOSE_WRITE = 0x00000008
@@ -133,6 +137,57 @@ def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
     return process
 
 
+class Reloader(ThreadingHTTPServer):
+    """Tell browsers to reload the page after each build, with server-sent
+    events."""
+
+    daemon_threads = True
+
+    def __init__(self) -> None:
+        super().__init__(("127.0.0.1", RELOAD_PORT), ReloadHandler)
+        self.condition = threading.Condition()
+        self.builds = 0
+
+    def reload(self) -> None:
+        with self.condition:
+            self.builds += 1
+            self.condition.notify_all()
+
+
+class ReloadHandler(BaseHTTPRequestHandler):
+    server: Reloader
+
+    def do_GET(self) -> None:
+        if self.path != "/_reload":
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        condition = self.server.condition
+        with condition:
+            seen = self.server.builds
+        try:
+            while True:
+                with condition:
+                    if self.server.builds == seen:
+                        condition.wait(30)
+                    builds = self.server.builds
+                if builds != seen:
+                    seen = builds
+                    self.wfile.write(b"data: reload\n\n")
+                else:
+                    # Keep the connection open
+                    self.wfile.write(b": ping\n\n")
+                self.wfile.flush()
+        except ConnectionError:
+            pass
+
+    def log_message(self, *args: Any) -> None:
+        pass
+
+
 def build() -> bool:
     process = spawn(
         "build",
@@ -153,6 +208,8 @@ def serve() -> None:
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     output = config.MODES["development"].output
     watcher = Watcher(WATCHED)
+    reloader = Reloader()
+    threading.Thread(target=reloader.serve_forever, daemon=True).start()
     nginx = None
     with tempfile.TemporaryDirectory(prefix="nginx-") as run:
         (Path(run) / "mime.types").symlink_to(os.environ["NGINX_MIME_TYPES"])
@@ -176,18 +233,18 @@ def serve() -> None:
                     status("build failed, waiting for changes", 31)
                     continue
                 new = (output / "nginx.conf").read_text()
-                if conf.exists() and conf.read_text() == new:
-                    continue
-                conf.write_text(new)
-                if nginx is None:
-                    nginx = spawn(
-                        "nginx",
-                        ["nginx", "-p", run, "-e", "/dev/stderr", "-c", str(conf)],
-                    )
-                    status("serving on http://localhost:8080")
-                else:
-                    os.kill(nginx.pid, signal.SIGHUP)
-                    status("nginx reloaded")
+                if not conf.exists() or conf.read_text() != new:
+                    conf.write_text(new)
+                    if nginx is None:
+                        nginx = spawn(
+                            "nginx",
+                            ["nginx", "-p", run, "-e", "/dev/stderr", "-c", str(conf)],
+                        )
+                        status("serving on http://localhost:8080")
+                    else:
+                        os.kill(nginx.pid, signal.SIGHUP)
+                        status("nginx reloaded")
+                reloader.reload()
         except KeyboardInterrupt:
             pass
         finally:
