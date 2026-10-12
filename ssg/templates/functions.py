@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import tomllib
 from typing import TYPE_CHECKING
 
@@ -20,10 +19,9 @@ if TYPE_CHECKING:
 @jinja_global
 @jinja2.pass_context
 def include_file(ctx: jinja2.runtime.Context, name: str) -> Markup:
-    target = os.path.join(ctx["node"].source, name)
+    target = ctx["node"].source / name
     deps.record_file(target)
-    with open(target, encoding="utf-8") as f:
-        return Markup(f.read())
+    return Markup(target.read_text(encoding="utf-8"))
 
 
 def as_list(value: str | list[str] | None) -> list[str]:
@@ -40,7 +38,7 @@ def licenses(lang: str) -> list[tuple[list[str], list[str]]]:
     """List REUSE.toml annotations as (paths, items), items being Markdown."""
     target = config.ROOT / "REUSE.toml"
     deps.record_file(target)
-    with open(target, "rb") as f:
+    with target.open("rb") as f:
         data = tomllib.load(f)
     result = []
     for annotation in data["annotations"]:

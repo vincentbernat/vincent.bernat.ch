@@ -6,7 +6,6 @@ import io
 import json
 import math
 import multiprocessing.util
-import os
 import pathlib
 import shutil
 import tempfile
@@ -72,7 +71,7 @@ class Cover:
             "serif": "Liberation Serif",
             "monospace": "DejaVu Sans Mono",
         }
-        with open(os.path.join(profile, "user.js"), "w") as f:
+        with (pathlib.Path(profile) / "user.js").open("w") as f:
             for lang in ("x-western", "x-unicode"):
                 f.write(f'user_pref("font.default.{lang}", "sans-serif");\n')
                 f.writelines(
@@ -305,7 +304,7 @@ class Cover:
             author_y = margin + (icon_h - author_img.height) // 2
             img.paste(author_img, (margin + icon_w + margin, author_y), author_img)
 
-        os.makedirs(os.path.dirname(target), exist_ok=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
         img.save(target, "JPEG", quality=100)
 
 

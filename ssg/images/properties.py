@@ -9,6 +9,7 @@ import math
 import re
 import xml.etree.ElementTree as ET
 from fractions import Fraction
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from PIL import Image
@@ -101,12 +102,12 @@ def read(path: str, kind: str) -> dict[str, Any]:
                 "interactive": interactive,
             }
         case "m3u8":
-            with open(path) as f:
-                w, h = max(
-                    (int(w), int(h))
-                    for w, h in re.findall(r"RESOLUTION=(\d+)x(\d+)(?:$|,)", f.read())
-                )
-                return {"size": (w, h), "opaque": True}
+            content = Path(path).read_text()
+            w, h = max(
+                (int(w), int(h))
+                for w, h in re.findall(r"RESOLUTION=(\d+)x(\d+)(?:$|,)", content)
+            )
+            return {"size": (w, h), "opaque": True}
         case "mp4" | "ogv":
             output = run(
                 "ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", path
@@ -115,7 +116,7 @@ def read(path: str, kind: str) -> dict[str, Any]:
             track = next(t for t in streams if t["codec_type"] == "video")
             return {"size": (track["width"], track["height"]), "opaque": True}
         case "pdf":
-            with open(path, "rb") as f:
+            with Path(path).open("rb") as f:
                 pdf = PdfReader(f)
                 box = pdf.pages[0].mediabox
                 # PDF physical sizes may be skewed, notably for slides. Assume

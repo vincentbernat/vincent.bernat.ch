@@ -5,8 +5,8 @@ from __future__ import annotations
 import functools
 import gzip
 import json
-import os
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from markdown.extensions import Extension
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from ..model.meta import Meta
 
 # Built and symlinked here by flake.nix.
-RFC_INDEX = os.path.join(os.path.dirname(__file__), "rfc-index.json.gz")
+RFC_INDEX = Path(__file__).parent / "rfc-index.json.gz"
 
 
 @functools.cache

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import posixpath
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -25,7 +25,7 @@ class Thumb(NamedTuple):
 
 
 def path(image: Resource) -> str:
-    return os.path.join(os.path.dirname(image.path), PREFIX + image.name)
+    return posixpath.join(posixpath.dirname(image.path), PREFIX + image.name)
 
 
 def info(image: Resource) -> Thumb:

@@ -15,6 +15,7 @@ import os
 import shutil
 from collections.abc import Callable, Sequence
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 if TYPE_CHECKING:
@@ -112,7 +113,7 @@ def record_code() -> None:
 @functools.cache
 def tool_path(name: str) -> str:
     """Path of a tool. With Nix, a new version has a new path."""
-    return os.path.realpath(shutil.which(name) or name)
+    return str(Path(shutil.which(name) or name).resolve())
 
 
 def tool(name: str) -> None:
@@ -137,7 +138,7 @@ def record_file(path: str | os.PathLike[str]) -> None:
 
 def file_digest(path: str | os.PathLike[str]) -> str:
     try:
-        st = os.stat(path)
+        st = Path(path).stat()
     except FileNotFoundError:
         return ""
     return f"{st.st_mtime_ns}:{st.st_size}"

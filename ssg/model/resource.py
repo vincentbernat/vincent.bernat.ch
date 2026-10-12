@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import fnmatch
 import functools
-import os
+import posixpath
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .. import config, deps
@@ -17,10 +18,10 @@ if TYPE_CHECKING:
 PYTHON = "#!python\n"
 
 
-def read_content(path: str | os.PathLike[str]) -> str | None:
+def read_content(path: Path) -> str | None:
     """Content of a text file, None for a binary file."""
     chunks = []
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         while chunk := f.read(65536):
             if b"\0" in chunk:
                 return None
@@ -35,8 +36,8 @@ class Resource:
         self.path = path
         self.source = config.CONTENT / path
         self.name = self.source.name
-        self.stem, ext = os.path.splitext(self.name)
-        self.kind = ext.lstrip(".")
+        self.stem = self.source.stem
+        self.kind = self.source.suffix.lstrip(".")
         self.simple_copy = any(fnmatch.fnmatch(path, p) for p in config.SIMPLE_COPY)
         # Text of the source, None for binary files and files copied as is
         self.content = None if self.simple_copy else read_content(self.source)
@@ -79,7 +80,7 @@ class Resource:
 
     def cover_image(self) -> str:
         """Path of the cover image, relative to media."""
-        return "images/covers/" + os.path.splitext(self.path)[0] + ".jpg"
+        return "images/covers/" + posixpath.splitext(self.path)[0] + ".jpg"
 
     @property
     def media_path(self) -> str:

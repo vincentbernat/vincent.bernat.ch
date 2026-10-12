@@ -17,7 +17,7 @@ DATABASE = config.ROOT / ".linkchecker.db"
 
 def results() -> tuple[list[dict[str, str]], bool]:
     """Read the results of the last run and tell if it reached the end."""
-    with open(OUTPUT, encoding="utf-8") as fp:
+    with OUTPUT.open(encoding="utf-8") as fp:
         lines = fp.readlines()
     rows = csv.DictReader(
         (line for line in lines if not line.startswith("#")), delimiter=";"
@@ -91,12 +91,10 @@ def replace(url: str, replacement: str) -> None:
     )
     for name in files.stdout.split():
         path = config.ROOT / name
-        with open(path, encoding="utf-8") as fp:
-            content = fp.read()
+        content = path.read_text(encoding="utf-8")
         updated = pattern.sub(lambda _: replacement, content)
         if updated != content:
-            with open(path, "w", encoding="utf-8") as fp:
-                fp.write(updated)
+            path.write_text(updated, encoding="utf-8")
 
 
 @command("links_check")

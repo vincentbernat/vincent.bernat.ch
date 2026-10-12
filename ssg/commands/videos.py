@@ -1,9 +1,9 @@
 """Encode and upload videos."""
 
 import json
-import os
 import re
 import shlex
+from pathlib import Path
 
 from .. import config
 from ..tools import human
@@ -77,8 +77,8 @@ def encode(videos: list[str]) -> None:
 def encode_one(video: str, skip_if_exists: bool = False) -> None:
     if video not in ARGUMENTS:
         raise Exit(f"unknown video {video}, add it to ARGUMENTS")
-    short = os.path.splitext(video)[0]
-    if skip_if_exists and os.path.isdir(DIRECTORY / short):
+    short = Path(video).stem
+    if skip_if_exists and (DIRECTORY / short).is_dir():
         return
     run(f"rm -rf ./{short}", cwd=DIRECTORY)
     run(
@@ -93,7 +93,7 @@ def encode_one(video: str, skip_if_exists: bool = False) -> None:
     # Copy poster, index.m3u8, and chapters if any
     run(f"cp {short}/poster.jpg ../images/posters/{short}.jpg", cwd=DIRECTORY)
     run(f"cp {short}/index.m3u8 {short}.m3u8", cwd=DIRECTORY)
-    if os.path.isfile(DIRECTORY / short / "chapters.vtt"):
+    if (DIRECTORY / short / "chapters.vtt").is_file():
         run(f"cp {short}/chapters.vtt {short}.chapters.vtt", cwd=DIRECTORY)
 
 
@@ -105,9 +105,9 @@ def analyze(videos: list[str]) -> None:
 
 
 def analyze_one(video: str) -> None:
-    directory = DIRECTORY / os.path.splitext(video)[0]
+    directory = DIRECTORY / Path(video).stem
     master = directory / "index.m3u8"
-    if not os.path.isfile(master):
+    if not master.is_file():
         raise Exit(f"{master} does not exist")
 
     def value(line: str, key: str) -> str | None:
@@ -116,21 +116,20 @@ def analyze_one(video: str) -> None:
         return match and match.group(1)
 
     def measure(
-        name: str, paths: list[str], duration: float
+        name: str, paths: list[Path], duration: float
     ) -> tuple[int, dict[str, list[int]]]:
         """Print the sizes for a set of files, return total and details."""
         # For MPEG-TS, the number of bytes taken by each PID
         pids: dict[int, int] = {}
-        if paths[0].endswith(".ts"):
+        if paths[0].suffix == ".ts":
             for path in paths:
-                with open(path, "rb") as f:
-                    data = f.read()
+                data = path.read_bytes()
                 for high, low in zip(data[1::188], data[2::188]):
                     pid = ((high & 0x1F) << 8) | low
                     pids[pid] = pids.get(pid, 0) + 188
         # The size of each elementary stream. There are too many packets to
         # bring them back to Python, so awk adds them up.
-        files = " ".join(shlex.quote(path) for path in paths)
+        files = " ".join(shlex.quote(str(path)) for path in paths)
         output = run(
             f"cat {files} | ffprobe -v error -of compact=p=0 "
             "-show_entries packet=stream_index,size - "
@@ -146,7 +145,7 @@ def analyze_one(video: str) -> None:
         streams = json.loads(
             run(
                 "ffprobe -v error -of json "
-                f"-show_entries stream=index,id,codec_type {shlex.quote(paths[0])}",
+                f"-show_entries stream=index,id,codec_type {shlex.quote(str(paths[0]))}",
                 capture=True,
             ).stdout
         )["streams"]
@@ -158,7 +157,7 @@ def analyze_one(video: str) -> None:
             sizes = kinds.setdefault(stream["codec_type"], [0, 0])
             sizes[0] += payload
             sizes[1] += pids.get(int(stream.get("id", "0x0"), 16), payload)
-        total = sum(os.path.getsize(path) for path in paths)
+        total = sum(path.stat().st_size for path in paths)
         cells = ""
         for kind in ("video", "audio"):
             if kind not in kinds:
@@ -177,8 +176,7 @@ def analyze_one(video: str) -> None:
     print("─" * len(header))
 
     # Renditions of the master playlist: variants and alternative audio
-    with open(master) as f:
-        lines = [line.strip() for line in f]
+    lines = [line.strip() for line in master.read_text().splitlines()]
     renditions: list[tuple[str, str]] = []
     for index, line in enumerate(lines):
         if line.startswith("#EXT-X-MEDIA:") and (media := value(line, "URI")):
@@ -189,11 +187,11 @@ def analyze_one(video: str) -> None:
     ladder = []
     used = {"index.m3u8"}
     for name, uri in renditions:
-        playlist = os.path.basename(uri)
+        playlist = Path(uri).name
         used.add(playlist)
         segments: list[str] = []
         duration = 0.0
-        with open(directory / playlist) as f:
+        with (directory / playlist).open() as f:
             for line in f:
                 line = line.strip()
                 if line.startswith("#EXT-X-MAP:"):
@@ -205,19 +203,20 @@ def analyze_one(video: str) -> None:
                     segments.append(line)
         used.update(segments)
         if segments:
-            paths = [str(directory / segment) for segment in segments]
+            paths = [directory / segment for segment in segments]
             ladder.append(measure(name, paths, duration))
 
     # Standalone files, like the progressive version
     rows = list(ladder)
-    leftovers = sorted(set(os.listdir(directory)) - used)
+    files = list(directory.iterdir())
+    leftovers = sorted({path.name for path in files} - used)
     for name in leftovers:
         if name.endswith(".mp4"):
-            target = str(directory / name)
+            target = directory / name
             duration = float(
                 run(
                     "ffprobe -v error -of default=nw=1:nk=1 "
-                    f"-show_entries format=duration {shlex.quote(target)}",
+                    f"-show_entries format=duration {shlex.quote(str(target))}",
                     capture=True,
                 ).stdout
             )
@@ -238,29 +237,25 @@ def analyze_one(video: str) -> None:
     print()
     for name in leftovers:
         if not name.endswith(".mp4"):
-            size = os.path.getsize(directory / name)
+            size = (directory / name).stat().st_size
             print(f"{name:<16}{human(size):>11}")
-    playlists = sum(
-        os.path.getsize(directory / name)
-        for name in os.listdir(directory)
-        if name.endswith(".m3u8")
-    )
+    playlists = sum(path.stat().st_size for path in files if path.suffix == ".m3u8")
     print(f"{'playlists':<16}{human(playlists):>11}")
-    size = sum(os.path.getsize(directory / name) for name in os.listdir(directory))
+    size = sum(path.stat().st_size for path in files)
     print(f"{'directory':<16}{human(size):>11}")
 
 
 @command("video_upload")
 def upload(videos: list[str]) -> None:
     """Upload transcoded videos. Without argument, upload all of them."""
-    for directory in os.listdir(DIRECTORY):
-        if not os.path.isfile(DIRECTORY / directory / "index.m3u8"):
+    for directory in DIRECTORY.iterdir():
+        if not (directory / "index.m3u8").is_file():
             continue
-        if videos and directory not in videos:
+        if videos and directory.name not in videos:
             continue
-        with step(f"uploading {directory}"):
+        with step(f"uploading {directory.name}"):
             for host in HOSTS:
                 run(
-                    f"rsync --delete --info=progress2 -a {DIRECTORY / directory}/ "
-                    f"{host}:/data/webserver/media.bernat.ch/videos/{directory}/"
+                    f"rsync --delete --info=progress2 -a {directory}/ "
+                    f"{host}:/data/webserver/media.bernat.ch/videos/{directory.name}/"
                 )

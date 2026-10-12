@@ -1,6 +1,5 @@
 """Optimized images (production only)."""
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -9,21 +8,17 @@ from .. import deps
 from ..tools import ProcessHelper, run
 
 
-def image(raw: Path, target: Path) -> list[Path | str]:
+def image(raw: Path, target: Path) -> list[Path]:
     """Write an optimized version of raw image to target. Also write AVIF or
     WebP versions when they are small enough. Return the written files."""
-    os.makedirs(os.path.dirname(target), exist_ok=True)
-    for path in (target, f"{target}.avif", f"{target}.webp"):
-        if os.path.lexists(path):
-            os.unlink(path)
-    kind = os.path.splitext(target)[1]
-    outputs: list[Path | str] = [target]
+    target.parent.mkdir(parents=True, exist_ok=True)
+    for path in (target, Path(f"{target}.avif"), Path(f"{target}.webp")):
+        path.unlink(missing_ok=True)
+    outputs = [target]
     alternative = None
-    match kind:
+    match target.suffix:
         case ".svg":
-            with open(raw, "rb") as f:
-                interactive = b"<script" in f.read()
-            if interactive:
+            if b"<script" in raw.read_bytes():
                 shutil.copyfile(raw, target)
             else:
                 run(
@@ -41,7 +36,7 @@ def image(raw: Path, target: Path) -> list[Path | str]:
             #   avifenc --codec aom --yuv 420 -a tune=iq --layered \
             #     --scaling-mode 1/8 -q 10 in --scaling-mode:u 1 -q:u 66 in out
             run("jpgicc", "-q100", raw, target)
-            alternative = f"{target}.avif"
+            alternative = Path(f"{target}.avif")
             run(
                 "avifenc",
                 "--codec",
@@ -56,7 +51,7 @@ def image(raw: Path, target: Path) -> list[Path | str]:
                 alternative,
             )
             run("cjpegli", target, f"{target}.tmp", "--quiet", "-d", "2.0")
-            os.replace(f"{target}.tmp", target)
+            Path(f"{target}.tmp").replace(target)
             tag_srgb(target)
         case ".png":
             # Exit code 98 when the result would be larger
@@ -73,11 +68,11 @@ def image(raw: Path, target: Path) -> list[Path | str]:
             elif result.returncode != 0:
                 raise RuntimeError(f"pngquant failed on {raw}:\n{result.stderr}")
             else:
-                alternative = f"{target}.webp"
+                alternative = Path(f"{target}.webp")
                 run("cwebp", "-quiet", "-z", "8", target, "-o", alternative)
                 tag_srgb(alternative)
         case ".gif":
-            alternative = f"{target}.webp"
+            alternative = Path(f"{target}.webp")
             run("gif2webp", "-quiet", raw, "-o", alternative)
             run("gifsicle", "--optimize=3", raw, "-o", target)
             tag_srgb(alternative)
@@ -86,10 +81,10 @@ def image(raw: Path, target: Path) -> list[Path | str]:
     # Prefer the original format when the alternative is not smaller enough:
     # JPEG and PNG decode fast and progressively.
     if alternative is not None:
-        if os.path.getsize(target) * 0.90 > os.path.getsize(alternative):
+        if target.stat().st_size * 0.90 > alternative.stat().st_size:
             outputs.append(alternative)
         else:
-            os.unlink(alternative)
+            alternative.unlink()
     return outputs
 
 
@@ -98,7 +93,7 @@ def image(raw: Path, target: Path) -> list[Path | str]:
 exiftool = ProcessHelper("exiftool", "-stay_open", "True", "-@", "-")
 
 
-def tag_srgb(path: Path | str) -> None:
+def tag_srgb(path: Path) -> None:
     """Tag as sRGB, as Firefox only manages colors of tagged images."""
     deps.tool("exiftool")
     profile = deps.getenv("SRGB_PROFILE")

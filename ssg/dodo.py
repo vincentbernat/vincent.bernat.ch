@@ -14,12 +14,13 @@ tasks.
 
 import os
 import sys
+from pathlib import Path
 
 # doit puts this directory first in sys.path. Modules here would hide modules
 # with the same name, like html or markdown.
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != HERE]
+HERE = Path(__file__).resolve().parent
+ROOT = str(HERE.parent)
+sys.path[:] = [p for p in sys.path if Path(p or ".").resolve() != HERE]
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
@@ -42,13 +43,13 @@ def sandbox() -> None:
     """Run doit again in a sandbox."""
     if shutil.which("bwrap") is None:
         sys.exit("bwrap not found, enter the development shell with nix develop")
-    home = os.path.expanduser("~")
-    matplotlib = os.path.join(home, ".cache", "matplotlib")
-    os.makedirs(matplotlib, exist_ok=True)
+    home = str(Path.home())
+    matplotlib = Path.home() / ".cache" / "matplotlib"
+    matplotlib.mkdir(parents=True, exist_ok=True)
     # Firefox, to render covers, may come from the home directory
     path = os.environ["PATH"]
     if firefox := shutil.which("firefox"):
-        path = f"{os.path.dirname(os.path.realpath(firefox))}:{path}"
+        path = f"{Path(firefox).resolve().parent}:{path}"
     args = [
         "bwrap",
         "--ro-bind", "/usr", "/usr",
@@ -65,7 +66,7 @@ def sandbox() -> None:
         "--tmpfs", home,
         "--ro-bind-try", f"{home}/.config/nix", f"{home}/.config/nix",
         "--bind", ROOT, ROOT,
-        "--bind", matplotlib, matplotlib,
+        "--bind", str(matplotlib), str(matplotlib),
         "--chdir", ROOT,
         "--unshare-all",
         "--die-with-parent",

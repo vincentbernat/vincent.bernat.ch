@@ -44,15 +44,15 @@ class Watcher:
         self.fd = self.libc.inotify_init1(os.O_CLOEXEC)
         if self.fd < 0:
             raise OSError(ctypes.get_errno(), "cannot initialize inotify")
-        self.directories: dict[int, str] = {}
+        self.directories: dict[int, Path] = {}
         for directory in directories:
             self.add(directory)
 
-    def add(self, top: str | Path) -> None:
+    def add(self, top: Path) -> None:
         """Watch a directory and its subdirectories."""
-        if os.path.basename(top) == "__pycache__":
+        if top.name == "__pycache__":
             return
-        for directory, dirnames, _ in os.walk(top):
+        for directory, dirnames, _ in top.walk():
             dirnames[:] = [d for d in dirnames if d != "__pycache__"]
             wd = self.libc.inotify_add_watch(self.fd, os.fsencode(directory), EVENTS)
             if wd < 0:
@@ -81,7 +81,7 @@ class Watcher:
                     continue
                 changed = True
                 if mask & IN_ISDIR and mask & (IN_CREATE | IN_MOVED_TO):
-                    self.add(os.path.join(self.directories[wd], name))
+                    self.add(self.directories[wd] / name)
             # Wait until there are no more changes
             timeout = QUIET if changed else 0
         return changed
@@ -130,7 +130,7 @@ def serve() -> None:
     watcher = Watcher(WATCHED)
     nginx = None
     with tempfile.TemporaryDirectory(prefix="nginx-") as run:
-        os.symlink(os.environ["NGINX_MIME_TYPES"], f"{run}/mime.types")
+        (Path(run) / "mime.types").symlink_to(os.environ["NGINX_MIME_TYPES"])
         conf = Path(run) / "nginx.conf"
         try:
             changed = True

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 import json
-import os
 import re
 import sys
 from collections.abc import Iterator
@@ -74,7 +73,7 @@ def environment(**values: str) -> config_changed:
     tasks using it run again. Tools are recorded when they run."""
     result = {
         "python": sys.prefix,
-        "node_modules": os.path.realpath(config.ROOT / "node_modules"),
+        "node_modules": str((config.ROOT / "node_modules").resolve()),
     }
     return config_changed(result | values)
 
@@ -463,22 +462,21 @@ class Builder:
             "uptodate": [False],
         }
 
-    def expected(self) -> set[str]:
+    def expected(self) -> set[Path]:
         """Files expected in the output directory."""
         result = {self.out / r.path for r in self.copies + self.pages}
         if self.mode.production:
             result.add(self.out / "bundle-sizes.txt")
             for path in self.published:
                 try:
-                    with open(self.site.sidecar(path)) as f:
-                        names = json.load(f)["files"]
+                    names = json.loads(self.site.sidecar(path).read_text())["files"]
                 except FileNotFoundError:
                     continue
                 result.update(self.out / "media" / f for f in names)
         else:
             result.update(self.out / r.path for r in self.media)
             result.update(self.site.generated.values())
-        return {str(p) for p in result}
+        return result
 
 
 def copy_task(name: str, source: Path, target: Path) -> Task:

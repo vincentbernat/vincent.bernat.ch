@@ -161,8 +161,7 @@ def article(resource: Resource) -> str:
     """Rendered article of another resource."""
     path = fragment_path(resource)
     deps.record_file(path)
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)["html"]
+    return json.loads(path.read_text(encoding="utf-8"))["html"]
 
 
 # Register filters and functions

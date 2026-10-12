@@ -1,7 +1,5 @@
 """Check content and code."""
 
-import glob
-import os
 import re
 import sys
 
@@ -31,13 +29,11 @@ def vale() -> None:
 def frontmatter(fix: bool = False) -> None:
     """Check frontmatter keys are known and ordered."""
     unordered = []
-    for path in sorted(
-        glob.glob(str(config.CONTENT / "??" / "**" / "*"), recursive=True)
-    ):
-        if path.endswith((".yaml", ".yml")) or not os.path.isfile(path):
+    for path in sorted(config.CONTENT.glob("??/**/*")):
+        if path.suffix in (".yaml", ".yml") or not path.is_file():
             continue
         try:
-            with open(path, encoding="utf-8") as f:
+            with path.open(encoding="utf-8") as f:
                 lines = f.readlines()
             if lines[0].strip() != "---":
                 continue
@@ -52,9 +48,9 @@ def frontmatter(fix: bool = False) -> None:
                 blocks[-1][1].append(line)
             if blocks == sorted(blocks):
                 continue
-            unordered.append(path)
+            unordered.append(str(path))
             if fix:
-                with open(path, "w", encoding="utf-8") as out:
+                with path.open("w", encoding="utf-8") as out:
                     out.writelines(
                         lines[:1]
                         + [line for _, block in sorted(blocks) for line in block]

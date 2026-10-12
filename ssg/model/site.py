@@ -5,7 +5,6 @@ import functools
 import hashlib
 import itertools
 import json
-import os
 import posixpath
 import subprocess
 import urllib.parse
@@ -24,9 +23,8 @@ from .resource import PYTHON, Resource
 NODEMETA = "meta.yaml"
 
 
-def read_text(path: str | os.PathLike[str]) -> str:
-    with open(path, encoding="utf-8", newline="") as f:
-        return f.read()
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8", newline="")
 
 
 def encode_url(base: str, path: str) -> str:
@@ -109,8 +107,7 @@ class Site:
         sidecar = self.sidecar(path)
         deps.record_file(sidecar)
         try:
-            with open(sidecar) as f:
-                return json.load(f)
+            return json.loads(sidecar.read_text())
         except FileNotFoundError:
             return None
 
@@ -119,18 +116,18 @@ class Site:
         raw = self.raw(path)
         deps.record_file(raw)
         try:
-            md5 = file_md5(str(raw), deps.file_digest(raw))
+            md5 = file_md5(raw, deps.file_digest(raw))
         except FileNotFoundError:
             raise ValueError(f"unknown media file {path}") from None
-        root, ext = os.path.splitext(path)
+        root, ext = posixpath.splitext(path)
         return f"{root}.{md5[:14]}{ext}"
 
     def load(self) -> None:
         root = Node(self, "", None)
         self.nodes[""] = root
-        for directory, dirnames, filenames in os.walk(config.CONTENT, followlinks=True):
+        for directory, dirnames, filenames in config.CONTENT.walk(follow_symlinks=True):
             dirnames[:] = sorted(d for d in dirnames if not ignored(d))
-            relative = os.path.relpath(directory, config.CONTENT)
+            relative = directory.relative_to(config.CONTENT).as_posix()
             relative = "" if relative == "." else relative
             node = self.nodes[relative]
             for name in sorted(dirnames):
@@ -180,7 +177,7 @@ class Site:
                 continue
             # Files not committed yet use their modification time
             # Only the day, so saving does not change what other pages show
-            mtime = datetime.fromtimestamp(os.path.getmtime(resource.source), UTC)
+            mtime = datetime.fromtimestamp(resource.source.stat().st_mtime, UTC)
             mtime = mtime.replace(
                 hour=0, minute=0, second=0, microsecond=0, tzinfo=None
             )
@@ -257,7 +254,7 @@ def git_dates() -> dict[str, tuple[datetime, datetime]]:
     )
     dates = {}
     current = None
-    prefix = os.path.relpath(config.CONTENT, config.ROOT) + "/"
+    prefix = config.CONTENT.relative_to(config.ROOT).as_posix() + "/"
     for line in output.split("\n"):
         line = line.strip()
         if not line:
@@ -284,6 +281,6 @@ def git_dates() -> dict[str, tuple[datetime, datetime]]:
 
 
 @functools.cache
-def file_md5(path: str, digest: str) -> str:
-    with open(path, "rb") as f:
+def file_md5(path: Path, digest: str) -> str:
+    with path.open("rb") as f:
         return hashlib.file_digest(f, "md5").hexdigest()

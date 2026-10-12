@@ -44,43 +44,39 @@ def publish() -> None:
         raise Exit("Build rollbacked")
 
 
-def merge(upper: str | Path, lower: str | Path) -> None:
+def merge(upper: Path, lower: Path) -> None:
     """Apply the changes recorded in the upper directory of an overlay."""
     # The database goes last. If the merge stops, it does not describe files
     # which are not there.
-    entries = sorted(os.scandir(upper), key=lambda e: e.name.startswith("doit.db"))
+    entries = sorted(upper.iterdir(), key=lambda e: e.name.startswith("doit.db"))
     for entry in entries:
-        target = os.path.join(lower, entry.name)
-        st = entry.stat(follow_symlinks=False)
-        replaced = opaque(entry.path)
+        target = lower / entry.name
+        st = entry.lstat()
+        replaced = opaque(entry)
         if stat.S_ISCHR(st.st_mode) and st.st_rdev == 0:
             # Deleted file or directory
             remove(target)
-        elif (
-            not entry.is_dir(follow_symlinks=False)
-            or replaced
-            or not os.path.isdir(target)
-        ):
+        elif not entry.is_dir(follow_symlinks=False) or replaced or not target.is_dir():
             remove(target)
-            os.rename(entry.path, target)
+            entry.rename(target)
             if replaced:
                 os.removexattr(target, "user.overlay.opaque")
         else:
-            merge(entry.path, target)
+            merge(entry, target)
 
 
-def opaque(path: str) -> bool:
+def opaque(path: Path) -> bool:
     try:
         return os.getxattr(path, "user.overlay.opaque") == b"y"
     except OSError:
         return False
 
 
-def remove(path: str) -> None:
-    if os.path.isdir(path) and not os.path.islink(path):
+def remove(path: Path) -> None:
+    if path.is_dir(follow_symlinks=False):
         shutil.rmtree(path)
-    elif os.path.lexists(path):
-        os.unlink(path)
+    else:
+        path.unlink(missing_ok=True)
 
 
 def discard() -> None:
@@ -119,7 +115,7 @@ def push(clean: bool = False) -> None:
     with step("restore timestamps"):
         for name, ts in commit_times().items():
             path = FINAL / name
-            if os.path.lexists(path):
+            if path.exists(follow_symlinks=False):
                 os.utime(path, (ts, ts), follow_symlinks=False)
 
     for host in HOSTS:

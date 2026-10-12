@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 import tempfile
@@ -20,13 +19,14 @@ if TYPE_CHECKING:
 def extract(target: Path) -> None:
     """Extract the pagefind library by indexing an almost empty site."""
     with tempfile.TemporaryDirectory() as tmp:
-        site = os.path.join(tmp, "site")
-        os.makedirs(site)
-        with open(os.path.join(site, "index.html"), "w") as f:
-            f.write("<html><body><main data-pagefind-body>empty</main></body></html>")
-        output = os.path.join(tmp, "out")
+        site = Path(tmp) / "site"
+        site.mkdir()
+        (site / "index.html").write_text(
+            "<html><body><main data-pagefind-body>empty</main></body></html>"
+        )
+        output = Path(tmp) / "out"
         run("pagefind", "--site", site, "--output-path", output, "--quiet")
-        copy(os.path.join(output, "pagefind.js"), target)
+        copy(output / "pagefind.js", target)
 
 
 UNWANTED = re.compile(
@@ -51,21 +51,20 @@ def index(site: Site) -> None:
             "--quiet",
         )
         shutil.rmtree(destination, ignore_errors=True)
-        os.makedirs(destination)
+        destination.mkdir(parents=True)
         files = []
-        for name in sorted(os.listdir(tmp)):
-            if not UNWANTED.match(name):
-                shutil.move(os.path.join(tmp, name), destination / name)
-                files.append(name)
+        for path in sorted(Path(tmp).iterdir()):
+            if not UNWANTED.match(path.name):
+                path.move(destination / path.name)
+                files.append(path.name)
     write(site.mode.cache / "pagefind.json", json.dumps(files))
 
 
 def exist(site: Site) -> bool:
     """Check the files of the search index exist."""
     try:
-        with open(site.mode.cache / "pagefind.json") as f:
-            files = json.load(f)
+        files = json.loads((site.mode.cache / "pagefind.json").read_text())
     except FileNotFoundError:
         return False
     destination = site.mode.output / "media" / "pagefind"
-    return all(os.path.exists(destination / name) for name in files)
+    return all((destination / name).exists() for name in files)

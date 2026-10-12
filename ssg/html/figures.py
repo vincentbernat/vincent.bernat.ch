@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
+import posixpath
 import re
 import sys
 import urllib.parse
 from collections.abc import Mapping
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import langcodes
@@ -35,7 +36,7 @@ def resolve(site: Site, resource: Resource, src: str) -> Resource | None:
     elif src.startswith("/"):
         path = src.lstrip("/")
     else:
-        path = os.path.join(resource.node.path, src)
+        path = posixpath.join(resource.node.path, src)
     image = site.resource(path)
     if image is None:
         print(f"[{resource}] has an unknown image {src}", file=sys.stderr)
@@ -210,7 +211,7 @@ def fix(site: Site, resource: Resource, d: Any) -> None:
 
 
 def video(site: Site, resource: Resource, img: Any, src: str) -> None:
-    id = os.path.splitext(os.path.basename(src))[0]
+    id = PurePosixPath(src).stem
     img[0].tag = "video"
     img[0].set("controls", None)
     img.attr("preload", "none")

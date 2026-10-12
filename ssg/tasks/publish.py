@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import base64
-import glob
 import hashlib
 import json
-import os
+import posixpath
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -22,17 +21,16 @@ def image(site: Site, path: str, sidecar: Path) -> None:
     raw = site.raw(path)
     name = site.hashed(path)
     outputs = optimize.image(raw, site.output(f"media/{name}"))
-    files = [os.path.relpath(o, site.output("media")) for o in outputs]
+    files = [o.relative_to(site.output("media")).as_posix() for o in outputs]
     write(sidecar, json.dumps({"path": name, "files": files}))
 
 
 def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> None:
     if content is None:
-        with open(site.raw(path), "rb") as f:
-            content = f.read()
+        content = site.raw(path).read_bytes()
     md5 = hashlib.md5(content).hexdigest()[:14]
     sha256 = base64.b64encode(hashlib.sha256(content).digest()).decode("ascii")
-    root, ext = os.path.splitext(path)
+    root, ext = posixpath.splitext(path)
     name = f"{root}.{md5}{ext}"
     write(site.output(f"media/{name}"), content)
     write(
@@ -46,8 +44,7 @@ CSS_REFERENCE = re.compile(r"[^\s()'\"]*((?:fonts|images)/[^\s()'\"]+)(['\"]?)\)
 
 def css(site: Site, path: str, sidecar: Path) -> None:
     """Use hashed names for fonts and images referenced in a stylesheet."""
-    with open(site.raw(path), encoding="utf-8") as f:
-        content = f.read()
+    content = site.raw(path).read_text(encoding="utf-8")
 
     def replace(mo: re.Match[str]) -> str:
         ref = mo.group(1)
@@ -68,11 +65,10 @@ def css(site: Site, path: str, sidecar: Path) -> None:
 def exist(site: Site, sidecar: Path) -> bool:
     """Check the files listed in a sidecar exist."""
     try:
-        with open(sidecar) as f:
-            files = json.load(f)["files"]
+        files = json.loads(sidecar.read_text())["files"]
     except FileNotFoundError:
         return False
-    return all(os.path.exists(site.output(f"media/{f}")) for f in files)
+    return all(site.output(f"media/{f}").exists() for f in files)
 
 
 def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
@@ -82,14 +78,16 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     sizes = []
     for bundle in bundles:
         raw = site.raw(bundle)
-        row = [os.path.getsize(raw)]
+        row = [raw.stat().st_size]
         if bundle.endswith(".woff2"):
             sizes.append((f"media/{bundle}", row * 3))
             continue
         # compression levels are from:
         # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/web-servers/nginx/default.nix
-        for compress in (["gzip", "-c", "-5"], ["brotli", "-c", "-q", "5"]):
-            row.append(len(run(*compress, raw, text=False)))
+        row += [
+            len(run(*compress, raw, text=False))
+            for compress in (["gzip", "-c", "-5"], ["brotli", "-c", "-q", "5"])
+        ]
         sizes.append((f"media/{bundle}", row))
 
     # Count pages using each bundle, directly or through a stylesheet
@@ -106,18 +104,18 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     )
 
     def references(path: Path) -> set[str]:
-        with open(path, encoding="utf-8") as f:
-            return {names[name] for name in pattern.findall(f.read())}
+        content = path.read_text(encoding="utf-8")
+        return {names[name] for name in pattern.findall(content)}
 
     nested = {
         names[name]: references(out / "media" / name)
         for name in names
         if name.endswith(".css")
     }
-    pages = glob.glob("**/*.html", root_dir=out, recursive=True)
+    pages = list(out.glob("**/*.html"))
     counts = {f"media/{b}": 0 for b in bundles}
     for page in pages:
-        found = references(out / page)
+        found = references(page)
         for bundle in found.copy():
             found |= nested.get(bundle, set())
         for bundle in found:
@@ -133,7 +131,7 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     totals.append(("total", [sum(row[i] for _, row in sizes) for i in range(3)]))
     sizes += totals
     width = max(len(name) for name, _ in sizes)
-    with open(target, "w", encoding="utf-8") as f:
+    with target.open("w", encoding="utf-8") as f:
         f.write(
             f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10} {'pages':>10}\n"
         )

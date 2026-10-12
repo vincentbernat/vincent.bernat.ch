@@ -68,8 +68,8 @@ def fragment(site: Site, resource: Resource, target: Path) -> bool:
 def page(site: Site, resource: Resource, fragment: Path | None, target: Path) -> None:
     context = {}
     if fragment:
-        with open(fragment, encoding="utf-8") as f:
-            context["formatted_article"] = json.load(f)["html"]
+        content = fragment.read_text(encoding="utf-8")
+        context["formatted_article"] = json.loads(content)["html"]
     deps.record_resource(resource)
     deps.record_code()
     deps.record_content(resource)

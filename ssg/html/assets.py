@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import posixpath
 from typing import TYPE_CHECKING, Any
 
 from lxml.html import fragment_fromstring
@@ -24,7 +24,7 @@ def load(site: Site, d: Any) -> None:
             continue
         for f in files:
             src = site.media_url(f)
-            name = os.path.basename(f)
+            name = posixpath.basename(f)
             if f.endswith(".css"):
                 if lazy:
                     css_tags.append(

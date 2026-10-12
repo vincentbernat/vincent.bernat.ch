@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Mapping
+from pathlib import Path
 from typing import IO, ClassVar, Literal, Self, overload
 
 from . import deps
@@ -193,11 +194,10 @@ def write(path: str | os.PathLike[str], content: str | bytes) -> None:
     then not considered as changed."""
     if isinstance(content, str):
         content = content.encode("utf-8")
+    path = Path(path)
     try:
-        with open(path, "rb") as f:
-            if f.read() == content:
-                return
+        if path.read_bytes() == content:
+            return
     except FileNotFoundError:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as f:
-        f.write(content)
+        path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
