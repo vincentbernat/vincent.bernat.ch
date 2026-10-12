@@ -49,7 +49,7 @@ def glyphs_path(site: Site, kind: str) -> Path:
 
 def glyphs(site: Site, fragments: Iterable[Path]) -> None:
     """Collect glyphs used by all articles."""
-    result = {kind: set(markdown.BASE_GLYPHS[kind]) for kind in KINDS}
+    result = {kind: set(markdown.base_glyphs()[kind]) for kind in KINDS}
     for fragment in fragments:
         data = json.loads(fragment.read_text(encoding="utf-8"))["glyphs"]
         for kind in KINDS:

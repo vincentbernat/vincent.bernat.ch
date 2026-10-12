@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import sys
 import unicodedata
 from typing import TYPE_CHECKING
@@ -18,22 +19,26 @@ if TYPE_CHECKING:
 # Glyphs and unknown references found during conversions, when not None
 collected: dict[str, set[str]] | None = None
 
-# Glyphs always kept in fonts
-BASE_GLYPHS = {
-    "monospace": {
-        "û",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
-    },
-    "regular": {
-        "…",  # HORIZONTAL ELLIPSIS
-        "’",  # RIGHT SINGLE QUOTATION MARK
-    },
-}
-for c in range(sys.maxunicode + 1):
-    # Zs is Space Separator Category (it contains all non-zero-width spaces)
-    # Cf is Format Category (it contains zero-width-spaces)
-    if unicodedata.category(chr(c)) in ("Zs", "Cf"):
-        for chars in BASE_GLYPHS.values():
-            chars.add(chr(c))
+
+@functools.cache
+def base_glyphs() -> dict[str, set[str]]:
+    """Glyphs always kept in fonts."""
+    result = {
+        "monospace": {
+            "û",  # SMALL LETTER U WITH CIRCUMFLEX (for août)
+        },
+        "regular": {
+            "…",  # HORIZONTAL ELLIPSIS
+            "’",  # RIGHT SINGLE QUOTATION MARK
+        },
+    }
+    for c in range(sys.maxunicode + 1):
+        # Zs is Space Separator Category (it contains all non-zero-width spaces)
+        # Cf is Format Category (it contains zero-width-spaces)
+        if unicodedata.category(chr(c)) in ("Zs", "Cf"):
+            for chars in result.values():
+                chars.add(chr(c))
+    return result
 
 
 def collect(kind: str, values: str) -> None:
