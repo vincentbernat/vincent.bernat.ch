@@ -144,6 +144,21 @@ def file_digest(path: str | os.PathLike[str]) -> str:
     return f"{st.st_mtime_ns}:{st.st_size}"
 
 
+# Kinds of recorded keys, as handled by state()
+KINDS = {
+    "r": "resource",
+    "c": "content",
+    "f": "file",
+    "w": "sorted",
+    "n": "neighbor",
+    "v": "tracks",
+    "k": "code",
+    "t": "tool",
+    "e": "environment",
+    "y": "year",
+}
+
+
 def state(site: Site, key: str) -> str | None:
     """Current digest for a key."""
     kind, _, what = key.partition(":")
