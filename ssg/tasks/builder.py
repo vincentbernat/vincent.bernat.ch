@@ -243,7 +243,7 @@ class Builder:
             if resource.kind == "css":
                 file_dep += CSS_DEPS
             if resource.uses_template:
-                file_dep += CODE + templates.page_layouts(resource)
+                file_dep += templates.page_layouts(resource)
             yield {
                 "basename": "image" if resource.kind == "svg" else "media",
                 "name": path,
@@ -313,7 +313,6 @@ class Builder:
                 "name": path,
                 "actions": [(render.fragment, [self.site, resource, target])],
                 "file_dep": [str(resource.source)]
-                + CODE
                 + templates.article_layouts(resource)
                 + [
                     str(self.site.generated[thumb])
@@ -328,7 +327,7 @@ class Builder:
         for resource in self.pages:
             target = self.out / resource.path
             fragment = self.fragments.get(resource.path)
-            file_dep = [str(resource.source)] + CODE + PAGE_CSS_DEPS
+            file_dep = [str(resource.source)] + PAGE_CSS_DEPS
             file_dep += templates.page_layouts(resource)
             if fragment:
                 file_dep.append(str(fragment))
