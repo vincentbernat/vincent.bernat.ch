@@ -37,7 +37,7 @@ MODES = {
     "production": Mode(
         "production",
         ".final",
-        "https://d2pzklc15kok91.cloudfront.net/",
+        "https://media-bernat-ch.b-cdn.net/",
         cdn=(
             ("files/", "https://media.bernat.ch/files/"),
             ("videos/", "https://media.bernat.ch/videos/"),
