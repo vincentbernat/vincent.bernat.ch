@@ -197,7 +197,6 @@ class Cover:
         # Fonts are found with Fontconfig
         deps.getenv("FONTCONFIG_FILE", "")
         W, H = self.WIDTH, self.HEIGHT
-        author = author or ""
         title = "".join(
             ch
             for ch in title.split(" | ", 1)[0]

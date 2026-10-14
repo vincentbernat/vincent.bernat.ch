@@ -301,7 +301,7 @@ class Builder:
                     self.site.raw(f"images/{cover}") if image.python else image.source
                 )
                 file_dep.append(str(cover))
-            title, author = resource.meta.title, resource.meta.author
+            title, author = resource.meta.title, resource.meta.author or ""
             yield {
                 "basename": "cover",
                 "name": resource.path,
