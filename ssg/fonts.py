@@ -28,7 +28,7 @@ KINDS = ("monospace", "regular")
 #
 # To look at the result: http://torinak.com/font/lsfont.html
 SUBSET = {
-    "iosevka-custom-regular": (
+    "iosevka": (
         "monospace",
         ["--layout-features=", "--desubroutinize", "--no-hinting"],
     ),

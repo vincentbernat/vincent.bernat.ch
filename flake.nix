@@ -332,11 +332,8 @@
                   };
                 in
                 ''
-                  for ttf in ${iosevka}/share/fonts/truetype/*.ttf; do
-                    cp $ttf .
-                    ${pkgs.woff2}/bin/woff2_compress *.ttf
-                    rm *.ttf
-                  done
+                  cp ${iosevka}/share/fonts/truetype/*.ttf iosevka.ttf
+                  ${pkgs.woff2}/bin/woff2_compress iosevka.ttf
                 '';
               installPhase = ''
                 mkdir -p $out

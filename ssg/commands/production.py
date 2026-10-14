@@ -170,20 +170,12 @@ def prune_final(before: str = "1 year ago") -> None:
 
 
 @command()
-def fonts_update() -> None:
-    """Build fonts with Nix."""
+def fonts_update(names: list[str]) -> None:
+    """Build fonts with Nix. Without argument, build all of them."""
     # We can compare the metrics using http://webfont-test.com/
     fonts = config.CONTENT / "media" / "fonts"
-    with step("building Iosevka"):
-        run("nix build .#build.iosevka", cwd=config.ROOT)
-        run(
-            "install -m 0644 result/Iosevka*.woff2 "
-            f"{fonts}/iosevka-custom-regular.woff2",
-            cwd=config.ROOT,
-        )
-        run("rm result", cwd=config.ROOT)
-    for name in ("literata", "baskerville"):
-        with step(f"building {name.capitalize()}"):
+    for name in names or ("iosevka", "literata", "baskerville"):
+        with step(f"building {name}"):
             run(f"nix build .#build.{name}", cwd=config.ROOT)
             run(f"install -m 0644 result/*.woff2 {fonts}/", cwd=config.ROOT)
             run("rm result", cwd=config.ROOT)
