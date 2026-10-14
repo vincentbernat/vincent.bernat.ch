@@ -29,12 +29,14 @@
   <meta property="og:type" content="article">
   <meta property="og:locale" content="{{ resource.meta.locale }}">
   <meta property="og:title" content="{{ resource.meta.title|e }}">
+{% if resource.meta.description is not defined or resource.meta.description %}
   <meta property="og:description" name="description" content="
 {%- filter replace('\n', ' ')|truncate(150)|trim()|e %}
 {%- if resource.meta.description %}{{ resource.meta.description }}
 {%- else %}{{ formatted_article|truncate(1000)|striptags }}
 {%- endif %}
 {%- endfilter %}">
+{% endif %}
   <meta property="og:image" content="{{ media_url(resource.cover_image()) }}">
 {% if resource.meta.created != None %}
   <meta property="article:published_time" data-pagefind-meta="date[content]" content="{{ resource.meta.created|xmldatetime }}">
