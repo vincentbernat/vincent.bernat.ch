@@ -42,7 +42,7 @@ def image(raw: Path, target: Path) -> list[Path]:
                 "--codec",
                 "aom",
                 "--yuv",
-                "420",
+                "444",
                 "-q",
                 "66",
                 "-a",
