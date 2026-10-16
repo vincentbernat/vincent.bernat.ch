@@ -351,14 +351,11 @@
                 NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
                 PYTHONDONTWRITEBYTECODE = 1;
                 SRGB_PROFILE = "${srgbProfile}";
+                SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
                 NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
                 FONTCONFIG_FILE = "${pkgs.runCommand "fonts.conf" { } ''
                   sed '/<dir prefix="xdg">/d' ${pkgs.makeFontsConf {
-                    fontDirectories = with pkgs; [
-                      notoSansDisplay
-                      dejavu_fonts
-                      liberation_ttf
-                    ];
+                    fontDirectories = [ notoSansDisplay ];
                     impureFontDirectories = [ ];
                     includes = [ ];
                   }} > $out

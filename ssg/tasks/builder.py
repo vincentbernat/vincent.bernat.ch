@@ -292,14 +292,10 @@ class Builder:
             cover = resource.meta.get("cover")
             file_dep = COVER_DEPS + [str(FAVICON)]
             if cover:
-                # Generated images are used as is. For SVG, the source is used
-                # to keep the original fonts.
                 image = self.site.resources.get(f"media/images/{cover}")
                 if image is None:
                     raise ValueError(f"{resource}: unknown cover {cover}")
-                cover = (
-                    self.site.raw(f"images/{cover}") if image.python else image.source
-                )
+                cover = self.site.raw(f"images/{cover}")
                 file_dep.append(str(cover))
             title, author = resource.meta.title, resource.meta.author or ""
             yield {

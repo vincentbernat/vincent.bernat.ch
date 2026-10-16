@@ -26,13 +26,13 @@ def media(site: Site, resource: Resource) -> None:
         content = python(site, resource)
     else:
         content = text(site, resource)
-        match resource.kind:
-            case "css":
-                content = css.process(site, content)
-            case "js":
-                content = js(site, content)
-            case "svg":
-                content = svg.process(content)
+    match resource.kind:
+        case "css":
+            content = css.process(site, content)
+        case "js":
+            content = js(site, content)
+        case "svg":
+            content = svg.process(content)
     write(site.generated[resource.media_path], content)
 
 

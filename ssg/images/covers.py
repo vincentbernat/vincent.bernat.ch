@@ -55,20 +55,7 @@ class Cover:
 
     @functools.cached_property
     def firefox_profile(self) -> str:
-        profile = tempfile.mkdtemp(prefix="ssg-firefox-")
-        fonts = {
-            "sans-serif": "Liberation Sans",
-            "serif": "Liberation Serif",
-            "monospace": "DejaVu Sans Mono",
-        }
-        with (pathlib.Path(profile) / "user.js").open("w") as f:
-            for lang in ("x-western", "x-unicode"):
-                f.write(f'user_pref("font.default.{lang}", "sans-serif");\n')
-                f.writelines(
-                    f'user_pref("font.name.{generic}.{lang}", "{family}");\n'
-                    for generic, family in fonts.items()
-                )
-        return profile
+        return tempfile.mkdtemp(prefix="ssg-firefox-")
 
     @functools.cached_property
     def firefox(self) -> ProcessHelper:
