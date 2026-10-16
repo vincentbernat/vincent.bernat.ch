@@ -64,6 +64,9 @@ def image(raw: Path, target: Path) -> list[Path]:
                 text=True,
             )
             if result.returncode == 98:
+                # The WebP version is tagged as sRGB without color conversion
+                if has_icc_profile(raw):
+                    raise RuntimeError(f"{raw} has an ICC profile, convert it to sRGB")
                 shutil.copyfile(raw, target)
             elif result.returncode != 0:
                 raise RuntimeError(f"pngquant failed on {raw}:\n{result.stderr}")
@@ -106,3 +109,18 @@ def tag_srgb(path: Path) -> None:
         errors = exiftool.errors()
     if output[-1:] != ["status=0\n"]:
         raise RuntimeError(f"exiftool failed on {path}:\n{errors}{''.join(output)}")
+
+
+def has_icc_profile(png: Path) -> bool:
+    """Tell if a PNG file has a color profile."""
+    with png.open("rb") as f:
+        f.read(8)
+        while header := f.read(8):
+            length = int.from_bytes(header[:4], "big")
+            kind = header[4:]
+            if kind == b"iCCP":  # color profile
+                return True
+            if kind == b"IDAT":  # first chunk of data
+                return False
+            f.seek(length + 4, 1)
+    return False
