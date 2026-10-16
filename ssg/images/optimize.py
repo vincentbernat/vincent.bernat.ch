@@ -67,10 +67,9 @@ def image(raw: Path, target: Path) -> list[Path]:
                 shutil.copyfile(raw, target)
             elif result.returncode != 0:
                 raise RuntimeError(f"pngquant failed on {raw}:\n{result.stderr}")
-            else:
-                alternative = Path(f"{target}.webp")
-                run("cwebp", "-quiet", "-z", "8", target, "-o", alternative)
-                tag_srgb(alternative)
+            alternative = Path(f"{target}.webp")
+            run("cwebp", "-quiet", "-z", "8", target, "-o", alternative)
+            tag_srgb(alternative)
         case ".gif":
             alternative = Path(f"{target}.webp")
             run("gif2webp", "-quiet", raw, "-o", alternative)
