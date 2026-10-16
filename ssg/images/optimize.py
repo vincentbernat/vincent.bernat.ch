@@ -65,7 +65,7 @@ def image(raw: Path, target: Path) -> list[Path]:
             )
             if result.returncode == 98:
                 # The WebP version is tagged as sRGB without color conversion
-                if has_icc_profile(raw):
+                if png_has_icc_profile(raw):
                     raise RuntimeError(f"{raw} has an ICC profile, convert it to sRGB")
                 shutil.copyfile(raw, target)
             elif result.returncode != 0:
@@ -74,6 +74,9 @@ def image(raw: Path, target: Path) -> list[Path]:
             run("cwebp", "-quiet", "-z", "8", target, "-o", alternative)
             tag_srgb(alternative)
         case ".gif":
+            # The WebP version is tagged as sRGB without color conversion
+            if gif_has_icc_profile(raw):
+                raise RuntimeError(f"{raw} has an ICC profile, convert it to sRGB")
             alternative = Path(f"{target}.webp")
             run("gif2webp", "-quiet", raw, "-o", alternative)
             run("gifsicle", "--optimize=3", raw, "-o", target)
@@ -111,7 +114,7 @@ def tag_srgb(path: Path) -> None:
         raise RuntimeError(f"exiftool failed on {path}:\n{errors}{''.join(output)}")
 
 
-def has_icc_profile(png: Path) -> bool:
+def png_has_icc_profile(png: Path) -> bool:
     """Tell if a PNG file has a color profile."""
     with png.open("rb") as f:
         f.read(8)
@@ -123,4 +126,24 @@ def has_icc_profile(png: Path) -> bool:
             if kind == b"IDAT":  # first chunk of data
                 return False
             f.seek(length + 4, 1)
+    return False
+
+
+def gif_has_icc_profile(gif: Path) -> bool:
+    """Tell if a GIF file has a color profile."""
+    with gif.open("rb") as f:
+        header = f.read(13)
+        if len(header) < 13:
+            return False
+        if header[10] & 0x80:  # global color table
+            f.seek(3 << ((header[10] & 0x07) + 1), 1)
+        # Extensions before the first image
+        while f.read(1) == b"\x21":
+            label = f.read(1)
+            size = f.read(1)
+            first = f.read(size[0]) if size else b""
+            if label == b"\xff" and first == b"ICCRGBG1012":  # color profile
+                return True
+            while (size := f.read(1)) not in (b"", b"\x00"):
+                f.seek(size[0], 1)
     return False
