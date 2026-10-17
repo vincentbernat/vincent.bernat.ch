@@ -11,7 +11,7 @@ from . import FINAL, HOSTS, Exit, command, confirm, run, step
 
 
 @command(depends=["checks"])
-def publish() -> None:
+def build() -> None:
     """Build for production, review changes and commit them."""
     if run("git status --porcelain", cwd=FINAL, capture=True).stdout:
         raise Exit(f"{FINAL} has uncommitted changes")

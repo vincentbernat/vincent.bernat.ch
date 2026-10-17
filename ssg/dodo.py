@@ -3,8 +3,7 @@
     doit                  # development build (in .out)
     doit mode=prod        # production build (in .final)
     doit serve            # serve development build
-    doit publish          # check, build for production, review and commit
-    doit push             # deploy production build
+    doit build push       # check, build for production, review, commit and push
     doit list             # other commands
     doit profile=true     # profile the build (in one process)
 
