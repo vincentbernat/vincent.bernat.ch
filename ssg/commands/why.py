@@ -20,9 +20,7 @@ def relative(path: str) -> str:
 
 @command()
 def why(tasks: list[str]) -> None:
-    """Show why build tasks would run again: their file dependencies, their
-    targets, their environment and what they recorded while running. Changed
-    ones are marked with "*". Use mode=prod for the production build."""
+    """Show build tasks dependencies."""
     if not tasks:
         raise Exit("no task given, for example page:en/index.html")
     from ..model.site import Site
