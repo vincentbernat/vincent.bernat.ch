@@ -20,9 +20,9 @@ GROUPS: dict[str, tuple[str, bool]] = {
     "fragment": ("render articles of other pages", False),
     "page": ("render pages", False),
     "subset": ("subset fonts", True),
-    "font": ("publish fonts with a hashed name", True),
-    "asset": ("publish stylesheets and scripts with a hashed name", True),
-    "optimize": ("publish optimized images with a hashed name", True),
+    "fingerprint-font": ("copy fonts with a hashed name", False),
+    "fingerprint-asset": ("copy stylesheets and scripts with a hashed name", False),
+    "fingerprint-image": ("copy images with a hashed name", False),
 }
 
 # Kinds with one task

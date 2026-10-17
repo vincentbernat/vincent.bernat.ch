@@ -15,7 +15,7 @@ from doit.tools import config_changed
 from .. import config, deps, fonts, templates
 from ..images import covers, scales, thumbnails
 from ..media import css
-from . import GROUPS, SINGLES, Task, files, pagefind, publish, render
+from . import GROUPS, SINGLES, Task, files, fingerprint, pagefind, render, sizes
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -54,12 +54,12 @@ OPTIMIZE_DEPS = [str(IMAGES / "optimize.py"), str(IMAGES / "svgo.config.js")]
 FAVICON = config.CONTENT / "media" / "images" / "favicon.png"
 
 
-# Media directories whose files get a hashed name in production
+# Media directories whose files get a hashed name
 HASHED = ("fonts/", "images/", "js/", "css/")
 
 
 # Only used to build other stylesheets
-UNPUBLISHED = tuple(f"css/{p.name}" for p in css.SHARED)
+UNFINGERPRINTED = tuple(f"css/{p.name}" for p in css.SHARED)
 
 
 # Video files are served from another server
@@ -145,16 +145,13 @@ class Builder:
         if production:
             generated += [f"fonts/{name}.woff2" for name in fonts.SUBSET]
         for path in generated:
-            if production:
-                site.generated[path] = self.mode.cache / "media" / path
-            else:
-                site.generated[path] = self.out / "media" / path
+            site.generated[path] = self.mode.cache / "media" / path
 
-        # Media files with a hashed name in production
-        self.published = sorted(
+        # Media files with a hashed name
+        self.fingerprinted = sorted(
             path
             for path in {r.media_path for r in self.media} | set(site.generated)
-            if path.startswith(HASHED) and path not in UNPUBLISHED
+            if path.startswith(HASHED) and path not in UNFINGERPRINTED
         )
 
     def find_resizes(self) -> dict[str, tuple[Resource, float]]:
@@ -214,9 +211,9 @@ class Builder:
         yield from self.fragment_tasks()
         yield from self.page_tasks()
         yield from self.pagefind_tasks()
+        yield from self.fingerprint_tasks()
         if self.mode.production:
             yield from self.font_tasks()
-            yield from self.publish_tasks()
             yield from self.bundle_sizes_task()
         yield from self.prune_task()
 
@@ -232,13 +229,13 @@ class Builder:
                     "uptodate": [(files.is_symlink, [resource.source, target])],
                 }
             else:
-                yield copy_task(resource.path, resource.source, target)
-        if not self.mode.production:
-            for resource in self.media:
-                if not resource.text:
-                    yield copy_task(
-                        resource.path, resource.source, self.out / resource.path
-                    )
+                yield {
+                    "basename": "copy",
+                    "name": resource.path,
+                    "actions": [(files.copy, [resource.source, target])],
+                    "file_dep": [str(resource.source)],
+                    "targets": [str(target)],
+                }
 
     def media_tasks(self) -> Iterator[Task]:
         for resource in self.media:
@@ -336,11 +333,9 @@ class Builder:
             file_dep += templates.page_layouts(resource)
             if fragment:
                 file_dep.append(str(fragment))
-            task_dep = ["article", "image"]
-            if self.mode.production:
-                task_dep += ["font", "asset"]
-                if resource.kind == "html":
-                    task_dep.append(f"cover:{resource.path}")
+            task_dep = ["article", "image", "fingerprint-font", "fingerprint-asset"]
+            if resource.kind == "html":
+                task_dep.append(f"cover:{resource.path}")
             yield {
                 "basename": "page",
                 "name": resource.path,
@@ -399,28 +394,28 @@ class Builder:
                 "uptodate": [environment()],
             }
 
-    def publish_tasks(self) -> Iterator[Task]:
+    def fingerprint_tasks(self) -> Iterator[Task]:
         """Media files get a name with a hash of their content."""
-        for path in self.published:
+        for path in self.fingerprinted:
             sidecar = self.site.sidecar(path)
             file_dep = [str(self.site.raw(path))]
             task_dep = []
-            uptodate = [(publish.exist, [self.site, sidecar])]
+            uptodate = [(fingerprint.exist, [self.site, sidecar])]
             if path.startswith("images/"):
-                basename = "optimize"
-                action = publish.image
+                basename = "fingerprint-image"
+                action = fingerprint.image
                 file_dep += OPTIMIZE_DEPS
                 uptodate.append(environment())
             elif path.startswith("fonts/"):
-                basename = "font"
-                action = publish.file
+                basename = "fingerprint-font"
+                action = fingerprint.file
             elif path.startswith("css/"):
-                basename = "asset"
-                action = publish.css
-                task_dep = ["image", "font"]
+                basename = "fingerprint-asset"
+                action = fingerprint.css
+                task_dep = ["image", "fingerprint-font"]
             else:
-                basename = "asset"
-                action = publish.file
+                basename = "fingerprint-asset"
+                action = fingerprint.file
             yield {
                 "basename": basename,
                 "name": path,
@@ -436,7 +431,7 @@ class Builder:
         pages = [str(self.out / r.path) for r in self.pages if r.kind == "html"]
         bundles = [
             path
-            for path in self.published
+            for path in self.fingerprinted
             if path.count("/") == 1
             and path.endswith((".css", ".js", ".woff2"))
             and path.startswith(("css/", "js/", "fonts/"))
@@ -444,20 +439,19 @@ class Builder:
         yield {
             "basename": "bundle-sizes",
             "doc": SINGLES["bundle-sizes"][0],
-            "actions": [(publish.bundle_sizes, [self.site, bundles, target])],
+            "actions": [(sizes.bundle_sizes, [self.site, bundles, target])],
             "file_dep": pages + [str(self.site.sidecar(b)) for b in bundles],
             "targets": [str(target)],
             "uptodate": [environment()],
         }
 
     def prune_task(self) -> Iterator[Task]:
-        kinds = ["pagefind-js"] + [
+        kinds = [
             kind
-            for kind, (_, production) in GROUPS.items()
-            if self.mode.production or not production
+            for kind, (_, production) in (GROUPS | SINGLES).items()
+            if (self.mode.production or not production)
+            and kind not in ("pagefind", "prune")
         ]
-        if self.mode.production:
-            kinds += ["glyphs", "bundle-sizes"]
         yield {
             "basename": "prune",
             "doc": SINGLES["prune"][0],
@@ -471,23 +465,10 @@ class Builder:
         result = {self.out / r.path for r in self.copies + self.pages}
         if self.mode.production:
             result.add(self.out / "bundle-sizes.txt")
-            for path in self.published:
-                try:
-                    names = json.loads(self.site.sidecar(path).read_text())["files"]
-                except FileNotFoundError:
-                    continue
-                result.update(self.out / "media" / f for f in names)
-        else:
-            result.update(self.out / r.path for r in self.media)
-            result.update(self.site.generated.values())
+        for path in self.fingerprinted:
+            try:
+                names = json.loads(self.site.sidecar(path).read_text())["files"]
+            except FileNotFoundError:
+                continue
+            result.update(self.out / "media" / f for f in names)
         return result
-
-
-def copy_task(name: str, source: Path, target: Path) -> Task:
-    return {
-        "basename": "copy",
-        "name": name,
-        "actions": [(files.copy, [source, target])],
-        "file_dep": [str(source)],
-        "targets": [str(target)],
-    }

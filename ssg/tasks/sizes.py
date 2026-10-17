@@ -1,76 +1,15 @@
-"""Publish media files with a hashed name (production only)."""
+"""Sizes of stylesheets, scripts and fonts (production only)."""
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import json
-import posixpath
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import xxhash
-
-from ..images import optimize
-from ..tools import human, run, write
+from ..tools import human, run
 
 if TYPE_CHECKING:
     from ..model.site import Site
-
-
-def image(site: Site, path: str, sidecar: Path) -> None:
-    raw = site.raw(path)
-    name = site.hashed(path)
-    outputs = optimize.image(raw, site.output(f"media/{name}"))
-    files = [o.relative_to(site.output("media")).as_posix() for o in outputs]
-    write(sidecar, json.dumps({"path": name, "files": files}))
-
-
-def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> None:
-    if content is None:
-        content = site.raw(path).read_bytes()
-    digest = xxhash.xxh3_128_hexdigest(content)[:14]
-    sha256 = base64.b64encode(hashlib.sha256(content).digest()).decode("ascii")
-    root, ext = posixpath.splitext(path)
-    name = f"{root}.{digest}{ext}"
-    write(site.output(f"media/{name}"), content)
-    write(
-        sidecar,
-        json.dumps({"path": name, "integrity": f"sha256-{sha256}", "files": [name]}),
-    )
-
-
-CSS_REFERENCE = re.compile(r"[^\s()'\"]*((?:fonts|images)/[^\s()'\"]+)(['\"]?)\)")
-
-
-def css(site: Site, path: str, sidecar: Path) -> None:
-    """Use hashed names for fonts and images referenced in a stylesheet."""
-    content = site.raw(path).read_text(encoding="utf-8")
-
-    def replace(mo: re.Match[str]) -> str:
-        ref = mo.group(1)
-        if ref.startswith("fonts/"):
-            published = site.published(ref)
-            if published is None:
-                raise ValueError(f"{path}: unknown font {ref}")
-            new = published["path"]
-        else:
-            new = site.hashed(ref)
-        prefix = mo.group(0)[: mo.start(1) - mo.start(0)]
-        return prefix + new + mo.group(2) + ")"
-
-    content = CSS_REFERENCE.sub(replace, content)
-    file(site, path, sidecar, content.encode("utf-8"))
-
-
-def exist(site: Site, sidecar: Path) -> bool:
-    """Check the files listed in a sidecar exist."""
-    try:
-        files = json.loads(sidecar.read_text())["files"]
-    except FileNotFoundError:
-        return False
-    return all(site.output(f"media/{f}").exists() for f in files)
 
 
 def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
@@ -95,10 +34,10 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     # Count pages using each bundle, directly or through a stylesheet
     names = {}
     for bundle in bundles:
-        published = site.published(bundle)
-        if published is None:
-            raise ValueError(f"{bundle} is not published")
-        names[published["path"]] = f"media/{bundle}"
+        fingerprint = site.fingerprint(bundle)
+        if fingerprint is None:
+            raise ValueError(f"{bundle} is not fingerprinted")
+        names[fingerprint["path"]] = f"media/{bundle}"
     pattern = re.compile(
         rf"(?:{re.escape(site.mode.media_url)}|\.\./)("
         + "|".join(re.escape(name) for name in names)

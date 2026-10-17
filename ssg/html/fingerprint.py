@@ -1,4 +1,4 @@
-"""Hashed names for media files (production only)."""
+"""Hashed names for media files."""
 
 from __future__ import annotations
 
@@ -30,11 +30,11 @@ def rewrite(site: Site, root: lxml.etree._Element) -> None:
             if value.startswith(media) and ATTRIBUTE.fullmatch(local):
                 path = value[len(media) :]
                 if path.startswith(("fonts/", "js/", "css/")):
-                    published = site.published(path)
-                    if published is not None:
+                    fingerprint = site.fingerprint(path)
+                    if fingerprint is not None:
                         prefix = "data-" if local.startswith("data-") else ""
-                        items.append((name, media + published["path"]))
-                        items.append((f"{prefix}integrity", published["integrity"]))
+                        items.append((name, media + fingerprint["path"]))
+                        items.append((f"{prefix}integrity", fingerprint["integrity"]))
                         items.append(("crossorigin", "anonymous"))
                         integrity = True
                         continue

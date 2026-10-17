@@ -93,17 +93,17 @@ class Site:
         return self.mode.output / path
 
     def raw(self, path: str) -> Path:
-        """File for a media path, before publishing it."""
+        """File for a media path, before fingerprinting it."""
         if path in self.generated:
             return self.generated[path]
         return config.CONTENT / "media" / path
 
     def sidecar(self, path: str) -> Path:
-        """Information about a published media file."""
-        return self.mode.cache / "published" / (path + ".json")
+        """Information about a fingerprinted media file."""
+        return self.mode.cache / "fingerprints" / (path + ".json")
 
-    def published(self, path: str) -> dict[str, Any] | None:
-        """Hashed name and integrity of a published media file."""
+    def fingerprint(self, path: str) -> dict[str, Any] | None:
+        """Hashed name and integrity of a fingerprinted media file."""
         sidecar = self.sidecar(path)
         deps.record_file(sidecar)
         try:

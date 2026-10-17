@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import lxml.etree
 from pyquery import PyQuery as pq
 
-from . import assets, figures, hashing, reading, sidenotes, toc
+from . import assets, figures, fingerprint, reading, sidenotes, toc
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -28,8 +28,7 @@ def page(site: Site, resource: Resource, text: str) -> str:
         sidenotes.convert(d)
     toc.fix(resource, d)
     assets.load(site, d)
-    if site.mode.production:
-        hashing.rewrite(site, d[0])
+    fingerprint.rewrite(site, d[0])
     return "<!DOCTYPE html>\n" + d.outer_html()
 
 
@@ -46,8 +45,7 @@ def feed(site: Site, resource: Resource, text: str) -> str:
             name = lxml.etree.QName(el)
             if name.namespace is None:
                 el.tag = f"{{{xhtml}}}{name.localname}"
-    if site.mode.production:
-        hashing.rewrite(site, root)
+    fingerprint.rewrite(site, root)
     return lxml.etree.tostring(
         root.getroottree(), xml_declaration=True, encoding="UTF-8"
     ).decode("utf-8")
