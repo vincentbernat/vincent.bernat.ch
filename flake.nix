@@ -403,7 +403,9 @@
                 # Helper tools
                 nginx
                 vale
-                mypy
+                (writeShellScriptBin "mypy" ''
+                  exec ${mypy}/bin/mypy --python-executable ${pythonEnv}/bin/python "$@"
+                '')
               ];
               shellHook = ''
                 unset PYTHONPATH

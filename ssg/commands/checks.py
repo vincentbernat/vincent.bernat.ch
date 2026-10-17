@@ -1,7 +1,6 @@
 """Check content and code."""
 
 import re
-import sys
 
 from .. import config
 from . import Exit, command, run
@@ -71,7 +70,7 @@ def python() -> None:
         for command in (
             "ruff check ssg",
             "ruff format --check ssg",
-            f"mypy --python-executable {sys.executable}",
+            "mypy",
         )
         if run(command, cwd=config.ROOT, check=False).returncode != 0
     ]
