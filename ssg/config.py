@@ -33,7 +33,7 @@ class Mode:
 
 
 MODES = {
-    "development": Mode("development", ".out", "/media"),
+    "development": Mode("development", ".out", "/media/"),
     "production": Mode(
         "production",
         ".final",
