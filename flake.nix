@@ -205,6 +205,17 @@
               type = "app";
               program = "${lychee}/bin/lychee";
             };
+            links = {
+              type = "app";
+              program = l.getExe (pkgs.writeShellApplication {
+                name = "links";
+                runtimeInputs = [ lychee ];
+                text = ''
+                  exec ${pkgs.python3.withPackages (ps: [ ps.textual ])}/bin/python3 \
+                    ${./tools/links} "$@"
+                '';
+              });
+            };
           };
           legacyPackages = {
             build.literata = pkgs.stdenvNoCC.mkDerivation {
