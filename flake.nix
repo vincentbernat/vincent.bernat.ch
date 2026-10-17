@@ -96,7 +96,14 @@
               ./tools/patches/svgo-foreignobject.patch
             ];
           });
-          hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
+          lychee = pkgs.lychee.overrideAttrs (old: {
+            patches = (old.patches or [ ]) ++ [
+              ./tools/patches/lychee-detailed-stats.patch
+            ];
+            # This test checks there are no details without --verbose
+            checkFlags = old.checkFlags ++ [ "--skip=cli::test_redirect_json" ];
+          });
+          hlsVersion =(l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = ./.;
             inherit (pkgs) nodejs;
@@ -194,9 +201,9 @@
         in
         {
           apps = {
-            linkchecker = {
+            lychee = {
               type = "app";
-              program = "${pkgs.linkchecker}/bin/linkchecker";
+              program = "${lychee}/bin/lychee";
             };
           };
           legacyPackages = {
