@@ -103,7 +103,7 @@
             # This test checks there are no details without --verbose
             checkFlags = old.checkFlags ++ [ "--skip=cli::test_redirect_json" ];
           });
-          hlsVersion =(l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
+          hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = ./.;
             inherit (pkgs) nodejs;
@@ -403,6 +403,7 @@
                 # Helper tools
                 nginx
                 vale
+                mypy
               ];
               shellHook = ''
                 unset PYTHONPATH

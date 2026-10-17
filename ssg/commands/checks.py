@@ -71,7 +71,7 @@ def python() -> None:
         for command in (
             "ruff check ssg",
             "ruff format --check ssg",
-            f"{sys.executable} -m mypy",
+            f"mypy --python-executable {sys.executable}",
         )
         if run(command, cwd=config.ROOT, check=False).returncode != 0
     ]
