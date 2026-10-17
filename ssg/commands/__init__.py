@@ -48,8 +48,9 @@ def command[F: Callable[..., None]](
     line."""
 
     def register(function: F) -> F:
-        FUNCTIONS[name or function.__name__] = function
-        DEPENDENCIES[name or function.__name__] = depends or []
+        key = (name or function.__name__).replace("_", "-")
+        FUNCTIONS[key] = function
+        DEPENDENCIES[key] = depends or []
         return function
 
     return register

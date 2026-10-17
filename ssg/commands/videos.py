@@ -61,7 +61,7 @@ ARGUMENTS = {
 #
 # Then, to normalize (where 6.4dB is the desired offset compared to max)
 #  ffmpeg -i 2021-network-cmdb.mkv -filter:a "volume=6.4dB" -c:v copy normalized.mkv
-@command("video_encode")
+@command("video-encode")
 def encode(videos: list[str]) -> None:
     """Encode videos to HLS with video2hls. Without argument, encode the
     videos not encoded yet."""
@@ -97,7 +97,7 @@ def encode_one(video: str, skip_if_exists: bool = False) -> None:
         run(f"cp {short}/chapters.vtt {short}.chapters.vtt", cwd=DIRECTORY)
 
 
-@command("video_analyze")
+@command("video-analyze")
 def analyze(videos: list[str]) -> None:
     """Report the size breakdown of encoded videos."""
     for video in videos:
@@ -245,7 +245,7 @@ def analyze_one(video: str) -> None:
     print(f"{'directory':<16}{human(size):>11}")
 
 
-@command("video_upload")
+@command("video-upload")
 def upload(videos: list[str]) -> None:
     """Upload transcoded videos. Without argument, upload all of them."""
     for directory in DIRECTORY.iterdir():

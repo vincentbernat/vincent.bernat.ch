@@ -97,7 +97,7 @@ def replace(url: str, replacement: str) -> None:
             path.write_text(updated, encoding="utf-8")
 
 
-@command("links_check")
+@command("links-check")
 def check(local: bool = False) -> None:
     """Check links."""
     url = "http://localhost:8080/" if local else "https://vincent.bernat.ch/"
@@ -111,7 +111,7 @@ def check(local: bool = False) -> None:
         fix()
 
 
-@command("links_fix")
+@command("links-fix")
 def fix() -> None:
     """Try to fix links."""
     rows, _ = results()
