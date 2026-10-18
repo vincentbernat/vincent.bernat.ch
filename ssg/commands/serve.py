@@ -43,7 +43,9 @@ EVENTS = IN_CLOSE_WRITE | IN_MOVED_FROM | IN_MOVED_TO | IN_CREATE | IN_DELETE
 EVENT = struct.Struct("iIII")
 
 # Editor lock and backup files, Python cache, and temporary files
-IGNORED = re.compile(r"^\.#|~$|^__pycache__$|\.tmp\.\d+\.[0-9a-f]+$")
+IGNORED = re.compile(
+    r"^\.#|~$|^__pycache__$|\.tmp\.\d+\.[0-9a-f]+$|\.tmp$|^sed[0-9A-Za-z]{6}$"
+)
 
 # Delay without changes before building, after a first change and after
 # a change following a recent one
