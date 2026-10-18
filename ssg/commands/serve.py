@@ -166,6 +166,7 @@ class Reloader(ThreadingHTTPServer):
         super().__init__(("127.0.0.1", RELOAD_PORT), ReloadHandler)
         self.condition = threading.Condition()
         self.builds = 0
+        self.run = time.time_ns()
 
     def reload(self) -> None:
         with self.condition:
@@ -187,7 +188,13 @@ class ReloadHandler(BaseHTTPRequestHandler):
         condition = self.server.condition
         with condition:
             seen = self.server.builds
+        version = f"{self.server.run}-{seen}"
         try:
+            # Browsers send the last ID back when they reconnect
+            if self.headers.get("Last-Event-ID", version) != version:
+                self.wfile.write(b"data: reload\n\n")
+            self.wfile.write(f"id: {version}\n\n".encode())
+            self.wfile.flush()
             while True:
                 with condition:
                     if self.server.builds == seen:
@@ -195,7 +202,8 @@ class ReloadHandler(BaseHTTPRequestHandler):
                     builds = self.server.builds
                 if builds != seen:
                     seen = builds
-                    self.wfile.write(b"data: reload\n\n")
+                    version = f"{self.server.run}-{seen}"
+                    self.wfile.write(f"id: {version}\ndata: reload\n\n".encode())
                 else:
                     # Keep the connection open
                     self.wfile.write(b": ping\n\n")
