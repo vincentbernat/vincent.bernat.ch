@@ -25,6 +25,7 @@ from .. import config
 from . import command
 
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
+NIX_PROFILES = config.ROOT / ".direnv~"
 COLORS = {"build": "\033[36m", "nginx": "\033[35m"}
 RESET = "\033[0m"
 
@@ -61,6 +62,8 @@ class Watcher:
         if self.fd < 0:
             raise OSError(ctypes.get_errno(), "cannot initialize inotify")
         self.directories: dict[int, Path] = {}
+        # Directories where new subdirectories are watched too
+        self.recursive: set[int] = set()
         self.last = float("-inf")
         for directory in directories:
             self.add(directory)
@@ -71,12 +74,18 @@ class Watcher:
             return
         for directory, dirnames, _ in top.walk():
             dirnames[:] = [d for d in dirnames if d != "__pycache__"]
-            wd = self.libc.inotify_add_watch(self.fd, os.fsencode(directory), EVENTS)
-            if wd < 0:
-                error = os.strerror(ctypes.get_errno())
-                print(f"cannot watch {directory}: {error}", file=sys.stderr)
-                continue
-            self.directories[wd] = directory
+            self.watch(directory, recursive=True)
+
+    def watch(self, directory: Path, recursive: bool = False) -> None:
+        """Watch a directory, without its subdirectories."""
+        wd = self.libc.inotify_add_watch(self.fd, os.fsencode(directory), EVENTS)
+        if wd < 0:
+            error = os.strerror(ctypes.get_errno())
+            print(f"cannot watch {directory}: {error}", file=sys.stderr)
+            return
+        self.directories[wd] = directory
+        if recursive:
+            self.recursive.add(wd)
 
     def changes(self, timeout: float) -> list[str]:
         """Wait for changes and return the changed files. When a change comes
@@ -114,7 +123,11 @@ class Watcher:
                 continue
             path = self.directories[wd] / name
             changed.append(str(path.relative_to(config.ROOT)))
-            if mask & IN_ISDIR and mask & (IN_CREATE | IN_MOVED_TO):
+            if (
+                wd in self.recursive
+                and mask & IN_ISDIR
+                and mask & (IN_CREATE | IN_MOVED_TO)
+            ):
                 self.add(path)
         return changed
 
@@ -205,12 +218,36 @@ def status(message: str, color: int = 32) -> None:
     print(f"\033[34;1m▶ \033[{color};1m{message}\033[0m", flush=True)
 
 
+def profiles() -> dict[str, str]:
+    """Targets of the Nix profiles of direnv."""
+    return {
+        path.name: os.readlink(path)
+        for path in NIX_PROFILES.glob("flake-profile-*")
+        if path.is_symlink()
+    }
+
+
+def restart() -> None:
+    """Run this command again in a new process, with the environment from
+    direnv when available."""
+    args = ["-m", "doit", *sys.argv[1:]]
+    if os.environ.get("DIRENV_DIR"):
+        os.execvp("direnv", ["direnv", "exec", str(config.ROOT), "python", *args])
+    os.execv(sys.executable, [sys.executable, *args])
+
+
 @command()
 def serve() -> None:
     """Serve the development build on http://localhost:8080."""
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     output = config.MODES["development"].output
     watcher = Watcher(WATCHED)
+    environment = None
+    if os.environ.get("DIRENV_DIR") and NIX_PROFILES.is_dir():
+        watcher.watch(NIX_PROFILES)
+        environment = profiles()
+    myself = str(Path(__file__).relative_to(config.ROOT))
+    restarting = False
     reloader = Reloader()
     threading.Thread(target=reloader.serve_forever, daemon=True).start()
     nginx = None
@@ -227,10 +264,22 @@ def serve() -> None:
                     changed = watcher.changes(1)
                     if not changed:
                         continue
+                    if environment is not None and profiles() != environment:
+                        status("environment changed", 33)
+                        restarting = True
+                        break
+                    changed = [
+                        c for c in changed if Path(c).parts[0] != NIX_PROFILES.name
+                    ]
+                    if not changed:
+                        continue
                     names = ", ".join(changed[:3])
                     if len(changed) > 3:
                         names += f" and {len(changed) - 3} more"
                     status(f"changed: {names}", 33)
+                    if myself in changed:
+                        restarting = True
+                        break
                 first = False
                 if not build():
                     status("build failed, waiting for changes", 31)
@@ -254,3 +303,6 @@ def serve() -> None:
             if nginx is not None:
                 nginx.terminate()
                 nginx.wait()
+    if restarting:
+        status("restarting", 33)
+        restart()
