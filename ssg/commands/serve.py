@@ -283,17 +283,16 @@ def serve() -> None:
                     return
                 if not first:
                     changed = watcher.changes(1)
-                    if not changed:
-                        continue
-                    if environment is not None and profiles() != environment:
+                    sources = [
+                        c for c in changed if Path(c).parts[0] != NIX_PROFILES.name
+                    ]
+                    if sources != changed and profiles() != environment:
                         status("environment changed", 33)
                         restarting = True
                         break
-                    changed = [
-                        c for c in changed if Path(c).parts[0] != NIX_PROFILES.name
-                    ]
-                    if not changed:
+                    if not sources:
                         continue
+                    changed = sources
                     names = ", ".join(changed[:3])
                     if len(changed) > 3:
                         names += f" and {len(changed) - 3} more"
