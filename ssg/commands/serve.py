@@ -25,7 +25,10 @@ from .. import config
 from . import command
 
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
-NIX_PROFILES = config.ROOT / ".direnv~"
+NIX_PROFILES = next(
+    (d for d in (config.ROOT / ".direnv~", config.ROOT / ".direnv") if d.is_dir()),
+    config.ROOT / ".direnv",
+)
 COLORS = {"build": "\033[36m", "nginx": "\033[35m"}
 RESET = "\033[0m"
 
