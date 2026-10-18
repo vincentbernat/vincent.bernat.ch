@@ -238,6 +238,14 @@ def profiles() -> dict[str, str]:
     }
 
 
+def check() -> bool:
+    """Check the new code of this command can be imported."""
+    process = subprocess.run(
+        [sys.executable, "-c", f"import {__name__}"], cwd=config.ROOT, check=False
+    )
+    return process.returncode == 0
+
+
 def restart() -> None:
     """Run this command again in a new process, with the environment from
     direnv when available."""
@@ -288,9 +296,12 @@ def serve() -> None:
                     if len(changed) > 3:
                         names += f" and {len(changed) - 3} more"
                     status(f"changed: {names}", 33)
-                    if myself in changed:
-                        restarting = True
-                        break
+                    if myself.intersection(changed):
+                        if check():
+                            restarting = True
+                            break
+                        status("cannot restart, waiting for changes", 31)
+                        continue
                 first = False
                 if not build():
                     status("build failed, waiting for changes", 31)
