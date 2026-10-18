@@ -1,5 +1,6 @@
 #!/usr/bin/env nix
-#! nix shell --inputs-from .. nixpkgs#python3 nixpkgs#jpegli nixpkgs#libavif nixpkgs#libwebp nixpkgs#lcms2 nixpkgs#exiftool --command python3
+# -*- python -*-
+#! nix shell ..#tools.image-compare --command python3
 """Compare image encodings side by side in a browser.
 
 Each encoding is LABEL=COMMAND. In COMMAND, {in} is replaced by the source
@@ -21,13 +22,15 @@ Then, open /tmp/compare/index.html.
 
 import argparse
 import concurrent.futures
+import dataclasses
 import json
 import os
-import pathlib
 import shlex
 import shutil
 import subprocess
 import urllib.parse
+from pathlib import Path
+from typing import TypedDict
 
 PAGE = """<!doctype html>
 <meta charset="utf-8">
@@ -94,54 +97,116 @@ show();
 </script>
 """
 
-parser = argparse.ArgumentParser(
-    description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-)
-parser.add_argument("output", type=pathlib.Path, help="output directory")
-parser.add_argument("images", type=pathlib.Path, nargs="+", help="source images")
-parser.add_argument(
-    "-e", dest="encodings", action="append", required=True, metavar="LABEL=COMMAND"
-)
-args = parser.parse_args()
-encodings = [e.split("=", 1) for e in args.encodings]
-directories = [args.output / f"{i}-{p.stem}" for i, p in enumerate(args.images)]
 
-commands = []
-for image, directory in zip(args.images, directories):
+@dataclasses.dataclass
+class Encoding:
+    label: str
+    template: str
+
+    def command(self, source: Path, output: Path) -> str:
+        """Shell command to encode an image, output is without extension."""
+        return self.template.replace("{in}", shlex.quote(str(source))).replace(
+            "{out}", shlex.quote(str(output))
+        )
+
+
+class Variant(TypedDict):
+    label: str
+    url: str
+    size: int
+
+
+def encoding(spec: str) -> Encoding:
+    label, sep, template = spec.partition("=")
+    if not sep:
+        raise argparse.ArgumentTypeError(f"missing '=' in {spec!r}")
+    return Encoding(label, template)
+
+
+def prepare(image: Path, directory: Path) -> Path:
+    """Copy the original image into the directory. Return the image to encode."""
     shutil.rmtree(directory, ignore_errors=True)
     directory.mkdir(parents=True)
     shutil.copy(image, directory / f"original{image.suffix}")
-    source = image
-    if image.suffix.lower() in (".jpg", ".jpeg"):
-        source = directory / "input.jpg"
-        subprocess.run(["jpgicc", "-q100", image, source], check=True)
-    for i, (_, command) in enumerate(encodings):
-        command = command.replace("{in}", shlex.quote(str(source)))
-        commands.append(command.replace("{out}", shlex.quote(str(directory / str(i)))))
-with concurrent.futures.ThreadPoolExecutor() as executor:
-    list(executor.map(lambda c: subprocess.run(c, shell=True, check=True), commands))
+    if image.suffix.lower() not in (".jpg", ".jpeg"):
+        return image
+    source = directory / "input.jpg"
+    subprocess.run(["jpgicc", "-q100", image, source], check=True)
+    return source
 
-# AVIF images are always tagged. exiftool exits with 2 when all images are tagged.
-untagged = [f for d in directories for f in d.iterdir() if f.suffix != ".avif"]
-result = subprocess.run(
-    ["exiftool", "-q", "-overwrite_original", "-if", "not $ICC_Profile"]
-    + [f"-icc_profile<={os.environ['SRGB_PROFILE']}", *untagged]
-)
-if result.returncode not in (0, 2):
-    raise SystemExit(result.returncode)
 
-data = []
-for image, directory in zip(args.images, directories):
+def encode(commands: list[str]) -> None:
+    def run(command: str) -> None:
+        subprocess.run(command, shell=True, check=True)
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        list(executor.map(run, commands))
+
+
+def tag(files: list[Path]) -> None:
+    """Tag images without a color profile with the sRGB profile."""
+    # exiftool exits with 2 when all images are tagged
+    result = subprocess.run(
+        ["exiftool", "-q", "-overwrite_original", "-if", "not $ICC_Profile"]
+        + [f"-icc_profile<={os.environ['SRGB_PROFILE']}", *files],
+        check=False,
+    )
+    if result.returncode not in (0, 2):
+        raise SystemExit(result.returncode)
+
+
+def variants(
+    output: Path, image: Path, directory: Path, encodings: list[Encoding]
+) -> list[Variant]:
     files = [directory / f"original{image.suffix}"]
     files += [next(directory.glob(f"{i}.*")) for i in range(len(encodings))]
-    labels = ["original"] + [label for label, _ in encodings]
-    variants = [
-        {
-            "label": label,
-            "url": urllib.parse.quote(str(f.relative_to(args.output))),
-            "size": f.stat().st_size,
-        }
-        for label, f in zip(labels, files)
+    labels = ["original", *(e.label for e in encodings)]
+    return [
+        Variant(
+            label=label,
+            url=urllib.parse.quote(str(f.relative_to(output))),
+            size=f.stat().st_size,
+        )
+        for label, f in zip(labels, files, strict=True)
     ]
-    data.append({"name": str(image), "variants": variants})
-(args.output / "index.html").write_text(PAGE.replace("DATA", json.dumps(data)))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("output", type=Path, help="output directory")
+    parser.add_argument("images", type=Path, nargs="+", help="source images")
+    parser.add_argument(
+        "-e",
+        dest="encodings",
+        type=encoding,
+        action="append",
+        required=True,
+        metavar="LABEL=COMMAND",
+    )
+    args = parser.parse_args()
+    output: Path = args.output
+    images: list[Path] = args.images
+    encodings: list[Encoding] = args.encodings
+    directories = [output / f"{i}-{image.stem}" for i, image in enumerate(images)]
+
+    commands = []
+    for image, directory in zip(images, directories, strict=True):
+        source = prepare(image, directory)
+        commands += [
+            e.command(source, directory / str(i)) for i, e in enumerate(encodings)
+        ]
+    encode(commands)
+    # AVIF images are always tagged
+    tag([f for d in directories for f in d.iterdir() if f.suffix != ".avif"])
+
+    data = [
+        {"name": str(image), "variants": variants(output, image, directory, encodings)}
+        for image, directory in zip(images, directories, strict=True)
+    ]
+    (output / "index.html").write_text(PAGE.replace("DATA", json.dumps(data)))
+
+
+if __name__ == "__main__":
+    main()

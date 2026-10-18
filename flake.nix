@@ -208,24 +208,25 @@
           '';
         in
         {
-          apps = {
-            lychee = {
-              type = "app";
-              program = "${lychee}/bin/lychee";
-            };
-            links = {
-              type = "app";
-              program = l.getExe (pkgs.writeShellApplication {
-                name = "links";
-                runtimeInputs = [ lychee ];
-                text = ''
-                  exec ${pkgs.python3.withPackages (ps: [ ps.textual ])}/bin/python3 \
-                    ${./tools/links} "$@"
-                '';
-              });
-            };
-          };
           legacyPackages = {
+            tools.links = pkgs.buildEnv {
+              name = "links-env";
+              paths = [
+                lychee
+                (pkgs.python3.withPackages (ps: [ ps.textual ]))
+              ];
+            };
+            tools.image-compare = pkgs.buildEnv {
+              name = "image-compare-env";
+              paths = with pkgs; [
+                python3
+                jpegli.bin
+                libavif
+                libwebp
+                lcms
+                exiftool
+              ];
+            };
             build.literata = pkgs.stdenvNoCC.mkDerivation {
               name = "custom-literata";
               dontUnpack = true;
