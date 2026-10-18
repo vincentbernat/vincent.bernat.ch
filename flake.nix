@@ -34,7 +34,12 @@
               pythonBase = pkgs.callPackage inputs.pyproject-nix.build.packages {
                 inherit python;
               };
-              workspace = inputs.uv2nix.lib.workspace.loadWorkspace { workspaceRoot = ./.; };
+              workspace = inputs.uv2nix.lib.workspace.loadWorkspace {
+                workspaceRoot = l.fileset.toSource {
+                  root = ./.;
+                  fileset = l.fileset.unions [ ./pyproject.toml ./uv.lock ];
+                };
+              };
               overlay = workspace.mkPyprojectOverlay {
                 sourcePreference = "wheel";
               };
@@ -105,7 +110,10 @@
           });
           hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
-            npmRoot = ./.;
+            npmRoot = l.fileset.toSource {
+              root = ./.;
+              fileset = l.fileset.unions [ ./package.json ./package-lock.json ];
+            };
             inherit (pkgs) nodejs;
             derivationArgs = {
               nativeBuildInputs = [ pkgs.esbuild ];
