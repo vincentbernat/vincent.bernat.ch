@@ -265,7 +265,9 @@ def serve() -> None:
     if os.environ.get("DIRENV_DIR") and NIX_PROFILES.is_dir():
         watcher.watch(NIX_PROFILES)
         environment = profiles()
-    myself = str(Path(__file__).relative_to(config.ROOT))
+    myself = {
+        str(Path(f).relative_to(config.ROOT)) for f in (__file__, config.__file__)
+    }
     restarting = False
     reloader = Reloader()
     threading.Thread(target=reloader.serve_forever, daemon=True).start()
