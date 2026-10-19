@@ -206,6 +206,15 @@
               }
             )} $out/share/fonts/truetype/NotoSansDisplay-SemiBold.ttf
           '';
+          # Fonts to embed in SVG files. Subsetting a WOFF2 font is slow
+          # because of the decompression.
+          svgFonts = pkgs.runCommand "svg-fonts" { } ''
+            mkdir $out
+            ${fonttools}/bin/fonttools ttLib.woff2 decompress \
+              -o $out/literata.ttf ${./content/media/fonts/literata.woff2}
+            ${fonttools}/bin/fonttools ttLib.woff2 decompress \
+              -o $out/iosevka.ttf ${./content/media/fonts/iosevka.woff2}
+          '';
         in
         {
           legacyPackages = {
@@ -379,6 +388,8 @@
                 PYTHONDONTWRITEBYTECODE = 1;
                 SRGB_PROFILE = "${srgbProfile}";
                 SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
+                LITERATA_FONT = "${svgFonts}/literata.ttf";
+                IOSEVKA_FONT = "${svgFonts}/iosevka.ttf";
                 NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
                 FONTCONFIG_FILE = "${pkgs.runCommand "fonts.conf" { } ''
                   sed '/<dir prefix="xdg">/d' ${pkgs.makeFontsConf {

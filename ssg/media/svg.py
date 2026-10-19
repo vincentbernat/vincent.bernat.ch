@@ -7,7 +7,7 @@ from pathlib import Path
 
 import lxml.etree
 
-from .. import config, deps
+from .. import deps
 from ..tools import run
 
 # An image cannot load a font from the network, so each file carries the fonts
@@ -16,6 +16,13 @@ FONTS = {
     "sans-serif": "Source Sans 3",
     "serif": "Literata",
     "monospace": "Iosevka",
+}
+# Environment variables with the font files. They are not compressed to make
+# subsetting faster.
+FONT_FILES = {
+    "sans-serif": "SOURCE_SANS_FONT",
+    "serif": "LITERATA_FONT",
+    "monospace": "IOSEVKA_FONT",
 }
 
 SANS_TRIGGERS = {
@@ -170,9 +177,7 @@ def displayed(root: lxml.etree._Element) -> str:
 
 def font_file(generic: str) -> Path:
     """The font to embed."""
-    if generic == "sans-serif":
-        return Path(deps.getenv("SOURCE_SANS_FONT"))
-    return config.CONTENT / "media" / "fonts" / f"{FONTS[generic].lower()}.woff2"
+    return Path(deps.getenv(FONT_FILES[generic]))
 
 
 @deps.cache
