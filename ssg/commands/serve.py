@@ -1,4 +1,4 @@
-"""Development server: nginx serves the development build, rebuilt each time a
+"""Development server: Caddy serves the development build, rebuilt each time a
 source file changes."""
 
 # This does not use "doit auto" from the doit-auto1 plugin since it looks
@@ -6,6 +6,7 @@ source file changes."""
 # unmaintained (not working on Python 3.14).
 
 import ctypes
+import json
 import os
 import re
 import select
@@ -29,10 +30,10 @@ NIX_PROFILES = next(
     (d for d in (config.ROOT / ".direnv~", config.ROOT / ".direnv") if d.is_dir()),
     config.ROOT / ".direnv",
 )
-COLORS = {"build": "\033[36m", "nginx": "\033[35m"}
+COLORS = {"build": "\033[36m", "caddy": "\033[35m"}
 RESET = "\033[0m"
 
-# Port for reload events, nginx proxies /_reload to it
+# Port for reload events, Caddy proxies /_reload to it
 RELOAD_PORT = 8081
 
 # From linux/inotify.h
@@ -135,11 +136,31 @@ class Watcher:
         return changed
 
 
+def caddy_log(line: str) -> str:
+    """Format a JSON log line from Caddy."""
+    try:
+        entry = json.loads(line)
+        when = time.strftime("%H:%M:%S", time.localtime(entry["ts"]))
+        if "request" not in entry:
+            return f"{when} {entry['level']}: {entry['msg']}"
+        request = entry["request"]
+        return (
+            f"{when} {request['client_ip']} {entry['status']} "
+            f'"{request["method"]} {request["uri"]}"'
+        )
+    except ValueError, TypeError, KeyError:
+        return line
+
+
+FORMATS = {"caddy": caddy_log}
+
+
 def forward(name: str, stream: Iterable[str]) -> None:
     """Display the output of a process, with a prefix."""
     prefix = f"{COLORS[name]}{name:5}{RESET} │ "
+    formatter = FORMATS.get(name, str)
     for line in stream:
-        print(f"{prefix}{line.rstrip()}", flush=True)
+        print(f"{prefix}{formatter(line.rstrip())}", flush=True)
 
 
 def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
@@ -271,15 +292,14 @@ def serve() -> None:
     restarting = False
     reloader = Reloader()
     threading.Thread(target=reloader.serve_forever, daemon=True).start()
-    nginx = None
-    with tempfile.TemporaryDirectory(prefix="nginx-") as run:
-        (Path(run) / "mime.types").symlink_to(os.environ["SSG_NGINX_MIME_TYPES"])
-        conf = Path(run) / "nginx.conf"
+    caddy = None
+    with tempfile.TemporaryDirectory(prefix="caddy-") as run:
+        conf = Path(run) / "Caddyfile"
         try:
             first = True
             while True:
-                if nginx is not None and nginx.poll() is not None:
-                    status("nginx exited", 31)
+                if caddy is not None and caddy.poll() is not None:
+                    status("caddy exited", 31)
                     return
                 if not first:
                     changed = watcher.changes(1)
@@ -307,25 +327,27 @@ def serve() -> None:
                 if not build():
                     status("build failed, waiting for changes", 31)
                     continue
-                new = (output / "nginx.conf").read_text()
+                new = (output / "Caddyfile").read_text()
                 if not conf.exists() or conf.read_text() != new:
                     conf.write_text(new)
-                    if nginx is None:
-                        nginx = spawn(
-                            "nginx",
-                            ["nginx", "-p", run, "-e", "/dev/stderr", "-c", str(conf)],
+                    if caddy is None:
+                        caddy = spawn(
+                            "caddy",
+                            ["caddy", "run", "--config", str(conf)],
+                            env=os.environ
+                            | {"XDG_CONFIG_HOME": run, "XDG_DATA_HOME": run},
                         )
                         status("serving on http://localhost:8080")
                     else:
-                        os.kill(nginx.pid, signal.SIGHUP)
-                        status("nginx reloaded")
+                        os.kill(caddy.pid, signal.SIGUSR1)
+                        status("caddy reloaded")
                 reloader.reload()
         except KeyboardInterrupt:
             pass
         finally:
-            if nginx is not None:
-                nginx.terminate()
-                nginx.wait()
+            if caddy is not None:
+                caddy.terminate()
+                caddy.wait()
     if restarting:
         status("restarting", 33)
         restart()

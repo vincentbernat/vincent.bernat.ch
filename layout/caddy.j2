@@ -1,0 +1,154 @@
+{# Caddy configuration to be imported at the "site" level #}
+{% from "macros.j2" import csp with context %}
+
+{% set server %}
+@hidden path /nginx.conf /Caddyfile*
+@root path /
+@lang header_regexp lang Accept-Language `(?:^|,)\s*({{ languages|join("|") }})\b`
+@icons path_regexp ^/(?:favicon\.ico$|apple-touch-icon(?:-\d+x\d+|precomposed|)\.png)
+@slash path_regexp slash ^(.+)/(?:index\.html)?$
+@html path_regexp html ^(.*)\.html$
+
+handle_errors 404 {
+{% for code in languages %}
+  handle /{{ code }}* {
+    rewrite * /{{ code }}/404.html
+    file_server
+  }
+{% endfor %}
+  handle {
+    rewrite * /{{ languages|first }}/404.html
+    file_server
+  }
+}
+
+route {
+  header {
+    X-Content-Type-Options nosniff
+    Content-Security-Policy "{{ csp()|striptags }}"
+    Cache-Control {% if site.mode.production %}max-age=3600{% else %}no-cache{% endif %}
+
+  }
+  error @hidden 404
+
+{# language selection #}
+  route @root {
+    log_skip
+    header Vary Accept-Language
+    redir @lang /{re.lang.1} 302
+    redir * /{{ languages|first }} 302
+  }
+{% for code in languages %}
+  redir /{{ code }}/blog/subscribe /{{ code }}/blog/atom.xml 302
+{% endfor %}
+
+{# redirections #}
+  route @icons {
+    log_skip
+    error 404
+  }
+  route @slash {
+    log_skip
+    redir * {re.slash.1} 308
+  }
+  route @html {
+    log_skip
+    redir * {re.html.1} 308
+  }
+
+{% for res in resource.node.all_resources() %}
+{# handle exceptions #}
+{% set url = content_url(res.url) %}
+{% if res.meta.nolog %}
+  log_skip {{ url }}
+{% endif %}
+{% if res.meta.mime %}
+  header {{ url }} >Content-Type {{ res.meta.mime }}
+{% endif %}
+{% for name, value in (res.meta.headers or {}).items() %}
+  header {{ url }} {{ name }} "{{ value }}"
+{% endfor %}
+{% if res.meta.csp %}
+  header {{ url }} Content-Security-Policy "{{ csp(res.meta.csp)|striptags }}"
+{% endif %}
+{% if res.meta.alias %}
+  redir {{ res.meta.alias }} {{ url }} 301
+{% endif %}
+{% endfor %}
+
+{# Misc #}
+  route /ip* {
+    header Content-Type text/plain
+    header Cache-Control no-cache
+    respond {client_ip} 200
+  }
+  route /hit {
+    log_skip
+{% if site.mode.production %}
+    rewrite * /count
+    reverse_proxy 127.0.0.3:8087 {
+      header_up -*
+      header_up Accept-Language {http.request.header.Accept-Language}
+      header_up User-Agent {http.request.header.User-Agent}
+      header_up X-Real-Ip {client_ip}
+    }
+{% else %}
+    respond 204
+{% endif %}
+  }
+  route /redirect-ddg* {
+    map {query} {ddg_lang} {
+      ~(?:^|&)lang=([^&]*) "${1}"
+    }
+    map {query} {ddg_q} {
+      ~(?:^|&)q=([^&]*) "${1}"
+    }
+    redir * https://html.duckduckgo.com/html?q=site:{{ base|replace("https://","") }}/{ddg_lang}+{ddg_q} 302
+  }
+
+  try_files {path}.html {path} {path}/index.html =404
+}
+{% endset %}
+
+{%- if site.mode.production %}
+{{ server }}
+{% else %}
+{# complete configuration, to be run with "caddy run --config Caddyfile" #}
+{
+  admin off
+  grace_period 100ms
+  persist_config off
+  auto_https off
+  log {
+    level ERROR
+  }
+  servers {
+    trusted_proxies static 127.0.0.1/32 ::1/128
+  }
+}
+
+http://:8080 {
+  bind 127.0.0.1 [::1]
+  log {
+    output stdout
+    format json
+  }
+  root * {{ site.mode.output }}
+
+{# videos come from the disk, or from the media server when missing #}
+  route /media/videos/*/* {
+    root * {{ site.content.source }}
+    @local file
+    file_server @local
+    uri strip_prefix /media
+    reverse_proxy https://media.bernat.ch
+  }
+
+  route /_reload {
+    reverse_proxy 127.0.0.1:8081
+  }
+
+{{ server|indent(2, true) }}
+  file_server
+}
+{% endif %}

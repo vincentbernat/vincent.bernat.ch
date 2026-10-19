@@ -390,7 +390,6 @@
                 SSG_SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
                 SSG_LITERATA_FONT = "${svgFonts}/literata.ttf";
                 SSG_IOSEVKA_FONT = "${svgFonts}/iosevka.ttf";
-                SSG_NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
                 FONTCONFIG_FILE = "${pkgs.runCommand "fonts.conf" { } ''
                   sed '/<dir prefix="xdg">/d' ${pkgs.makeFontsConf {
                     fontDirectories = [ notoSansDisplay ];
@@ -421,7 +420,7 @@
                 exiftool
 
                 # Helper tools
-                nginx
+                caddy
                 vale
                 (writeShellScriptBin "mypy" ''
                   exec ${mypy}/bin/mypy --python-executable ${pythonEnv}/bin/python "$@"
