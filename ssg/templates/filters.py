@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import html as htmllib
 import re
 import urllib.parse
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
+import lxml.etree
+import lxml.html
 from babel.dates import format_date
 from markupsafe import Markup
-from pyquery import PyQuery as pq
 
 from .. import deps
+from ..html.dom import remove, select, text
 from . import jinja_filter
 
 if TYPE_CHECKING:
@@ -171,11 +174,18 @@ def ai_usage_emoji(entry: str, emojis: Mapping[str, str] | None) -> str | None:
 
 @jinja_filter
 def clean_rss(html: str) -> Markup:
-    doc = pq(html)
-    doc(".when-js").remove()
-    doc(".when-nojs").remove()
-    doc("a").filter(lambda i, el: pq(el).text() == "#").remove()
-    doc(".footnote-backref").text("↩")
+    root = lxml.html.fragment_fromstring(html, create_parent="div")
+    for el in select(root, ".when-js, .when-nojs"):
+        remove(el)
+    for el in select(root, "a"):
+        if text(el) == "#":
+            remove(el)
+    for el in select(root, ".footnote-backref"):
+        el[:] = []
+        el.text = "↩"
     # Markup so the XHTML markup is inserted into the atom feed as
     # structure rather than autoescaped to entity-encoded text.
-    return Markup(doc.html())
+    return Markup(
+        htmllib.escape(root.text or "", quote=False)
+        + "".join(lxml.etree.tostring(el, encoding="unicode") for el in root)
+    )

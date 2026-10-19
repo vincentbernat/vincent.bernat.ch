@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .dom import select
+
 if TYPE_CHECKING:
-    from pyquery import PyQuery
+    import lxml.etree
 
     from ..model.resource import Resource
 
 
-def fix(resource: Resource, d: PyQuery) -> None:
+def fix(resource: Resource, root: lxml.etree._Element) -> None:
     """Remove whitespaces inside UL and add a disclosure to expand the TOC."""
-    for element in d(".toc"):
+    for element in select(root, ".toc"):
         # The empty details element is only a switch: CSS uses its state to
         # display the TOC collapsed or expanded. It never hides anything.
         details = element.makeelement("details", {})

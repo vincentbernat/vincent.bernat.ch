@@ -2,11 +2,10 @@
 
 from typing import TYPE_CHECKING
 
-from pyquery import PyQuery as pq
+from .dom import add_class, classes, remove, remove_class, select, text
 
 if TYPE_CHECKING:
     import lxml.etree
-    from pyquery import PyQuery
 
 # Elements with margin-top. Sidenotes can be inserted before them.
 MARGIN_TOP_TAGS = frozenset({"p", "dl", "h1", "h2", "h3", "h4"})
@@ -18,11 +17,10 @@ MARGIN_TOP_CLASSES = frozenset(
 def has_margin_top(el: lxml.etree._Element) -> bool:
     if el.tag in MARGIN_TOP_TAGS:
         return True
-    classes = (el.get("class") or "").split()
-    return bool(MARGIN_TOP_CLASSES.intersection(classes))
+    return bool(MARGIN_TOP_CLASSES.intersection(classes(el)))
 
 
-def convert(d: PyQuery) -> None:
+def convert(root: lxml.etree._Element) -> None:
     """Move footnotes to sidenotes.
 
     The footnote extension uses the following classes:
@@ -36,50 +34,61 @@ def convert(d: PyQuery) -> None:
     - .lf-sidenote-end: replace the backref link
     """
     for cls in ["footnote-ref", "footnote-backref"]:
-        els = d(f".{cls}")
-        els.removeClass(cls)
-        els.addClass(cls.replace("foot", "lf-side"))
+        for el in select(root, f".{cls}"):
+            remove_class(el, cls)
+            add_class(el, cls.replace("foot", "lf-side"))
 
-    notes = d(".footnote ol")
+    notes = select(root, ".footnote ol")
 
     # Pop out backrefs when they are the only element of their container.
-    for backref in notes(".lf-sidenote-backref"):
-        parent = backref.getparent()
-        if len(pq(parent).contents()) == 1:
-            backref.tail = parent.tail
-            parent.getparent().replace(parent, backref)
+    for backref in [el for ol in notes for el in select(ol, ".lf-sidenote-backref")]:
+        container = backref.getparent()
+        assert container is not None
+        grandparent = container.getparent()
+        if (
+            grandparent is not None
+            and len(container.xpath("child::text()|child::*")) == 1
+        ):
+            backref.tail = container.tail
+            grandparent.replace(container, backref)
 
     # Create sidenotes and insert them after their parent.
-    for ref in d.items("sup[id^='fnref:']"):
-        name = ref.attr.id[6:]
-        fn = notes(f"li[id='fn:{name}']")
+    for ref in select(root, "sup[id^='fnref:']"):
+        name = ref.get("id", "")[6:]
+        fn = [el for ol in notes for el in select(ol, f"li[id='fn:{name}']")]
         assert fn, f"sidenote {name} does not exist"
-        parents = ref.parents()
+        parents = list(ref.iterancestors())[::-1]
         for i in range(len(parents) - 1):
-            if parents.eq(i).has_class("lf-text"):
-                parent = parents.eq(i + 1)
-        sidenote = pq("<aside>")
-        sidenote.attr.role = "note"
-        sidenote.attr.class_ = "lf-sidenote"
-        sidenote.attr.id = f"sidenote-{name}"
-        ref[0].set("data-anchor", f"--lf-sn-{name}")
-        sidenote[0].set("data-anchor", f"--lf-sn-{name}")
-        refmark = sidenote[0].makeelement("sup", {"class": "lf-sidenote-refmark"})
-        refmark.text = ref.text()
+            if "lf-text" in classes(parents[i]):
+                parent = parents[i + 1]
+        sidenote = ref.makeelement(
+            "aside",
+            {
+                "role": "note",
+                "class": "lf-sidenote",
+                "id": f"sidenote-{name}",
+                "data-anchor": f"--lf-sn-{name}",
+            },
+        )
+        ref.set("data-anchor", f"--lf-sn-{name}")
+        refmark = sidenote.makeelement("sup", {"class": "lf-sidenote-refmark"})
+        refmark.text = text(ref)
         refmark.tail = fn[0].text
-        sidenote[0].append(refmark)
-        sidenote[0].extend(list(fn[0]))
-        for backref in sidenote("a.lf-sidenote-backref").items():
-            backref[0].tag = "span"
-            backref[0].attrib.clear()
-            backref[0].set("class", "lf-sidenote-end")
-        ref("a.lf-sidenote-ref").attr.href = f"#sidenote-{name}"
+        sidenote.append(refmark)
+        sidenote.extend(list(fn[0]))
+        for backref in select(sidenote, "a.lf-sidenote-backref"):
+            backref.tag = "span"
+            backref.attrib.clear()
+            backref.set("class", "lf-sidenote-end")
+        for link in select(ref, "a.lf-sidenote-ref"):
+            link.set("href", f"#sidenote-{name}")
         insert_point = parent
         # Skip past following siblings without margin-top
-        next_el = insert_point[0].getnext()
+        next_el = insert_point.getnext()
         while next_el is not None and not has_margin_top(next_el):
-            insert_point = pq(next_el)
+            insert_point = next_el
             next_el = next_el.getnext()
-        sidenote.insert_after(insert_point)
+        insert_point.addnext(sidenote)
 
-    d(".footnote").remove()
+    for el in select(root, ".footnote"):
+        remove(el)

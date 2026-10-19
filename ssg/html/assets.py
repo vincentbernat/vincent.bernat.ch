@@ -6,21 +6,22 @@ import posixpath
 from typing import TYPE_CHECKING
 
 from .. import config
+from .dom import select
 
 if TYPE_CHECKING:
-    from pyquery import PyQuery
+    import lxml.etree
 
     from ..model.site import Site
 
 
-def load(site: Site, d: PyQuery) -> None:
+def load(site: Site, root: lxml.etree._Element) -> None:
     """Load additional scripts and stylesheets."""
-    css_anchor = d(f'link[href="{site.media_url("css/luffy.css")}"]')
-    js_anchor = d(f'script[src="{site.media_url("js/luffy.js")}"]')
+    css_anchor = select(root, f'link[href="{site.media_url("css/luffy.css")}"]')
+    js_anchor = select(root, f'script[src="{site.media_url("js/luffy.js")}"]')
     css_tags: list[dict[str, str]] = []
     js_tags: list[dict[str, str]] = []
     for selector, files, lazy in config.LOAD:
-        if not d(selector):
+        if not select(root, selector):
             continue
         for f in files:
             src = site.media_url(f)
@@ -45,7 +46,9 @@ def load(site: Site, d: PyQuery) -> None:
     insert_after(js_anchor, "script", js_tags)
 
 
-def insert_after(anchor: PyQuery, tag: str, attributes: list[dict[str, str]]) -> None:
+def insert_after(
+    anchor: list[lxml.etree._Element], tag: str, attributes: list[dict[str, str]]
+) -> None:
     """Insert elements right after the anchor element, keeping a 2-space
     indentation."""
     if not anchor or not attributes:

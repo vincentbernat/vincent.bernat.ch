@@ -13,14 +13,12 @@ from typing import TYPE_CHECKING, Any
 import langcodes
 import lxml.etree
 import lxml.html
-from pyquery import PyQuery as pq
 
 from ..images import properties, scales
 from ..media import css
+from .dom import add_class, classes, element, localname, rename
 
 if TYPE_CHECKING:
-    from pyquery import PyQuery
-
     from ..model.resource import Resource
     from ..model.site import Site
 
@@ -71,32 +69,39 @@ def size(
     return (new_width, new_height)
 
 
-def fix(site: Site, resource: Resource, d: PyQuery) -> None:
+def caption(ref: lxml.etree._Element, html: str) -> lxml.etree._Element:
+    """Create a figcaption from an HTML string."""
+    figcaption = lxml.html.fragment_fromstring(html, create_parent="figcaption")
+    if isinstance(ref, lxml.html.HtmlElement):
+        return figcaption
+    # In feeds, use XML elements in the XHTML namespace
+    lxml.html.html_to_xhtml(figcaption)
+    return lxml.etree.fromstring(lxml.etree.tostring(figcaption))
+
+
+def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
     """Add width/height to images, make them responsive, turn them into
     objects if they are interactive, into videos if they are videos."""
-    for img in d.items("img"):
-        width = img.attr.width
-        height = img.attr.height
-        src = urllib.parse.unquote(img.attr.src)
+    for img in list(root.iter("{*}img")):
+        width_attr = img.get("width")
+        height_attr = img.get("height")
+        src = urllib.parse.unquote(img.get("src", ""))
         props = None
-        if width is None or height is None:
+        dims: tuple[int, int] | None
+        if width_attr is None or height_attr is None:
             image = resolve(site, resource, src)
             if image is not None:
                 props = properties.get(site, image)
-            wh = size(props, width, height)
-            if wh is not None:
-                width, height = wh
-            else:
-                width, height = None, None
-        if width is not None:
-            width, height = int(width), int(height)
+            dims = size(props, width_attr, height_attr)
+        else:
+            dims = (int(width_attr), int(height_attr))
 
         # Adapt width/height if this is a scaled image (something@2x.jpg)
         mo = re.match(r".*@(\d+)x\.[^.]*$", src)
-        if mo and width is not None:
+        if mo and dims is not None:
             factor = int(mo.group(1))
-            width //= factor
-            height //= factor
+            width, height = dims[0] // factor, dims[1] // factor
+            dims = (width, height)
             paths = scales.smaller(src) + [src]
             versions = [(path, width * (i + 1)) for i, path in enumerate(paths)]
             # Use weighted geometric mean of consecutive widths instead of the
@@ -108,33 +113,34 @@ def fix(site: Site, resource: Resource, d: PyQuery) -> None:
                 if i < len(versions) - 1:
                     w = round(w ** (1 - weight) * versions[i + 1][1] ** weight)
                 srcset.append(f"{path} {w}w")
-            img.attr.src = versions[0][0]
-            img.attr.srcset = ",".join(srcset)
+            img.set("src", versions[0][0])
+            img.set("srcset", ",".join(srcset))
             page_width_px, breakpoint_px = css.page_width()
             # The image cannot display wider than its intrinsic width.
             page_width_px = min(page_width_px, width)
             breakpoint_px = min(breakpoint_px, width)
-            img.attr.sizes = (
-                f"auto, (max-width: {breakpoint_px}px) 100vw, {page_width_px}px"
+            img.set(
+                "sizes",
+                f"auto, (max-width: {breakpoint_px}px) 100vw, {page_width_px}px",
             )
 
-        if width is not None:
-            img.attr.width = f"{width}"
-            img.attr.height = f"{height}"
+        if dims is not None:
+            img.set("width", f"{dims[0]}")
+            img.set("height", f"{dims[1]}")
 
         # Interactive SVG are turned into objects
         if src.endswith(".svg") and props and props.get("interactive"):
-            img[0].tag = "object"
-            img.attr("type", "image/svg+xml")
-            img.attr("data", src)
-            img.text(f"&#128444; {img.attr.alt or ''}")
-            del img.attr.src
-            del img.attr.alt
+            rename(img, "object")
+            img.set("type", "image/svg+xml")
+            img.set("data", src)
+            img.text = f"\U0001f5bc {img.get('alt') or ''}"
+            img.attrib.pop("src", None)
+            img.attrib.pop("alt", None)
 
         # PDF files
         elif src.endswith(".pdf"):
-            img[0].tag = "object"
-            img.attr("type", "application/pdf")
+            rename(img, "object")
+            img.set("type", "application/pdf")
             options = "&".join(
                 f"{k}={v}"
                 for k, v in {
@@ -147,13 +153,12 @@ def fix(site: Site, resource: Resource, d: PyQuery) -> None:
                     "pagemode": "none",
                 }.items()
             )
-            img.attr("data", f"{src}#{options}")
-            fallback = pq("<a />")
-            fallback.attr("href", src)
-            fallback.text(img.attr.alt or "PDF")
+            img.set("data", f"{src}#{options}")
+            fallback = element(img, "a", {"href": src})
+            fallback.text = img.get("alt") or "PDF"
             img.append(fallback)
-            del img.attr.src
-            del img.attr.alt
+            img.attrib.pop("src", None)
+            img.attrib.pop("alt", None)
 
         # On-demand videos (should be in /videos)
         elif src.endswith(".m3u8"):
@@ -161,111 +166,112 @@ def fix(site: Site, resource: Resource, d: PyQuery) -> None:
 
         # Videos not in /videos are like an animated GIF
         elif src.endswith((".mp4", ".ogv")):
-            img[0].tag = "video"
+            rename(img, "video")
             for attr in ["muted", "loop", "autoplay", "playsinline", "controls"]:
-                set_flag(img[0], attr)
-            del img.attr.alt
+                set_flag(img, attr)
+            img.attrib.pop("alt", None)
 
         # Lazy load
-        if img[0].tag == "img" and width:
-            lftext = img.parents(".lf-text")
-            if lftext:
-                parents = img.parents()
-                root = pq(parents[parents.index(lftext[0]) + 1])
-                if len(root.prev_all()) > 3:
-                    img.attr.loading = "lazy"
-                img.attr.decoding = "async"
+        if localname(img) == "img" and dims and dims[0]:
+            # Position in the outermost .lf-text
+            top = None
+            child = img
+            for ancestor in img.iterancestors():
+                if "lf-text" in classes(ancestor):
+                    top = child
+                child = ancestor
+            if top is not None:
+                if len(list(top.itersiblings(preceding=True))) > 3:
+                    img.set("loading", "lazy")
+                img.set("decoding", "async")
 
         # If image is contained in a paragraph, enclose into a responsive
         # structure.
-        parent = None
-        parents = [p.tag for p in img.parents()]
-        if parents[-1] == "p":
-            parent = img.parent()
-        elif parents[-2:] == ["p", "a"]:
-            parent = img.parent().parent()
-        if parent and parent.contents().length == 1:
-            img.addClass("lf-media")
-            inner = pq("<span />")
-            outer = pq("<div />")
-            inner.addClass("lf-media-inner")
-            outer.addClass("lf-media-outer")
-            if width is not None:
-                inner.css.padding_bottom = f"{height * 100.0 / width:.3f}%"
-                outer.css.width = f"{width}px"
+        parent = img.getparent()
+        if parent is not None and localname(parent) == "a":
+            parent = parent.getparent()
+        if (
+            parent is not None
+            and localname(parent) == "p"
+            and len(parent.xpath("child::text()|child::*")) == 1
+        ):
+            add_class(img, "lf-media")
+            inner = element(img, "span", {"class": "lf-media-inner"})
+            outer = element(img, "div", {"class": "lf-media-outer"})
+            if dims is not None:
+                width, height = dims
+                inner.set("style", f"padding-bottom: {height * 100.0 / width:.3f}%")
+                outer.set("style", f"width: {width}px")
             outer.append(inner)
 
             if props and props["opaque"]:
-                img.addClass("lf-opaque")
+                add_class(img, "lf-opaque")
                 lqip = props.get("lqip")
                 if lqip is not None:
-                    img.css("background-image", f"url({lqip})")
+                    style = img.get("style")
+                    background = f"background-image: url({lqip})"
+                    img.set("style", f"{style}; {background}" if style else background)
 
             # If we have a title, also enclose in a figure
-            figure = pq("<figure />")
-            figure.addClass("lf-fullbleed")
-            if img.attr.title:
-                figcaption = pq("<figcaption />")
-                figcaption.html(img.attr.title)
-                del img.attr.title
-                figure.append(outer)
-                figure.append(figcaption)
-            else:
-                figure.append(outer)
+            figure = element(img, "figure", {"class": "lf-fullbleed"})
+            figure.append(outer)
+            title = img.attrib.pop("title", None)
+            if title:
+                figure.append(caption(img, title))
 
             # Put image in inner tag
-            if img.parent()[0].tag == "a":
-                inner.append(img.parent())
-            else:
-                inner.append(img)
+            link = img.getparent()
+            inner.append(link if link is not None and link is not parent else img)
             # Replace parent with our enclosure
-            figure[0].tail = parent[0].tail
-            parent[0].getparent().replace(parent[0], figure[0])
+            figure.tail = parent.tail
+            grandparent = parent.getparent()
+            if grandparent is not None:
+                grandparent.replace(parent, figure)
 
 
-def video(site: Site, resource: Resource, img: PyQuery, src: str) -> None:
+def video(site: Site, resource: Resource, img: lxml.etree._Element, src: str) -> None:
     id = PurePosixPath(src).stem
-    img[0].tag = "video"
-    set_flag(img[0], "controls")
-    img.attr("preload", "none")
-    img.attr("crossorigin", "anonymous")
-    img.attr("poster", site.media_url(f"images/posters/{id}.jpg"))
-    del img.attr.src
-    del img.attr.alt
-    m3u8 = pq("<source>")
-    m3u8.attr.src = site.media_url(f"videos/{id}.m3u8")
-    m3u8.attr.type = "application/vnd.apple.mpegurl"
+    rename(img, "video")
+    set_flag(img, "controls")
+    img.set("preload", "none")
+    img.set("crossorigin", "anonymous")
+    img.set("poster", site.media_url(f"images/posters/{id}.jpg"))
+    img.attrib.pop("src", None)
+    img.attrib.pop("alt", None)
+    m3u8 = element(img, "source")
+    m3u8.set("src", site.media_url(f"videos/{id}.m3u8"))
+    m3u8.set("type", "application/vnd.apple.mpegurl")
     img.append(m3u8)
-    progressive = pq("<source>")
-    progressive.attr.src = site.media_url(f"videos/{id}/progressive.mp4")
-    progressive.attr.type = 'video/mp4; codecs="mp4a.40.2,avc1.4d401f"'
+    progressive = element(img, "source")
+    progressive.set("src", site.media_url(f"videos/{id}/progressive.mp4"))
+    progressive.set("type", 'video/mp4; codecs="mp4a.40.2,avc1.4d401f"')
     img.append(progressive)
     vtts = site.tracks(id)
     # Chapters
     for vtt in vtts:
         if vtt.name != f"{id}.chapters.vtt":
             continue
-        track = pq("<track>")
-        track.attr.src = site.media_url(vtt.path[6:])
-        track.attr.kind = "chapters"
-        track.attr.label = resource.meta.l10n.chapters
+        track = element(img, "track")
+        track.set("src", site.media_url(vtt.path[6:]))
+        track.set("kind", "chapters")
+        track.set("label", resource.meta.l10n.chapters)
         img.append(track)
     # Subtitles
     for vtt in vtts:
         code = vtt.name[len(id) + 1 : -4]
         if code == "chapters":
             continue
-        track = pq("<track>")
-        track.attr.src = site.media_url(vtt.path[6:])
-        track.attr.kind = "subtitles"
-        track.attr.srclang = code
+        track = element(img, "track")
+        track.set("src", site.media_url(vtt.path[6:]))
+        track.set("kind", "subtitles")
+        track.set("srclang", code)
         if resource.meta.language == code:
-            set_flag(track[0], "default")
+            set_flag(track, "default")
         if "-" not in code:
-            track.attr.label = langcodes.get(code).autonym()
+            track.set("label", langcodes.get(code).autonym())
         else:
             details = langcodes.get(code).describe(code)
             lang = details["language"]
             del details["language"]
-            track.attr.label = f"{lang} ({', '.join(details.values())})"
+            track.set("label", f"{lang} ({', '.join(details.values())})")
         img.append(track)

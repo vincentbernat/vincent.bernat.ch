@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import lxml.etree
-from pyquery import PyQuery as pq
+import lxml.html
 
 from . import assets, figures, fingerprint, reading, sidenotes, toc
 
@@ -21,30 +21,22 @@ ATOM_NS = {
 
 def page(site: Site, resource: Resource, text: str) -> str:
     """Transform an HTML page."""
-    d = pq(text, parser="html")
-    reading.fix(resource, d)
-    figures.fix(site, resource, d)
+    root = lxml.html.fromstring(text)
+    reading.fix(resource, root)
+    figures.fix(site, resource, root)
     if resource.meta.get("sidenotes", True) is not False:
-        sidenotes.convert(d)
-    toc.fix(resource, d)
-    assets.load(site, d)
-    fingerprint.rewrite(site, d[0])
-    return "<!DOCTYPE html>\n" + d.outer_html()
+        sidenotes.convert(root)
+    toc.fix(resource, root)
+    assets.load(site, root)
+    fingerprint.rewrite(site, root)
+    return "<!DOCTYPE html>\n" + lxml.html.tostring(root, encoding="unicode")
 
 
 def feed(site: Site, resource: Resource, text: str) -> str:
     """Transform an Atom feed."""
     root = lxml.etree.fromstring(text.encode("utf-8"))
-    xhtml = ATOM_NS["xhtml"]
     for div in root.iterfind("atom:entry/atom:content/xhtml:div", ATOM_NS):
-        # Selectors of pyquery ignore namespaces
-        for el in div.iter("{*}*"):
-            el.tag = lxml.etree.QName(el).localname
-        figures.fix(site, resource, pq(div))
-        for el in div.iter("*"):
-            name = lxml.etree.QName(el)
-            if name.namespace is None:
-                el.tag = f"{{{xhtml}}}{name.localname}"
+        figures.fix(site, resource, div)
     fingerprint.rewrite(site, root)
     return lxml.etree.tostring(
         root.getroottree(), xml_declaration=True, encoding="UTF-8"
