@@ -20,28 +20,37 @@ def build() -> None:
     discard()
     (config.STAGING / "upper").mkdir(parents=True)
     (config.STAGING / "work").mkdir()
-    with step("build"):
-        run(f"SSG_STAGING=1 {sys.executable} -m doit mode=prod", cwd=config.ROOT)
-    run("git add *", cwd=FINAL)
-    run("git diff --find-renames=10% --stat HEAD || true", cwd=FINAL)
-    if confirm("More diff?", default=True):
-        run(
-            "env GIT_PAGER=less git diff --find-renames=10% --word-diff HEAD || true",
-            cwd=FINAL,
-        )
-    run('git annex lock && [ -z "$(git status --porcelain)" ]', cwd=config.ROOT)
-    if confirm("Keep?", default=True):
-        merge(config.STAGING / "upper", config.MODES["production"].cache)
-        discard()
-        run(
-            '[ -z "$(git status --porcelain)" ] || git commit -a -m "Autocommit"',
-            cwd=FINAL,
-        )
-    else:
-        run("git reset --hard", cwd=FINAL)
-        run("git clean -d -f", cwd=FINAL)
-        discard()
+    try:
+        with step("build"):
+            run(f"SSG_STAGING=1 {sys.executable} -m doit mode=prod", cwd=config.ROOT)
+        run("git add *", cwd=FINAL)
+        run("git diff --find-renames=10% --stat HEAD || true", cwd=FINAL)
+        if confirm("More diff?", default=True):
+            run(
+                "env GIT_PAGER=less git diff --find-renames=10% --word-diff HEAD || true",
+                cwd=FINAL,
+            )
+        run('git annex lock && [ -z "$(git status --porcelain)" ]', cwd=config.ROOT)
+        keep = confirm("Keep?", default=True)
+    except BaseException:
+        rollback()
+        raise
+    if not keep:
+        rollback()
         raise Exit("Build rollbacked")
+    merge(config.STAGING / "upper", config.MODES["production"].cache)
+    discard()
+    run(
+        '[ -z "$(git status --porcelain)" ] || git commit -a -m "Autocommit"',
+        cwd=FINAL,
+    )
+
+
+def rollback() -> None:
+    """Restore the last committed build and drop the cache changes."""
+    run("git reset --hard", cwd=FINAL)
+    run("git clean -d -f", cwd=FINAL)
+    discard()
 
 
 def merge(upper: Path, lower: Path) -> None:
