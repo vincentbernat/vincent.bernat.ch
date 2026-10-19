@@ -101,7 +101,7 @@ exiftool = ProcessHelper("exiftool", "-stay_open", "True", "-@", "-")
 def tag_srgb(path: Path) -> None:
     """Tag as sRGB, as Firefox only manages colors of tagged images."""
     deps.tool("exiftool")
-    profile = deps.getenv("SRGB_PROFILE")
+    profile = deps.getenv("SSG_SRGB_PROFILE")
     args = ["-q", "-overwrite_original", f"-icc_profile<={profile}", path]
     args += ["-echo3", "status=${status}", "-execute1"]
     output: list[str] = []

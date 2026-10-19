@@ -6,7 +6,7 @@
 Each encoding is LABEL=COMMAND. In COMMAND, {in} is replaced by the source
 image and {out} by the output path, without extension. Like for the website,
 JPEG images are converted to sRGB with jpgicc first and images without a color
-profile are tagged with the sRGB profile from $SRGB_PROFILE (set in the
+profile are tagged with the sRGB profile from $SSG_SRGB_PROFILE (set in the
 development shell). For example:
 
     tools/image-compare /tmp/compare \\
@@ -148,7 +148,7 @@ def tag(files: list[Path]) -> None:
     # exiftool exits with 2 when all images are tagged
     result = subprocess.run(
         ["exiftool", "-q", "-overwrite_original", "-if", "not $ICC_Profile"]
-        + [f"-icc_profile<={os.environ['SRGB_PROFILE']}", *files],
+        + [f"-icc_profile<={os.environ['SSG_SRGB_PROFILE']}", *files],
         check=False,
     )
     if result.returncode not in (0, 2):

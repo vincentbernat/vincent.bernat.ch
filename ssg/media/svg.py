@@ -20,9 +20,9 @@ FONTS = {
 # Environment variables with the font files. They are not compressed to make
 # subsetting faster.
 FONT_FILES = {
-    "sans-serif": "SOURCE_SANS_FONT",
-    "serif": "LITERATA_FONT",
-    "monospace": "IOSEVKA_FONT",
+    "sans-serif": "SSG_SOURCE_SANS_FONT",
+    "serif": "SSG_LITERATA_FONT",
+    "monospace": "SSG_IOSEVKA_FONT",
 }
 
 SANS_TRIGGERS = {

@@ -273,7 +273,7 @@ def serve() -> None:
     threading.Thread(target=reloader.serve_forever, daemon=True).start()
     nginx = None
     with tempfile.TemporaryDirectory(prefix="nginx-") as run:
-        (Path(run) / "mime.types").symlink_to(os.environ["NGINX_MIME_TYPES"])
+        (Path(run) / "mime.types").symlink_to(os.environ["SSG_NGINX_MIME_TYPES"])
         conf = Path(run) / "nginx.conf"
         try:
             first = True

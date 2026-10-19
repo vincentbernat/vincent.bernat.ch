@@ -386,11 +386,11 @@
                 UV_PYTHON_DOWNLOADS = "never";
                 NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
                 PYTHONDONTWRITEBYTECODE = 1;
-                SRGB_PROFILE = "${srgbProfile}";
-                SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
-                LITERATA_FONT = "${svgFonts}/literata.ttf";
-                IOSEVKA_FONT = "${svgFonts}/iosevka.ttf";
-                NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
+                SSG_SRGB_PROFILE = "${srgbProfile}";
+                SSG_SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
+                SSG_LITERATA_FONT = "${svgFonts}/literata.ttf";
+                SSG_IOSEVKA_FONT = "${svgFonts}/iosevka.ttf";
+                SSG_NGINX_MIME_TYPES = "${pkgs.mailcap}/etc/nginx/mime.types";
                 FONTCONFIG_FILE = "${pkgs.runCommand "fonts.conf" { } ''
                   sed '/<dir prefix="xdg">/d' ${pkgs.makeFontsConf {
                     fontDirectories = [ notoSansDisplay ];
