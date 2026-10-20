@@ -143,8 +143,7 @@ def push(clean: bool = False) -> None:
                 f"./ {host}:/data/webserver/vincent.bernat.ch/",
                 cwd=FINAL,
             )
-            for server in ("nginx", "caddy"):
-                run(f"ssh {host} sudo systemctl reload {server}", check=False)
+            run(f"ssh {host} sudo systemctl reload caddy")
 
     if clean:
         for host in HOSTS:

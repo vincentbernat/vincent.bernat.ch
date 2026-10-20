@@ -7,8 +7,8 @@ This is the source code of my website. You can find the result at
 Licensing is described in `content/en/licenses.html`.
 
 This site is hosted on NixOS instances. You may find the remaining
-nginx configuration on [another Git repository][nixos] (the other
-part is in `layout/nginx.j2`).
+Caddy configuration on [another Git repository][nixos] (the other
+part is in `layout/caddy.j2`).
 
 [doit]: https://pydoit.org/
 [cc1]: http://creativecommons.org/licenses/by-nc-sa/3.0/
