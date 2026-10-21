@@ -1,18 +1,18 @@
 {
   let supported = {};
-  const webp = "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=",
-    avif =
-      "AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=",
+  const images = {
+      webp: "UklGRiQAAABXRUJQVlA4IBgAAAAwAQCdASoBAAEAAwA0JaQAA3AA/vuUAAA=",
+      avif: "AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=",
+      jxl: "/woAEBAUFwIIAAEAJABLGIsVwknk+AM=",
+    },
     update = () => {
-      const ids = {
-        webp: supported.webp && !supported.avif,
-        avif: supported.avif && !supported.webp,
-        both: supported.webp && supported.avif,
-        none: !supported.webp && !supported.avif,
-      };
-      for (const id in ids) {
-        const el = document.getElementById(`lf1-support-${id}`);
-        if (el) el.style.display = ids[id] ? "inline" : "none";
+      const formats = Object.keys(images),
+        name = (keep) => formats.filter(keep).join("-") || "none",
+        current = name((fmt) => supported[fmt]);
+      for (let mask = 0; mask < 1 << formats.length; mask++) {
+        const id = name((fmt, i) => mask & (1 << i)),
+          el = document.getElementById(`lf1-support-${id}`);
+        if (el) el.style.display = id === current ? "inline" : "none";
       }
     },
     test = (fmt, base64) => {
@@ -23,6 +23,5 @@
       };
       image.src = `data:image/${fmt};base64,${base64}`;
     };
-  test("webp", webp);
-  test("avif", avif);
+  for (const fmt in images) test(fmt, images[fmt]);
 }
