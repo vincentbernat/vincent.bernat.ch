@@ -1,0 +1,13 @@
+--- a/doit/dependency.py
++++ b/doit/dependency.py
+@@ -702,6 +702,10 @@
+             else:
+                 if state is None or check_modified(dep, file_stat, state):
+                     changed.append(dep)
++                else:
++                    new_state = self.checker.get_state(dep, state)
++                    if new_state is not None and new_state != state:
++                        self._set(task.name, dep, new_state)
+         task.dep_changed = changed
+ 
+         if len(changed) > 0:

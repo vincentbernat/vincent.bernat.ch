@@ -78,6 +78,15 @@
                     NIX_CFLAGS_COMPILE = "-march=x86-64-v3";
                   };
                 });
+                # doit from source, to patch it
+                doit = (prev.doit.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
+                  nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
+                    setuptools = [ ];
+                  };
+                  patches = (old.patches or [ ]) ++ [
+                    ./tools/patches/doit-refresh-file-dep-state.patch
+                  ];
+                });
                 # No need for tools from fonttools (we pull the Nix version for that)
                 fonttools = prev.fonttools.overrideAttrs (old: {
                   postInstall = (old.postInstall or "") + ''
