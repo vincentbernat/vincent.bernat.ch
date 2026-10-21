@@ -10,7 +10,6 @@ from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-import langcodes
 import lxml.etree
 import lxml.html
 
@@ -257,6 +256,8 @@ def video(site: Site, resource: Resource, img: lxml.etree._Element, src: str) ->
         track.set("label", resource.meta.l10n.chapters)
         img.append(track)
     # Subtitles
+    import langcodes
+
     for vtt in vtts:
         code = vtt.name[len(id) + 1 : -4]
         if code == "chapters":
