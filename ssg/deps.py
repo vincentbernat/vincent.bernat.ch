@@ -171,7 +171,8 @@ class XXHashChecker(FileChangedChecker):
             return False
         if file_stat.st_size != size:
             return True
-        return bool(digest != file_hash(file_path))
+        current = f"{file_stat.st_mtime_ns}:{file_stat.st_size}"
+        return bool(digest != cached_file_hash(file_path, current))
 
     def get_state(
         self, dep: str, current_state: list[Any] | None
@@ -179,7 +180,8 @@ class XXHashChecker(FileChangedChecker):
         st = Path(dep).stat()
         if current_state and current_state[0] == st.st_mtime:
             return None
-        return st.st_mtime, st.st_size, file_hash(dep)
+        current = f"{st.st_mtime_ns}:{st.st_size}"
+        return st.st_mtime, st.st_size, cached_file_hash(dep, current)
 
 
 def file_digest(path: str | os.PathLike[str]) -> str:
