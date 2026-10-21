@@ -140,7 +140,7 @@ MODE.cache.mkdir(parents=True, exist_ok=True)
 MEMORY = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
 WORKERS = max(1, min(os.cpu_count() or 1, MEMORY // 2**31))
 DOIT_CONFIG = {
-    "dep_file": str(MODE.cache / "doit.db"),
+    "dep_file": str(MODE.cache / ("serve.db" if words[:1] == ["serve"] else "doit.db")),
     "backend": "sqlite3",
     "check_file_uptodate": deps.XXHashChecker,
     # Commands may be interactive and the profiler only sees this process
