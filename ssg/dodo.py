@@ -136,9 +136,14 @@ multiprocessing.set_start_method("fork", force=True)
 
 lexers.register()
 MODE.cache.mkdir(parents=True, exist_ok=True)
-# One worker per CPU or per 2 GiB of memory, whichever is lower
-MEMORY = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-WORKERS = max(1, min(os.cpu_count() or 1, MEMORY // 2**31))
+# One worker per CPU or per 1 GiB of available memory (free memory and
+# cache), whichever is lower
+MEMORY = next(
+    int(line.split()[1]) * 1024
+    for line in Path("/proc/meminfo").read_text().splitlines()
+    if line.startswith("MemAvailable:")
+)
+WORKERS = max(1, min(os.cpu_count() or 1, MEMORY // 2**30))
 DOIT_CONFIG = {
     "dep_file": str(MODE.cache / ("serve.db" if words[:1] == ["serve"] else "doit.db")),
     "backend": "sqlite3",
