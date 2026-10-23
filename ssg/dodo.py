@@ -80,6 +80,7 @@ def sandbox() -> None:
         MODE.cache.mkdir(parents=True, exist_ok=True)
         args += ["--overlay-src", cache, "--overlay", upper, work, cache]
     args += ["--", sys.executable, "-m", "doit", *sys.argv[1:]]
+    os.nice(10)
     os.execvp(args[0], args)
 
 
