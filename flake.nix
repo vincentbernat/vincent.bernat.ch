@@ -143,6 +143,17 @@
                 # playlist. Merge the variant into the rendition in this case.
                 patch -p1 -d $out/node_modules/@videojs/spf < ${./tools/patches/videojs-spf-audio-only.patch}
 
+                # Remove the SPF features the site does not use: DRM, multiple
+                # CDNs, live streams, HLS text tracks and HLS chapters. Text
+                # tracks and chapters come from <track> elements.
+                (
+                  cd $out/node_modules/@videojs/spf/dist/default/engines
+                  for feature in drm airPlayFairPlay multiCdn live textTracks shiftTextTimestamps chapters; do
+                    grep -q "^[[:space:]]*''${feature}Feature,\?$" hls-video.js
+                    sed -i "/^[[:space:]]*''${feature}Feature,\?$/d" hls-video.js
+                  done
+                )
+
                 # Video.js ships one module per component. Bundle the video
                 # preset together with the HLS media element, which runs on
                 # SPF, the Video.js streaming engine. Wrap it in a function:
