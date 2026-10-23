@@ -8,8 +8,6 @@
 @icons path_regexp ^/(?:favicon\.ico$|apple-touch-icon(?:-\d+x\d+|precomposed|)\.png)
 @slash path_regexp slash ^(.+)/(?:index\.html)?$
 @html path_regexp html ^(.*)\.html$
-@feed path{% for code in languages %} /{{ code }}/blog/atom.xml{% endfor %}
-
 
 handle_errors 404 {
 {% for code in languages %}
@@ -56,17 +54,6 @@ route {
   route @html {
     log_skip
     redir * {re.html.1} 308
-  }
-
-{# feed opened in a browser tab #}
-  route @feed {
-    header Vary "Accept, Sec-Fetch-Dest"
-    @browser {
-      header Sec-Fetch-Dest document
-      header_regexp Accept `^text/html`
-      not header_regexp Accept `application/(?:atom|rss)\+xml`
-    }
-    rewrite @browser {http.request.uri.path.dir}atom
   }
 
 {% for res in resource.node.all_resources() %}
