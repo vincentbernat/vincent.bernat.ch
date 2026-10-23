@@ -283,7 +283,7 @@ def state(site: Site, key: str) -> str | None:
         case "e":
             return os.environ.get(what, "")
         case "y":
-            return str(datetime.now().year)  # noqa: DTZ005
+            return str(datetime.now().year)
     return None
 
 

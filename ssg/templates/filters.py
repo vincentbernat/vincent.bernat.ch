@@ -30,7 +30,7 @@ def urlencode(url: str, safe: str = "/") -> str:
 @jinja_filter
 def date_format(dt: date | None, fmt: str | None = None) -> str | date:
     if not dt:
-        dt = datetime.now()  # noqa: DTZ005
+        dt = datetime.now()
         deps.record("y:", str(dt.year))
     if not isinstance(dt, datetime):
         return dt
@@ -40,7 +40,7 @@ def date_format(dt: date | None, fmt: str | None = None) -> str | date:
 @jinja_filter
 def xmldatetime(dt: date | None) -> str:
     if not dt:
-        dt = datetime.now()  # noqa: DTZ005
+        dt = datetime.now()
     zprefix = "Z"
     tz = dt.strftime("%z")
     if tz:
