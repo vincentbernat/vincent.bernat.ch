@@ -76,13 +76,13 @@ route {
 {% endif %}
 {% endfor %}
 
-{# Misc #}
-  route /ip {
+{# API #}
+  route /api/v0/ip {
     header Content-Type text/plain
     header Cache-Control no-cache
     respond {client_ip} 200
   }
-  route /hit {
+  route /api/v0/hit {
     log_skip
 {% if site.mode.production %}
     rewrite * /count
@@ -96,7 +96,7 @@ route {
     respond 204
 {% endif %}
   }
-  route /redirect-ddg {
+  route /api/v0/redirect-ddg {
     map {query} {ddg_lang} {
       ~(?:^|&)lang=([^&]*) "${1}"
     }

@@ -11,7 +11,7 @@ luffy.do(() => {
     return;
   const path = new URL(canonical).pathname;
 
-  /* Send a hit to GoatCounter through the /hit endpoint. Call with `luffy.count?.()`. */
+  /* Send a hit to GoatCounter through the /api/v0/hit endpoint. Call with `luffy.count?.()`. */
   luffy.count = ({ event, title } = {}) => {
     // Round down client width to 10px (when < 1000), 20px (when < 2000), 40px
     // (otherwise).
@@ -27,7 +27,7 @@ luffy.do(() => {
       e: !!event,
       rnd: Math.random().toString(36).slice(2, 7),
     });
-    fetch(`/hit?${params}`, { keepalive: true }).catch(() => {});
+    fetch(`/api/v0/hit?${params}`, { keepalive: true }).catch(() => {});
   };
 
   /* Assume we are human if we trigger one of these interactions. pointerdown
