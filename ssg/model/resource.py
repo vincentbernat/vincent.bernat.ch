@@ -30,14 +30,16 @@ def read_content(path: Path) -> str | None:
 
 
 class Resource:
-    def __init__(self, site: Site, node: Node, path: str) -> None:
+    def __init__(
+        self, site: Site, node: Node, path: str, source: Path | None = None
+    ) -> None:
         self.site = site
         self.node = node
         self.path = path
-        self.source = config.CONTENT / path
-        self.name = self.source.name
-        self.stem = self.source.stem
-        self.kind = self.source.suffix.lstrip(".")
+        self.source = source or config.CONTENT / path
+        self.name = posixpath.basename(path)
+        self.stem, ext = posixpath.splitext(self.name)
+        self.kind = ext.lstrip(".")
         self.simple_copy = any(fnmatch.fnmatch(path, p) for p in config.SIMPLE_COPY)
         # Text of the source, None for binary files and files copied as is
         self.content = None if self.simple_copy else read_content(self.source)

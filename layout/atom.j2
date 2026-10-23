@@ -1,15 +1,27 @@
 {# -*- web -*- #}
+{% from "macros.j2" import format_tag, tagfmt_plain with context %}
+{% set lang = resource.meta.language %}
+{% set tag = resource.stem[5:] if resource.stem.startswith("atom-") else None %}
+{% set entries = resource.node.sorted("time_" + lang) %}
+{% if tag %}
+{% set entries = entries|tagged(tag) %}
+{% set page = content_url(lang + '/blog') ~ '#tag-' ~ tag %}
+{% else %}
+{% set page = content_url(lang + '/blog/atom.html') %}
+{% endif %}
 <?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="{{ resource.meta.language }}" xml:base="{{base}}">
+{% if not tag %}
   <style xmlns="http://www.w3.org/1999/xhtml">
     feed { display: none }
   </style>
-  <meta xmlns="http://www.w3.org/1999/xhtml" http-equiv="refresh" content="0; url={{ content_url(resource.meta.language + '/blog/atom.html') }}"/>
-  <title>{{ resource.meta.author|e }}</title>
+  <meta xmlns="http://www.w3.org/1999/xhtml" http-equiv="refresh" content="0; url={{ page }}"/>
+{% endif %}
+  <title>{{ resource.meta.author|e }}{% if tag %} — {{ format_tag(resource, tag, tagfmt_plain) }}{% endif %}</title>
   <link href="{{base}}{{ content_url(resource.url) }}" rel="self" />
-  <link href="{{base}}{{ content_url(resource.meta.language) }}" rel="alternate" />
+  <link href="{{base}}{% if tag %}{{ page }}{% else %}{{ content_url(lang) }}{% endif %}" rel="alternate" />
   <id>http://www.luffy.cx{{ content_url(resource.url) }}/</id>
-{% for res in resource.node.sorted("time_" + resource.meta.language)|top(6) %}
+{% for res in entries|top(6) %}
 {% if loop.first %}
   <updated>{{ res.meta.modified|xmldatetime }}</updated>
 

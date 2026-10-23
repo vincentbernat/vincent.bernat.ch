@@ -142,12 +142,27 @@ class Site:
                 resource = Resource(self, node, path)
                 node.resources.append(resource)
                 self.resources[path] = resource
+        self.load_feeds()
         self.load_meta()
         self.load_dates()
         self.load_combine()
         self.load_translations()
         self.load_sorters()
         self.load_tags()
+
+    def load_feeds(self) -> None:
+        """Feeds of tags, named atom-<tag>.xml, use the source of atom.xml."""
+        for language in config.LANGUAGES:
+            feed = self.resources.get(f"{language}/blog/atom.xml")
+            if feed is None:
+                continue
+            for tag, info in config.TAGS.items():
+                if not info.get("feed"):
+                    continue
+                path = posixpath.join(feed.node.path, f"atom-{tag}.xml")
+                resource = Resource(self, feed.node, path, feed.source)
+                feed.node.resources.append(resource)
+                self.resources[path] = resource
 
     def load_meta(self) -> None:
         for node in self.content.walk():

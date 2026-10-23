@@ -76,6 +76,6 @@ def page(site: Site, resource: Resource, fragment: Path | None, target: Path) ->
     output = templates.render(site, resource, **context)
     if resource.kind == "html":
         output = html.page(site, resource, output)
-    elif resource.name == "atom.xml":
+    elif resource.meta.get("layout") == "atom.j2":
         output = html.feed(site, resource, output)
     write(target, output)

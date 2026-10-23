@@ -54,6 +54,10 @@
 {% endfor %}
 {% endif %}
   <link rel="alternate" href="{{ content_url( resource.meta.language + '/blog/atom.xml') }}" type="application/atom+xml" title="ATOM feed">
+{% from "macros.j2" import format_tag, tagfmt_plain with context %}
+{% for tag, feed in resource|tag_feeds %}
+  <link rel="alternate" href="{{ content_url(feed.url) }}" type="application/atom+xml" title="ATOM feed: {{ format_tag(resource, tag, tagfmt_plain) }}">
+{% endfor %}
   <script>if ("noModule" in HTMLScriptElement.prototype) document.documentElement.classList.remove("nojs");</script>
 {% if not site.mode.production %}
   <script>new EventSource("/_reload").onmessage = () => location.reload();</script>

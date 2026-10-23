@@ -60,6 +60,12 @@
 {%- endfilter -%}
 {% endmacro %}
 
+{# URL of the Atom feed of a category, empty if none #}
+{% macro tag_feed(lang, tag) -%}
+{%- set feed = site.resource(lang ~ "/blog/atom-" ~ tag ~ ".xml") -%}
+{%- if feed %}{{ content_url(feed.url) }}{% endif -%}
+{%- endmacro %}
+
 {# Display all the categories #}
 {% macro list_tags(lang) %}
 {% set ctx = resource %}
@@ -82,7 +88,10 @@
 {% set rr = site.sorted("time")|in_language(lang)|tagged(tag) %}
 {% if rr and tag|string != "outdated" %}
   <div class="lf-tag" id="tag-{{tag}}">
-    <h2>{{ format_tag(resource, tag|string, tagfmt_plain) }}</h2>
+{% set feed = tag_feed(lang, tag|string) %}
+    <h2>{{ format_tag(resource, tag|string, tagfmt_plain) }}
+{%- if feed %} <a href="{{ feed }}" class="lf-feed"><img src="{{ media_url('images/l/rss.svg') }}" alt="{{ ctx.meta.l10n.feed|e }}" title="{{ ctx.meta.l10n.feed|e }}"></a>{% endif -%}
+    </h2>
     <ul class="lf-list-titles">
 {% for resource in rr %}
       {{ format_resource(ctx, resource)|indent(6) }}
@@ -159,6 +168,7 @@
 [NewsBlur]: https://www.newsblur.com/?url={{ feed|urlencode }} "NewsBlur"
 [Bluesky]: https://bsky.app/profile/{{ resource.meta.bluesky }}
 [Mastodon]: {{ resource.meta.mastodon|mastodon_href }}
+[blog]: {{ content_url(resource.meta.language ~ "/blog") }}
 
 {% for res in resource.node.sorted("time_" + resource.meta.language)|top(6) %}
 <article>

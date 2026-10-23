@@ -163,6 +163,24 @@ def tag_tree(tags: Iterable[str]) -> list[tuple[str, list[str]]]:
 
 
 @jinja_filter
+def tag_feeds(resource: Resource) -> list[tuple[str, Resource]]:
+    """Tags of a resource and their parents with a feed, as (tag, feed)
+    pairs in the order of the tags."""
+    result: list[tuple[str, Resource]] = []
+    for tag in resource.tags:
+        subtags = str(tag).split("-")
+        for i in range(1, len(subtags) + 1):
+            subtag = "-".join(subtags[:i])
+            if any(t == subtag for t, _ in result):
+                continue
+            path = f"{resource.meta.language}/blog/atom-{subtag}.xml"
+            feed = resource.site.resource(path)
+            if feed:
+                result.append((subtag, feed))
+    return result
+
+
+@jinja_filter
 def ai_usage_emoji(entry: str, emojis: Mapping[str, str] | None) -> str | None:
     """Get the emoji for the key matching the start of an AI usage entry."""
     emojis = dict(emojis or {})

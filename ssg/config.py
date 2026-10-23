@@ -90,7 +90,7 @@ LOAD = (
 )
 
 TAGS: dict[str, dict[str, str | bool]] = {
-    "network": {"descr_en": "network", "descr_fr": "réseau"},
+    "network": {"descr_en": "network", "descr_fr": "réseau", "feed": True},
     "network-bgp": {"descr": "BGP"},
     "network-automation": {"descr_en": "automation", "descr_fr": "automatisation"},
     "network-monitoring": {"descr_en": "monitoring", "descr_fr": "supervision"},
@@ -98,20 +98,20 @@ TAGS: dict[str, dict[str, str | bool]] = {
     "network-tls": {"descr": "TLS"},
     "network-vpn": {"descr": "VPN"},
     "network-ipv6": {"descr": "IPv6"},
-    "linux": {"descr": "Linux"},  # this means "Linux kernel"
+    "linux": {"descr": "Linux", "feed": True},  # this means "Linux kernel"
     "programming": {"descr_en": "programming", "descr_fr": "programmation"},
-    "programming-go": {"descr": "Go"},
+    "programming-go": {"descr": "Go", "feed": True},
     "programming-c": {"descr": "C"},
-    "programming-python": {"descr": "Python"},
+    "programming-python": {"descr": "Python", "feed": True},
     "programming-shell": {"descr": "shell"},
     "project": {"descr_en": "project", "descr_fr": "projet", "hidden": True},
     "project-akvorado": {"descr": "Akvorado"},
     "distribution": {"descr": "distribution"},
-    "distribution-debian": {"descr": "Debian"},
-    "distribution-nixos": {"descr": "NixOS"},
-    "retro": {"descr_en": "retrocomputing", "descr_fr": "rétrocomputing"},
+    "distribution-debian": {"descr": "Debian", "feed": True},
+    "distribution-nixos": {"descr": "NixOS", "feed": True},
+    "retro": {"descr_en": "retrocomputing", "descr_fr": "rétrocomputing", "feed": True},
     "retro-wguide": {"descr": "W"},
-    "web": {"descr": "web"},
+    "web": {"descr": "web", "feed": True},
     "security": {"descr_en": "security", "descr_fr": "sécurité"},
     "desktop": {
         "descr_en": "desktop environment",
