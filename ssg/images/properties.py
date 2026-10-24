@@ -12,7 +12,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image
+lazy from PIL import Image
+lazy from pypdf import PdfReader
 
 from .. import deps
 from ..tools import run
@@ -115,8 +116,6 @@ def read(path: str, kind: str) -> dict[str, Any]:
             track = next(t for t in streams if t["codec_type"] == "video")
             return {"size": (track["width"], track["height"]), "opaque": True}
         case "pdf":
-            from pypdf import PdfReader
-
             with Path(path).open("rb") as f:
                 pdf = PdfReader(f)
                 box = pdf.pages[0].mediabox

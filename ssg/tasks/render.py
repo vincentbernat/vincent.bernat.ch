@@ -7,9 +7,10 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .. import deps, fonts, html, markdown, templates
+from .. import deps, fonts, html, templates
 from ..media import css, js, python, svg, text
 from ..tools import write
+lazy from .. import markdown
 
 if TYPE_CHECKING:
     from ..model.resource import Resource

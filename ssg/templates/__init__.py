@@ -12,8 +12,9 @@ from typing import TYPE_CHECKING, Any
 import jinja2
 import jinja2.meta
 
-from .. import config, deps, markdown
+from .. import config, deps
 from ..typography import typogrify
+lazy from .. import markdown
 
 if TYPE_CHECKING:
     from ..model.resource import Resource

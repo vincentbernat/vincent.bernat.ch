@@ -7,8 +7,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import markdown
 from .tools import run, write
+lazy from . import markdown
 
 if TYPE_CHECKING:
     from .model.site import Site
