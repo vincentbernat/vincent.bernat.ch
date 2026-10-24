@@ -433,7 +433,7 @@
                 caddy
                 vale
                 (writeShellScriptBin "mypy" ''
-                  exec ${mypy}/bin/mypy --python-executable ${pythonEnv}/bin/python "$@"
+                  exec ${python.pkgs.mypy}/bin/mypy --python-executable ${pythonEnv}/bin/python "$@"
                 '')
               ];
               shellHook = ''
