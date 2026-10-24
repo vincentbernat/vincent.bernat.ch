@@ -410,7 +410,6 @@
                 UV_PYTHON = "${pythonEnv}/bin/python";
                 UV_PYTHON_DOWNLOADS = "never";
                 NODE_OPTIONS = "--disable-warning=DEP0169"; # url.parse()
-                PYTHONDONTWRITEBYTECODE = 1;
                 SSG_SRGB_PROFILE = "${srgbProfile}";
                 SSG_SOURCE_SANS_FONT = "${pkgs.source-sans}/share/fonts/opentype/SourceSans3-Regular.otf";
                 SSG_LITERATA_FONT = "${svgFonts}/literata.ttf";
@@ -453,6 +452,7 @@
               ];
               shellHook = ''
                 unset PYTHONPATH
+                export PYTHONPYCACHEPREFIX="$PWD/.cache/pycache"
                 [ "$(readlink node_modules)" = ${nodeEnv}/node_modules ] \
                   || ln -nsfT ${nodeEnv}/node_modules node_modules
                 [ "$(readlink ssg/markdown/rfc-index.json.gz)" = ${rfcIndex} ] \
