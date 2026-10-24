@@ -22,6 +22,7 @@ HOSTS = [
     "web04.luffy.cx",
     "web05.luffy.cx",
     "web06.luffy.cx",
+    "web07.luffy.cx",
 ]
 
 
