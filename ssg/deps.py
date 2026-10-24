@@ -177,7 +177,7 @@ class XXHashChecker(FileChangedChecker):
     def get_state(
         self, dep: str, current_state: list[Any] | None
     ) -> tuple[float, int, str] | None:
-        st = Path(dep).stat()
+        st = os.stat(dep)
         if current_state and current_state[0] == st.st_mtime:
             return None
         current = f"{st.st_mtime_ns}:{st.st_size}"
@@ -186,7 +186,7 @@ class XXHashChecker(FileChangedChecker):
 
 def file_digest(path: str | os.PathLike[str]) -> str:
     try:
-        st = Path(path).stat()
+        st = os.stat(path)
     except FileNotFoundError:
         return ""
     return f"{st.st_mtime_ns}:{st.st_size}"
