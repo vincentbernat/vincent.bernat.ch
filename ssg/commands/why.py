@@ -10,8 +10,6 @@ from doit.loader import generate_tasks
 
 from .. import config, deps
 from . import Exit, command
-lazy from ..model.site import Site
-lazy from ..tasks.builder import Builder, Environment
 
 
 def relative(path: str) -> str:
@@ -25,6 +23,9 @@ def why(tasks: list[str]) -> None:
     """Show build tasks dependencies."""
     if not tasks:
         raise Exit("no task given, for example page:en/index.html")
+    from ..model.site import Site
+    from ..tasks.builder import Builder, Environment
+
     mode = config.MODES["production" if get_var("mode") == "prod" else "development"]
     path = mode.cache / "doit.db"
     if not path.exists():
@@ -88,6 +89,8 @@ def section(title: str, lines: list[tuple[bool, str]]) -> None:
 def reasons(status: Any, values: dict[str, Any], recorded: object) -> Iterator[str]:
     """Reasons given by doit for a task to run again, when not displayed in a
     section."""
+    from ..tasks.builder import Environment
+
     found = status.reasons
     if status.error_reason:
         yield f"error: {status.error_reason}"

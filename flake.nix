@@ -28,7 +28,7 @@
           fonttools = pkgs.python3Packages.fonttools.overridePythonAttrs (old: {
             dependencies = (old.dependencies or [ ]) ++ old.optional-dependencies.woff;
           });
-          python = pkgs.python315;
+          python = pkgs.python3;
           pythonEnv =
             let
               pythonBase = pkgs.callPackage inputs.pyproject-nix.build.packages {
@@ -54,14 +54,6 @@
                     typogrify.setuptools = [ ];
                     markupsafe.setuptools = [ ];
                     markdown.setuptools = [ ];
-                    marisa-trie = {
-                      setuptools = [ ];
-                      cython = [ ];
-                    };
-                    pyyaml = {
-                      setuptools = [ ];
-                      cython = [ ];
-                    };
                   };
                 in
                 final: prev: l.mapAttrs
@@ -84,13 +76,6 @@
                   };
                   env = (old.env or { }) // l.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 {
                     NIX_CFLAGS_COMPILE = "-march=x86-64-v3";
-                  };
-                });
-                # pyyaml with libyaml, for CSafeLoader
-                pyyaml = prev.pyyaml.overrideAttrs (old: {
-                  buildInputs = (old.buildInputs or [ ]) ++ [ pkgs.libyaml ];
-                  env = (old.env or { }) // {
-                    PYYAML_FORCE_LIBYAML = "1";
                   };
                 });
                 # doit from source, to patch it

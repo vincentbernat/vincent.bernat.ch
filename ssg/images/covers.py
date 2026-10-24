@@ -9,8 +9,8 @@ import pathlib
 import tempfile
 import unicodedata
 
-lazy import skia
-lazy from PIL import Image
+import skia
+from PIL import Image
 
 from .. import config, deps
 from ..tools import ProcessHelper
