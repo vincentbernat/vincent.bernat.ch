@@ -3,6 +3,7 @@
 import contextlib
 import importlib
 import inspect
+import os
 import pkgutil
 import re
 import subprocess
@@ -16,14 +17,10 @@ from doit.exceptions import TaskFailed
 
 from .. import config
 
-HOSTS = [
-    "web02.luffy.cx",
-    "web03.luffy.cx",
-    "web04.luffy.cx",
-    "web05.luffy.cx",
-    "web06.luffy.cx",
-    "web07.luffy.cx",
-]
+HOSTS = {
+    "www": os.environ["SSG_EXPORT_www"].split(),
+    "media": os.environ["SSG_EXPORT_media"].split(),
+}
 
 
 FINAL = config.MODES["production"].output

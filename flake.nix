@@ -438,6 +438,10 @@
               shellHook = ''
                 unset PYTHONPATH
                 export PYTHONPYCACHEPREFIX="$PWD/.cache/pycache"
+                export SSG_EXPORT_www=$(< ../automation/nixops-take1/cdktf.json \
+                  jq -r '.sites.value["vincent.bernat.ch"] | join(" ")')
+                export SSG_EXPORT_media=$(< ../automation/nixops-take1/cdktf.json \
+                  jq -r '.sites.value["media.bernat.ch"] | join(" ")')
                 [ "$(readlink node_modules)" = ${nodeEnv}/node_modules ] \
                   || ln -nsfT ${nodeEnv}/node_modules node_modules
                 [ "$(readlink ssg/markdown/rfc-index.json.gz)" = ${rfcIndex} ] \

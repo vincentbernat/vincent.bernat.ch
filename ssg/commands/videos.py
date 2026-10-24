@@ -254,7 +254,7 @@ def upload(videos: list[str]) -> None:
         if videos and directory.name not in videos:
             continue
         with step(f"uploading {directory.name}"):
-            for host in HOSTS:
+            for host in HOSTS["media"]:
                 run(
                     f"rsync --delete --info=progress2 -a {directory}/ "
                     f"{host}:/data/webserver/media.bernat.ch/videos/{directory.name}/"

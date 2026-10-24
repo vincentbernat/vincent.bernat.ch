@@ -127,7 +127,7 @@ def push(clean: bool = False) -> None:
             if path.exists(follow_symlinks=False):
                 os.utime(path, (ts, ts), follow_symlinks=False)
 
-    for host in HOSTS:
+    for host in HOSTS["media"]:
         with step(f"push media to {host}"):
             run(
                 "rsync --exclude=.git --copy-unsafe-links -rt "
@@ -135,7 +135,7 @@ def push(clean: bool = False) -> None:
                 cwd=FINAL,
             )
 
-    for host in HOSTS:
+    for host in HOSTS["www"]:
         with step(f"push HTML to {host}"):
             run(
                 "rsync --exclude=.git --exclude=media --exclude=/bundle-sizes.txt "
@@ -146,7 +146,7 @@ def push(clean: bool = False) -> None:
             run(f"ssh {host} sudo systemctl reload caddy")
 
     if clean:
-        for host in HOSTS:
+        for host in HOSTS["media"]:
             with step(f"clean files on {host}"):
                 run(
                     "rsync --exclude=.git --copy-unsafe-links -rt "
