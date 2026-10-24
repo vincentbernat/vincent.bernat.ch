@@ -1,0 +1,42 @@
+--- a/doit/dependency.py
++++ b/doit/dependency.py
+@@ -18,6 +18,30 @@
+     pass
+ 
+ 
++UPTODATE_ARGS = {}
++
++
++def uptodate_args(utd):
++    """return the parameter names of an uptodate callable
++
++    Names are cached by code for functions and by class for callable objects.
++    """
++    if hasattr(utd, '__wrapped__') or hasattr(utd, '__signature__'):
++        return list(inspect.signature(utd).parameters.keys())
++    if inspect.isfunction(utd):
++        key = utd.__code__
++    elif inspect.isfunction(getattr(type(utd), '__call__', None)):
++        key = type(utd)
++    else:
++        return list(inspect.signature(utd).parameters.keys())
++    try:
++        return UPTODATE_ARGS[key]
++    except KeyError:
++        args = list(inspect.signature(utd).parameters.keys())
++        UPTODATE_ARGS[key] = args
++        return args
++
++
+ def get_md5(input_data):
+     """return md5 from string or unicode"""
+     byte_data = input_data.encode("utf-8")
+@@ -621,7 +645,7 @@
+                     utd.setup(self, tasks_dict)
+                 # 2) add magic positional args for `task` and `values`
+                 # if present.
+-                spec_args = list(inspect.signature(utd).parameters.keys())
++                spec_args = uptodate_args(utd)
+                 magic_args = []
+                 for i, name in enumerate(spec_args):
+                     if i == 0 and name == 'task':

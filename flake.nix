@@ -85,6 +85,7 @@
                   };
                   patches = (old.patches or [ ]) ++ [
                     ./tools/patches/doit-refresh-file-dep-state.patch
+                    ./tools/patches/doit-cache-uptodate-signature.patch
                   ];
                 });
                 # No need for tools from fonttools (we pull the Nix version for that)
