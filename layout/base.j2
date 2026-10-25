@@ -58,9 +58,10 @@
 {% for tag, feed in resource|tag_feeds %}
   <link rel="alternate" href="{{ content_url(feed.url) }}" type="application/atom+xml" title="ATOM feed: {{ format_tag(resource, tag, tagfmt_plain) }}">
 {% endfor %}
-  <script>if ("noModule" in HTMLScriptElement.prototype) document.documentElement.classList.remove("nojs");</script>
+{% from "macros.j2" import nojs_script, reload_script %}
+  <script>{{ nojs_script }}</script>
 {% if not site.mode.production %}
-  <script>new EventSource("/_reload").onmessage = () => location.reload();</script>
+  <script>{{ reload_script }}</script>
 {% endif %}
 </head>
 <body>

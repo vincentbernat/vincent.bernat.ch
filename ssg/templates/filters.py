@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import html as htmllib
 import re
 import urllib.parse
@@ -20,6 +22,13 @@ from . import jinja_filter
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
+
+
+@jinja_filter
+def csp_hash(script: str) -> str:
+    """Hash of an inline script for a Content-Security-Policy."""
+    digest = hashlib.sha256(script.encode()).digest()
+    return f"'sha256-{base64.b64encode(digest).decode()}'"
 
 
 @jinja_filter
