@@ -12,10 +12,10 @@ popular: true
 ai-usage: Grammatical edits (Claude Opus 4.6)
 ---
 
-!!! "TL;DR" Do not enable `net.ipv4.tcp_tw_recycle`—it doesn't even
-exist anymore since Linux 4.12. Most of the time, `TIME-WAIT` sockets
-are harmless. Otherwise, jump to [the summary](#summary) for the
-recommended solutions.
+!!! "TL;DR"
+    Do not enable `net.ipv4.tcp_tw_recycle`—it doesn't even exist anymore since
+    Linux 4.12. Most of the time, `TIME-WAIT` sockets are harmless. Otherwise,
+    jump to [the summary](#summary) for the recommended solutions.
 
 The Linux kernel documentation is not very helpful about what
 `net.ipv4.tcp_tw_recycle` and `net.ipv4.tcp_tw_reuse` do. This lack of
@@ -147,11 +147,12 @@ ports (this can be changed by tuning
 connections can be established between the web server and the
 load-balancer every minute, so about **500 connections per second**.
 
-!!! "Update (2026-10)" This limit is less strict when the `TIME-WAIT` sockets
-are on the server side. Linux [accepts a new _SYN_ segment][tw_syn] for a
-quadruplet in the `TIME-WAIT` state if its sequence number is above the last one
-received for the previous connection, as allowed by [RFC 1122][], or if its
-timestamp is more recent, as described in [RFC 6191][].
+!!! "Update (2026-10)"
+    This limit is less strict when the `TIME-WAIT` sockets are on the server
+    side. Linux [accepts a new _SYN_ segment][tw_syn] for a quadruplet in the
+    `TIME-WAIT` state if its sequence number is above the last one received for
+    the previous connection, as allowed by [RFC 1122][], or if its timestamp is
+    more recent, as described in [RFC 6191][].
 
 If the `TIME-WAIT` sockets are on the client side, such a situation is
 easy to detect. The call to `connect()` will return `EADDRNOTAVAIL`
@@ -510,10 +511,10 @@ during one minute because they do not share the same timestamp clock.
 In doubt, it is far better to disable this option since it leads to
 **difficult to detect** and **difficult to diagnose** problems.
 
-!!! "Update (2017-09)" Starting from Linux 4.10 (commit
-[95a22caee396][]), Linux will randomize timestamp offsets for each
-connection, making this option completely broken, with or without NAT.
-It has been completely [removed][] from Linux 4.12.
+!!! "Update (2017-09)"
+    Starting from Linux 4.10 (commit [95a22caee396][]), Linux will randomize
+    timestamp offsets for each connection, making this option completely broken,
+    with or without NAT. It has been completely [removed][] from Linux 4.12.
 
 [removed]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4396e46187ca5070219b81773c4e65088dac50cc "tcp: remove tcp_tw_recycle"
 
@@ -546,7 +547,8 @@ And a final quote by [W. Richard Stevens][], in [Unix Network Programming][]:
 > to let old duplicate segments expire in the network). Instead of
 > trying to avoid the state, we should understand it.
 
-!!! "Update (2026-10)" This post was briefly discussed on [Hacker News][].
+!!! "Update (2026-10)"
+    This post was briefly discussed on [Hacker News][].
 
 *[NAT]: Network Address Translation
 *[MSL]: Maximum Segment Lifetime

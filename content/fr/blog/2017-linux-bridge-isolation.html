@@ -12,12 +12,12 @@ tags:
 ai-usage: Corrections grammaticales (Claude Opus 4.6)
 ---
 
-!!! "En bref" Pour isoler correctement un pont Linux, utilisez
-les commandes suivantes :
+!!! "En bref"
+    Pour isoler correctement un pont Linux, utilisez les commandes suivantes :
 
-    ::console
-    # bridge vlan del dev br0 vid 1 self
-    # ip link set dev br0 type bridge vlan_filtering 1
+        ::console
+        # bridge vlan del dev br0 vid 1 self
+        # ip link set dev br0 type bridge vlan_filtering 1
 
 Un pont réseau (aussi appelé « commutateur » ou « *switch* ») permet
 d'interconnecter plusieurs segments Ethernet ensemble. C'est un
@@ -273,19 +273,20 @@ donc qu'aucune livraison locale n'aura lieu :
 Il s'agit de la troisième méthode la plus efficace. Elle est toutefois
 plus commode et ne nécessite que quelques cycles CPU supplémentaires.
 
-!!! "Mise à jour (01.2020)" Depuis [Linux 4.2][], il est possible
-d'utiliser *Netfilter* pour configurer la politique de réception avec
-la même efficacité. Cela peut se faire via [nftables][] :
+!!! "Mise à jour (01.2020)"
+    Depuis [Linux 4.2][], il est possible d'utiliser *Netfilter* pour configurer
+    la politique de réception avec la même efficacité. Cela peut se faire via
+    [nftables][] :
 
-    ::console
-    # nft -f - <<EOF
-    > table netdev firewall {
-    >   chain ingress {
-    >     type filter hook ingress device br0 priority 0; policy drop;
-    >     log
-    >   }
-    > }
-    > EOF
+        ::console
+        # nft -f - <<EOF
+        > table netdev firewall {
+        >   chain ingress {
+        >     type filter hook ingress device br0 priority 0; policy drop;
+        >     log
+        >   }
+        > }
+        > EOF
 
 
 ### Utilisation d'`ebtables`
@@ -323,9 +324,10 @@ le pont :
 Le paquet va voyager un peu dans la pile IP en utilisant quelques
 cycles CPU, mais sera au final rejeté.
 
-!!! "Mise à jour (08.2023)" Une alternative plus légère est de placer le pont
-dans une VRF avec `ip link set br0 master vrf0`. Le résultat est similaire à
-l'utilisation d'un espace de noms, mais la configuration est plus simple.
+!!! "Mise à jour (08.2023)"
+    Une alternative plus légère est de placer le pont dans une VRF avec `ip link
+    set br0 master vrf0`. Le résultat est similaire à l'utilisation d'un espace
+    de noms, mais la configuration est plus simple.
 
 ## Dépendamment du protocole
 

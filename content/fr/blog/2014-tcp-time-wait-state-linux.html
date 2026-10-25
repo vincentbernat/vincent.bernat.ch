@@ -12,10 +12,11 @@ popular: true
 ai-usage: Corrections grammaticales (Claude Opus 4.6)
 ---
 
-!!! "En bref" N'activez pas `net.ipv4.tcp_tw_recycle` (qui n'existe
-même plus depuis Linux 4.12) ! La plupart du temps, les connexions
-dans l'état `TIME-WAIT` sont inoffensives. Dans le cas contraire,
-sautez au [résumé](#resume) pour les solutions recommandées.
+!!! "En bref"
+    N'activez pas `net.ipv4.tcp_tw_recycle` (qui n'existe même plus depuis Linux
+    4.12) ! La plupart du temps, les connexions dans l'état `TIME-WAIT` sont
+    inoffensives. Dans le cas contraire, sautez au [résumé](#resume) pour les
+    solutions recommandées.
 
 La documentation du noyau Linux n'est pas très prolixe sur les effets
 de `net.ipv4.tcp_tw_recycle` et de `net.ipv4.tcp_tw_reuse`. Ce manque
@@ -138,12 +139,13 @@ d'environ 30 000 ports (cela se règle en modifiant
 connexions peuvent donc être établies vers le serveur web, soit
 environ **500 connexions par seconde**.
 
-!!! "Mise à jour (10.2026)" Cette limite est moins stricte quand les chaussettes
-dans l'état `TIME-WAIT` se trouvent côté serveur. Linux [accepte un nouveau
-segment _SYN_][tw_syn] pour un quadruplet dans l'état `TIME-WAIT` si son numéro
-de séquence est supérieur au dernier reçu pour la connexion précédente, comme le
-permet la [RFC 1122][], ou si son horodatage est plus récent, comme le décrit la
-[RFC 6191][].
+!!! "Mise à jour (10.2026)"
+    Cette limite est moins stricte quand les chaussettes dans l'état `TIME-WAIT`
+    se trouvent côté serveur. Linux [accepte un nouveau segment _SYN_][tw_syn]
+    pour un quadruplet dans l'état `TIME-WAIT` si son numéro de séquence est
+    supérieur au dernier reçu pour la connexion précédente, comme le permet la
+    [RFC 1122][], ou si son horodatage est plus récent, comme le décrit la [RFC
+    6191][].
 
 Si l'état `TIME-WAIT` se situe côté client, une telle situation se
 détecte facilement. L'appel à `connect()` retourne `EADDRNOTAVAIL` et
@@ -497,10 +499,10 @@ est donc préférable de ne pas activer cette option car elle conduit à
 des problèmes **difficiles à détecter** et **difficiles à
 diagnostiquer**.
 
-!!! "Mise à jour (09.2017)" À partir de Linux 4.10 (commit
-[95a22caee396][]), Linux utilise un décalage aléatoire pour
-l'horodatage de chaque connexion. Cela casse entièrement cette option,
-NAT ou pas. Elle a été [retirée][removed] de Linux 4.12.
+!!! "Mise à jour (09.2017)"
+    À partir de Linux 4.10 (commit [95a22caee396][]), Linux utilise un décalage
+    aléatoire pour l'horodatage de chaque connexion. Cela casse entièrement
+    cette option, NAT ou pas. Elle a été [retirée][removed] de Linux 4.12.
 
 [removed]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=4396e46187ca5070219b81773c4e65088dac50cc "tcp: remove tcp_tw_recycle"
 
@@ -532,8 +534,8 @@ Pour terminer, voici une citation de [W. Richard Stevens][] issue de [Unix Netwo
 > aux segments dupliqués d'expirer en transit). Plutôt que de tenter de
 > supprimer cet état, nous devons le comprendre.
 
-!!! "Mise à jour (10.2026)" Cet article a été brièvement discuté sur
-[Hacker News][].
+!!! "Mise à jour (10.2026)"
+    Cet article a été brièvement discuté sur [Hacker News][].
 
 *[NAT]: Network Address Translation
 *[MSL]: Maximum Segment Lifetime

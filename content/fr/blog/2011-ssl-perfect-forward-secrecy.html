@@ -35,12 +35,12 @@ cryptographie sur les courbes elliptiques.
     [confidentialité persistante][pfs] ce qui me semble assez
     horrible. J'opte donc pour le terme anglais.
 
-!!! "Mise à jour (08.2019)" Bien que le contenu de cet article soit
-toujours pertinent, il est important de comprendre qu'il a été rédigé
-en 2011 et qu'il ne prend pas en compte certains aspects
-contemporains, notamment la chute de RC4 en tant qu'algorithme
-approprié et l'omniprésence du _forward secrecy_ dans les déploiements
-actuels.
+!!! "Mise à jour (08.2019)"
+    Bien que le contenu de cet article soit toujours pertinent, il est important
+    de comprendre qu'il a été rédigé en 2011 et qu'il ne prend pas en compte
+    certains aspects contemporains, notamment la chute de RC4 en tant
+    qu'algorithme approprié et l'omniprésence du _forward secrecy_ dans les
+    déploiements actuels.
 
 [TOC]
 
@@ -141,13 +141,13 @@ mains comme on peut le voir sur le benchmark ci-dessous :
 
 ![Graphique de comparaison de la vitesse avec et sans Diffie-Hellman]([[!!images/benchs-ssl/dhe-impact.png]] "Performances de stud sur 6 cœurs, avec et sans Diffie-Hellman pour une clé de 1024 bits")
 
-!!! "Mise à jour (05.2015)" L'[attaque « Logjam »][Logjam attack] a démontré que
-la sécurité de Diffie-Hellman est plus faible que prévue. Notamment,
-la réutilisation du même nombre premier par de nombreux serveurs
-permet de précalculer une attaque pour casser les connexions protégées
-par ce même nombre. Il est donc important que la taille du nombre
-premier choisi soit équivalente à la taille de la clé RSA (au moins
-2048 bits).
+!!! "Mise à jour (05.2015)"
+    L'[attaque « Logjam »][Logjam attack] a démontré que la sécurité de
+    Diffie-Hellman est plus faible que prévue. Notamment, la réutilisation du
+    même nombre premier par de nombreux serveurs permet de précalculer une
+    attaque pour casser les connexions protégées par ce même nombre. Il est donc
+    important que la taille du nombre premier choisi soit équivalente à la
+    taille de la clé RSA (au moins 2048 bits).
 
 [Logjam attack]: https://weakdh.org/ "Logjam: How Diffie-Hellman Fails in Practice"
 
@@ -243,22 +243,21 @@ est respecté**. Pour _nginx_, il s'agit de la directive
 `ssl_prefer_server_ciphers on` tandis que pour _Apache_, c'est
 `SSLHonorCipherOrder on`.
 
-!!! "Mise à jour (11.2011)" Il est également nécessaire de vérifier que le
-support pour **ECDHE est présent dans le serveur web** que vous
-souhaitez utiliser. Pour _nginx_, le support a été ajouté dans la
-version 1.0.6 et dans la version 1.1.0. La courbe elliptique
-sélectionnée par défaut est NIST P-256 et il est possible d'en choisir
-une autre avec la directive `ssl_ecdh_curve`. Pour _Apache_, le
-support existe depuis la version 2.3.3 mais n'est pas présent dans la
-branche stable. Ajouter le support pour ECDHE n'est pas très
-difficile. À titre d'exemple, vous pouvez consulter
-[comment j'ai ajouté son support dans _stud_][stud61]. Le problème est
-similaire pour les suites basées sur DHE ; dans ce cas, il peut aussi
-être nécessaire de spécifier les paramètres DH à utiliser (générés
-avec `openssl dhparam`) à l'aide de la directive adéquate ou en les
-incluant après le certificat. Un
-[article de Immerda Techblog][immerda] fournit quelques informations
-supplémentaires sur ce point précis.
+!!! "Mise à jour (11.2011)"
+    Il est également nécessaire de vérifier que le support pour **ECDHE est
+    présent dans le serveur web** que vous souhaitez utiliser. Pour _nginx_, le
+    support a été ajouté dans la version 1.0.6 et dans la version 1.1.0. La
+    courbe elliptique sélectionnée par défaut est NIST P-256 et il est possible
+    d'en choisir une autre avec la directive `ssl_ecdh_curve`. Pour _Apache_, le
+    support existe depuis la version 2.3.3 mais n'est pas présent dans la
+    branche stable. Ajouter le support pour ECDHE n'est pas très difficile. À
+    titre d'exemple, vous pouvez consulter [comment j'ai ajouté son support dans
+    _stud_][stud61]. Le problème est similaire pour les suites basées sur DHE ;
+    dans ce cas, il peut aussi être nécessaire de spécifier les paramètres DH à
+    utiliser (générés avec `openssl dhparam`) à l'aide de la directive adéquate
+    ou en les incluant après le certificat. Un [article de Immerda
+    Techblog][immerda] fournit quelques informations supplémentaires sur ce
+    point précis.
 
 L'implémentation des [tickets de session TLS][tickets] peut être
 incompatible avec le _forward secrecy_ selon leur
