@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -22,6 +23,7 @@ SHARED = [
 BASELINE_FONT = config.CONTENT / "media" / "fonts" / "literata.woff2"
 
 
+@functools.cache
 def baseline_offset(path: Path) -> float:
     """Baseline position as (ascent - descent) / (2 * upm) from OS/2 table."""
     xml = run("ttx", "-t", "OS/2", "-t", "head", "-o", "/dev/stdout", path)
@@ -30,6 +32,19 @@ def baseline_offset(path: Path) -> float:
     ascent = ttx_value(root, ".//OS_2/sTypoAscender")
     descent = abs(ttx_value(root, ".//OS_2/sTypoDescender"))
     return (ascent - descent) / (2 * upm)
+
+
+@functools.cache
+def cap_offset(path: Path) -> float:
+    """Space above capital letters minus space under the baseline, as
+    (ascent - cap height - descent) / upm from OS/2 table."""
+    xml = run("ttx", "-t", "OS/2", "-t", "head", "-o", "/dev/stdout", path)
+    root = ET.fromstring(xml)
+    upm = ttx_value(root, ".//head/unitsPerEm")
+    ascent = ttx_value(root, ".//OS_2/sTypoAscender")
+    descent = abs(ttx_value(root, ".//OS_2/sTypoDescender"))
+    cap = ttx_value(root, ".//OS_2/sCapHeight")
+    return (ascent - cap - descent) / upm
 
 
 def ttx_value(root: ET.Element, path: str) -> int:
@@ -44,6 +59,7 @@ def process(site: Site, text: str) -> str:
     env = os.environ.copy()
     env["CSS_MINIFY"] = "true" if site.mode.production else "false"
     env["CSS_BASELINE_OFFSET"] = str(baseline_offset(BASELINE_FONT))
+    env["CSS_CAP_OFFSET"] = str(cap_offset(BASELINE_FONT))
     return run("node", SCRIPT, "process", input=text, env=env)
 
 

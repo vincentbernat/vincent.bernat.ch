@@ -250,7 +250,10 @@ function runProcess() {
         );
         fs.writeFileSync(
             computedFile,
-            `:root { --lf-baseline-offset: calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem); }`,
+            `:root {
+                --lf-baseline-offset: calc(0.5rlh + ${process.env.CSS_BASELINE_OFFSET}rem);
+                --lf-cap-offset: ${process.env.CSS_CAP_OFFSET}em;
+            }`,
         );
         postcss([
             postcssGlobalData({
