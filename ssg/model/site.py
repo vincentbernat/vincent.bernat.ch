@@ -98,16 +98,16 @@ class Site:
             return self.generated[path]
         return config.CONTENT / "media" / path
 
-    def sidecar(self, path: str) -> Path:
+    def manifest(self, path: str) -> Path:
         """Information about a fingerprinted media file."""
         return self.mode.cache / "fingerprints" / (path + ".json")
 
     def fingerprint(self, path: str) -> dict[str, Any] | None:
         """Hashed name and integrity of a fingerprinted media file."""
-        sidecar = self.sidecar(path)
-        deps.record_file(sidecar)
+        manifest = self.manifest(path)
+        deps.record_file(manifest)
         try:
-            return json.loads(sidecar.read_text())
+            return json.loads(manifest.read_text())
         except FileNotFoundError:
             return None
 

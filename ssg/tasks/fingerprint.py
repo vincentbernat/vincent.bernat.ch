@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ..model.site import Site
 
 
-def image(site: Site, path: str, sidecar: Path) -> None:
+def image(site: Site, path: str, manifest: Path) -> None:
     raw = site.raw(path)
     name = site.hashed(path)
     target = site.output(f"media/{name}")
@@ -30,10 +30,10 @@ def image(site: Site, path: str, sidecar: Path) -> None:
         files.copy(raw, target)
         outputs = [target]
     names = [o.relative_to(site.output("media")).as_posix() for o in outputs]
-    write(sidecar, json.dumps({"path": name, "files": names}))
+    write(manifest, json.dumps({"path": name, "files": names}))
 
 
-def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> None:
+def file(site: Site, path: str, manifest: Path, content: bytes | None = None) -> None:
     if content is None:
         content = site.raw(path).read_bytes()
     digest = xxhash.xxh3_128_hexdigest(content)[:14]
@@ -47,7 +47,7 @@ def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> 
     for n in names:
         write(site.output(f"media/{n}"), content)
     write(
-        sidecar,
+        manifest,
         json.dumps(
             {
                 "path": name_with_digest,
@@ -61,7 +61,7 @@ def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> 
 CSS_REFERENCE = re.compile(r"[^\s()'\"]*((?:fonts|images)/[^\s()'\"]+)(['\"]?)\)")
 
 
-def css(site: Site, path: str, sidecar: Path) -> None:
+def css(site: Site, path: str, manifest: Path) -> None:
     """Use hashed names for fonts and images referenced in a stylesheet."""
     content = site.raw(path).read_text(encoding="utf-8")
 
@@ -78,13 +78,13 @@ def css(site: Site, path: str, sidecar: Path) -> None:
         return prefix + new + mo.group(2) + ")"
 
     content = CSS_REFERENCE.sub(replace, content)
-    file(site, path, sidecar, content.encode("utf-8"))
+    file(site, path, manifest, content.encode("utf-8"))
 
 
-def exist(site: Site, path: str, sidecar: Path) -> bool:
-    """Check the files listed in a sidecar exist."""
+def exist(site: Site, path: str, manifest: Path) -> bool:
+    """Check the files listed in a manifest exist."""
     try:
-        files = json.loads(sidecar.read_text())["files"]
+        files = json.loads(manifest.read_text())["files"]
     except FileNotFoundError:
         return False
     if not site.mode.production and not path.startswith("images/"):

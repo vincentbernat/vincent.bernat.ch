@@ -398,10 +398,10 @@ class Builder:
     def fingerprint_tasks(self) -> Iterator[Task]:
         """Media files get a name with a hash of their content."""
         for path in self.fingerprinted:
-            sidecar = self.site.sidecar(path)
+            manifest = self.site.manifest(path)
             file_dep = [str(self.site.raw(path))]
             task_dep = []
-            uptodate = [(fingerprint.exist, [self.site, path, sidecar])]
+            uptodate = [(fingerprint.exist, [self.site, path, manifest])]
             if path.startswith("images/"):
                 basename = "fingerprint-image"
                 action = fingerprint.image
@@ -420,9 +420,9 @@ class Builder:
             yield {
                 "basename": basename,
                 "name": path,
-                "actions": [(action, [self.site, path, sidecar])],
+                "actions": [(action, [self.site, path, manifest])],
                 "file_dep": file_dep,
-                "targets": [str(sidecar)],
+                "targets": [str(manifest)],
                 "task_dep": task_dep,
                 "uptodate": uptodate,
             }
@@ -441,7 +441,7 @@ class Builder:
             "basename": "bundle-sizes",
             "doc": SINGLES["bundle-sizes"][0],
             "actions": [(sizes.bundle_sizes, [self.site, bundles, target])],
-            "file_dep": pages + [str(self.site.sidecar(b)) for b in bundles],
+            "file_dep": pages + [str(self.site.manifest(b)) for b in bundles],
             "targets": [str(target)],
             "uptodate": [environment()],
         }
@@ -470,7 +470,7 @@ class Builder:
             result.add(self.out / "bundle-sizes.txt")
         for path in self.fingerprinted:
             try:
-                names = json.loads(self.site.sidecar(path).read_text())["files"]
+                names = json.loads(self.site.manifest(path).read_text())["files"]
             except FileNotFoundError:
                 continue
             result.update(self.out / "media" / f for f in names)
