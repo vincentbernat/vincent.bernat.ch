@@ -7,6 +7,7 @@ import re
 
 import lxml.cssselect
 import lxml.etree
+import lxml.html
 
 # Elements displayed inline. Other elements separate words.
 INLINE_TAGS = frozenset({
@@ -66,6 +67,15 @@ def add_class(el: lxml.etree._Element, name: str) -> None:
 
 def remove_class(el: lxml.etree._Element, name: str) -> None:
     el.set("class", " ".join(c for c in classes(el) if c != name))
+
+
+def set_flag(el: lxml.etree._Element, name: str) -> None:
+    """Set a boolean attribute. In HTML, it has no value. In XML, for feeds,
+    its value is empty."""
+    if isinstance(el, lxml.html.HtmlElement):
+        el.set(name, None)
+    else:
+        el.set(name, "")
 
 
 def remove(el: lxml.etree._Element) -> None:

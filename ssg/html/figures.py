@@ -15,20 +15,11 @@ import lxml.html
 
 from ..images import properties, scales
 from ..media import css
-from .dom import add_class, classes, element, localname, rename
+from .dom import add_class, classes, element, localname, rename, set_flag
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
     from ..model.site import Site
-
-
-def set_flag(el: lxml.etree._Element, name: str) -> None:
-    """Set a boolean attribute. In HTML, it has no value. In XML, for feeds,
-    its value is empty."""
-    if isinstance(el, lxml.html.HtmlElement):
-        el.set(name, None)
-    else:
-        el.set(name, "")
 
 
 def resolve(site: Site, resource: Resource, src: str) -> Resource | None:

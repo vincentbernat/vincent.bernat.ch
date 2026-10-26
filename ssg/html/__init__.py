@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import lxml.etree
 import lxml.html
 
-from . import assets, figures, fingerprint, reading, sidenotes, toc
+from . import assets, figures, fingerprint, links, reading, sidenotes, toc
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -29,6 +29,7 @@ def page(site: Site, resource: Resource, text: str) -> str:
     toc.fix(resource, root)
     assets.load(site, root)
     fingerprint.rewrite(site, root)
+    links.number(resource, root)
     return "<!DOCTYPE html>\n" + lxml.html.tostring(root, encoding="unicode")
 
 
