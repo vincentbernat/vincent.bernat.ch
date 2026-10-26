@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import functools
 import json
 import re
@@ -10,7 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from doit.tools import config_changed
+from doit.tools import config_changed, timeout
 
 from .. import config, deps, fonts, templates
 from ..images import covers, scales, thumbnails
@@ -457,7 +458,9 @@ class Builder:
             "doc": SINGLES["prune"][0],
             "actions": [(files.prune, [self])],
             "task_dep": kinds,
-            "uptodate": [False],
+            "uptodate": [
+                False if self.mode.production else timeout(datetime.timedelta(days=1))
+            ],
         }
 
     def expected(self) -> set[Path]:
