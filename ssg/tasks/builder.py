@@ -401,7 +401,7 @@ class Builder:
             sidecar = self.site.sidecar(path)
             file_dep = [str(self.site.raw(path))]
             task_dep = []
-            uptodate = [(fingerprint.exist, [self.site, sidecar])]
+            uptodate = [(fingerprint.exist, [self.site, path, sidecar])]
             if path.startswith("images/"):
                 basename = "fingerprint-image"
                 action = fingerprint.image

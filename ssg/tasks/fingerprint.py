@@ -39,11 +39,22 @@ def file(site: Site, path: str, sidecar: Path, content: bytes | None = None) -> 
     digest = xxhash.xxh3_128_hexdigest(content)[:14]
     sha256 = base64.b64encode(hashlib.sha256(content).digest()).decode("ascii")
     root, ext = posixpath.splitext(path)
-    name = f"{root}.{digest}{ext}"
-    write(site.output(f"media/{name}"), content)
+    name_with_digest = f"{root}.{digest}{ext}"
+    names = [name_with_digest]
+    if not site.mode.production:
+        # Used by pages while the file changes
+        names.append(path)
+    for n in names:
+        write(site.output(f"media/{n}"), content)
     write(
         sidecar,
-        json.dumps({"path": name, "integrity": f"sha256-{sha256}", "files": [name]}),
+        json.dumps(
+            {
+                "path": name_with_digest,
+                "integrity": f"sha256-{sha256}",
+                "files": names,
+            }
+        ),
     )
 
 
@@ -70,10 +81,12 @@ def css(site: Site, path: str, sidecar: Path) -> None:
     file(site, path, sidecar, content.encode("utf-8"))
 
 
-def exist(site: Site, sidecar: Path) -> bool:
+def exist(site: Site, path: str, sidecar: Path) -> bool:
     """Check the files listed in a sidecar exist."""
     try:
         files = json.loads(sidecar.read_text())["files"]
     except FileNotFoundError:
         return False
+    if not site.mode.production and not path.startswith("images/"):
+        files.append(path)
     return all(site.output(f"media/{f}").exists() for f in files)

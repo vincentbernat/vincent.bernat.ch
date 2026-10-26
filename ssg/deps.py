@@ -13,6 +13,7 @@ import functools
 import hashlib
 import os
 import shutil
+import time
 from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,8 @@ from typing import TYPE_CHECKING, Any, Self
 
 import xxhash
 from doit.dependency import FileChangedChecker
+
+from . import config
 
 if TYPE_CHECKING:
     from .model.resource import Resource
@@ -248,6 +251,8 @@ KINDS = {
     "e": "environment",
     # empty → current year
     "y": "year",
+    # empty → "1" if CSS, JS or font files changed recently, in development
+    "a": "assets",
 }
 
 
@@ -284,7 +289,24 @@ def state(site: Site, key: str) -> str | None:
             return os.environ.get(what, "")
         case "y":
             return str(datetime.now().year)
+        case "a":
+            return recent_assets(site)
     return None
+
+
+@functools.cache
+def recent_assets(site: Site) -> str:
+    """In development, "1" if a CSS, JS or font file changed in the last hour.
+    Pages then use their original names, to not rebuild all of them after each
+    change."""
+    if site.mode.production:
+        return ""
+    limit = time.time() - 600
+    for kind in ("css", "js", "fonts"):
+        for path in (config.CONTENT / "media" / kind).iterdir():
+            if path.lstat().st_mtime > limit:
+                return "1"
+    return ""
 
 
 def unchanged(site: Site, key: str, digest: str) -> bool:
