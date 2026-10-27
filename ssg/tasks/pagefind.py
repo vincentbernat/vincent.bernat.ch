@@ -46,6 +46,7 @@ def index(site: Site) -> None:
             "--site",
             out,
             "--exclude-selectors=.headerlink",
+            "--exclude-selectors=[hidden]",
             "--output-path",
             tmp,
             "--quiet",

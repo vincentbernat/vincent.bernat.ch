@@ -42,9 +42,7 @@ def number(resource: Resource, root: lxml.etree._Element) -> None:
         a.addnext(mark)
     if not urls:
         return
-    ol = article.makeelement(
-        "ol", {"class": "lf-print-links", "data-pagefind-ignore": "all"}
-    )
+    ol = article.makeelement("ol", {"class": "lf-print-links"})
     set_flag(ol, "hidden")
     for url in urls:
         li = ol.makeelement("li", {})
