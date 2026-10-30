@@ -47,7 +47,7 @@ class ShortLinksExtension(Extension):
 
 class ShortLinksPreprocessor(Preprocessor):
     SCHEMAS: ClassVar[dict[str, str]] = {
-        "rfc": "https://www.rfc-editor.org/rfc/rfc{}",
+        "rfc": "https://www.rfc-editor.org/info/rfc{}",
         "man": "https://manpages.debian.org/{}.html",
         "doi": "https://oadoi.org/{}",
         "sci-hub": "https://sci-hub.fr/{}",
