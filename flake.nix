@@ -111,13 +111,6 @@
               ./tools/patches/svgo-foreignobject.patch
             ];
           });
-          lychee = pkgs.lychee.overrideAttrs (old: {
-            patches = (old.patches or [ ]) ++ [
-              ./tools/patches/lychee-detailed-stats.patch
-            ];
-            # This test checks there are no details without --verbose
-            checkFlags = old.checkFlags ++ [ "--skip=cli::test_redirect_json" ];
-          });
           hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = l.fileset.toSource {
@@ -231,7 +224,7 @@
             tools.links = pkgs.buildEnv {
               name = "links-env";
               paths = [
-                lychee
+                pkgs.lychee
                 (pkgs.python3.withPackages (ps: [ ps.textual ]))
               ];
             };
