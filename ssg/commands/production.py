@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from .. import config
-from . import FINAL, HOSTS, Exit, command, confirm, run, step
+from . import FINAL, HOSTS, Exit, command, confirm, on_hosts, run, step
 
 
 @command(depends=["checks"])
@@ -127,7 +127,7 @@ def push(clean: bool = False) -> None:
             if path.exists(follow_symlinks=False):
                 os.utime(path, (ts, ts), follow_symlinks=False)
 
-    for host in HOSTS["media"]:
+    def push_media(host: str) -> None:
         with step(f"push media to {host}"):
             run(
                 "rsync --exclude=.git --copy-unsafe-links -rt "
@@ -135,7 +135,7 @@ def push(clean: bool = False) -> None:
                 cwd=FINAL,
             )
 
-    for host in HOSTS["www"]:
+    def push_html(host: str) -> None:
         with step(f"push HTML to {host}"):
             run(
                 "rsync --exclude=.git --exclude=media --exclude=/bundle-sizes.txt "
@@ -145,24 +145,29 @@ def push(clean: bool = False) -> None:
             )
             run(f"ssh {host} sudo systemctl reload caddy")
 
+    def clean_media(host: str) -> None:
+        with step(f"clean files on {host}"):
+            run(
+                "rsync --exclude=.git --copy-unsafe-links -rt "
+                "--delete-delay "
+                "--include='**/' "
+                "--include='*.avif' --include='*.webp' "
+                "--exclude='*' "
+                f"media/images {host}:/data/webserver/media.bernat.ch/",
+                cwd=FINAL,
+            )
+            run(
+                "rsync --exclude=.git --copy-unsafe-links -rt "
+                "--delete-delay --exclude=videos/\\*/ "
+                f"media/ {host}:/data/webserver/media.bernat.ch/",
+                cwd=FINAL,
+            )
+
+    # HTML needs the new media, so all media hosts are done first
+    on_hosts(HOSTS["media"], push_media)
+    on_hosts(HOSTS["www"], push_html)
     if clean:
-        for host in HOSTS["media"]:
-            with step(f"clean files on {host}"):
-                run(
-                    "rsync --exclude=.git --copy-unsafe-links -rt "
-                    "--delete-delay "
-                    "--include='**/' "
-                    "--include='*.avif' --include='*.webp' "
-                    "--exclude='*' "
-                    f"media/images {host}:/data/webserver/media.bernat.ch/",
-                    cwd=FINAL,
-                )
-                run(
-                    "rsync --exclude=.git --copy-unsafe-links -rt "
-                    "--delete-delay --exclude=videos/\\*/ "
-                    f"media/ {host}:/data/webserver/media.bernat.ch/",
-                    cwd=FINAL,
-                )
+        on_hosts(HOSTS["media"], clean_media)
 
 
 @command()

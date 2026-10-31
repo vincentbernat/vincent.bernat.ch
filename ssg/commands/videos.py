@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .. import config
 from ..tools import human
-from . import HOSTS, Exit, command, run, step
+from . import HOSTS, Exit, command, on_hosts, run, step
 
 DIRECTORY = config.CONTENT / "media" / "videos"
 
@@ -254,8 +254,11 @@ def upload(videos: list[str]) -> None:
         if videos and directory.name not in videos:
             continue
         with step(f"uploading {directory.name}"):
-            for host in HOSTS["media"]:
+
+            def push(host: str, directory: Path = directory) -> None:
                 run(
-                    f"rsync --delete --info=progress2 -a {directory}/ "
+                    f"rsync --delete -a {directory}/ "
                     f"{host}:/data/webserver/media.bernat.ch/videos/{directory.name}/"
                 )
+
+            on_hosts(HOSTS["media"], push)

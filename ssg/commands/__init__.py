@@ -5,11 +5,13 @@ import importlib
 import inspect
 import os
 import pkgutil
+import random
 import re
 import subprocess
 import sys
 import time
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -140,6 +142,12 @@ def run(
     if check and result.returncode != 0:
         raise Exit(f"command failed: {command}")
     return result
+
+
+def on_hosts(hosts: list[str], function: Callable[[str], None]) -> None:
+    """Run a function for each host in random order, 4 hosts at a time."""
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        list(executor.map(function, random.sample(hosts, len(hosts))))
 
 
 def confirm(question: str, default: bool = False) -> bool:
