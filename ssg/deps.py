@@ -157,7 +157,7 @@ def file_hash(path: str | os.PathLike[str]) -> str:
             return xxhash.xxh3_128_hexdigest(target.name.encode())
     with path.open("rb", buffering=0) as f:
         # The xxhash stubs do not match the protocol expected by hashlib
-        digest = hashlib.file_digest(f, xxhash.xxh3_128)  # type: ignore[arg-type]
+        digest = hashlib.file_digest(f, xxhash.xxh3_128)
     return digest.hexdigest()
 
 
