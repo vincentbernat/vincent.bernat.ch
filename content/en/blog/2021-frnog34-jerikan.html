@@ -19,7 +19,7 @@ They are about automating the deployment of Blade's datacenters using
 "[Jerikan+Ansible: a configuration management system for
 network][post]."
 
-![Slides in PDF]([[!!files/slides-frnog34.pdf]])
+![Slides in PDF](self://media/files/slides-frnog34.pdf)
 
 The presentation, in French, was recorded. I have added English
 subtitles.[^diction]
@@ -28,23 +28,23 @@ subtitles.[^diction]
     Good thing if you don't understand French as my diction
     was poor with a lot of fillers.
 
-![]([[!!videos/2021-frnog34-jerikan.m3u8]])
+![](self://media/videos/2021-frnog34-jerikan.m3u8)
 
 # Transcript
 
-![How we deployed a datacenter in one click]([[!!images/2021-frnog34-jerikan/slide-01@2x.png]])
+![How we deployed a datacenter in one click](self://media/images/2021-frnog34-jerikan/slide-01@2x.png)
 
 Hello! I'll tell you how we at Blade deployed a datacenter in one "click." The
 title is a little bit clickbaity because we didn't click anywhere. This is the
 joint work of the former Blade network team. My colleagues are in the room.
 
-![What's deployed?]([[!!images/2021-frnog34-jerikan/slide-02@2x.png]])
+![What's deployed?](self://media/images/2021-frnog34-jerikan/slide-02@2x.png)
 
 The scope is just the network part of the datacenter. Edge routers, OOB
 switches, spines, leafs, console servers, two Linux servers that are central to
 the whole network management, and a LibreNMS server for the supervision.
 
-![What's configured?]([[!!images/2021-frnog34-jerikan/slide-03@2x.png]])
+![What's configured?](self://media/images/2021-frnog34-jerikan/slide-03@2x.png)
 
 At the end of the deployment, all that is configured: the edge routers,
 including BGP sessions, policies with transit providers and peerings, a
@@ -54,7 +54,7 @@ access to console servers, the VPN to other sites, and all external systems:
 DNS, IRR, RPKI, NetBox. All this is configured automatically at the end of the
 deployment.
 
-![Steps]([[!!images/2021-frnog34-jerikan/slide-04@2x.png]])
+![Steps](self://media/images/2021-frnog34-jerikan/slide-04@2x.png)
 
 There is a first step where you have to buy space, power, cooling, racks,
 equipment, and plug it all in. Then, on the gateway servers, you install a
@@ -68,7 +68,7 @@ devices. Once they have the basic provisioning, Ansible will finalize their
 configuration. Once that's done, we tell our system team that everything is
 functional.
 
-![Source of truth]([[!!images/2021-frnog34-jerikan/slide-05@2x.png]])
+![Source of truth](self://media/images/2021-frnog34-jerikan/slide-05@2x.png)
 
 We have a source of truth. We chose that NetBox was not our source of truth. We
 use NetBox, but it is secondary. Our source of truth is flat files in YAML,
@@ -77,14 +77,14 @@ device name, gives the intrinsic properties of the device, a definition of a
 hierarchy to search for all other data, and all data files written in YAML and
 included in this hierarchy.
 
-![List of devices]([[!!images/2021-frnog34-jerikan/slide-06@2x.png]])
+![List of devices](self://media/images/2021-frnog34-jerikan/slide-06@2x.png)
 
 The equipment list is just a list containing the names of all the equipment. The
 name of the equipment implies its function. This is not strictly necessary, but
 it is simpler. For example, here it's an equipment in San Francisco and `ob`
 means it's an OOB equipment.
 
-![Classifier]([[!!images/2021-frnog34-jerikan/slide-07@2x.png]])
+![Classifier](self://media/images/2021-frnog34-jerikan/slide-07@2x.png)
 
 The classifier takes the name of the equipment and attaches properties to it.
 These are only properties that can be inferred from the name. There are several
@@ -95,12 +95,12 @@ up in two groups that give this information. It also deduces the OS. These are
 Facebook Wedge 100s running Cumulus. The classifier uses regexes to infer this
 information from the name.
 
-![Hierarchy definition]([[!!images/2021-frnog34-jerikan/slide-08@2x.png]])
+![Hierarchy definition](self://media/images/2021-frnog34-jerikan/slide-08@2x.png)
 
 We have a definition of the hierarchy which, from the information deduced by the
 classifier, will indicate in which directories to look for the data files.
 
-![Data files]([[!!images/2021-frnog34-jerikan/slide-09@2x.png]])
+![Data files](self://media/images/2021-frnog34-jerikan/slide-09@2x.png)
 
 Finally, we have all the data files. The model is freeform. An important rule is
 not to have any repetition. If you put the same IP in two different files, there
@@ -110,7 +110,7 @@ don't have yet. On this example, we define a peering on an IX. We give the name
 of the peering, the AS, the IPs. In this case with Blizzard, we give their macro
 to generate the filters to accept only their prefixes.
 
-![Commit by Loïc]([[!!images/2021-frnog34-jerikan/slide-10@2x.png]])
+![Commit by Loïc](self://media/images/2021-frnog34-jerikan/slide-10@2x.png)
 
 It's a little hard to see but for the San Francisco datacenter, it was
 implemented in one commit. It was prepared over several weeks. The data needed
@@ -119,7 +119,7 @@ each equipment, often to give their IP and MAC addresses. Some are datacenter or
 rack specific. Once this commit has been accepted, the next step is to deploy
 with the commands I indicated at the beginning.
 
-![Jerikan]([[!!images/2021-frnog34-jerikan/slide-11@2x.png]])
+![Jerikan](self://media/images/2021-frnog34-jerikan/slide-11@2x.png)
 
 We have developed a software called Jerikan. Its function is to compile
 configuration files from the source of truth and templates. We didn't use
@@ -129,13 +129,13 @@ It is extremely fast. We have about 600 devices. It generates the entire
 configuration, including edge routers with multi-megabyte BGP policies, in less
 than a minute.
 
-![Templates]([[!!images/2021-frnog34-jerikan/slide-12@2x.png]])
+![Templates](self://media/images/2021-frnog34-jerikan/slide-12@2x.png)
 
 At the template level, we use Jinja2 because that's what Ansible uses and that's
 what's most common. We added some functions of our own, like the `lookup()`
 function, which allows to look for data in the source of truth.
 
-![Error handling]([[!!images/2021-frnog34-jerikan/slide-13@2x.png]])
+![Error handling](self://media/images/2021-frnog34-jerikan/slide-13@2x.png)
 
 This is a small example when there is an error in a template to show the
 difference with Ansible. There is an error. We get the line on which the error
@@ -143,7 +143,7 @@ is located: line 15. We also have all the variables that are currently in the
 scope. The `info` dictionary contains `address` with two "d" and not three "d."
 This allows you to see where the error is without removing half the template.
 
-![Integration into GitLab]([[!!images/2021-frnog34-jerikan/slide-14@2x.png]])
+![Integration into GitLab](self://media/images/2021-frnog34-jerikan/slide-14@2x.png)
 
 We have an integration in GitLab thanks to the use of Git. When Loïc wanted to
 prepare the deployment of San Francisco, we didn't stop working. He's doing a
@@ -156,13 +156,13 @@ configuration that is running on the hardware. When you make small changes, you
 don't really know what the impact will be. Here, we can say that this change
 will do that. It's pretty convenient to see the result.
 
-![Integration into GitLab]([[!!images/2021-frnog34-jerikan/slide-15@2x.png]])
+![Integration into GitLab](self://media/images/2021-frnog34-jerikan/slide-15@2x.png)
 
 This is an example of a diff you get on a different kind of commit. We can see
 that there are added devices. There is a port that has been activated and the
 second part is about DNS.
 
-![Ansible]([[!!images/2021-frnog34-jerikan/slide-16@2x.png]])
+![Ansible](self://media/images/2021-frnog34-jerikan/slide-16@2x.png)
 
 Then, we keep Ansible for the whole deployment part. We have very heterogeneous
 equipment like Dell OS 9 and HP Comware. You wouldn't want to have them on your
@@ -177,7 +177,7 @@ something has been changed without us knowing it and put the equipment in
 question back into compliance. And on the network devices, we deploy full
 configurations to make sure we're running exactly what we expect.
 
-![Further reading]([[!!images/2021-frnog34-jerikan/slide-17@2x.png]])
+![Further reading](self://media/images/2021-frnog34-jerikan/slide-17@2x.png)
 
 If you want more information, there is a blog post with a video demo that goes
 into more detail.
@@ -243,4 +243,4 @@ put everything in flat files to allow us to embrace Git.
 [Shadow]: https://shadow.tech
 [Jerikan]: https://github.com/jerikan-network/cmdb
 [Ansible]: https://www.ansible.com "https://www.ansible.com"
-[post]: [[en/blog/2021-network-jerikan-ansible.html]]
+[post]: self://en/blog/2021-network-jerikan-ansible

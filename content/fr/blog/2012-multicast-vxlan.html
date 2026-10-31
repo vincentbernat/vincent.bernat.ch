@@ -39,8 +39,8 @@ fonctionne.
 !!! "Mise à jour (10.2018)"
     En août 2014, la proposition a été publiée en tant que [RFC 7348][].
 
-[second article]: [[fr/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
-[troisième article]: [[fr/blog/2017-vxlan-bgp-evpn.html]] "VXLAN: BGP EVPN avec FRR"
+[second article]: self://fr/blog/2017-vxlan-linux
+[troisième article]: self://fr/blog/2017-vxlan-bgp-evpn
 [RFC 7348]: rfc://7348
 
 [TOC]
@@ -82,7 +82,7 @@ construit n'est pas résilient mais il est assez pratique pour
 expliquer les concepts essentiels. Le labo s'appuie sur des machines
 QEMU. Mon [article précédent][] contient plus de détails à ce sujet.
 
-![Labo VXLAN]([[!!images/vxlan/lab.svg]] "Topologie du labo VXLAN")
+![Labo VXLAN](self://media/images/vxlan/lab.svg "Topologie du labo VXLAN")
 
 Les fichiers nécessaires pour installer ce labo sont hébergés
 sur [GitHub][]. Pour faciliter les choses, le noyau que j'utilise est
@@ -186,7 +186,7 @@ Tout d'abord, les routeurs PIM-SM **élisent un point de rendez-vous**
 pour devenir point de rendez-vous. De plus, `C3` est configuré de
 façon à gagner les élections.
 
-![Élection du RP]([[!!images/vxlan/multicast-rp.svg]] "C3 a été élu RP")
+![Élection du RP](self://media/images/vxlan/multicast-rp.svg "C3 a été élu RP")
 
     ::console
     root@e1$ show pim rps
@@ -202,7 +202,7 @@ en place un arbre partagé unidirectionnel** (_RP tree_) dont la racine
 est `C3`. Chaque routeur de l'arbre sait alors comment envoyer des
 paquets multicast pour `239.0.0.11` : il les envoie vers les feuilles.
 
-![Arbre partagé unidirectionnel]([[!!images/vxlan/multicast-rptree.svg]] "Arbre partagé unidirectionnel pour 239.0.0.11")
+![Arbre partagé unidirectionnel](self://media/images/vxlan/multicast-rptree.svg "Arbre partagé unidirectionnel pour 239.0.0.11")
 
     ::console
     root@e3$ show pim join
@@ -239,7 +239,7 @@ envoyer au RP**. Le RP va ensuite décapsuler les paquets et les
 envoyer via l'arbre partagé unidirectionnel construit lors de l'étape
 précédente afin que `R2` et `R3` les réceptionnent.
 
-![Routage multicast via le RP]([[!!images/vxlan/multicast-register.svg]] "R1 envoie des paquets multicast pour 239.0.0.11 via le RP")
+![Routage multicast via le RP](self://media/images/vxlan/multicast-register.svg "R1 envoie des paquets multicast pour 239.0.0.11 via le RP")
 
     ::console
     root@r1# iperf -c 239.0.0.11 -u -b 10k -t 30 -T 10
@@ -272,7 +272,7 @@ messages _(S,G) join_.
     attendu. XORP a donc été configuré pour effectuer cette
     bascule dès le premier paquet reçu.
 
-![Routage multicast sans passer par le RP]([[!!images/vxlan/multicast-native.svg]] "R1 envoie des paquets multicast pour 239.0.0.11 sans passer par le RP")
+![Routage multicast sans passer par le RP](self://media/images/vxlan/multicast-native.svg "R1 envoie des paquets multicast pour 239.0.0.11 sans passer par le RP")
 
 Chaque routeur situé dans l'arbre sait alors comment router les
 paquets de `R1` à destination du groupe sans utiliser le RP. Par
@@ -403,7 +403,7 @@ FDB de l'interface VXLAN (qui se comporte comme un switch) :
 
 Voici une courte démonstration du labo ainsi obtenu :
 
-![]([[!!videos/2012-multicast-vxlan.m3u8]])
+![](self://media/videos/2012-multicast-vxlan.m3u8)
 
 *[KVM]: Kernel-based Virtual Machine
 *[VM]: Virtual Machine
@@ -423,7 +423,7 @@ Voici une courte démonstration du labo ainsi obtenu :
 [xorp-pimsm]: https://web.archive.org/web/2012/http://xorp.run.montefiore.ulg.ac.be/latex2wiki/user_manual/pim_sparse_mode "Documentation de XORP pour PIM-SM"
 [xorp-igmp]: https://web.archive.org/web/2012/http://xorp.run.montefiore.ulg.ac.be/latex2wiki/user_manual/igmp_and_mld "Documentation de XORP pour IGMP et MLD"
 [GitHub]: https://github.com/vincentbernat/network-lab/tree/master/lab-multicast-vxlan "Lab VXLAN"
-[article précédent]: [[fr/blog/2012-lab-reseau-kvm.html]] "Labo virtuel avec QEMU"
+[article précédent]: self://fr/blog/2012-lab-reseau-kvm
 [XORP]: https://web.archive.org/web/2012/http://www.xorp.org/ "XORP: Extensible open source routing platform"
 [upa-vxlan]: https://github.com/upa/vxlan/ "VXLAN implementation using Linux tap interfaces"
 [vxlan-ipv6]: https://lore.kernel.org/netdev/20121029072056.5faa6db4@nehalam.linuxnetplumber.net/ "Plan for adding IPv6 support for VXLAN in Linux"

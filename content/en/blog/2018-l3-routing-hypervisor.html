@@ -50,7 +50,7 @@ subnet is bound to a specific rack and routing information is shared
 between top of the rack switches and core routers using a routing
 protocol like OSPF.
 
-![Legacy L2 design]([[!!images/l3-routing/legacy.svg]] "Minimal layer 3 (routed) access design: each pair of top of the racks act as a gateway. Layer 2 fault domains are limited to a single rack. Hypervisors provide a bridge to virtual guests, extending the layer 2 domain. Each rack owns a set of subnets.")
+![Legacy L2 design](self://media/images/l3-routing/legacy.svg "Minimal layer 3 (routed) access design: each pair of top of the racks act as a gateway. Layer 2 fault domains are limited to a single rack. Hypervisors provide a bridge to virtual guests, extending the layer 2 domain. Each rack owns a set of subnets.")
 
 There are two main issues with this design:
 
@@ -87,7 +87,7 @@ included). Each hypervisor uses two routing tables for this purpose.
 The following illustration shows the configuration of a hypervisor
 with 5 guests. No bridge is needed.
 
-![L3 routing inside a hypervisor]([[!!images/l3-routing/hypervisor.svg]] "Layer 3 routing setup for a hypervisor. Each hypervisor is connected to a “public” network and a “private” one. Guests are attached to either of these networks. Each routing table contains connected routes for local guests, host routes for remote guests, and a default route for other destinations.")
+![L3 routing inside a hypervisor](self://media/images/l3-routing/hypervisor.svg "Layer 3 routing setup for a hypervisor. Each hypervisor is connected to a “public” network and a “private” one. Guests are attached to either of these networks. Each routing table contains connected routes for local guests, host routes for remote guests, and a default route for other destinations.")
 
 The complete configuration described below is also available on
 [GitHub][]. In real life, a piece of software is needed to update the
@@ -235,7 +235,7 @@ other.
 Several designs are possible to connect hypervisors. The most obvious
 one is to use a full L3 leaf-spine fabric:
 
-![Full L3 fabric design]([[!!images/l3-routing/full-v2.svg]] "Full L3 leaf-spine fabric design. A BGP session is established over each link. Spine routers need to learn all routes.")
+![Full L3 fabric design](self://media/images/l3-routing/full-v2.svg "Full L3 leaf-spine fabric design. A BGP session is established over each link. Spine routers need to learn all routes.")
 
 Each hypervisor establishes an eBGP session with each of the leaf
 top-of-the-rack routers. These routers establish an eBGP session
@@ -262,7 +262,7 @@ surprising after bad-mouthing L2 networks for their unreliability but
 we don't need them to be highly available. They can provide a very
 scalable and cost-efficient design:[^scale]
 
-![L2 fabric design]([[!!images/l3-routing/l2.svg]] "L2 fabric leaf-spine fabric design with 4 distinct L2 networks. Each hypervisor establishes a BGP session to at least one route reflector for each L2 network.")
+![L2 fabric design](self://media/images/l3-routing/l2.svg "L2 fabric leaf-spine fabric design with 4 distinct L2 networks. Each hypervisor establishes a BGP session to at least one route reflector for each L2 network.")
 
 [^scale]:
     From a scalability point of view, with switches able to
@@ -761,7 +761,7 @@ BGP resiliency with BGP LLGR
 [IEEE 802.1Q-2014]: sci-hub://10.1109/IEEESTD.2014.6991462 "IEEE 802.1Q-2014 on Sci-Hub"
 [IEEE 802.1AX-2014]: sci-hub://10.1109/IEEESTD.2014.7055197 "IEEE 802.1AX-2014 on Sci-Hub"
 [TRILL]: rfc://6325
-[VXLAN]: [[en/blog/2017-vxlan-linux.html]] "VXLAN & Linux"
+[VXLAN]: self://en/blog/2017-vxlan-linux
 [commit 7889681f4a6c]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=7889681f4a6c2148e1245604bac751a1cae8f882 "net: vrf: Update flags and features settings"
 [vrf.txt]: https://www.kernel.org/doc/Documentation/networking/vrf.txt "Virtual Routing and Forwarding (VRF)"
 [BGP in the datacenter]: https://www.nvidia.com/en-us/networking/border-gateway-protocol/ "BGP in the data center: a complete guide to BGP for the modern data center"
@@ -769,10 +769,10 @@ BGP resiliency with BGP LLGR
 [ndppd]: https://github.com/DanielAdolfsson/ndppd/ "NDP Proxy Daemon"
 [dnsmasq]: https://thekelleys.org.uk/dnsmasq/doc.html
 [radvd]: https://radvd.litech.org/ "Linux IPv6 Router Advertisement Daemon (radvd)"
-[IPv4 route lookup on Linux]: [[en/blog/2017-ipv4-route-lookup-linux.html]] "IPv4 route lookup on Linux"
-[IPv6 route lookup on Linux]: [[en/blog/2017-ipv6-route-lookup-linux.html]] "IPv6 route lookup on Linux"
-[ddos-cache]: [[en/blog/2017-ipv6-route-lookup-linux.html]]#caching "IPv6 route lookup on Linux"
-[BGP LLGR: robust and reactive BGP sessions]: [[en/blog/2018-bgp-llgr.html]] "BGP LLGR: robust and reactive BGP sessions"
+[IPv4 route lookup on Linux]: self://en/blog/2017-ipv4-route-lookup-linux
+[IPv6 route lookup on Linux]: self://en/blog/2017-ipv6-route-lookup-linux
+[ddos-cache]: self://en/blog/2017-ipv6-route-lookup-linux#caching
+[BGP LLGR: robust and reactive BGP sessions]: self://en/blog/2018-bgp-llgr
 [Juniper QFX5100]: https://www.juniper.net/us/en/products/switches/qfx-series/qfx5100-ethernet-switch-datasheet.html "QFX5100 10/40GbE data center switches"
 [Arista 7208SR]: https://www.arista.com/en/products/7280r-series "Arista 7280R Series"
 [Juniper MX240]: https://web.archive.org/web/2017/https://www.juniper.net/us/en/products/routers/mx-series/mx240-universal-routing-platform.html "MX240 edge router"
@@ -790,7 +790,7 @@ BGP resiliency with BGP LLGR
 [l2-fabric]: https://docs.tigera.io/calico/latest/reference/architecture/design/l2-interconnect-fabric "Calico over an Ethernet interconnect fabric"
 [does not spoof the source address]: https://github.com/DanielAdolfsson/ndppd/issues/41 "Source address used by ndppd may not be a neighbor address #41"
 [pickier about it]: https://github.com/openbsd/src/blob/442f4bb483c9350a9d4c74fd7a2ae45f06c454dd/sys/netinet6/nd6_nbr.c#L155-L159 "nd6_ns_input() on OpenBSD"
-[Securing BGP on the host with origin validation]: [[en/blog/2019-bgp-host-rpki.html]] "Securing BGP on the host with origin validation"
+[Securing BGP on the host with origin validation]: self://en/blog/2019-bgp-host-rpki
 [GitHub]: https://github.com/vincentbernat/network-lab/tree/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv "Lab configuration files"
 [local-out]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/hypervisor.conf#L11-L40 "local-out table configuration"
 [ipv6]: https://github.com/vincentbernat/network-lab/blob/88b9b875c3c48c2f9e3ad4fb4e2719d6c4b3cc22/lab-l3-hyperv/bird-common/rr-client6.conf "IPv6 configuration"

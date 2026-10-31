@@ -68,7 +68,7 @@ Akvorado connects 2 elements to build its RIB:
 2. a **list of routes** attached to each prefix.
 
 ![Akvorado BMP RIB implementation before sharding with the memory layout of each
-structure and a single lock.]([[!!images/akvorado/sharding-before.svg]]
+structure and a single lock.](self://media/images/akvorado/sharding-before.svg
 "Akvorado BMP RIB implementation without sharding. One single read/write lock.")
 
 In the diagram above, the RIB stores five IPv4 prefixes and two IPv6 prefixes.
@@ -275,7 +275,7 @@ To remove the global lock, the RIB is split into several "shards," each one
 handling a subset of the prefixes:
 
 ![Akvorado BMP RIB implementation after sharding with the memory layout of each
-structure and one lock per shard.]([[!!images/akvorado/sharding-step1.svg]]
+structure and one lock per shard.](self://media/images/akvorado/sharding-step1.svg
 "Akvorado BMP RIB implementation with sharding.")
 
 The prefix tree stays global and is protected by a single lock. Each shard gets
@@ -301,7 +301,7 @@ improvements for both read and write latencies:
 ![Two heatmaps. One for read latency ratio, the other for write latency ratio.
 Both of them comparing the speedup with colored tiles between the code before
 sharding and after sharding. Most tiles are
-green.]([[!!images/akvorado/sharding-heatmap.svg]] "Read and write latency
+green.](self://media/images/akvorado/sharding-heatmap.svg "Read and write latency
 performance improvement after sharding.")
 
 It also shows that a high number of writers degrades read latency.
@@ -322,7 +322,7 @@ using copy-on-write. Readers don't need the global lock any more, leaving it
 only to synchronize writers. The prefix tree is boxed in an atomic pointer.
 
 ![Akvorado BMP RIB implementation for sharding with lock-free reads. It shows
-the memory layout of each structure.]([[!!images/akvorado/sharding-step2.svg]]
+the memory layout of each structure.](self://media/images/akvorado/sharding-step2.svg
 "Akvorado BMP RIB implementation with sharding and lock-free reads.")
 
 Without a lock, readers can now fetch a stale prefix index when walking their
@@ -365,7 +365,7 @@ prefix tree is amortized.
 ratio. They compare the numbers without sharding, with sharding, and with
 lock-free reads, pair by pair. For read latency, most tiles are green, showing
 an improvement of the second step. For write latency, the speedup is negative
-for a low number of readers.]([[!!images/akvorado/sharding-heatmap2.svg]] "Read and
+for a low number of readers.](self://media/images/akvorado/sharding-heatmap2.svg "Read and
 write latency performance improvement after lock-free reads. The middle column
 shows the cumulative improvements of both steps.")
 

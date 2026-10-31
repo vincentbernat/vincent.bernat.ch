@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import gzip
 import json
+import posixpath
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -14,6 +15,7 @@ from markdown.preprocessors import Preprocessor
 
 if TYPE_CHECKING:
     from ..model.meta import Meta
+    from ..model.site import Site
 
 # Built and symlinked here by flake.nix.
 RFC_INDEX = Path(__file__).parent / "rfc-index.json.gz"
@@ -27,7 +29,8 @@ def rfc_titles() -> dict[str, str]:
 
 
 class ShortLinksExtension(Extension):
-    def __init__(self, **kwargs: Any) -> None:
+    def __init__(self, site: Site, **kwargs: Any) -> None:
+        self.site = site
         self.config = {
             "l10n": [{}, "Translated strings, from the resource meta"],
             "sources": ["", "URL of the sources of the site, from the resource meta"],
@@ -38,7 +41,10 @@ class ShortLinksExtension(Extension):
         md.registerExtension(self)
         md.preprocessors.register(
             ShortLinksPreprocessor(
-                md, self.getConfig("l10n"), self.getConfig("sources")
+                md,
+                self.getConfig("l10n"),
+                self.getConfig("sources"),
+                self.site,
             ),
             "shortlinks",
             12,
@@ -57,6 +63,9 @@ class ShortLinksPreprocessor(Preprocessor):
     }
     RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://([\w.~;=:@+/-]+)", re.ASCII)
 
+    # Pages and media files of the site, with an optional fragment
+    SELF_RE = re.compile(r"self://([\w.~;=:@+,/-]+)(#[\w.:-]*)?", re.ASCII)
+
     SRC_REF_RE = re.compile(r"@(?P<ref>[0-9a-f]{7,40})(?:/(?P<path>.*))?")
 
     # Links without a title: a reference definition or an inline link.
@@ -70,13 +79,21 @@ class ShortLinksPreprocessor(Preprocessor):
     )
     GODOC_RE = re.compile(r"^https://pkg\.go\.dev/([^#?]+?)/?(?:#([^#]*))?$")
 
-    def __init__(self, md: Any, l10n: Meta | None, sources: str | None) -> None:
+    def __init__(
+        self, md: Any, l10n: Meta | None, sources: str | None, site: Site
+    ) -> None:
         super().__init__(md)
         self.l10n = l10n
         self.sources = sources
+        self.site = site
+        # Titles of the pages from self:// links, by URL
+        self.titles: dict[str, str] = {}
 
     def title(self, url: str) -> str | None:
-        """Build a title from an RFC, a manual page or a Go package URL."""
+        """Build a title from a page of the site, an RFC, a manual page or a Go
+        package URL."""
+        if url in self.titles:
+            return self.titles[url]
         if not self.l10n:
             return None
         mo = self.RFC_RE.match(url)
@@ -122,6 +139,22 @@ class ShortLinksPreprocessor(Preprocessor):
             )
         return self.SCHEMAS[schema].format(path)
 
+    def expand_self(self, mo: re.Match[str]) -> str:
+        path, fragment = mo.group(1), mo.group(2) or ""
+        if path.startswith("media/"):
+            return self.site.media_url(path.removeprefix("media/")) + fragment
+        url = self.site.content_url(path) + fragment
+        base = path.rstrip("/")
+        for candidate in (base, f"{base}.html", posixpath.join(base, "index.html")):
+            resource = self.site.resource(candidate)
+            if resource is not None:
+                break
+        else:
+            raise ValueError(f"{mo.group(0)}: unknown page")
+        if title := resource.meta.get("title"):
+            self.titles[url] = title
+        return url
+
     def add_title(self, mo: re.Match[str], suffix: str = "") -> str:
         title = self.title(mo.group("url"))
         if title is None:
@@ -129,6 +162,7 @@ class ShortLinksPreprocessor(Preprocessor):
         return f'{mo.group("prefix")}{mo.group("url")} "{title}"{suffix}'
 
     def run(self, lines: list[str]) -> list[str]:
+        lines = [self.SELF_RE.sub(self.expand_self, l) for l in lines]
         lines = [self.RE.sub(self.expand, l) for l in lines]
         lines = [self.DEFINITION_RE.sub(self.add_title, l) for l in lines]
         return [
@@ -136,5 +170,5 @@ class ShortLinksPreprocessor(Preprocessor):
         ]
 
 
-def makeExtension(*args: Any, **kwargs: Any) -> ShortLinksExtension:
-    return ShortLinksExtension(*args, **kwargs)
+def makeExtension(site: Site, **kwargs: Any) -> ShortLinksExtension:
+    return ShortLinksExtension(site, **kwargs)

@@ -20,12 +20,12 @@ July 2022][], hosted by [Altinity][]. They are about [Akvorado][], a
 network flow collector and visualizer, and notably on how it relies on
 [ClickHouse][], a column-oriented database.
 
-![Slides in PDF]([[!!files/slides-clickhouse-meetup.pdf]])
+![Slides in PDF](self://media/files/slides-clickhouse-meetup.pdf)
 
 The meetup was recorded and available on [YouTube][]. Here is the part
 relevant to my presentation, with subtitles:[^subtitles]
 
-![]([[!!videos/2022-clickhouse-meetup-akvorado.m3u8]])
+![](self://media/videos/2022-clickhouse-meetup-akvorado.m3u8)
 
 [^subtitles]:
     To generate the subtitles, I have used [Amazon
@@ -54,14 +54,14 @@ table, unless I request something about ports and IP addresses.
 
 # Transcript
 
-![Akvorado: a Flow Collector and Visualizer Backed by ClickHouse]([[!!images/2022-clickhouse-meetup-akvorado/slide-01@2x.png]])
+![Akvorado: a Flow Collector and Visualizer Backed by ClickHouse](self://media/images/2022-clickhouse-meetup-akvorado/slide-01@2x.png)
 
 Hello. So I am Vincent Bernat. I'm a French network engineer working at Free.
 I'm doing this presentation from Paris, France. So it's nice to see you. I'm
 going to present Akvorado, a network flow collector and visualizer backed by
 ClickHouse.
 
-![About Free]([[!!images/2022-clickhouse-meetup-akvorado/slide-02@2x.png]])
+![About Free](self://media/images/2022-clickhouse-meetup-akvorado/slide-02@2x.png)
 
 It was developed internally at Free. Free is a French ISP founded in 1999. It
 was one of the first to offer internet access without a subscription or
@@ -73,7 +73,7 @@ is also quite innovative with the big data allowance. You have more than 100 GB
 of data included and you can roam in the world with that but we are not
 available in San Francisco yet.
 
-![About Akvorado]([[!!images/2022-clickhouse-meetup-akvorado/slide-03@2x.png]])
+![About Akvorado](self://media/images/2022-clickhouse-meetup-akvorado/slide-03@2x.png)
 
 So Akvorado is a NetFlow, IPFIX, sFlow collector. Internet routers send a sample
 of the packets they received to Akvorado, like one packet out of 10,000.
@@ -102,15 +102,15 @@ And then, Akvorado will serialize the flow using Protobuf and send that to a
 Kafka cluster. Since recently, this is an open source project. We have published
 it on GitHub. There is also a nice web frontend to query the data.
 
-![Screenshots (1/3)]([[!!images/2022-clickhouse-meetup-akvorado/slide-04@2x.png]])
+![Screenshots (1/3)](self://media/images/2022-clickhouse-meetup-akvorado/slide-04@2x.png)
 
-![Screenshots (2/3)]([[!!images/2022-clickhouse-meetup-akvorado/slide-05@2x.png]])
+![Screenshots (2/3)](self://media/images/2022-clickhouse-meetup-akvorado/slide-05@2x.png)
 
-![Screenshots (3/3)]([[!!images/2022-clickhouse-meetup-akvorado/slide-06@2x.png]])
+![Screenshots (3/3)](self://media/images/2022-clickhouse-meetup-akvorado/slide-06@2x.png)
 
 Here are a few screenshot but I will do a live demo.
 
-![Live demo]([[!!images/2022-clickhouse-meetup-akvorado/slide-07@2x.png]])
+![Live demo](self://media/images/2022-clickhouse-meetup-akvorado/slide-07@2x.png)
 
 You can try the demo yourself. The URL is [demo.akvorado.net][]. It's running on
 a small virtual machine. It uses fake data.
@@ -160,7 +160,7 @@ seems that you get most of the traffic using a transit provider but a small part
 is going through an internet exchange. It's also very useful visualization to
 get for a network engineer. Let me get back to the presentation.
 
-![ClickHouse usage]([[!!images/2022-clickhouse-meetup-akvorado/slide-08@2x.png]])
+![ClickHouse usage](self://media/images/2022-clickhouse-meetup-akvorado/slide-08@2x.png)
 
 How did we use ClickHouse? So that's the tables that we have in our setup. First
 a bit of warning. It's the first time I have used ClickHouse. I am a network
@@ -176,7 +176,7 @@ table containing all the flows. Then we have a few other flow tables which are
 aggregating data over time to take less space and speed up queries. I will go in
 more details in the next slides.
 
-![Ingestion]([[!!images/2022-clickhouse-meetup-akvorado/slide-09@2x.png]])
+![Ingestion](self://media/images/2022-clickhouse-meetup-akvorado/slide-09@2x.png)
 
 So ingestion is done using the Kafka engine. We receive the data using the Kafka
 engine. The data is decoded with the Protobuf format. Protobuf schemas are
@@ -197,7 +197,7 @@ data because Kafka will buffer the message while ClickHouse is restarting.
 ClickHouse is able to use a registry when you are using Avro. But I think that
 it doesn't work with Protobuf.
 
-![Flows table]([[!!images/2022-clickhouse-meetup-akvorado/slide-10@2x.png]])
+![Flows table](self://media/images/2022-clickhouse-meetup-akvorado/slide-10@2x.png)
 
 The main table is the `flows` table. Here is a partial view of it. Many columns
 are missing. For each `Src` column, you should have a `Dst` column. For each
@@ -205,7 +205,7 @@ are missing. For each `Src` column, you should have a `Dst` column. For each
 use `LowCardinality` when it makes sense and the table is ordered by
 `TimeReceived` because every queries will use this column.
 
-![Aggregating timeseries]([[!!images/2022-clickhouse-meetup-akvorado/slide-11@2x.png]])
+![Aggregating timeseries](self://media/images/2022-clickhouse-meetup-akvorado/slide-11@2x.png)
 
 The `flows` table in our setup keeps 15 days of data. It's half a terabyte of
 data. It's very slow to query for more than one hour of data and almost
@@ -216,7 +216,7 @@ of setup to be able to look at what happened last year at the same period. To be
 able to do that we need to aggregate data when it gets older. ClickHouse
 aggregates data but it was not flexible enough for us.
 
-![RRD-like aggregation]([[!!images/2022-clickhouse-meetup-akvorado/slide-12@2x.png]])
+![RRD-like aggregation](self://media/images/2022-clickhouse-meetup-akvorado/slide-12@2x.png)
 
 We use an approach inspired by the round-robin database. Round-robin database
 (RRD) is an ancestor of the time series database. The data is stored in a
@@ -255,7 +255,7 @@ years very efficiently. Akvorado automatically chooses the best table depending
 on the time range, the columns requested (if you request a source IP address or
 a destination address, you will have to use the main table).
 
-![Materialized view for aggregated table]([[!!images/2022-clickhouse-meetup-akvorado/slide-13@2x.png]])
+![Materialized view for aggregated table](self://media/images/2022-clickhouse-meetup-akvorado/slide-13@2x.png)
 
 I wanted to show you how we feed data to the aggregated table because it shows a
 nice feature of ClickHouse. You can select everything with the star except a few
@@ -264,7 +264,7 @@ and destination port. It's very easy to do that and we can also replace some
 columns. For example, the `TimeReceived` is truncated to the previous hour. It's
 very nice to be able to do that.
 
-![Exporters table]([[!!images/2022-clickhouse-meetup-akvorado/slide-14@2x.png]])
+![Exporters table](self://media/images/2022-clickhouse-meetup-akvorado/slide-14@2x.png)
 
 The `exporters` table. It's just a small helper table to have a list of exporter
 names, addresses and interface, names and descriptions and other data. It's
@@ -273,7 +273,7 @@ the filter. I wanted to show you that because it's another nice feature of
 ClickHouse. You have a lot of ways to manipulate arrays. So with a single query,
 I can populate the table using `ARRAY JOIN` and `arrayEnumerate`.
 
-![Dictionaries]([[!!images/2022-clickhouse-meetup-akvorado/slide-15@2x.png]])
+![Dictionaries](self://media/images/2022-clickhouse-meetup-akvorado/slide-15@2x.png)
 
 Another interesting part is the dictionaries. We use three dictionaries. One
 dictionary to map AS numbers to names. There are about 100,000 AS numbers. From
@@ -290,7 +290,7 @@ a tenant. And this time we use this dictionary during ingestion to materialize
 some columns because we don't want historic data to change when you reallocate a
 subnet to a region.
 
-![Network classification during ingestion]([[!!images/2022-clickhouse-meetup-akvorado/slide-16@2x.png]])
+![Network classification during ingestion](self://media/images/2022-clickhouse-meetup-akvorado/slide-16@2x.png)
 
 The network classification is done during ingestion using the materialized view
 where we select everything from what we receive from Kafka and we just add the
@@ -306,12 +306,12 @@ to do that in Akvorado directly. But the classification is done with
 user-provided rules. So this time it's easier to do that in the backend. Not in
 ClickHouse.
 
-![User queries]([[!!images/2022-clickhouse-meetup-akvorado/slide-17@2x.png]])
+![User queries](self://media/images/2022-clickhouse-meetup-akvorado/slide-17@2x.png)
 
 So if you remember the demo, the user inputs a time range, columns, (in the web
 interface as they are called dimensions) and the filter expression.
 
-![Filter expression]([[!!images/2022-clickhouse-meetup-akvorado/slide-18@2x.png]])
+![Filter expression](self://media/images/2022-clickhouse-meetup-akvorado/slide-18@2x.png)
 
 And the filter expression is also something that I find interesting. Our users
 are network engineers, they may know SQL, but they are not fluent in SQL but
@@ -331,7 +331,7 @@ anything in ClickHouse. Even if ClickHouse is not very vulnerable to injection
 attacks, it's not possible because the parser needs to understand what you want
 and it translates that to ClickHouse.
 
-![User query to ClickHouse query]([[!!images/2022-clickhouse-meetup-akvorado/slide-19@2x.png]])
+![User query to ClickHouse query](self://media/images/2022-clickhouse-meetup-akvorado/slide-19@2x.png)
 
 Then the whole user query is translated to ClickHouse SQL. ClickHouse helps a
 lot to return data that would be directly exploitable by the frontend. For
@@ -353,7 +353,7 @@ if it's one of the top 10, we will display the AS number along with its name
 with the dictionary. Otherwise, we just display `Others`. This way we don't have
 an infinite list of AS numbers returned to the user.
 
-![Go bindings]([[!!images/2022-clickhouse-meetup-akvorado/slide-20@2x.png]])
+![Go bindings](self://media/images/2022-clickhouse-meetup-akvorado/slide-20@2x.png)
 
 Let's switch to the back end. It's written in Go. And we are using
 `clickhouse-go/v2` bindings which is using the native client server protocol.
@@ -369,7 +369,7 @@ function that will answer this result: `customer-1`, `customer-2`, `customer-3`.
 It enables us to do a lot of tests, very fast without relying on an external
 database.
 
-![Migrations]([[!!images/2022-clickhouse-meetup-akvorado/slide-21@2x.png]])
+![Migrations](self://media/images/2022-clickhouse-meetup-akvorado/slide-21@2x.png)
 
 The last thing that I wanted to mention are the migrations. With a regular
 database, a product often start migrations when you update. For ClickHouse, it
@@ -380,7 +380,7 @@ with Go code. Each migration step has a description, a test and a function.
 There is no state: each migration step is executed on start. And the test says
 if a step can be skipped or not. It's only managing forward migrations.
 
-![Steps]([[!!images/2022-clickhouse-meetup-akvorado/slide-22@2x.png]])
+![Steps](self://media/images/2022-clickhouse-meetup-akvorado/slide-22@2x.png)
 
 The current steps create dictionaries: protocol, AS numbers, and network
 dictionary, create the `flows` tables, the main one and the aggregated ones. If
@@ -390,7 +390,7 @@ the TTL associated with table. This means that if the user configures a
 different TTL and restarts, the TTLs will be updated. And then a step for the
 `exporters` view, the raw flows table, etc.
 
-![Migration for dictionaries and views]([[!!images/2022-clickhouse-meetup-akvorado/slide-23@2x.png]])
+![Migration for dictionaries and views](self://media/images/2022-clickhouse-meetup-akvorado/slide-23@2x.png)
 
 There are two different kinds of steps. The ones that will modify the
 dictionaries and the views. We don't need to keep data for this one. We do two
@@ -400,7 +400,7 @@ So it's done by hashing the name, type, position from the system `columns` table
 and checking against an hard-coded value. So it's quite nice that ClickHouse
 exposes a lot of things in the system tables because it enables us to do that.
 
-![Migration for data tables]([[!!images/2022-clickhouse-meetup-akvorado/slide-24@2x.png]])
+![Migration for data tables](self://media/images/2022-clickhouse-meetup-akvorado/slide-24@2x.png)
 
 And the second kind of steps that we can have is when we want to keep existing
 data. So in this case we use mutations. We test "do we have the column that we
@@ -408,7 +408,7 @@ have to add?" If not then we use `ALTER TABLE` to add the column. There are many
 limits of what you can mutate but with some compromises, until today, we were
 able to do what we wanted to do.
 
-![Testing migrations]([[!!images/2022-clickhouse-meetup-akvorado/slide-25@2x.png]])
+![Testing migrations](self://media/images/2022-clickhouse-meetup-akvorado/slide-25@2x.png)
 
 Migrations are tested. They are part of the automatic tests. There is a
 ClickHouse database spawned in a container and migrations are tested from
@@ -417,7 +417,7 @@ final state and each time a migration step is added, the final state is recorded
 to be used in future tests using the query on the slide. This enables us to
 ensure that the user is able to migrate from one version to any other version.
 
-![Single node setup]([[!!images/2022-clickhouse-meetup-akvorado/slide-26@2x.png]])
+![Single node setup](self://media/images/2022-clickhouse-meetup-akvorado/slide-26@2x.png)
 
 Our setup is quite small. We are running everything on a single VM including
 Kafka and Akvorado itself. Everything is running in containers using
@@ -427,7 +427,7 @@ some usage graph for CPU, memory, and disk. Everything is quite low but there is
 a DDoS system running in the background, every five seconds, doing requests and
 it's the one generating most of the load.
 
-![Opinions about ClickHouse]([[!!images/2022-clickhouse-meetup-akvorado/slide-27@2x.png]])
+![Opinions about ClickHouse](self://media/images/2022-clickhouse-meetup-akvorado/slide-27@2x.png)
 
 To conclude, my opinions about ClickHouse. It's a great out of the box
 experience, great documentation. There are many builtin functions available.
@@ -443,7 +443,7 @@ easy to do something that looks right but that isn't. For example if you
 aggregate using average, you don't get what you expect. ClickHouse has functions
 to help you doing that.
 
-![Questions?]([[!!images/2022-clickhouse-meetup-akvorado/slide-28@2x.png]])
+![Questions?](self://media/images/2022-clickhouse-meetup-akvorado/slide-28@2x.png)
 
 So that's all for me. I welcome a few questions if you want.
 

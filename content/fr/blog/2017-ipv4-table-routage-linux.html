@@ -77,7 +77,7 @@ préfixe.
 
 Le trie suivant encode la table de routage exposée ci-dessus :
 
-![Simple routing trie]([[!!images/linux/lpc-trie-simple-trie-v3.svg]] "Trie primitif de recherche pour une petite table de routage. Pour des raisons de lisibilité, le trie a été coupé en deux. Les nœuds avec une flèche contiennent une entrée de routage.")
+![Simple routing trie](self://media/images/linux/lpc-trie-simple-trie-v3.svg "Trie primitif de recherche pour une petite table de routage. Pour des raisons de lisibilité, le trie a été coupé en deux. Les nœuds avec une flèche contiennent une entrée de routage.")
 
 À tout moment, la longueur du préfixe correspond à la profondeur
 actuelle et le préfixe lui-même correspond au chemin depuis la racine.
@@ -113,7 +113,7 @@ aussi connu sous le nom d'*arbre Patricia* ou
 d'[arbre radix][radix trie]. Voici la version avec des chemins
 compressés du trie précédent :
 
-![Arbre Patricia]([[!!images/linux/lpc-trie-patricia-trie-v3.svg]] "Arbre Patricia pour une petite table de routage. Certains nœuds indiquent combien de bits supplémentaires doivent être ignorés dans l'adresse IP recherchée.")
+![Arbre Patricia](self://media/images/linux/lpc-trie-patricia-trie-v3.svg "Arbre Patricia pour une petite table de routage. Certains nœuds indiquent combien de bits supplémentaires doivent être ignorés dans l'adresse IP recherchée.")
 
 Parce que certains bits ont été ignorés, une vérification finale est
 nécessaire pour s'assurer que l'entrée trouvée correspond à l'IP
@@ -122,7 +122,7 @@ recherchée. Dans le cas contraire, on considère que l'entrée n'a pas
 figure ci-dessous montre deux adresses IP qui aboutissent à la même
 feuille :
 
-![Recherche dans un arbre Patricia]([[!!images/linux/lpc-trie-patricia-trie-lookup-v3.svg]] "Recherche de deux adresses IP dans un arbre Patricia. Les deux IP partagent les mêmes bits aux endroits clefs mais sont différents sur les parties ignorées.")
+![Recherche dans un arbre Patricia](self://media/images/linux/lpc-trie-patricia-trie-lookup-v3.svg "Recherche de deux adresses IP dans un arbre Patricia. Les deux IP partagent les mêmes bits aux endroits clefs mais sont différents sur les parties ignorées.")
 
 La réduction de la profondeur du trie compense la complexité
 supplémentaire résultant de la nécessité de gérer les faux
@@ -146,7 +146,7 @@ un unique nœud contenant un vecteur de 2<sup>*k*</sup> fils. Ce nœud
 consomme donc *k* bits en entrée au lieu d'un seul. Par exemple, voici
 une version doublement compressée de notre trie précédent :
 
-![Trie doublement compressé]([[!!images/linux/lpc-trie-lpc-trie-v3.svg]] "Trie doublement compressé. La fusion d'un sous-arbre produit un nœud avec un vecteur de 4 éléments. Le dernier élément est vide.")
+![Trie doublement compressé](self://media/images/linux/lpc-trie-lpc-trie-v3.svg "Trie doublement compressé. La fusion d'un sous-arbre produit un nœud avec un vecteur de 4 éléments. Le dernier élément est vide.")
 
 [^ref-lpc]:
     “[IP-address lookup using LC-tries][lpc-trie]”, IEEE
@@ -177,7 +177,7 @@ L'implémentation pour IPv4 existe depuis Linux 2.6.13
 
 Voici la représentation en mémoire de notre table de routage[^tnode] :
 
-![Représentation en mémoire d'un trie]([[!!images/linux/lpc-trie-struct-v3.svg]] "Représentation en mémoire d'un trie LPC sous Linux")
+![Représentation en mémoire d'un trie](self://media/images/linux/lpc-trie-struct-v3.svg "Représentation en mémoire d'un trie LPC sous Linux")
 
 [^tnode]:
     Pour les nœuds internes, la structure `key_vector` est
@@ -267,7 +267,7 @@ réparties sur 4 sous-réseaux différents avec des densités
 variées). Lorsque les routes sont denses, le nombre de nœuds internes
 est très réduit.
 
-![Nœuds internes et pointeurs nuls]([[!!images/linux/lpc-trie-nodes-v2.svg]] "Nombre de nœuds internes et de pointeurs nuls par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
+![Nœuds internes et pointeurs nuls](self://media/images/linux/lpc-trie-nodes-v2.svg "Nombre de nœuds internes et de pointeurs nuls par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 ## Performance
 
@@ -278,7 +278,7 @@ rapide. À l'aide d'un petit [module noyau][kernel module], il est
 possible de mesurer précisément[^bench] le temps utilisé par la
 fonction `fib_lookup()` :
 
-![Profondeur maximale et temps de recherche]([[!!images/linux/lpc-trie-maxdepth-v2.svg]] "Profondeur maximale du trie et temps de recherche selon le nombre de routes insérées. L'axe horizontal utilise une échelle logarithmique.")
+![Profondeur maximale et temps de recherche](self://media/images/linux/lpc-trie-maxdepth-v2.svg "Profondeur maximale du trie et temps de recherche selon le nombre de routes insérées. L'axe horizontal utilise une échelle logarithmique.")
 
 [^bench]:
     Les mesures sont faites dans une machine virtuelle équipée
@@ -310,7 +310,7 @@ de routes dans le noyau. Linux est également particulièrement efficace
 dans ce domaine puisque deux millions de routes sont insérées en moins
 de 10 secondes :
 
-![Temps d'insertion]([[!!images/linux/lpc-trie-time-v2.svg]] "Temps d'insertion (temps système) par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
+![Temps d'insertion](self://media/images/linux/lpc-trie-time-v2.svg "Temps d'insertion (temps système) par rapport au nombre de routes. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 ## Utilisation mémoire
 
@@ -322,7 +322,7 @@ voir sur le graphique ci-dessous, la quantité de mémoire utilisée est
 linéaire avec le nombre de routes insérées, quelle que soit la forme
 des routes.
 
-![Utilisation mémoire]([[!!images/linux/lpc-trie-memory-v2.svg]] "Utilisation mémoire du trie par rapport aux nombres de routes insérées. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
+![Utilisation mémoire](self://media/images/linux/lpc-trie-memory-v2.svg "Utilisation mémoire du trie par rapport aux nombres de routes insérées. L'axe horizontal utilise une échelle logarithmique. La ligne bleue est une régression linéaire.")
 
 Les résultats sont très bons : deux millions de routes tiennent dans
 256 Mio !
@@ -416,7 +416,7 @@ ajoutée, quelques cycles CPU sont utilisés pour chaque datagramme à
 l'évaluation des règles. Voici une paire de graphiques démontrant
 l'impact des règles de routage sur les performances :
 
-![Impact des règles de routage sur les performances]([[!!images/linux/lpc-trie-rules-v2.svg]] "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire.")
+![Impact des règles de routage sur les performances](self://media/images/linux/lpc-trie-rules-v2.svg "Temps de recherche d'une route selon le nombre de règles de routage. La dernière règle de routage est utilisée. L'échelle du premier graphique est logarithmique tandis que celle du second est linéaire. La ligne bleue est une régression linéaire.")
 
 La relation est linéaire quand le nombre de règles est entre 1 et 100
 mais la pente augmente sensiblement au-delà. Le second graphique met
@@ -518,9 +518,9 @@ Pour IPv6, jetez un œil sur
 [struct fib_alias]: https://elixir.bootlin.com/linux/v4.11.5/source/net/ipv4/fib_lookup.h#L8 "Linux: struct fib_alias definition"
 [struct fib_info]: https://elixir.bootlin.com/linux/v4.11.5/source/include/net/ip_fib.h#L103 "Linux: struct fib_info definition"
 [vrf.txt]: https://www.kernel.org/doc/Documentation/networking/vrf.txt "Virtual Routing and Forwarding (VRF)"
-[route cache]: [[fr/blog/2011-ipv4-route-cache-linux.html]] "Comprendre la mise en cache des routes IPv4 sous Linux"
-[progression]: [[fr/blog/2017-progres-ipv4-table-routage-linux.html]] "Progression des performances de la table de routage IPv4 sous Linux"
-[Fonctionnement de la table de routage IPv6 sous Linux]: [[fr/blog/2017-ipv6-table-routage-linux.html]] "Fonctionnement de la table de routage IPv6 sous Linux"
+[route cache]: self://fr/blog/2011-ipv4-route-cache-linux
+[progression]: self://fr/blog/2017-progres-ipv4-table-routage-linux
+[Fonctionnement de la table de routage IPv6 sous Linux]: self://fr/blog/2017-ipv6-table-routage-linux
 [trie]: https://fr.wikipedia.org/wiki/Trie_(informatique) "Article Wikipedia sur le trie"
 [radix trie]: https://fr.wikipedia.org/wiki/Arbre_radix "Article Wikipedia sur l'arbre radix"
 [patricia-openbsd]: https://cvsweb.openbsd.org/checkout/src/sys/net/radix.c,v?rev=1.56 "Code source de sys/net/radix.c dans OpenBSD"

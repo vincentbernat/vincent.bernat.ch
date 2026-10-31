@@ -31,7 +31,7 @@ currently editing.
 
 - Keep all Markdown markup intact.
 - Keep original link reference names and URLs unchanged.
-- Point internal links (`[[en/blog/…]]`) to the French counterpart when it
+- Point internal links (`self://en/blog/…`) to the French counterpart when it
   exists and translate their title attribute.
 - Do not translate code blocks or command examples, but translate the comments
   inside them.

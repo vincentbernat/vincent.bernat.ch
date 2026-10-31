@@ -61,8 +61,7 @@ def convert(
             admonition.makeExtension(),
             glyphs.makeExtension(),
             katex.makeExtension(),
-            shortlinks.makeExtension(l10n=l10n, sources=sources),
-            textlinks.makeExtension(site=site),
+            shortlinks.makeExtension(site, l10n=l10n, sources=sources),
             html_comments.makeExtension(),
             responsive_table.makeExtension(),
             codehilite_lang.makeExtension(),
@@ -84,5 +83,4 @@ from . import (
     references,
     responsive_table,
     shortlinks,
-    textlinks,
 )
