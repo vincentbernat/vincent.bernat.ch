@@ -64,7 +64,7 @@ class ShortLinksPreprocessor(Preprocessor):
     INLINE_RE = re.compile(r"(?P<prefix>\]\()(?P<url>[^\s()]+)\)")
 
     # Links we can build a title for.
-    RFC_RE = re.compile(r"^https://www\.rfc-editor\.org/rfc/rfc(\d+)(?:#.*)?$")
+    RFC_RE = re.compile(r"^https://www\.rfc-editor\.org/info/rfc(\d+)(?:#.*)?$")
     MANPAGE_RE = re.compile(
         r"^https://manpages\.debian\.org/(?:[^/]+/)*([\w.+-]+)\.(\d\w*)\.html(?:#.*)?$"
     )
