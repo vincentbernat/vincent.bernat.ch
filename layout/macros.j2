@@ -199,7 +199,7 @@
   {{ url.split("://")[- 1].split("/")[0] or "'self'" }}
 {%- endmacro %}
 {% set nojs_script = 'if ("noModule" in HTMLScriptElement.prototype) document.documentElement.classList.remove("nojs");' %}
-{% set reload_script = 'new EventSource("/_reload").onmessage = () => location.reload();' %}
+{% set reload_script = 'if (!navigator.webdriver && !/Headless/.test(navigator.userAgent)) new EventSource("/_reload").onmessage = () => location.reload();' %}
 {% macro csp(extra={}) %}
 {% set directives = {
   "default-src":     "'self' blob:",
