@@ -24,6 +24,13 @@ def vale() -> None:
     run("vale content/??", cwd=config.ROOT)
 
 
+@command("checks:scratch")
+def scratch() -> None:
+    """Check there is not scratch directory remaining at the root."""
+    if (config.ROOT / "scratch").exists():
+        raise Exit("scratch directory still present at the root")
+
+
 @command("checks:frontmatter")
 def frontmatter(fix: bool = False) -> None:
     """Check frontmatter keys are known and ordered."""
