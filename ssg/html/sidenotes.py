@@ -1,5 +1,6 @@
 """Turn footnotes into sidenotes."""
 
+import copy
 from typing import TYPE_CHECKING
 
 from .dom import add_class, classes, remove, remove_class, select, text
@@ -18,6 +19,14 @@ def has_margin_top(el: lxml.etree._Element) -> bool:
     if el.tag in MARGIN_TOP_TAGS:
         return True
     return bool(MARGIN_TOP_CLASSES.intersection(classes(el)))
+
+
+def introduces_next(el: lxml.etree._Element) -> bool:
+    """Tell if the text ends with a colon, footnote references excluded."""
+    el = copy.deepcopy(el)
+    for ref in select(el, "sup[id^='fnref:']"):
+        remove(ref)
+    return text(el).endswith(":")
 
 
 def convert(root: lxml.etree._Element) -> None:
@@ -83,9 +92,12 @@ def convert(root: lxml.etree._Element) -> None:
         for link in select(ref, "a.lf-sidenote-ref"):
             link.set("href", f"#sidenote-{name}")
         insert_point = parent
-        # Skip past following siblings without margin-top
+        # Skip past following siblings without margin-top or introduced by
+        # the previous one
         next_el = insert_point.getnext()
-        while next_el is not None and not has_margin_top(next_el):
+        while next_el is not None and (
+            not has_margin_top(next_el) or introduces_next(insert_point)
+        ):
             insert_point = next_el
             next_el = next_el.getnext()
         insert_point.addnext(sidenote)
