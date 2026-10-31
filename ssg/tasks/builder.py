@@ -406,7 +406,6 @@ class Builder:
                 basename = "fingerprint-image"
                 action = fingerprint.image
                 file_dep += OPTIMIZE_DEPS
-                uptodate.append(environment())
             elif path.startswith("fonts/"):
                 basename = "fingerprint-font"
                 action = fingerprint.file
