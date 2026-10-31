@@ -34,6 +34,7 @@ class ShortLinksExtension(Extension):
         self.config = {
             "l10n": [{}, "Translated strings, from the resource meta"],
             "sources": ["", "URL of the sources of the site, from the resource meta"],
+            "page": ["", "Path of the page, for self:// alone"],
         }
         super().__init__(**kwargs)
 
@@ -44,6 +45,7 @@ class ShortLinksExtension(Extension):
                 md,
                 self.getConfig("l10n"),
                 self.getConfig("sources"),
+                self.getConfig("page"),
                 self.site,
             ),
             "shortlinks",
@@ -63,8 +65,9 @@ class ShortLinksPreprocessor(Preprocessor):
     }
     RE = re.compile(rf"({'|'.join(SCHEMAS.keys())})://([\w.~;=:@+/-]+)", re.ASCII)
 
-    # Pages and media files of the site, with an optional fragment
-    SELF_RE = re.compile(r"self://([\w.~;=:@+,/-]+)(#[\w.:-]*)?", re.ASCII)
+    # Pages and media files of the site, with an optional fragment. Without a
+    # path, the current page.
+    SELF_RE = re.compile(r"self://([\w.~;=:@+,/-]*)(#[\w.:-]*)?", re.ASCII)
 
     SRC_REF_RE = re.compile(r"@(?P<ref>[0-9a-f]{7,40})(?:/(?P<path>.*))?")
 
@@ -80,11 +83,17 @@ class ShortLinksPreprocessor(Preprocessor):
     GODOC_RE = re.compile(r"^https://pkg\.go\.dev/([^#?]+?)/?(?:#([^#]*))?$")
 
     def __init__(
-        self, md: Any, l10n: Meta | None, sources: str | None, site: Site
+        self,
+        md: Any,
+        l10n: Meta | None,
+        sources: str | None,
+        page: str | None,
+        site: Site,
     ) -> None:
         super().__init__(md)
         self.l10n = l10n
         self.sources = sources
+        self.page = page
         self.site = site
         # Titles of the pages from self:// links, by URL
         self.titles: dict[str, str] = {}
@@ -141,6 +150,11 @@ class ShortLinksPreprocessor(Preprocessor):
 
     def expand_self(self, mo: re.Match[str]) -> str:
         path, fragment = mo.group(1), mo.group(2) or ""
+        current = not path
+        if current:
+            if not self.page:
+                raise ValueError(f"{mo.group(0)}: no current page")
+            path = self.page
         if path.startswith("media/"):
             return self.site.media_url(path.removeprefix("media/")) + fragment
         url = self.site.content_url(path) + fragment
@@ -151,7 +165,8 @@ class ShortLinksPreprocessor(Preprocessor):
                 break
         else:
             raise ValueError(f"{mo.group(0)}: unknown page")
-        if title := resource.meta.get("title"):
+        # A link to the current page does not need its title
+        if not current and (title := resource.meta.get("title")):
             self.titles[url] = title
         return url
 

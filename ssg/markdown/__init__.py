@@ -51,7 +51,11 @@ def collect(kind: str, values: str) -> None:
 
 
 def convert(
-    text: str, site: Site, l10n: Meta | None = None, sources: str | None = None
+    text: str,
+    site: Site,
+    l10n: Meta | None = None,
+    sources: str | None = None,
+    page: str | None = None,
 ) -> str:
     return Markdown(
         extensions=[
@@ -61,7 +65,7 @@ def convert(
             admonition.makeExtension(),
             glyphs.makeExtension(),
             katex.makeExtension(),
-            shortlinks.makeExtension(site, l10n=l10n, sources=sources),
+            shortlinks.makeExtension(site, l10n=l10n, sources=sources, page=page),
             html_comments.makeExtension(),
             responsive_table.makeExtension(),
             codehilite_lang.makeExtension(),
