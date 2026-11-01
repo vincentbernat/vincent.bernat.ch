@@ -12,6 +12,7 @@ from . import (
     codebreaks,
     figures,
     fingerprint,
+    lastwords,
     links,
     reading,
     sidenotes,
@@ -39,6 +40,7 @@ def page(site: Site, resource: Resource, text: str) -> str:
     assets.load(site, root)
     fingerprint.rewrite(site, root)
     links.number(resource, root)
+    lastwords.fix(root)
     codebreaks.fix(root)
     return "<!DOCTYPE html>\n" + lxml.html.tostring(root, encoding="unicode")
 
