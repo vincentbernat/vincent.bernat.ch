@@ -24,11 +24,13 @@ def vale() -> None:
     run("vale content/??", cwd=config.ROOT)
 
 
-@command("checks:scratch")
+@command("checks:wip")
 def scratch() -> None:
-    """Check there is not scratch directory remaining at the root."""
+    """Check there is not WIP files."""
     if (config.ROOT / "scratch").exists():
         raise Exit("scratch directory still present at the root")
+    if files := sorted(str(p) for p in config.CONTENT.glob("**/wip.*")):
+        raise Exit(f"work-in-progress files: {', '.join(files)}")
 
 
 @command("checks:frontmatter")
