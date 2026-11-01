@@ -51,7 +51,6 @@
                     pygments-haproxy.setuptools = [ ];
                     pygments-ios.setuptools = [ ];
                     pygments-junos.setuptools = [ ];
-                    typogrify.setuptools = [ ];
                     markupsafe.setuptools = [ ];
                     markdown.setuptools = [ ];
                   };

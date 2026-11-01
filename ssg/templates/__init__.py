@@ -13,7 +13,6 @@ import jinja2
 import jinja2.meta
 
 from .. import config, deps, markdown
-from ..typography import typogrify
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -35,9 +34,6 @@ def jinja_global[F: Callable[..., Any]](function: F) -> F:
     """Make a function available in templates."""
     GLOBALS[function.__name__] = function
     return function
-
-
-jinja_filter(typogrify)
 
 
 class Loader(jinja2.FileSystemLoader):
@@ -91,10 +87,8 @@ def render_article(site: Site, resource: Resource) -> str:
     """Render the text of a resource, then convert it from Markdown."""
     text = render_body(site, resource)
     meta = resource.meta
-    return typogrify(
-        markdown.convert(
-            text, site, meta.get("l10n"), meta.get("sources"), resource.path
-        )
+    return markdown.convert(
+        text, site, meta.get("l10n"), meta.get("sources"), resource.path
     )
 
 

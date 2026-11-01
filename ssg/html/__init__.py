@@ -9,14 +9,13 @@ import lxml.html
 
 from . import (
     assets,
-    codebreaks,
     figures,
     fingerprint,
-    lastwords,
     links,
     reading,
     sidenotes,
     toc,
+    typography,
 )
 
 if TYPE_CHECKING:
@@ -40,8 +39,7 @@ def page(site: Site, resource: Resource, text: str) -> str:
     assets.load(site, root)
     fingerprint.rewrite(site, root)
     links.number(resource, root)
-    lastwords.fix(root)
-    codebreaks.fix(root)
+    typography.fix(root)
     return "<!DOCTYPE html>\n" + lxml.html.tostring(root, encoding="unicode")
 
 
