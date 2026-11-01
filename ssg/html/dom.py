@@ -11,10 +11,11 @@ import lxml.html
 
 # Elements displayed inline. Other elements separate words.
 INLINE_TAGS = frozenset({
-    "a", "abbr", "acronym", "b", "bdo", "big", "button", "cite", "code",
-    "dfn", "em", "i", "img", "input", "kbd", "label", "map", "object", "q",
-    "samp", "script", "select", "small", "span", "strong", "sub", "sup",
-    "textarea", "time", "tt", "var",
+    "a", "abbr", "acronym", "b", "bdi", "bdo", "big", "button", "cite",
+    "code", "data", "del", "dfn", "em", "i", "img", "input", "ins", "kbd",
+    "label", "map", "mark", "object", "q", "s", "samp", "script", "select",
+    "small", "span", "strong", "sub", "sup", "textarea", "time", "tt", "u",
+    "var", "wbr",
 })  # fmt: skip
 
 WHITESPACE = re.compile(r"[ \t\n\f\r\u200b]+")
