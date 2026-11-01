@@ -26,7 +26,7 @@ SSG = config.ROOT / "ssg"
 
 
 # Modules not used by the build
-NOT_BUILD = ("commands", "dodo.py")
+NOT_BUILD = ("commands", "dodo.py", "tests")
 CODE = sorted(
     str(p) for p in SSG.rglob("*.py") if p.relative_to(SSG).parts[0] not in NOT_BUILD
 ) + [

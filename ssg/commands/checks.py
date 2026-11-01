@@ -71,15 +71,23 @@ def frontmatter(fix: bool = False) -> None:
 
 @command("checks:python")
 def python() -> None:
-    """Check Python code with ruff and mypy."""
+    """Check Python code with ruff and mypy, and run unit tests."""
     failed = [
-        command
-        for command in (
-            "ruff check ssg",
-            "ruff format --check ssg",
-            "mypy",
+        name
+        for i, (name, args) in enumerate(
+            (
+                ("ruff", "ruff check ssg"),
+                ("format", "ruff format --check ssg"),
+                ("mypy", "mypy"),
+                ("tests", "python -m unittest discover -s ssg/tests -t ."),
+            )
         )
-        if run(command, cwd=config.ROOT, check=False).returncode != 0
+        if run(
+            args,
+            cwd=config.ROOT,
+            check=False,
+            prefix=f"\033[{33 + i}m{name:6}\033[0m │ ",
+        ).returncode
     ]
     if failed:
         raise Exit(f"failed: {', '.join(failed)}")

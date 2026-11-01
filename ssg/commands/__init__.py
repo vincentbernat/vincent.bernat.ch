@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -127,18 +127,45 @@ def task(name: str) -> dict[str, Any]:
     }
 
 
+def forward(
+    prefix: str, stream: Iterable[str], formatter: Callable[[str], str] = str
+) -> None:
+    """Display lines of a stream, with a prefix."""
+    for line in stream:
+        print(f"{prefix}{formatter(line.rstrip())}", flush=True)
+
+
 def run(
-    command: str, cwd: Path | None = None, capture: bool = False, check: bool = True
+    command: str,
+    cwd: Path | None = None,
+    capture: bool = False,
+    check: bool = True,
+    prefix: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a shell command."""
-    result = subprocess.run(
-        command,
-        shell=True,
-        cwd=cwd,
-        text=True,
-        stdout=subprocess.PIPE if capture else None,
-        check=False,
-    )
+    """Run a shell command. With a prefix, display its output and its errors
+    with this prefix."""
+    if prefix is None:
+        result = subprocess.run(
+            command,
+            shell=True,
+            cwd=cwd,
+            text=True,
+            stdout=subprocess.PIPE if capture else None,
+            check=False,
+        )
+    else:
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            errors="replace",
+        )
+        assert process.stdout is not None
+        forward(prefix, process.stdout)
+        result = subprocess.CompletedProcess(command, process.wait())
     if check and result.returncode != 0:
         raise Exit(f"command failed: {command}")
     return result

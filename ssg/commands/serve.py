@@ -23,9 +23,10 @@ from pathlib import Path
 from typing import Any
 
 from .. import config
-from . import command
+from . import command, forward
 
 WATCHED = (config.CONTENT, config.LAYOUT, config.ROOT / "ssg")
+UNWATCHED = (config.ROOT / "ssg" / "tests",)
 NIX_PROFILES = next(
     (d for d in (config.ROOT / ".direnv~", config.ROOT / ".direnv") if d.is_dir()),
     config.ROOT / ".direnv",
@@ -74,10 +75,14 @@ class Watcher:
 
     def add(self, top: Path) -> None:
         """Watch a directory and its subdirectories."""
-        if top.name == "__pycache__":
+        if top.name == "__pycache__" or top in UNWATCHED:
             return
         for directory, dirnames, _ in top.walk():
-            dirnames[:] = [d for d in dirnames if d != "__pycache__"]
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d != "__pycache__" and directory / d not in UNWATCHED
+            ]
             self.watch(directory, recursive=True)
 
     def watch(self, directory: Path, recursive: bool = False) -> None:
@@ -155,14 +160,6 @@ def caddy_log(line: str) -> str:
 FORMATS = {"caddy": caddy_log}
 
 
-def forward(name: str, stream: Iterable[str]) -> None:
-    """Display the output of a process, with a prefix."""
-    prefix = f"{COLORS[name]}{name:5}{RESET} │ "
-    formatter = FORMATS.get(name, str)
-    for line in stream:
-        print(f"{prefix}{formatter(line.rstrip())}", flush=True)
-
-
 def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
     process = subprocess.Popen(
         args,
@@ -173,7 +170,12 @@ def spawn(name: str, args: list[str], **kwargs: Any) -> subprocess.Popen[str]:
         errors="replace",
         **kwargs,
     )
-    threading.Thread(target=forward, args=(name, process.stdout), daemon=True).start()
+    prefix = f"{COLORS[name]}{name:5}{RESET} │ "
+    threading.Thread(
+        target=forward,
+        args=(prefix, process.stdout, FORMATS.get(name, str)),
+        daemon=True,
+    ).start()
     return process
 
 
