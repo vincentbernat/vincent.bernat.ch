@@ -23,11 +23,9 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
         if bundle.endswith(".woff2"):
             sizes.append((f"media/{bundle}", row * 3))
             continue
-        # compression levels are from:
-        # https://github.com/NixOS/nixpkgs/blob/master/nixos/modules/services/web-servers/nginx/default.nix
         row += [
             len(run(*compress, raw, text=False))
-            for compress in (["gzip", "-c", "-5"], ["brotli", "-c", "-q", "5"])
+            for compress in (["gzip", "-c", "-5"], ["zstd", "-c", "-q", "-3"])
         ]
         sizes.append((f"media/{bundle}", row))
 
@@ -73,9 +71,7 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     sizes += totals
     width = max(len(name) for name, _ in sizes)
     with target.open("w", encoding="utf-8") as f:
-        f.write(
-            f"{'':<{width}} {'raw':>10} {'gzip':>10} {'brotli':>10} {'pages':>10}\n"
-        )
+        f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'zstd':>10} {'pages':>10}\n")
         for name, row in sizes:
             cells = [human(size) for size in row]
             if name.endswith(".woff2"):
