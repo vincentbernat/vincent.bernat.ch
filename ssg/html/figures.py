@@ -204,6 +204,10 @@ def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
 
             # If we have a title, also enclose in a figure
             figure = element(img, "figure", {"class": "lf-fullbleed"})
+            for name in classes(parent):
+                add_class(figure, name)
+            if ident := parent.get("id"):
+                figure.set("id", ident)
             figure.append(outer)
             title = img.attrib.pop("title", None)
             if title:
