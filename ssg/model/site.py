@@ -15,7 +15,7 @@ from typing import Any
 import yaml
 
 from .. import config, deps
-from ..tools import write
+from ..tools import persistent
 from .meta import FRONTMATTER, Meta
 from .node import CIRCULAR, SORTERS, Node
 from .resource import PYTHON, Resource
@@ -186,7 +186,7 @@ class Site:
                 resource.meta = Meta(data, node.meta)
 
     def load_dates(self) -> None:
-        dates = git_dates(self.mode.cache / "git-dates.json")
+        dates = git_dates(self)
         for resource in self.resources.values():
             created = resource.meta.get("created")
             modified = resource.meta.get("modified")
@@ -252,21 +252,10 @@ def ignored(name: str) -> bool:
     return any(fnmatch.fnmatch(name, pattern) for pattern in config.IGNORE)
 
 
-def git_dates(cache: Path) -> dict[str, tuple[datetime, datetime]]:
+def git_dates(site: Site) -> dict[str, tuple[datetime, datetime]]:
     """Map paths relative to content to their creation and modification
-    dates from git. The result is kept in a cache file until HEAD changes."""
-    head = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=config.ROOT, text=True
-    ).strip()
-    try:
-        cached = json.loads(cache.read_text())
-    except FileNotFoundError, json.JSONDecodeError:
-        cached = {}
-    if cached.get("head") == head:
-        dates = cached["dates"]
-    else:
-        dates = git_timestamps()
-        write(cache, json.dumps({"head": head, "dates": dates}))
+    dates from git."""
+    dates = git_timestamps(site)
 
     def utc(ts: int) -> datetime:
         return datetime.fromtimestamp(ts, UTC).replace(tzinfo=None)
@@ -274,7 +263,14 @@ def git_dates(cache: Path) -> dict[str, tuple[datetime, datetime]]:
     return {path: (utc(c), utc(m)) for path, (c, m) in dates.items()}
 
 
-def git_timestamps() -> dict[str, list[int]]:
+def git_head() -> str:
+    return subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=config.ROOT, text=True
+    ).strip()
+
+
+@persistent(git_head)
+def git_timestamps(site: Site) -> dict[str, list[int]]:
     """Map paths relative to content to their creation and modification
     timestamps from git."""
     output = subprocess.check_output(

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .. import config, deps
-from ..tools import run
+from ..tools import persistent, run
 
 if TYPE_CHECKING:
     from ..model.site import Site
@@ -80,7 +80,13 @@ def value(expression: str) -> float:
     return float(mo.group(0))
 
 
-def page_width() -> tuple[int, int]:
+def page_width_key() -> str:
+    root = config.CONTENT / "media" / "css" / "root.css"
+    return f"{deps.file_hash(root)}:{deps.file_hash(SCRIPT)}"
+
+
+@persistent(page_width_key)
+def page_width(site: Site) -> tuple[int, int]:
     """Page width and breakpoint in pixels.
 
     The breakpoint matches the --lf-medium media query (--lf-vp-medium scaled

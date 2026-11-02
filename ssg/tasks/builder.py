@@ -25,15 +25,6 @@ if TYPE_CHECKING:
 SSG = config.ROOT / "ssg"
 
 
-# Modules not used by the build
-NOT_BUILD = ("commands", "dodo.py", "tests")
-CODE = sorted(
-    str(p) for p in SSG.rglob("*.py") if p.relative_to(SSG).parts[0] not in NOT_BUILD
-) + [
-    str(SSG / "markdown" / "rfc-index.json.gz"),
-]
-
-
 CSS_DEPS = [
     str(css.SCRIPT),
     str(css.BASELINE_FONT),
@@ -96,7 +87,6 @@ class Builder:
         self.mode = site.mode
         self.out = self.mode.output
         self.uptodate = deps.uptodate(site)
-        deps.code_files = CODE
         deps.code_digest()
         self.plan()
 

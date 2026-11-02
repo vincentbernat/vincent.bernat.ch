@@ -105,7 +105,7 @@ def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
                 srcset.append(f"{path} {w}w")
             img.set("src", versions[0][0])
             img.set("srcset", ",".join(srcset))
-            page_width_px, breakpoint_px = css.page_width()
+            page_width_px, breakpoint_px = css.page_width(site)
             # The image cannot display wider than its intrinsic width.
             page_width_px = min(page_width_px, width)
             breakpoint_px = min(breakpoint_px, width)

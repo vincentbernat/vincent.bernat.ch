@@ -14,7 +14,7 @@ import hashlib
 import os
 import shutil
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
@@ -29,8 +29,8 @@ if TYPE_CHECKING:
     from .model.site import Site
 
 recorder: Recorder | None = None
-# Files of the build code, set when planning
-code_files: Sequence[str] = ()
+# Modules not used by the build
+NOT_BUILD = ("commands", "dodo.py", "tests")
 
 
 class Recorder:
@@ -108,10 +108,23 @@ def content_digest(resource: Resource) -> str:
 
 
 @functools.cache
+def code_files() -> list[str]:
+    """Files of the build code."""
+    ssg = config.ROOT / "ssg"
+    return sorted(
+        str(p)
+        for p in ssg.rglob("*.py")
+        if p.relative_to(ssg).parts[0] not in NOT_BUILD
+    ) + [
+        str(ssg / "markdown" / "rfc-index.json.gz"),
+    ]
+
+
+@functools.cache
 def code_digest() -> str:
     """Digest of the build code."""
     hasher = xxhash.xxh3_128()
-    for path in code_files:
+    for path in code_files():
         hasher.update(f"{path}\0{file_hash(path)}\n".encode())
     return hasher.hexdigest()
 

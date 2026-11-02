@@ -1,14 +1,19 @@
 """Helpers shared by the build and the commands."""
 
 import contextlib
+import functools
+import json
 import os
 import subprocess
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import IO, Literal, Self, overload
+from typing import IO, TYPE_CHECKING, Any, Literal, Self, overload
 
 from . import deps
+
+if TYPE_CHECKING:
+    from .model.site import Site
 
 
 @overload
@@ -155,3 +160,38 @@ def write(path: str | os.PathLike[str], content: str | bytes) -> None:
     except FileNotFoundError:
         path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
+
+
+def persistent[R](
+    key: Callable[..., str],
+) -> Callable[[Callable[..., R]], Callable[..., R]]:
+    """Keep the result of a function in memory and in a JSON cache file of the
+    mode, until key() gives another value or the build code changes. The first
+    argument of the function is the site, key() gets the other ones. There is
+    one file per function and mode. Tuples come back as lists."""
+
+    def decorator(function: Callable[..., R]) -> Callable[..., R]:
+        name = f"{function.__module__}.{function.__qualname__}.json"
+
+        @functools.cache
+        def first(site: Site, *args: Any) -> R:
+            path = site.mode.cache / name
+            current = f"{deps.code_digest()}:{key(*args)}"
+            try:
+                data = json.loads(path.read_text())
+            except FileNotFoundError, json.JSONDecodeError:
+                data = {}
+            if data.get("key") == current:
+                value: R = data["value"]
+                return value
+            value = function(site, *args)
+            write(path, json.dumps({"key": current, "value": value}))
+            return value
+
+        @functools.wraps(function)
+        def call(site: Site, *args: Any) -> R:
+            return first(site, *args)
+
+        return call
+
+    return decorator
