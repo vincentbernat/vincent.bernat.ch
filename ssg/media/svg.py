@@ -66,7 +66,7 @@ HIDDEN = frozenset({"style", "script", "metadata", "desc", "title"})
 FONT_FAMILY_RE = re.compile(r"font-family\s*:\s*([^;}]+)")
 FONT_FACE_RE = re.compile(r"(@font-face\s*\{[^}]*\})")
 INKSCAPE_RE = re.compile(r"\s*-inkscape-font-specification\s*:\s*[^;}]*;?")
-COLOR_SCHEME_RE = re.compile(r"\s*color-scheme\s*:\s*[^;}]*;?")
+COLOR_SCHEME_RE = re.compile(r"\s*(?<![\w-])color-scheme\s*:\s*[^;}]*;?")
 LIGHT_DARK_RE = re.compile(r"light-dark\s*\(")
 
 # SVG presentation attributes that take a <color> value.
