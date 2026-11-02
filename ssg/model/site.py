@@ -291,7 +291,7 @@ def git_timestamps() -> dict[str, list[int]]:
         cwd=config.ROOT,
         text=True,
     )
-    dates = {}
+    dates: dict[str, list[int]] = {}
     current = None
     prefix = config.CONTENT.relative_to(config.ROOT).as_posix() + "/"
     for line in output.split("\n"):
@@ -308,6 +308,10 @@ def git_timestamps() -> dict[str, list[int]]:
             continue
         path = parts[2] if parts[0].startswith("R") else parts[1]
         path = path.removeprefix(prefix)
+        if parts[0].startswith("R"):
+            old = parts[1].removeprefix(prefix)
+            if old in dates:
+                dates[path] = dates.pop(old)
         if path not in dates:
             dates[path] = [current, current]
         else:
