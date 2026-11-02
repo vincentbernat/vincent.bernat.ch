@@ -84,6 +84,11 @@ route {
   }
   route /api/v0/hit {
     log_skip
+    @nojsbot {
+      query r=NoJS
+      not header Sec-Fetch-Dest image
+    }
+    respond @nojsbot 204
 {% if site.mode.production %}
     rewrite * /count
     reverse_proxy 127.0.0.3:8087 {
