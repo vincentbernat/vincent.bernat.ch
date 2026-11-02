@@ -53,10 +53,25 @@ class Loader(jinja2.FileSystemLoader):
         return resource.body(), str(resource.source), lambda: True
 
 
+class BytecodeCache(jinja2.FileSystemBytecodeCache):
+    """Compiled templates, kept until their source, the build code or Jinja
+    change."""
+
+    def __init__(self, site: Site) -> None:
+        directory = site.mode.cache / "jinja"
+        directory.mkdir(parents=True, exist_ok=True)
+        super().__init__(str(directory))
+
+    def get_source_checksum(self, source: str) -> str:
+        checksum = super().get_source_checksum(source)
+        return f"{checksum}:{deps.code_digest()}:{jinja2.__version__}"
+
+
 @functools.cache
 def environment(site: Site) -> jinja2.Environment:
     env = jinja2.Environment(
         loader=Loader(site),
+        bytecode_cache=BytecodeCache(site),
         undefined=jinja2.ChainableUndefined,
         trim_blocks=True,
         extensions=["jinja2.ext.do", "jinja2.ext.loopcontrols"],
