@@ -84,24 +84,11 @@ route {
   }
   route /api/v0/hit {
     log_skip
-
     @nojsbot {
       query r=NoJS
       not header Sec-Fetch-Dest image
     }
     respond @nojsbot 204
-
-    map {query.p}|{query.t} {hit_known} {
-{% for res in resource.node.all_resources() if res.uses_template and res.meta.layout == "base.j2" %}
-      `{{ content_url(res.url) }}|{{ res.meta.title }}` yes
-{% endfor %}
-      `play-video|Play a video` yes
-      `back-to-top|Click on back to top link` yes
-      default no
-    }
-    @unknown vars {hit_known} no
-    respond @unknown 204
-
 {% if site.mode.production %}
     rewrite * /count
     reverse_proxy 127.0.0.3:8087 {
