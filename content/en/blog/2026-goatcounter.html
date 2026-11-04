@@ -179,6 +179,23 @@ working.[^css-test]
     time ranges differ, this is not an apples-to-apples comparison, but it gives
     a hint about how efficient bot filtering is.
 
+!!! "Update (2026-11)"
+    I added an additional filter for the "NoJS" tracker to exclude bots pulling the
+    URL from the page:
+    
+        ::caddy
+        route /count {
+          log_skip
+          @nojsbot {
+            query r=NoJS
+            not header Sec-Fetch-Dest image
+          }
+          respond @nojsbot 204
+          reverse_proxy 127.0.0.3:8087 {
+            # …
+          }
+        }
+
 [bear blog]: https://bearblog.dev/ "Bear Blog"
 [small javascript client]: https://github.com/arp242/goatcounter/blob/main/public/count.js "GoatCounter's JavaScript client"
 [bear-css]: https://herman.bearblog.dev/how-bear-does-analytics-with-css/ "How Bear does analytics with CSS"

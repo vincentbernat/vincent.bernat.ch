@@ -160,6 +160,23 @@ par l'interaction que j'utilise me semble pouvoir durer[^css-test].
     périodes diffèrent, la comparaison n'est pas rigoureuse, mais elle donne une
     idée de l'efficacité de cette preuve d'humanité.
 
+!!! "Mise à jour (11.2026)"
+    J'ai ajouté un filtre supplémentaire pour le compteur "NoJS" afin
+    d'exclure les robots qui récupèrent l'URL de la page :
+
+        ::caddy
+        route /count {
+          log_skip
+          @nojsbot {
+            query r=NoJS
+            not header Sec-Fetch-Dest image
+          }
+          respond @nojsbot 204
+          reverse_proxy 127.0.0.3:8087 {
+            # …
+          }
+        }
+
 [bear blog]: https://bearblog.dev/ "Bear Blog"
 [small javascript client]: https://github.com/arp242/goatcounter/blob/main/public/count.js "GoatCounter's JavaScript client"
 [bear-css]: https://herman.bearblog.dev/how-bear-does-analytics-with-css/ "How Bear does analytics with CSS"
