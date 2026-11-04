@@ -30,6 +30,18 @@ HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 LAST_LINE = 8  # Minimum length of the last line of a paragraph
 CODE_MARKS = "._/="  # Line breaks in code are allowed after them
 CODE_PART = 3  # Minimum length of each part around a break in code
+# Units after a figure, separated by a normal space. Units with one letter
+# are often found in text, so they need a no-break space.
+UNITS = [
+    "KB", "MB", "GB", "TB", "KiB", "MiB", "GiB", "TiB",
+    "Ko", "Mo", "Go", "To", "Kio", "Mio", "Gio", "Tio",
+    "Kbps", "Mbps", "Gbps", "Tbps", "Kb/s", "Mb/s", "Gb/s", "Tb/s",
+    "Hz", "kHz", "MHz", "GHz",
+    "ns", "µs", "ms",
+    "nm", "mm", "cm", "km", "kg",
+    "W", "mW", "kW", "dB", "dBm", "°C",
+    "€",
+]  # fmt: skip
 
 # A quote is opening after a space, a bracket or another opening quote, and
 # before a non-space character. After a dash, it needs a letter after it.
@@ -39,8 +51,11 @@ space_before_punct = re.compile(r"\s([:;!?%»])")
 space_after_punct = re.compile(r"«\s")
 space_between_figures = re.compile(r"([0-9]|^)\s([0-9]+(?:\W|$))")
 version_number = re.compile(r"(\b[A-Z][a-zA-Z]+)\s([0-9]+(?:\W|$))")
+known_unit = re.compile(
+    rf"(\b[0-9]+(?:[,.][0-9]+)*)[ \u00a0]({'|'.join(map(re.escape, UNITS))})(?!\w)"
+)
 # Cheating, the no-break space is already here
-si_unit = re.compile(r"(\b[0-9,.]+)\u00a0(\w|€)")
+unknown_unit = re.compile(r"(\b[0-9,.]+)\u00a0(\w)")
 chunk = re.compile(r"\S+")
 url = re.compile(r"[/@]|\w\.\w")
 word = re.compile(r"\b[^\W\d_]{5,}\b")
@@ -78,7 +93,8 @@ def space(text: str) -> str:
     text = space_after_punct.sub("«" + NNBSP, text)
     text = space_between_figures.sub(r"\1" + NNBSP + r"\2", text)
     text = version_number.sub(r"\1" + NNBSP + r"\2", text)
-    return si_unit.sub(r"\1" + NNBSP + r"\2", text)
+    text = known_unit.sub(r"\1" + NNBSP + r"\2", text)
+    return unknown_unit.sub(r"\1" + NNBSP + r"\2", text)
 
 
 @functools.cache

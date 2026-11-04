@@ -70,6 +70,10 @@ class TestTypography(unittest.TestCase):
                 ("<div>about 1 000 users</div>", "<div>about 1^000 users</div>"),
                 ("<div>Use Python 3 now</div>", "<div>Use Python^3 now</div>"),
                 ("<div>It is 10\u00a0km away</div>", "<div>It is 10^km away</div>"),
+                ("<div>at 2.4 GHz, 3 Mb/s</div>", "<div>at 2.4^GHz, 3^Mb/s</div>"),
+                ("<div>costs 5 € or 6\u00a0€</div>", "<div>costs 5^€ or 6^€</div>"),
+                ("<div>It is 10 kmh</div>", "<div>It is 10 kmh</div>"),
+                ("<div>step 1 A or 2 V</div>", "<div>step 1 A or 2 V</div>"),
             ]
         )
 
