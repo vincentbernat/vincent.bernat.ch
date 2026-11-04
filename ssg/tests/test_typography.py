@@ -157,8 +157,8 @@ class TestTypography(unittest.TestCase):
                 ),
                 # No <wbr> in the last characters of code
                 (
-                    "<p>Use <code>foo.bar_baz</code></p>",
-                    "<p>Use <code>foo<wbr>.bar_baz</code></p>",
+                    "<p>Use <code>foo.bar_bazqux</code></p>",
+                    "<p>Use <code>foo.<wbr>bar_bazqux</code></p>",
                 ),
                 # Not inline content
                 ("<p>line<br>two words</p>", "<p>line<br>two words</p>"),
@@ -174,23 +174,23 @@ class TestTypography(unittest.TestCase):
             [
                 (
                     "<div><code>prometheus.remote_write</code></div>",
-                    "<div><code>prometheus<wbr>.remote<wbr>_write</code></div>",
+                    "<div><code>prometheus.<wbr>remote_<wbr>write</code></div>",
                 ),
                 (
                     "<div><code>/etc/systemd/system</code></div>",
-                    "<div><code>/etc<wbr>/systemd<wbr>/system</code></div>",
+                    "<div><code>/etc/<wbr>systemd/<wbr>system</code></div>",
                 ),
                 # Numbers, short parts and repeated marks
                 ("<div><code>1.2.3</code></div>", "<div><code>1.2.3</code></div>"),
                 ("<div><code>a.b</code></div>", "<div><code>a.b</code></div>"),
                 (
                     "<div><code>..foo..bar</code></div>",
-                    "<div><code>..foo<wbr>..bar</code></div>",
+                    "<div><code>..foo..<wbr>bar</code></div>",
                 ),
                 # Elements inside code
                 (
-                    "<div><code><span>discovery</span>.kubernetes_sd</code></div>",
-                    "<div><code><span>discovery</span>.kubernetes<wbr>_sd</code></div>",
+                    "<div><code><span>discovery</span>.kubernetes_sd_configs</code></div>",
+                    "<div><code><span>discovery</span>.kubernetes_<wbr>sd_<wbr>configs</code></div>",
                 ),
                 # Code blocks
                 (

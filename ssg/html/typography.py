@@ -28,7 +28,7 @@ HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
 HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
 LAST_LINE = 8  # Minimum length of the last line of a paragraph
-CODE_MARKS = "._/="  # Line breaks in code are allowed before them
+CODE_MARKS = "._/="  # Line breaks in code are allowed after them
 CODE_PART = 3  # Minimum length of each part around a break in code
 
 # A quote is opening after a space, a bracket or another opening quote, and
@@ -168,11 +168,11 @@ def cuts(text: str) -> list[int]:
     result: list[int] = []
     last = 0
     for i in range(CODE_PART, len(text) - CODE_PART + 1):
-        # Before a mark
-        if text[i] not in CODE_MARKS or text[i - 1] in CODE_MARKS:
+        # After a mark
+        if text[i - 1] not in CODE_MARKS or text[i] in CODE_MARKS:
             continue
         # But not between two digits
-        if text[i - 1].isdigit() and text[i + 1].isdigit():
+        if text[i - 2].isdigit() and text[i].isdigit():
             continue
         # And not if previous one is too close
         if i - last < CODE_PART:
