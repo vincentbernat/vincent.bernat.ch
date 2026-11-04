@@ -162,7 +162,11 @@ par l'interaction que j'utilise me semble pouvoir durer[^css-test].
 
 !!! "Mise à jour (11.2026)"
     J'ai ajouté un filtre supplémentaire pour le compteur "NoJS" afin
-    d'exclure les robots qui récupèrent l'URL de la page :
+    d'exclure les robots qui récupèrent l'URL de la page. Le code suivant
+    vérifie si le paramètre `r` de la requête vaut `NoJS` et si la valeur de
+    l'[en-tête `Sec-Fetch-Dest`][sec-fetch-dest] n'est pas `image`. Dans ce
+    cas, Caddy renvoie une réponse 204 vide. Sinon, il transmet la requête à
+    _GoatCounter_.
 
         ::caddy
         route /count {
@@ -184,6 +188,7 @@ par l'interaction que j'utilise me semble pouvoir durer[^css-test].
 [googlebot-events]: https://developers.google.com/search/docs/crawling-indexing/javascript/lazy-loading#:~:text=Google%20Search%20does%20not%20interact%20with%20your%20page "Google Search Central: Fix lazy-loaded content"
 [residential proxies]: https://jacob.gold/posts/residential-proxies-are-a-national-security-threat/ "Residential Proxies Are a National Security Threat"
 [tracking pixel]: https://www.goatcounter.com/help/pixel "GoatCounter documentation: tracking pixel without JavaScript"
+[sec-fetch-dest]: https://developer.mozilla.org/fr/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Dest "En-tête Sec-Fetch-Dest sur MDN"
 
 # Proxy local
 
