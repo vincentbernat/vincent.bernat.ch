@@ -4,13 +4,50 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import lxml.etree
+
 from .. import deps
 from ..tools import ProcessHelper, run
 
+INKSCAPE_NAMESPACES = frozenset(
+    {
+        "http://www.inkscape.org/namespaces/inkscape",
+        "http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd",
+    }
+)
+DC_TITLE = "{http://purl.org/dc/elements/1.1/}title"
 
-def image(raw: Path, target: Path) -> list[Path]:
+
+def svgo_generated(source: Path) -> bool:
+    """Tell if an SVG file comes from a tool whose output svgo shrinks a lot:
+    Inkscape, draw.io, Excalidraw or Matplotlib. Other SVG files are left
+    alone: svgo can change how they render, notably with :target rules."""
+    try:
+        root = lxml.etree.parse(source).getroot()
+    except lxml.etree.XMLSyntaxError:
+        return False
+    if INKSCAPE_NAMESPACES.intersection(root.nsmap.values()):
+        return True
+    if root.get("content", "").startswith("<mxfile"):
+        return True
+    comments = [
+        c.text.strip()
+        for c in [*root.itersiblings(preceding=True), *root]
+        if c.tag is lxml.etree.Comment and c.text
+    ]
+    if "svg-source:excalidraw" in comments:
+        return True
+    if any(c.startswith("Created with matplotlib") for c in comments):
+        return True
+    return any(
+        (title.text or "").startswith("Matplotlib ") for title in root.iter(DC_TITLE)
+    )
+
+
+def image(raw: Path, target: Path, source: Path) -> list[Path]:
     """Write an optimized version of raw image to target. Also write AVIF or
-    WebP versions when they are small enough. Return the written files."""
+    WebP versions when they are small enough. Return the written files. For
+    SVG, raw may be a processed version of source."""
     target.parent.mkdir(parents=True, exist_ok=True)
     for path in (target, Path(f"{target}.avif"), Path(f"{target}.webp")):
         path.unlink(missing_ok=True)
@@ -18,12 +55,8 @@ def image(raw: Path, target: Path) -> list[Path]:
     alternative = None
     match target.suffix:
         case ".svg":
-            # svgo reads the stylesheet as if no element is targeted: it
-            # removes or changes elements that :target rules show
             content = raw.read_bytes()
-            if b"<script" in content or b":target" in content:
-                shutil.copyfile(raw, target)
-            else:
+            if b"<script type=" not in content and svgo_generated(source):
                 run(
                     "svgo",
                     "--config",
@@ -33,6 +66,8 @@ def image(raw: Path, target: Path) -> list[Path]:
                     "-o",
                     target,
                 )
+            else:
+                shutil.copyfile(raw, target)
         case ".jpg":
             # Convert to sRGB, encode AVIF from it, then optimize the JPEG. For
             # progressive rendering of AVIF, use two layers with a 1/8 preview:

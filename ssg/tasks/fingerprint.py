@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import xxhash
 
+from .. import config
 from ..images import optimize
 from ..tools import write
 from . import files
@@ -26,7 +27,7 @@ def image(site: Site, path: str, manifest: Path) -> None:
     target = site.output(f"media/{name}")
     # svgo can change how an SVG renders: dev builds use it too
     if site.mode.production or raw.suffix == ".svg":
-        outputs = optimize.image(raw, target)
+        outputs = optimize.image(raw, target, config.CONTENT / "media" / path)
     else:
         files.copy(raw, target)
         outputs = [target]
