@@ -17,15 +17,21 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
     them."""
     out = site.mode.output
     sizes = []
+    # gzip and zstd from Caddy on the origin, brotli from Bunny CDN. Tested
+    # experimentally.
+    compress_cmds = {
+        "gzip": ["gzip", "-c", "-n", "-6"],
+        "brotli": ["brotli", "-c", "-q", "4"],
+        "zstd": ["zstd", "-c", "-q", "-3"],
+    }
     for bundle in bundles:
         raw = site.raw(bundle)
         row = [raw.stat().st_size]
         if bundle.endswith(".woff2"):
-            sizes.append((f"media/{bundle}", row * 3))
+            sizes.append((f"media/{bundle}", row * (len(compress_cmds) + 1)))
             continue
         row += [
-            len(run(*compress, raw, text=False))
-            for compress in (["gzip", "-c", "-5"], ["zstd", "-c", "-q", "-3"])
+            len(run(*compress, raw, text=False)) for compress in compress_cmds.values()
         ]
         sizes.append((f"media/{bundle}", row))
 
@@ -65,17 +71,23 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
         rows = [
             row for name, row in sizes if counts[name] * 100 >= percent * len(pages)
         ]
-        total = [sum(row[i] for row in rows) for i in range(3)]
+        total = [sum(row[i] for row in rows) for i in range(len(compress_cmds) + 1)]
         totals.append((f"total ({percent}%)", total))
-    totals.append(("total", [sum(row[i] for _, row in sizes) for i in range(3)]))
+    totals.append(
+        (
+            "total",
+            [sum(row[i] for _, row in sizes) for i in range(len(compress_cmds) + 1)],
+        )
+    )
     sizes += totals
     width = max(len(name) for name, _ in sizes)
     with target.open("w", encoding="utf-8") as f:
-        f.write(f"{'':<{width}} {'raw':>10} {'gzip':>10} {'zstd':>10} {'pages':>10}\n")
+        headers = ["raw", *compress_cmds, "pages"]
+        f.write(f"{'':<{width}}" + "".join(f" {h:>10}" for h in headers) + "\n")
         for name, row in sizes:
             cells = [human(size) for size in row]
             if name.endswith(".woff2"):
-                cells[1:] = ["-", "-"]
+                cells[1:] = ["-"] * len(compress_cmds)
             if name in counts:
                 cells.append(f"{counts[name] * 100 / len(pages):.1f}%")
             columns = "".join(f" {cell:>10}" for cell in cells)

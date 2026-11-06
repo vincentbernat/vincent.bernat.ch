@@ -409,6 +409,7 @@
                 fonttools
                 pagefind
                 brotli
+                zstd
 
                 # Image optimization
                 svgo
