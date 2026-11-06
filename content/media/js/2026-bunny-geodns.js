@@ -27,6 +27,11 @@
       area: [-37, -22, 55, 32],
     },
   ];
+  const PROVIDERS = {
+    Sapinet: "https://sapi.net/",
+    Hetzner: "https://www.hetzner.com/",
+    Vultr: "https://www.vultr.com/",
+  };
   const SCALE = 2; // canvas pixels for one SVG unit
   const STRIPE = 16; // canvas pixels between two stripes
   const STRIPE_WIDTH = 5;
@@ -274,6 +279,8 @@
         }
       }
       const g = svg("g", {}, overlay);
+      const link = svg("a", { href: PROVIDERS[s.provider] }, g);
+      svg("title", {}, link).textContent = s.provider;
       const icon = svg(
         "image",
         {
@@ -286,7 +293,7 @@
             : x - ICON_BOX / 2,
           y: side ? y - ICON_BOX / 2 - 9 : y - ICON_BOX - 3,
         },
-        g,
+        link,
       );
       const href = `${src}#${s.provider.toLowerCase()}`;
       icon.setAttribute("href", href);
