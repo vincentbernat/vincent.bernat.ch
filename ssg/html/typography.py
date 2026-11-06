@@ -38,9 +38,9 @@ UNITS = [
     "Kbps", "Mbps", "Gbps", "Tbps", "Kb/s", "Mb/s", "Gb/s", "Tb/s",
     "Hz", "kHz", "MHz", "GHz",
     "ns", "µs", "ms",
-    "nm", "mm", "cm", "km", "kg",
+    "nm", "mm", "cm", "km", "mi", "kg",
     "W", "mW", "kW", "dB", "dBm", "°C",
-    "€",
+    "€", "$",
 ]  # fmt: skip
 
 # A quote is opening after a space, a bracket or another opening quote, and

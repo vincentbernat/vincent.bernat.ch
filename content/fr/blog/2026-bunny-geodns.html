@@ -1,0 +1,429 @@
+---
+title: "GeoDNS programmable : migration d'AWS vers Bunny"
+description: |
+  J'ai migré ce blog de CloudFront et Route 53 vers un fournisseur européen. Du
+  code JavaScript exécuté à chaque requête DNS renvoie les serveurs les plus
+  proches, tandis qu'un serveur Hickory DNS auto-hébergé gère les défis ACME.
+uuid: cb064bd5-3304-4e34-8c5d-8c81ad1cafad
+cover: bunny-dns-map.svg
+tags:
+  - web
+  - network
+headers:
+  Server-Timing: "served-by;desc={system.hostname}"
+css:
+  - 2026-bunny-geodns.css
+js:
+  - 2026-bunny-geodns.js
+ai-usage: Traduit de l'anglais (Claude Opus 5.5)
+---
+
+Pour optimiser les performances de ce blog, je m'appuyais sur _Amazon
+CloudFront_ pour servir les ressources statiques[^cloudfront] et sur _Route 53_
+pour un DNS géolocalisé[^route53] qui dirige les lecteurs vers le serveur le
+plus proche. Mais Route 53 coûte cher : [0,50 $ par zone et par mois, 0,70 $ par
+million de requêtes géolocalisées et 0,75 $ par mois et par sonde de
+disponibilité][route53-pricing], auxquels s'ajoute [1 $ par mois pour la clé
+KMS][kms-pricing] nécessaire à la signature des zones avec DNSSEC. Quand j'ai
+découvert que Bunny DNS est [presque gratuit][almost free] jusqu'à 500 domaines
+et propose des réponses programmables, j'ai sauté sur l'occasion! En prime,
+c'est une entreprise européenne, installée en Slovénie.
+
+[^cloudfront]:
+    Je me reposais sur CloudFront pour diffuser les fichiers multimédias depuis
+    2011.
+[^route53]:
+    Route 53 répondait pour `bernat.ch` depuis décembre 2021. Je n'utilisais pas
+    les sondes de disponibilité, trop chères. Je n'y hébergeais pas non plus la
+    plupart de mes zones : les requêtes pour `haproxy.debian.net` m'auraient
+    coûté à elles seules environ 10 $ par mois.
+
+[TOC]
+
+[bunny.net]: https://bunny.net/ "bunny.net: The Global Edge Platform that truly Hops"
+[almost free]: https://bunny.net/blog/were-making-bunny-dns-free/ "We’re making Bunny DNS free"
+[route53-pricing]: https://aws.amazon.com/route53/pricing/ "Amazon Route 53 pricing"
+[kms-pricing]: https://aws.amazon.com/kms/pricing/ "AWS Key Management Service pricing"
+
+# Bunny CDN
+
+[_Bunny.net_][bunny.net] a démarré sous le nom [BunnyCDN en 2015][bunnycdn in
+2015]. L'entreprise a ajouté la [prise en charge d'IPv6 en 2017][ipv6 support in
+2017]. La migration s'est déroulée sans encombre. Je n'utilise pas de domaine
+personnalisé : je sers le contenu depuis le domaine `b-cdn.net`. Comme je
+m'appuie sur la négociation de contenu pour [servir des images AVIF et
+WebP][serve avif and webp images], je configure le CDN pour [mettre en cache
+chaque format d'image séparément][vary cache].
+
+Je [désactive la journalisation][specifically disabled] pour ne pas collecter de
+données personnelles. Si la [page RGPD de bunny.net][bunny.net gdpr page] promet
+l'anonymisation des données, impossible de savoir ce que CloudFront conserve
+dans ses propres journaux quand la journalisation est désactivée.
+
+Le seul point faible de l'offre CDN de _bunny.net_ est l'absence de HTTP/3. J'ai
+interrogé leur support : ils m'ont répondu en deux minutes qu'ils y travaillent,
+mais sans date précise.
+
+[bunnycdn in 2015]: https://bunny.net/our-story/ "Story of a small company disrupting the CDN market!"
+[ipv6 support in 2017]: https://bunny.net/blog/bunnycdn-is-now-ipv6-enabled/ "BunnyCDN is Now IPv6 Enabled"
+[specifically disabled]: https://github.com/vincentbernat/cdktf-take1/blob/8950deb049198982b595f864b2a53517e63717e3/luffy/bunnycdn.ts#L31 "cdktf-take1/luffy/bunnycdn.ts at main"
+[serve avif and webp images]: self://fr/blog/2021-webp-avif-nginx
+[vary cache]: https://bunny.net/docs/cdn/vary-cache "Vary Cache on bunny.net documentation"
+[bunny.net gdpr page]: https://bunny.net/gdpr/ "General Data Protection Regulation (GDPR) for bunny.net"
+
+# Bunny DNS
+
+_Bunny.net_ a lancé son [offre DNS en 2022][dns offering in 2022] et a récemment
+réduit son prix [à quasiment zéro][almost free]. Elle propose le [routage
+géographique][geographical routing], mais une fonctionnalité vraiment
+intéressante est le [DNS programmable][scriptable dns] : un bout de JavaScript
+personnalisé s'exécute à chaque requête pour calculer la réponse.
+
+Je fais tourner sept petites machines virtuelles NixOS pour héberger ce blog aux
+quatre coins du monde : Paris, Nuremberg, Ashburn, Singapour, San José, São
+Paulo et Sydney. Le DNS programmable de Bunny me permet de renvoyer les adresses
+IP des **deux serveurs les plus proches**. Le navigateur se rabat sur le second
+si le premier est en panne.
+
+```js hl_lines="24 32"
+const servers = [
+  {
+    ipv4: "45.90.160.60",
+    ipv6: "2a0c:8881:5:100::1",
+    latitude: 48.88,
+    longitude: 2.22,
+  },
+  /* […] */
+  {
+    ipv4: "139.180.162.114",
+    ipv6: "2001:19f0:5800:1855:5400:6ff:fef0:4c0a",
+    latitude: -33.87,
+    longitude: 151.21,
+  },
+];
+const families = { A: "ipv4", AAAA: "ipv6" };
+const records = { A: ARecord, AAAA: AaaaRecord };
+
+export default function handleQuery(query) {
+  const type = String(query.request.queryType).toUpperCase();
+  const family = families[type];
+  if (!family) return [];
+  // Position de l'utilisateur
+  const location = query.request.geoLocation;
+  // Liste des candidats
+  let candidates = servers.map(
+    (s) => new Server(s[family], s.latitude, s.longitude, 100),
+  );
+  // Choix des deux serveurs disponibles les plus proches
+  const selected = [];
+  while (selected.length < 2) {
+    const server = RoutingEngine.getClosestServer(candidates, location, true);
+    selected.push(server);
+    candidates = candidates.filter((s) => s.ip !== server.ip);
+  }
+  // Renvoi de leurs adresses IP
+  return selected.map((s) => new records[type](s.ip, 3600));
+}
+```
+
+Ce script repose sur la fonction
+[`RoutingEngine.getClosestServer()`][getClosestServer], qui renvoie le serveur
+disponible[^alive] le plus proche de l'utilisateur[^user]. Grâce à [Doggo][],
+vérifions que tout fonctionne comme prévu, au moins pour `A`[^a] :
+
+```console
+$ doggo --gp-from="Amsterdam" A vincent.bernat.ch
+LOCATION          NAME                TYPE  TTL    ADDRESS
+Amsterdam, NL
+                  vincent.bernat.ch.  A     3600s  45.90.160.60
+                  vincent.bernat.ch.  A     3600s  116.203.18.48
+$ doggo --gp-from="Texas" A vincent.bernat.ch
+LOCATION          NAME                TYPE  TTL    ADDRESS
+Houston (TX), US
+                  vincent.bernat.ch.  A     3600s  5.161.44.145
+                  vincent.bernat.ch.  A     3600s  149.28.219.155
+```
+
+[^alive]:
+    J'ai demandé à _bunny.net_ ce que « disponible » signifie, mais ils ont
+    refusé de détailler la méthode employée. C'est un peu dommage, car [leur
+    documentation][healthmonitoring] décrit les méthodes de surveillance pour
+    les *smart records*.
+
+[^user]:
+    L'utilisateur interroge Bunny DNS à travers un résolveur. En général, soit
+    le résolveur se trouve à proximité de l'utilisateur, soit il transmet le
+    sous-réseau de l'utilisateur via [EDNS client subnet][].
+
+[^a]:
+    N'utilisez pas ce script tel quel : `RoutingEngine.getClosestServer()` ne
+    fonctionne qu'avec IPv4. Le [script final][complete code] contourne cette
+    limite.
+
+Le défaut le plus gênant de cette méthode est qu'un utilisateur à Buenos Aires
+obtient à la fois São Paulo (1 600 km, 30 ms de RTT) et Ashburn (8 400 km, 140
+ms de RTT). La plupart des résolveurs mélangent l'ordre des réponses :
+l'utilisateur risque donc de charger la page depuis Ashburn. Il serait possible
+de ne renvoyer que le serveur le plus proche, et même de remplacer
+l'enregistrement programmé par le routage géographique intégré à Bunny DNS. Mais
+si ce serveur devient indisponible, le navigateur n'a aucune solution de repli
+avant l'expiration du cache DNS. Même avec un TTL faible, une brève fenêtre
+d'indisponibilité subsiste.
+
+[getclosestserver]: https://bunny.net/docs/dns/scriptable/helper-objects#routingengine-getclosestserver-servers-array%3Cserver%3E-location-geolocation-onlineonly-bool-=-false-applyweight-bool-=-true--server "Helper Objects on bunny.net documentation"
+[healthmonitoring]: https://bunny.net/docs/dns/records#health-monitoring "DNS Records on bunny.net documentation"
+[EDNS client subnet]: self://fr/blog/2014-bind-edns0-client-subnet
+[doggo]: https://doggo.mrkaran.dev/ "Doggo DNS"
+[dns offering in 2022]: https://bunny.net/blog/transforming-internet-routing-introducing-bunny-dns/ "We're transforming internet routing: Bunny DNS!"
+[geographical routing]: https://bunny.net/docs/dns/records#geographic-routing "DNS Records on bunny.net documentation"
+[scriptable dns]: https://bunny.net/docs/dns/scriptable/introduction "Scriptable DNS on bunny.net documentation"
+
+## La solution de l'enregistrement HTTPS
+
+L'[enregistrement DNS HTTPS][https dns record], défini dans la [RFC 9460][],
+résout à la fois le problème de disponibilité et celui de latence. Les
+navigateurs modernes interrogent cet enregistrement pour obtenir des
+informations supplémentaires afin de joindre un serveur HTTP, notamment un autre
+port et le protocole applicatif (HTTP/2 ou HTTP/3). Chaque enregistrement
+possède une priorité. Il est ainsi possible de demander aux navigateurs de
+contacter d'abord le serveur le plus proche, puis de se rabattre sur le suivant
+si le premier est indisponible :
+
+```zone
+vincent    HTTPS  1 first.geo  alpn="h3,h2"
+vincent    HTTPS  2 second.geo alpn="h3,h2"
+vincent    HTTPS  3 .          alpn="h3,h2"
+
+; Pour "first.geo" et "second.geo", Bunny DNS doit fournir les deux
+; serveurs les plus proches via le routage géographique.
+first.geo  A      45.90.160.60
+first.geo  AAAA   2a0c:8881:5:100::1
+second.geo A      116.203.18.48
+second.geo AAAA   2a01:4f8:1c0c:5eb5::1
+
+vincent    A      45.90.160.60
+vincent    A      116.203.18.48
+vincent    AAAA   2a0c:8881:5:100::1
+vincent    AAAA   2a01:4f8:1c0c:5eb5::1
+```
+
+Cela semble la solution idéale ! Malheureusement, Chrome [ignore tout
+enregistrement dont la cible n'est pas `.`][cr40257146], d'où le dernier
+enregistrement en priorité 3. De plus, contrairement à un `CNAME`, Bunny DNS ne
+renvoie pas les adresses IP de `first.geo` et `second.geo` dans la section
+additionnelle. Le résolveur doit envoyer une première requête pour obtenir
+l'enregistrement `HTTPS`, puis une seconde pour résoudre `first.geo`.
+
+Les enregistrements HTTPS sont [encore trop récents][still too new] pour ce cas.
+Retour à la case départ ! 📐
+
+[https dns record]: https://kalfeher.com/https-records-simple/ "Simple HTTPS Records"
+[rfc 9460]: rfc://9460
+[cr40257146]: https://issues.chromium.org/issues/40257146 "Fully implement HTTPS-RR [40257146]"
+[still too new]: https://www.netmeister.org/blog/https-caniuse.html "Can I use HTTPS RRs?"
+
+## La solution hybride
+
+En guise de compromis, le script renvoie les deux serveurs les plus proches
+s'ils se trouvent à une distance similaire de l'utilisateur. Sinon, il ne
+renvoie que le plus proche, avec un TTL réduit à 2 minutes.
+
+```js
+export default function handleQuery(query) {
+  const location = query.request.geoLocation;
+  let candidates = servers.map(
+    (s) => new Server(s.ipv4, s.latitude, s.longitude, 100),
+  );
+
+  // Choix des deux serveurs les plus proches
+  const selected = [];
+  while (selected.length < 2) {
+    const server = RoutingEngine.getClosestServer(candidates, location, true);
+    selected.push(server);
+    candidates = candidates.filter((s) => s.ip !== server.ip);
+  }
+
+  // Calcul de la distance entre chacun d'eux et l'utilisateur
+  const [first, second] = selected.map((s) =>
+    GeoDistance.calculate(s, location),
+  );
+
+  // Si le second est deux fois plus loin et à plus de 1000 miles du
+  // premier, ne renvoyer que le premier avec un TTL de 2 minutes.
+  if (second > 2 * first && second - first > 1000) {
+    return [new ARecord(selected[0].ip, 120)];
+  }
+
+  // Sinon, renvoyer les deux avec un TTL d'une heure.
+  return selected.map((s) => new ARecord(s.ip, 3600));
+}
+```
+
+Vérifions avec _Doggo_. Depuis Chicago, nous obtenons uniquement le serveur
+d'Ashburn avec un TTL de 2 minutes, tandis que depuis le Mexique, nous obtenons
+à la fois Ashburn et San José.
+
+```console
+$ doggo --gp-from="Chicago" A vincent.bernat.ch
+LOCATION          NAME                TYPE  TTL    ADDRESS
+Chicago (IL), US
+                  vincent.bernat.ch.  A     120s   5.161.44.145
+$ doggo --gp-from="Mexico" A vincent.bernat.ch
+LOCATION          NAME                TYPE  TTL    ADDRESS
+Queretaro, MX
+                  vincent.bernat.ch.  A     3600s  5.161.44.145
+                  vincent.bernat.ch.  A     3600s  149.28.219.155
+$ doggo --reverse 5.161.44.145 149.28.219.155
+NAME                          TYPE  TTL    ADDRESS
+145.44.161.5.in-addr.arpa.    PTR   7187s  web05.luffy.cx.
+155.219.28.149.in-addr.arpa.  PTR   3600s  web07.luffy.cx.
+```
+
+!!! "Note"
+    Sur la [page en ligne](self://), la carte ci-dessous est interactive :
+    pointez un endroit pour obtenir la réponse DNS, ou désactivez des serveurs
+    pour voir comment les réponses changent.
+    {.when-rss}
+
+!!! "Note"
+    Activez JavaScript pour rendre la carte ci-dessous interactive : pointez un
+    endroit pour obtenir la réponse DNS, ou désactivez des serveurs pour voir
+    comment les réponses changent.
+    {.when-nojs}
+
+Cette page vous a été servie par `???`. Vérifiez sur la carte ci-dessous si cela
+correspond à votre position !
+{.when-js #lf1-served-by}
+
+![Carte des serveurs renvoyés par Bunny DNS pour chaque endroit](self://media/images/bunny-dns-map.svg)
+{ #lf1-map }
+
+Le [code complet][complete code] est un peu plus complexe. Il contourne la
+limitation de `RoutingEngine.getClosestServer()` qui ne fonctionne qu'avec IPv4
+et il gère le cas où il ne reste pas assez de serveurs disponibles pour
+construire une réponse.
+
+_Bunny.net_ propose un [fournisseur Terraform][terraform provider] complet.
+J'utilise [CDK Terrain][] pour construire l'état cible en TypeScript et
+[OpenTofu][] pour le déployer. Pour plus de détails, consultez « [Gérer une
+infrastructure avec Terraform, CDKTF et
+NixOS](self://fr/blog/2022-cdktf-nixos)[^cdktn] ».
+
+[^cdktn]:
+    L'article date un peu. _CDK Terrain_ remplace _CDKTF_, _OpenTofu_ remplace
+    _Terraform_ et j'utilise désormais [Colmena][] à la place de _NixOps_.
+
+[complete code]: https://github.com/vincentbernat/cdktf-take1/blob/8950deb049198982b595f864b2a53517e63717e3/luffy/dns.ts#L509-L566
+[cdk terrain]: https://cdktn.io/ "CDK Terrain: Open-Source CDK for Terraform & OpenTofu"
+[opentofu]: https://opentofu.org/ "OpenTofu"
+[terraform provider]: https://search.opentofu.org/provider/bunnyway/bunnynet/latest "bunnynet Terraform Provider"
+[colmena]: https://colmena.cli.rs/unstable/ "Colmena documentation"
+
+# Défis ACME DNS avec Hickory DNS
+
+Route 53 couvrait un autre de mes besoins : servir `acme.luffy.cx` pour résoudre
+les [défis ACME DNS-01][dns-01]. Contrairement à Route 53, Bunny DNS ne permet
+pas de restreindre l'accès à une seule zone avec une politique d'accès fine.
+Comme cet usage n'exige ni haute disponibilité ni faible latence, j'ai remplacé
+Route 53 par [Hickory][], un serveur DNS écrit en Rust. Il prend en charge la
+[signature DNSSEC automatique][automatic dnssec signatures] et les [mises à jour
+dynamiques][dynamic updates backed by sqlite]. Sa configuration est simple :
+
+```toml
+[[zones]]
+zone = "acme.luffy.cx"
+zone_type = "Primary"
+
+[zones.stores]
+allow_update = true
+type = "sqlite"
+journal_path = "acme.luffy.cx.sqlite"
+zone_path = "acme.luffy.cx.zone"
+
+# Clé privée pour signer la zone avec DNSSEC. Générée avec :
+#  openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256
+[[zones.keys]]
+algorithm = "ECDSAP256SHA256"
+key_path = "/etc/hickory-dns.acme.luffy.cx.pem"
+
+# Clé TSIG pour signer les mises à jour de la zone. Générée avec :
+#  openssl rand 32
+[[zones.stores.tsig_keys]]
+algorithm = "hmac-sha256"
+key_file = "/etc/hickory-dns.acme.luffy.cx.update.acme.luffy.cx.tsig"
+name = "update.acme.luffy.cx."
+```
+
+Le [fichier de zone fourni][provided zone file] sert uniquement à initialiser la
+base au premier démarrage. Je délègue les défis DNS-01 à cette zone via des
+enregistrements `CNAME` :
+
+```zone
+_acme-challenge          CNAME bernat.ch.acme.luffy.cx.
+_acme-challenge.vincent  CNAME vincent.bernat.ch.acme.luffy.cx.
+```
+
+[Lego][], le client ACME que j'utilise pour obtenir des certificats auprès de
+[Let's Encrypt][], répond aux défis DNS-01 en publiant des entrées avec le
+[protocole DNS UPDATE][dns update protocol].
+
+Malheureusement, Bunny DNS ne peut pas publier d'enregistrement `DS` dans une
+zone[^ds]. J'en ai besoin pour sécuriser la zone `acme.luffy.cx` et la
+livraison des certificats. J'héberge donc la zone `luffy.cx` chez
+[deSEC][][^desec], un service d'hébergement DNS gratuit géré par une
+association à but non lucratif installée à Berlin. Je calcule l'enregistrement
+`DS` à publier dans `luffy.cx` à partir de l'enregistrement `DNSKEY` de
+`acme.luffy.cx` :
+
+```console
+$ ZONE=acme.luffy.cx
+$ dig @nsupdate.luffy.cx $ZONE DNSKEY +noall +answer \
+>   | dnssec-dsfromkey -a SHA-256 -f - $ZONE
+acme.luffy.cx. IN DS 55628 13 2 4946E7508F20E15F1B577A231104B029A1A82E04699A80CD46ADCE31227EE81F
+```
+
+[^ds]:
+    J'ai contacté le support de _bunny.net_ pour savoir quand ils prendront en
+    charge la publication d'un enregistrement `DS` et j'ai obtenu une réponse
+    sept minutes plus tard : ils ne savent pas. 😭
+
+    C'est frustrant, car ils gèrent automatiquement `CDS`, un enregistrement DNS
+    qui annonce un enregistrement `DS` à la zone parente. Ils gèrent un côté de
+    la délégation, mais pas l'autre.
+    
+    J'ai aussi signalé un problème dans la preuve de non-existence et ils m'ont
+    fait une réponse détaillée le lendemain.
+
+[^desec]:
+    Pourquoi ne pas utiliser deSEC pour les défis ACME ? Il est possible de
+    [limiter ses jetons à un seul RRset][desec-scoping]. Je pourrais prétendre
+    préférer l'auto-hébergement, mais en vérité, je ne l'ai découvert qu'en
+    écrivant cet article.
+
+[dns-01]: https://letsencrypt.org/docs/challenge-types/#dns-01-challenge "DNS-01 challenge"
+[hickory]: https://hickory-dns.org/ "Hickory DNS"
+[provided zone file]: https://github.com/vincentbernat/nixops-take1/blob/8f8bfbab9d04ee07471d916ab96ef4b3eca5f781/tags/dns.nix#L7-L17 "nixops-take1/tags/dns.nix"
+[desec]: https://desec.io/ "deSEC: Free Secure DNS"
+[lego]: https://go-acme.github.io/lego/index.html "Lego: ACME client and library written in Go"
+[let's encrypt]: https://letsencrypt.org/ "Let's Encrypt"
+[dns update protocol]: rfc://2136
+[automatic dnssec signatures]: https://hickory-dns.org/config/#signing-zones-with-dnssec "Hickory DNS: Configuring the server, DNSSEC"
+[dynamic updates backed by sqlite]: https://hickory-dns.org/config/#dynamic-updates-with-sqlite "Hickory DNS: Configuring the server, dynamic updates"
+[desec-scoping]: https://desec.readthedocs.io/en/latest/auth/tokens.html#token-scoping-policies "Manage Tokens on deSEC DNS API documentation"
+
+---
+
+Dans l'ensemble, je suis plutôt satisfait du passage à _bunny.net_. Il reste
+quelques écueils, comme l'impossibilité de publier des enregistrements `DS`,
+l'absence de HTTP/3 et la fonction `RoutingEngine.getClosestServer()` limitée à
+IPv4. Ma facture est passée de 5 $ à 1 $ par mois. Pour l'instant, les
+performances sont [équivalentes à celles d'AWS][crux vis], mais je n'ai finalisé
+la configuration actuelle, dont le serveur de Sydney, qu'à la fin d'octobre.
+J'ai besoin d'un peu plus de temps pour comparer et je publierai une mise à
+jour. 📈
+
+[crux vis]: https://cruxvis.withgoogle.com/#/?view=loadingperf&url=https%3A%2F%2Fvincent.bernat.ch&identifier=origin&device=ALL&periodStart=0&periodEnd=-1&display=p75s "CrUX Vis for vincent.bernat.ch"
+
+*[RTT]: Round Trip Time
+*[TTL]: Time To Live
+*[CDN]: Content Distribution Network
