@@ -24,7 +24,8 @@ def image(site: Site, path: str, manifest: Path) -> None:
     raw = site.raw(path)
     name = site.hashed(path)
     target = site.output(f"media/{name}")
-    if site.mode.production:
+    # svgo can change how an SVG renders: dev builds use it too
+    if site.mode.production or raw.suffix == ".svg":
         outputs = optimize.image(raw, target)
     else:
         files.copy(raw, target)

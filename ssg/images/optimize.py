@@ -1,4 +1,4 @@
-"""Optimized images (production only)."""
+"""Optimized images (production only, except for SVG)."""
 
 import shutil
 import subprocess
