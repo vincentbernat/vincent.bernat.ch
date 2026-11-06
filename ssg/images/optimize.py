@@ -1,5 +1,6 @@
 """Optimized images (production only)."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,7 +19,8 @@ def image(raw: Path, target: Path) -> list[Path]:
     alternative = None
     match target.suffix:
         case ".svg":
-            if b"<script" in raw.read_bytes():
+            content = raw.read_bytes()
+            if b"<script" in content:
                 shutil.copyfile(raw, target)
             else:
                 run(
@@ -29,6 +31,9 @@ def image(raw: Path, target: Path) -> list[Path]:
                     raw,
                     "-o",
                     target,
+                    env={**os.environ, "SVGO_TARGET": "1"}
+                    if b":target" in content
+                    else None,
                 )
         case ".jpg":
             # Convert to sRGB, encode AVIF from it, then optimize the JPEG. For
