@@ -35,7 +35,7 @@ Skip a site when the article already links to it (`news.ycombinator.com`,
   `comments_url`. Link to `comments_url`. Fetch each page once, even for
   several articles.
 
-Skip a thread with less than 10 comments.
+Skip a thread with less than 8 comments.
 
 ## Write the update
 
@@ -49,7 +49,7 @@ The adverb depends on the thread with the most comments:
 
 | Comments | English            | French                  |
 | -------- | ------------------ | ----------------------- |
-| 10–24    | briefly discussed  | brièvement discuté      |
+| 8–24     | briefly discussed  | brièvement discuté      |
 | 25–39    | discussed          | discuté                 |
 | 40–79    | widely discussed   | longuement discuté      |
 | 80+      | heavily discussed  | abondamment discuté     |
