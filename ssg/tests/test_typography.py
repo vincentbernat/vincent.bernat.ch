@@ -98,6 +98,11 @@ class TestTypography(unittest.TestCase):
                     "<p>HAProxy and OpenBSD hyphenation rules</p>",
                     "<p>HAProxy and OpenBSD hy~phen~ation_rules</p>",
                 ),
+                # Except known names
+                (
+                    "<p>JavaScript on ThinkPads and here</p>",
+                    "<p>Java~Script on Think~Pads_and_here</p>",
+                ),
                 # Only in paragraphs and lists
                 ("<div>hyphenation rules</div>", "<div>hyphenation rules</div>"),
                 (

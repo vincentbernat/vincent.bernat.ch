@@ -42,6 +42,14 @@ UNITS = [
     "W", "mW", "kW", "dB", "dBm", "°C",
     "€", "$",
 ]  # fmt: skip
+# Hyphenation of names with capital letters inside, in any language. A
+# trailing "s" is allowed.
+NAMES = [
+    "Java-Script", "Type-Script", "Click-House", "Goat-Counter", "Duck-DuckGo",
+    "Cloud-Front", "Wire-Guard", "Think-Pad", "Track-Point", "Yubi-Key",
+    "Pulse-Audio", "Postgre-SQL", "Lucas-Arts",
+]  # fmt: skip
+names = {n.replace("-", ""): n.replace("-", SHY) for n in NAMES}
 
 # A quote is opening after a space, a bracket or another opening quote, and
 # before a non-space character. After a dash, it needs a letter after it.
@@ -110,14 +118,18 @@ def dictionary(lang: str) -> pyphen.Pyphen | None:
 
 
 def hyphenate(text: str, lang: str | None) -> str:
-    """Add soft hyphens in words. URLs, acronyms and names with capital
-    letters inside are not changed."""
+    """Add soft hyphens in words. URLs and words with a capital letter after
+    the first one are not changed, unless they are in NAMES."""
     d = dictionary(lang) if lang else None
     if d is None:
         return text
 
     def insert(m: re.Match[str]) -> str:
         w = m.group()
+        if w in names:
+            return names[w]
+        if w.endswith("s") and w[:-1] in names:
+            return names[w[:-1]] + "s"
         if any(c.isupper() for c in w[1:]):
             return w
         positions = [p for p in d.positions(w) if p.data is None]
