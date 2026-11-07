@@ -13,10 +13,33 @@ from .dom import INLINE_TAGS, WHITESPACE, localname, select
 if TYPE_CHECKING:
     import lxml.etree
 
-NBSP = "\u00a0"
-NNBSP = "\u202f"
-SHY = "\u00ad"
-ZWSP = "\u200b"
+NBSP = "\u00a0"  # NO-BREAK SPACE
+NNBSP = "\u202f"  # NARROW NO-BREAK SPACE
+SHY = "\u00ad"  # SOFT HYPHEN
+ZWSP = "\u200b"  # ZERO WIDTH SPACE
+BREAKING_SPACES = (
+    "\u1680"  # OGHAM SPACE MARK
+    "\u2000"  # EN QUAD
+    "\u2001"  # EM QUAD
+    "\u2002"  # EN SPACE
+    "\u2003"  # EM SPACE
+    "\u2004"  # THREE-PER-EM SPACE
+    "\u2005"  # FOUR-PER-EM SPACE
+    "\u2006"  # SIX-PER-EM SPACE
+    "\u2008"  # PUNCTUATION SPACE
+    "\u2009"  # THIN SPACE
+    "\u200a"  # HAIR SPACE
+    "\u205f"  # MEDIUM MATHEMATICAL SPACE
+    "\u3000"  # IDEOGRAPHIC SPACE
+)
+NON_BREAKING_SPACES = (
+    "\u2007"  # FIGURE SPACE
+    "\u202f"  # NARROW NO-BREAK SPACE
+)
+source_spaces = str.maketrans(
+    dict.fromkeys(map(ord, BREAKING_SPACES), " ")
+    | dict.fromkeys(map(ord, NON_BREAKING_SPACES), NBSP)
+)
 
 # Elements whose text is kept as is
 SKIPPED = frozenset({
@@ -155,7 +178,7 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
         original = get(slot)
         if not original:
             return
-        text = space(smarten(original, previous))
+        text = space(smarten(original.translate(source_spaces), previous))
         if hyphenated:
             text = hyphenate(text, lang)
         put(slot, text)

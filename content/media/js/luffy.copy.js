@@ -5,7 +5,9 @@ luffy.do(() => {
     const selection = document.getSelection();
     const raw = selection.toString();
     const text = raw
+      // SOFT HYPHEN, ZERO WIDTH SPACE
       .replace(/[\u00ad\u200b]/g, "")
+      // NO-BREAK SPACE, NARROW NO-BREAK SPACE
       .replace(/[\u00a0\u202f]/g, " ");
     if (text === raw) return;
     const div = document.createElement("div");

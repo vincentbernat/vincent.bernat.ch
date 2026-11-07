@@ -1,5 +1,7 @@
 """Tests for ssg.html.typography."""
 
+import sys
+import unicodedata
 import unittest
 
 import lxml.etree
@@ -20,7 +22,12 @@ def render(html: str, cls: str = "lf-text", lang: str = "en") -> str:
     output = lxml.html.tostring(div, encoding="unicode")
     output = output[len(f'<div class="{cls}">') : -len("</div>")]
     # Make invisible characters visible
-    return output.replace("\u00ad", "~").replace("\u00a0", "_").replace("\u202f", "^").replace("\u200b", "|")
+    return (
+        output.replace("\u00ad", "~")
+        .replace("\u00a0", "_")
+        .replace("\u202f", "^")
+        .replace("\u200b", "|")
+    )
 
 
 class TestTypography(unittest.TestCase):
@@ -74,8 +81,24 @@ class TestTypography(unittest.TestCase):
                 ("<div>costs 5 € or 6\u00a0€</div>", "<div>costs 5^€ or 6^€</div>"),
                 ("<div>It is 10 kmh</div>", "<div>It is 10 kmh</div>"),
                 ("<div>step 1 A or 2 V</div>", "<div>step 1 A or 2 V</div>"),
+                # Spaces from the source
+                ("<div>il dit\u2009: oui</div>", "<div>il dit^: oui</div>"),
+                ("<div>un\u2009deux\u3000trois</div>", "<div>un deux trois</div>"),
+                ("<div>un\u202fdeux\u2007trois</div>", "<div>un_deux_trois</div>"),
             ]
         )
+
+    def test_all_spaces(self) -> None:
+        found = {
+            chr(c)
+            for c in range(sys.maxunicode + 1)
+            if unicodedata.category(chr(c)) == "Zs"
+        }
+        known = {" ", typography.NBSP}
+        breaking = set(typography.BREAKING_SPACES)
+        non_breaking = set(typography.NON_BREAKING_SPACES)
+        self.assertFalse(breaking & non_breaking)
+        self.assertEqual(found, known | breaking | non_breaking)
 
     def test_hyphens(self) -> None:
         self.check(
@@ -135,6 +158,7 @@ class TestTypography(unittest.TestCase):
             [
                 ("<p>Hello the universe.</p>", "<p>Hello the universe.</p>"),
                 ("<p>Hello the world.</p>", "<p>Hello the_world.</p>"),
+                ("<p>Hello the\u2009world.</p>", "<p>Hello the_world.</p>"),
                 ("<p>two words</p>", "<p>two_words</p>"),
                 ("<p>  two words\n</p>", "<p>  two_words\n</p>"),
                 ("<p>alone</p>", "<p>alone</p>"),
