@@ -138,11 +138,6 @@
                   sed -i '/() => import(/{ /locales\/fr\.js/!d }' load-locale.js
                 )
 
-                # SPF turns an audio-only variant into a "Default" audio track,
-                # even when an EXT-X-MEDIA rendition already uses the same
-                # playlist. Merge the variant into the rendition in this case.
-                patch -p1 -d $out/node_modules/@videojs/spf < ${./tools/patches/videojs-spf-audio-only.patch}
-
                 # Remove the SPF features the site does not use: DRM, multiple
                 # CDNs, live streams, HLS text tracks and HLS chapters. Text
                 # tracks and chapters come from <track> elements.

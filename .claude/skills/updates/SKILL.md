@@ -17,10 +17,6 @@ could be updated. Unless something break, I prefer things to be up-to-date.
 Don't update anything: don't run `uv lock`, `npm update` or `npm install`.
 The user does it.
 
-## Packages to ignore
-
-- `@svta/*` packages are pinned on purpose to match hls.js. Skip them.
-
 ## Steps
 
 1. Read `pyproject.toml` and `package.json` to know the version constraints. A
