@@ -196,8 +196,8 @@ def cuts(text: str) -> list[int]:
     result: list[int] = []
     last = 0
     for i in range(CODE_PART, len(text) - CODE_PART + 1):
-        # After a mark
-        if text[i - 1] not in CODE_MARKS or text[i] in CODE_MARKS:
+        # After a mark and before a letter or a digit
+        if text[i - 1] not in CODE_MARKS or not text[i].isalnum():
             continue
         # But not between two digits
         if text[i - 2].isdigit() and text[i].isdigit():

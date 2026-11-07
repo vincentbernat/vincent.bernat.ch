@@ -193,6 +193,15 @@ class TestTypography(unittest.TestCase):
                     "<div><code>2001:db8:a1::/64</code></div>",
                     "<div><code>2001:<wbr>db8:<wbr>a1::/64</code></div>",
                 ),
+                # Not before a space or a bracket
+                (
+                    "<div><code>ERROR: No DS</code></div>",
+                    "<div><code>ERROR: No DS</code></div>",
+                ),
+                (
+                    "<div><code>[::]:80 and [::]:443</code></div>",
+                    "<div><code>[::]:<wbr>80 and [::]:<wbr>443</code></div>",
+                ),
                 # Numbers, short parts and repeated marks
                 ("<div><code>1.2.3</code></div>", "<div><code>1.2.3</code></div>"),
                 ("<div><code>a.b</code></div>", "<div><code>a.b</code></div>"),
