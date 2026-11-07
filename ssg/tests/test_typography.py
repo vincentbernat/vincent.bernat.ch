@@ -20,7 +20,7 @@ def render(html: str, cls: str = "lf-text", lang: str = "en") -> str:
     output = lxml.html.tostring(div, encoding="unicode")
     output = output[len(f'<div class="{cls}">') : -len("</div>")]
     # Make invisible characters visible
-    return output.replace("\u00ad", "~").replace("\u00a0", "_").replace("\u202f", "^")
+    return output.replace("\u00ad", "~").replace("\u00a0", "_").replace("\u202f", "^").replace("\u200b", "|")
 
 
 class TestTypography(unittest.TestCase):
@@ -164,10 +164,10 @@ class TestTypography(unittest.TestCase):
                     f'<p>See <a href="x">the link</a>{H}.</p>',
                     f'<p>See <a href="x">the_link</a>{H}.</p>',
                 ),
-                # No <wbr> in the last characters of code
+                # No break in the last characters of code
                 (
                     "<p>Use <code>foo.bar_bazqux</code></p>",
-                    "<p>Use <code>foo.<wbr>bar_bazqux</code></p>",
+                    "<p>Use <code>foo.|bar_bazqux</code></p>",
                 ),
                 # Not inline content
                 ("<p>line<br>two words</p>", "<p>line<br>two words</p>"),
@@ -183,15 +183,15 @@ class TestTypography(unittest.TestCase):
             [
                 (
                     "<div><code>prometheus.remote_write</code></div>",
-                    "<div><code>prometheus.<wbr>remote_<wbr>write</code></div>",
+                    "<div><code>prometheus.|remote_|write</code></div>",
                 ),
                 (
                     "<div><code>/etc/systemd/system</code></div>",
-                    "<div><code>/etc/<wbr>systemd/<wbr>system</code></div>",
+                    "<div><code>/etc/|systemd/|system</code></div>",
                 ),
                 (
                     "<div><code>2001:db8:a1::/64</code></div>",
-                    "<div><code>2001:<wbr>db8:<wbr>a1::/64</code></div>",
+                    "<div><code>2001:|db8:|a1::/64</code></div>",
                 ),
                 # Not before a space or a bracket
                 (
@@ -200,19 +200,19 @@ class TestTypography(unittest.TestCase):
                 ),
                 (
                     "<div><code>[::]:80 and [::]:443</code></div>",
-                    "<div><code>[::]:<wbr>80 and [::]:<wbr>443</code></div>",
+                    "<div><code>[::]:|80 and [::]:|443</code></div>",
                 ),
                 # Numbers, short parts and repeated marks
                 ("<div><code>1.2.3</code></div>", "<div><code>1.2.3</code></div>"),
                 ("<div><code>a.b</code></div>", "<div><code>a.b</code></div>"),
                 (
                     "<div><code>..foo..bar</code></div>",
-                    "<div><code>..foo..<wbr>bar</code></div>",
+                    "<div><code>..foo..|bar</code></div>",
                 ),
                 # Elements inside code
                 (
                     "<div><code><span>discovery</span>.kubernetes_sd_configs</code></div>",
-                    "<div><code><span>discovery</span>.kubernetes_<wbr>sd_<wbr>configs</code></div>",
+                    "<div><code><span>discovery</span>.kubernetes_|sd_|configs</code></div>",
                 ),
                 # Code blocks
                 (

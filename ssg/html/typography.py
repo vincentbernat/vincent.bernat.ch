@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pyphen
 
-from .dom import INLINE_TAGS, WHITESPACE, localname, remove, select
+from .dom import INLINE_TAGS, WHITESPACE, localname, select
 
 if TYPE_CHECKING:
     import lxml.etree
@@ -210,38 +210,23 @@ def cuts(text: str) -> list[int]:
     return result
 
 
-def split(el: lxml.etree._Element, text: str, after: bool) -> None:
-    """Put text with <wbr> elements in the text of el, or after el."""
+def split(text: str) -> str:
+    """Add zero-width spaces in code text."""
     positions = cuts(text)
-    if not positions:
-        return
     parts = [text[a:b] for a, b in zip([0, *positions], [*positions, len(text)])]
-    if after:
-        el.tail = parts[0]
-        anchor = el
-        for part in parts[1:]:
-            wbr = el.makeelement("wbr", {})
-            wbr.tail = part
-            anchor.addnext(wbr)
-            anchor = wbr
-    else:
-        el.text = parts[0]
-        for i, part in enumerate(parts[1:]):
-            wbr = el.makeelement("wbr", {})
-            wbr.tail = part
-            el.insert(i, wbr)
+    return ZWSP.join(parts)
 
 
 def break_code(container: lxml.etree._Element) -> None:
-    """Add <wbr> elements in code elements, outside of pre."""
+    """Add zero-width spaces in code elements, outside of pre."""
     for code in select(container, "code"):
         if any(localname(parent) == "pre" for parent in code.iterancestors()):
             continue
         for el in [code, *code.iterdescendants()]:
             if el is not code and el.tail:
-                split(el, el.tail, True)
+                el.tail = split(el.tail)
             if isinstance(el.tag, str) and el.text:
-                split(el, el.text, False)
+                el.text = split(el.text)
 
 
 def slots(el: lxml.etree._Element) -> list[Slot] | None:
@@ -264,21 +249,16 @@ def slots(el: lxml.etree._Element) -> list[Slot] | None:
 def keep_last_line(block: lxml.etree._Element) -> None:
     """Remove line break opportunities at the end of a block, so the last
     line has at least LAST_LINE characters. Spaces become no-break spaces.
-    Soft hyphens and <wbr> elements are removed."""
+    Soft hyphens and zero-width spaces are removed."""
     found = slots(block)
     if found is None:
         return
     texts = [list(get(slot)) for slot in found]
     count = 0
     spaces: list[tuple[int, int]] = []
-    wbrs: list[lxml.etree._Element] = []
     for k in range(len(found) - 1, -1, -1):
         if count >= LAST_LINE:
             break
-        el, attr = found[k]
-        if attr == "text" and localname(el) == "wbr":
-            wbrs.append(el)
-            continue
         chars = texts[k]
         for j in range(len(chars) - 1, -1, -1):
             if count >= LAST_LINE:
@@ -303,8 +283,6 @@ def keep_last_line(block: lxml.etree._Element) -> None:
         text = "".join(chars)
         if text != get(slot):
             put(slot, text or None)
-    for wbr in wbrs:
-        remove(wbr)
 
 
 def fix(root: lxml.etree._Element) -> None:
