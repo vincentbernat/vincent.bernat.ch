@@ -195,7 +195,7 @@
   };
 
   const img = document.querySelector("#lf1-map img");
-  const inner = img && img.closest(".lf-media-inner");
+  const inner = img?.closest(".lf-media-inner");
   if (inner) {
     const canvas = document.createElement("canvas");
     canvas.className = "lf1-bunny-canvas";
@@ -410,16 +410,9 @@
 // header
 {
   const servedBy = document.getElementById("lf1-served-by");
-  const entry =
-    window.performance &&
-    performance.getEntriesByType &&
-    performance.getEntriesByType("navigation")[0];
-  const timing =
-    entry &&
-    entry.serverTiming &&
-    entry.serverTiming.find((t) => t.name === "served-by");
+  const entry = window.performance?.getEntriesByType?.("navigation")[0];
+  const timing = entry?.serverTiming?.find((t) => t.name === "served-by");
   if (servedBy) {
-    servedBy.querySelector("code").textContent =
-      (timing && timing.description) || "???";
+    servedBy.querySelector("code").textContent = timing?.description || "???";
   }
 }
