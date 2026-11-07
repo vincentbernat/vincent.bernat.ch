@@ -110,7 +110,6 @@
               ./tools/patches/svgo-foreignobject.patch
             ];
           });
-          hlsVersion = (l.importJSON ./package-lock.json).packages."node_modules/hls.js".version;
           nodeEnv = pkgs.importNpmLock.buildNodeModules {
             npmRoot = l.fileset.toSource {
               root = ./.;
@@ -130,32 +129,38 @@
                       --outfile=dist/baguetteBox.global.js
                 )
 
-                # The @svta/cml-* packages are dev dependencies of hls.js,
-                # pinned there. Check we use the same versions.
-                ${./tools/hls-deps} check ${./package.json} \
-                  $out/node_modules/hls.js/package.json
-
-                # hls.js ships a full build and a light build. The light one has
-                # no alternate audio. Build the same as light, with alternate
-                # audio.
+                # Video.js embeds a translation pack for each locale it
+                # knows. Keep only French: the other language of the site is
+                # English and it needs no pack.
                 (
-                  cd $out/node_modules/hls.js
+                  cd $out/node_modules/@videojs/core/dist/default/core/i18n
+                  grep -q 'fr: () => import' load-locale.js
+                  sed -i '/() => import(/{ /locales\/fr\.js/!d }' load-locale.js
+                )
 
-                  # Read the feature flags from the sources and turn them all
-                  # off. A new flag in hls.js then stays off instead of being
-                  # left undefined. This fails when a flag we turn on is gone.
-                  grep -q __USE_ALT_AUDIO__ src/define-plugin.d.ts
-                  off=$(sed -n 's/^declare const \(__USE_[A-Z0-9_]*__\).*/--define:\1=false/p' \
-                    src/define-plugin.d.ts)
+                # Remove the SPF features the site does not use: DRM, multiple
+                # CDNs, live streams, HLS text tracks and HLS chapters. Text
+                # tracks and chapters come from <track> elements.
+                (
+                  cd $out/node_modules/@videojs/spf/dist/default/engines
+                  for feature in drm airPlayFairPlay multiCdn live textTracks shiftTextTimestamps chapters; do
+                    grep -q "^[[:space:]]*''${feature}Feature,\?$" hls-video.js
+                    sed -i "/^[[:space:]]*''${feature}Feature,\?$/d" hls-video.js
+                  done
+                )
 
-                  echo 'import Hls from "./src/exports-default"; self.Hls = Hls;' \
-                    | esbuild --bundle --loader=js --format=iife --target=es2015 \
-                      --banner:js='(function __HLS_WORKER_BUNDLE__(__IN_WORKER__){' \
-                      --footer:js='})(false);' \
-                      --define:__VERSION__='"${hlsVersion}"' \
-                      $off \
-                      --define:__USE_ALT_AUDIO__=true \
-                      --outfile=dist/hls.light-alt-audio.js
+                # Video.js ships one module per component. Bundle the video
+                # preset together with the HLS media element, which runs on
+                # SPF, the Video.js streaming engine. Wrap it in a function:
+                # the site minifies one file at a time and can only rename
+                # names that are not at the top level.
+                (
+                  cd $out
+                  echo 'import "@videojs/html/video/player";
+                        import "@videojs/html/video/neutral-skin";
+                        import "@videojs/html/media/hls-video";' \
+                    | esbuild --bundle --loader=js --format=iife \
+                      --outfile=node_modules/@videojs/html/dist/videojs.bundle.js
                 )
               '';
             };

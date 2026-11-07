@@ -26,8 +26,10 @@ def python(site: Site, resource: Resource) -> str:
     return namespace["run"](site, resource)
 
 
-def js(site: Site, text: str) -> str:
-    args = ["esbuild", "--target=es2015", "--log-level=warning"]
+def js(site: Site, resource: Resource, text: str) -> str:
+    # Video.js only loads in browsers running ES2022.
+    es = "es2022" if resource.name == "videojs.js" else "es2015"
+    args = ["esbuild", f"--target={es}", "--log-level=warning"]
     if site.mode.production:
         args.append("--minify")
     return run(*args, input=text)

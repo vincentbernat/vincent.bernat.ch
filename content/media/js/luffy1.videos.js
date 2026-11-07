@@ -1,4 +1,4 @@
-// Self-hosted videos with HLS
+// Self-hosted videos with HLS, played by Video.js
 luffy.do(() => {
   const hlsSource = "source[type='application/vnd.apple.mpegurl']";
   const hlsVideos = [
@@ -6,50 +6,71 @@ luffy.do(() => {
   ].map(({ parentNode }) => parentNode);
   if (hlsVideos.length === 0) return;
 
-  // Enable HLS for selected videos
-  luffy.load("hls.js", () => {
-    if (Hls.isSupported()) {
-      hlsVideos.forEach((oldVideo, index) => {
-        const m3u8 = oldVideo.querySelector(hlsSource).src;
-        const newVideo = oldVideo.cloneNode(true);
-        const allSources = newVideo.querySelectorAll("source");
+  // Video.js 10 needs MSE and a recent browser: :has() for Firefox 121,
+  // color-mix() and oklch() for Chrome 111, adoptedStyleSheets for Safari 16.4
+  // (it also covers ES2022). Browsers not matching the gate will fallback
+  // either to native HLS or to the progressive MP4 video.
+  //
+  // https://videojs.org/docs/framework/html/guides/browser-support
+  const mse = window.MediaSource || window.ManagedMediaSource;
+  if (
+    !mse ||
+    !CSS.supports("selector(:has(a))") ||
+    !CSS.supports("color", "color-mix(in oklch, red, red)") ||
+    !("adoptedStyleSheets" in Document.prototype)
+  )
+    return;
 
-        // Remove all sources from clone. Keep tracks.
-        allSources.forEach((source) => source.remove());
+  const language = document.documentElement.lang.slice(0, 2);
 
-        // Enable HLS on the video
-        const hls = new Hls({
-          autoStartLoad: false,
-          capLevelToPlayerSize: true,
-          maxMaxBufferLength: 90,
-        });
-        hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
-          // Switch audio track to match the document language
-          const track = hls.audioTracks.find(
-            ({ lang }) =>
-              lang?.slice(0, 2) === document.documentElement.lang.slice(0, 2),
-          );
-          if (track) hls.audioTrack = track.id;
-        });
-        hls.loadSource(m3u8);
-        hls.attachMedia(newVideo);
-        newVideo.addEventListener(
-          "play",
-          () => hls.startLoad(newVideo.currentTime),
-          false,
-        );
+  luffy.load("videojs.js", () => {
+    const videos = hlsVideos.map((oldVideo) => {
+      // <media-i18n> takes the language from the document, <video-player>
+      // owns the state, <video-neutral-skin> draws the controls.
+      const i18n = document.createElement("media-i18n");
+      const player = document.createElement("video-player");
+      const skin = document.createElement("video-neutral-skin");
+      const video = document.createElement("hls-video");
 
-        hlsVideos[index] = newVideo;
-        oldVideo.parentNode.replaceChild(newVideo, oldVideo);
-      });
-    }
+      skin.className = oldVideo.className;
+      player.setAttribute("poster", oldVideo.poster);
+      video.setAttribute("playsinline", "");
+      video.setAttribute("crossorigin", oldVideo.crossOrigin);
+      video.setAttribute("preload", oldVideo.preload);
+      video.setAttribute("src", oldVideo.querySelector(hlsSource).src);
+      video.append(...oldVideo.querySelectorAll("track"));
+      video.querySelector("track[kind=chapters]")?.setAttribute("default", "");
 
-    hlsVideos.forEach((video) => {
+      // Switch audio track to match the document language. The tracks are
+      // added one by one, wait for the whole list before choosing.
+      video.audioTracks.addEventListener(
+        "addtrack",
+        () =>
+          queueMicrotask(() => {
+            const track = [...video.audioTracks].find(
+              (audio) => audio.language?.slice(0, 2) === language,
+            );
+            if (track) track.enabled = true;
+          }),
+        { once: true },
+      );
+
+      // Drop the picture-in-picture button.
+      skin.shadowRoot.querySelector("media-pip-button")?.remove();
+
+      skin.append(video);
+      player.append(skin);
+      i18n.append(player);
+      oldVideo.replaceWith(i18n);
+      return video;
+    });
+
+    videos.forEach((video) => {
       // Pause other videos when playing a new one
       video.addEventListener(
         "play",
         ({ target }) => {
-          hlsVideos.forEach((ovideo) => {
+          videos.forEach((ovideo) => {
             if (target !== ovideo && !ovideo.paused) ovideo.pause();
           });
         },
@@ -73,7 +94,7 @@ luffy.do(() => {
       event.preventDefault();
 
       const seekTo = parseInt(seekLink.hash.slice(12), 10);
-      const videos = document.querySelectorAll("video");
+      const videos = document.querySelectorAll("video, hls-video");
 
       // Look for the nearest video before that
       for (let i = videos.length - 1; i >= 0; i--) {
@@ -84,15 +105,17 @@ luffy.do(() => {
           videos[i].currentTime = seekTo;
           if (videos[i].paused) videos[i].play();
 
-          // Scroll element into view if needed
-          const rect = videos[i].getBoundingClientRect();
+          // Scroll element into view if needed. An <hls-video> has no box of
+          // its own, the skin around it has one.
+          const box = videos[i].closest("video-neutral-skin") ?? videos[i];
+          const rect = box.getBoundingClientRect();
           if (
             rect.top >= 0 &&
             rect.bottom <=
               (window.innerHeight || document.documentElement.clientHeight)
           )
             break;
-          videos[i].scrollIntoView();
+          box.scrollIntoView();
           break;
         }
       }
