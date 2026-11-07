@@ -34,6 +34,10 @@ luffy.do(() => {
 
       skin.className = oldVideo.className;
       player.setAttribute("poster", oldVideo.poster);
+      player.setAttribute(
+        "default-playback-rates",
+        "0.75 0.9 1 1.1 1.25 1.5 1.75 2",
+      );
       video.setAttribute("playsinline", "");
       video.setAttribute("crossorigin", oldVideo.crossOrigin);
       video.setAttribute("preload", oldVideo.preload);
