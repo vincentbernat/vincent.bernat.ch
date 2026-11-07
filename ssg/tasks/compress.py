@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .. import deps
@@ -18,14 +19,18 @@ COMPRESSORS = {
 }
 
 
+def file(target: Path) -> None:
+    for suffix, command in COMPRESSORS.items():
+        write(f"{target}{suffix}", run(*command, target, text=False))
+
+
 def compress(site: Site, path: str) -> None:
     fingerprint = site.fingerprint(path)
     if fingerprint is None:
         raise ValueError(f"{path} is not fingerprinted")
     target = site.output(f"media/{fingerprint['path']}")
     deps.record_file(target)
-    for suffix, command in COMPRESSORS.items():
-        write(f"{target}{suffix}", run(*command, target, text=False))
+    file(target)
 
 
 def exist(site: Site, path: str) -> bool:

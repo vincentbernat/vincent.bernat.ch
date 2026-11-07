@@ -428,9 +428,21 @@ class Builder:
             }
 
     def compress_tasks(self) -> Iterator[Task]:
-        """Compressed copies of fingerprinted files. Their names are only known
-        once the files are fingerprinted."""
+        """Compressed copies of HTML pages and fingerprinted files. The names of
+        fingerprinted files are only known once they are fingerprinted."""
         uptodate = environment(compressors=json.dumps(compress.COMPRESSORS))
+        for resource in self.pages:
+            if resource.kind != "html":
+                continue
+            target = self.out / resource.path
+            yield {
+                "basename": "compress",
+                "name": resource.path,
+                "actions": [(compress.file, [target])],
+                "file_dep": [str(target)],
+                "targets": [f"{target}{s}" for s in compress.COMPRESSORS],
+                "uptodate": [uptodate],
+            }
         for path in self.fingerprinted:
             if not path.endswith(compress.EXTENSIONS):
                 continue
@@ -488,6 +500,12 @@ class Builder:
         result = {self.out / r.path for r in self.copies + self.pages}
         if self.mode.production:
             result.add(self.out / "bundle-sizes.txt")
+            result.update(
+                self.out / f"{r.path}{s}"
+                for r in self.pages
+                if r.kind == "html"
+                for s in compress.COMPRESSORS
+            )
         for path in self.fingerprinted:
             try:
                 names = json.loads(self.site.manifest(path).read_text())["files"]

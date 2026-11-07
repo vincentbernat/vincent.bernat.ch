@@ -23,7 +23,7 @@ GROUPS: dict[str, tuple[str, bool]] = {
     "fingerprint-font": ("copy fonts with a hashed name", False),
     "fingerprint-asset": ("copy stylesheets and scripts with a hashed name", False),
     "fingerprint-image": ("copy images with a hashed name", False),
-    "compress": ("compress stylesheets, scripts and SVG images", True),
+    "compress": ("compress stylesheets, scripts, SVG images and pages", True),
 }
 
 # Kinds with one task
