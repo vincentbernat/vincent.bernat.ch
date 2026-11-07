@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from .. import config
+from ..tasks import compress
 from . import FINAL, HOSTS, Exit, command, confirm, on_hosts, run, step
 
 
@@ -23,7 +24,7 @@ def build() -> None:
     try:
         with step("build"):
             run(f"SSG_STAGING=1 {sys.executable} -m doit mode=prod", cwd=config.ROOT)
-        run("git add *", cwd=FINAL)
+        run("git add -A", cwd=FINAL)
         run("git diff --find-renames=10% --stat HEAD || true", cwd=FINAL)
         if confirm("More diff?", default=True):
             run(
@@ -123,9 +124,12 @@ def push(clean: bool = False) -> None:
     # Restore timestamps (this relies on us not truncating history too often)
     with step("restore timestamps"):
         for name, ts in commit_times().items():
-            path = FINAL / name
-            if path.exists(follow_symlinks=False):
-                os.utime(path, (ts, ts), follow_symlinks=False)
+            # Compressed copies are not committed
+            for path in [FINAL / name] + [
+                FINAL / f"{name}{s}" for s in compress.COMPRESSORS
+            ]:
+                if path.exists(follow_symlinks=False):
+                    os.utime(path, (ts, ts), follow_symlinks=False)
 
     def push_media(host: str) -> None:
         with step(f"push media to {host}"):
