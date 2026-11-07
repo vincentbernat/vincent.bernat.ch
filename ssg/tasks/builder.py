@@ -16,7 +16,17 @@ from doit.tools import config_changed, timeout
 from .. import config, deps, fonts, templates
 from ..images import covers, scales, thumbnails
 from ..media import css
-from . import GROUPS, SINGLES, Task, files, fingerprint, pagefind, render, sizes
+from . import (
+    GROUPS,
+    SINGLES,
+    Task,
+    compress,
+    files,
+    fingerprint,
+    pagefind,
+    render,
+    sizes,
+)
 
 if TYPE_CHECKING:
     from ..model.resource import Resource
@@ -205,6 +215,7 @@ class Builder:
         yield from self.fingerprint_tasks()
         if self.mode.production:
             yield from self.font_tasks()
+            yield from self.compress_tasks()
             yield from self.bundle_sizes_task()
         yield from self.prune_task()
 
@@ -416,6 +427,25 @@ class Builder:
                 "uptodate": uptodate,
             }
 
+    def compress_tasks(self) -> Iterator[Task]:
+        """Compressed copies of fingerprinted files. Their names are only known
+        once the files are fingerprinted."""
+        uptodate = environment(compressors=json.dumps(compress.COMPRESSORS))
+        for path in self.fingerprinted:
+            if not path.endswith(compress.EXTENSIONS):
+                continue
+            if path.startswith("images/"):
+                task_dep = [f"fingerprint-image:{path}"]
+            else:
+                task_dep = [f"fingerprint-asset:{path}"]
+            yield {
+                "basename": "compress",
+                "name": path,
+                "actions": [(compress.compress, [self.site, path])],
+                "task_dep": task_dep,
+                "uptodate": [(compress.exist, [self.site, path]), uptodate],
+            }
+
     def bundle_sizes_task(self) -> Iterator[Task]:
         target = self.out / "bundle-sizes.txt"
         pages = [str(self.out / r.path) for r in self.pages if r.kind == "html"]
@@ -431,6 +461,7 @@ class Builder:
             "doc": SINGLES["bundle-sizes"][0],
             "actions": [(sizes.bundle_sizes, [self.site, bundles, target])],
             "file_dep": pages + [str(self.site.manifest(b)) for b in bundles],
+            "task_dep": ["compress"],
             "targets": [str(target)],
             "uptodate": [environment()],
         }
@@ -463,4 +494,10 @@ class Builder:
             except FileNotFoundError:
                 continue
             result.update(self.out / "media" / f for f in names)
+            if self.mode.production and path.endswith(compress.EXTENSIONS):
+                result.update(
+                    self.out / "media" / f"{n}{s}"
+                    for n in names
+                    for s in compress.COMPRESSORS
+                )
         return result
