@@ -28,7 +28,7 @@ HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
 HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
 LAST_LINE = 8  # Minimum length of the last line of a paragraph
-CODE_MARKS = "._/="  # Line breaks in code are allowed after them
+CODE_MARKS = "._/=:"  # Line breaks in code are allowed after them
 CODE_PART = 3  # Minimum length of each part around a break in code
 # Units after a figure, separated by a normal space. Units with one letter
 # are often found in text, so they need a no-break space.

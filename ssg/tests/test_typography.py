@@ -189,6 +189,10 @@ class TestTypography(unittest.TestCase):
                     "<div><code>/etc/systemd/system</code></div>",
                     "<div><code>/etc/<wbr>systemd/<wbr>system</code></div>",
                 ),
+                (
+                    "<div><code>2001:db8:a1::/64</code></div>",
+                    "<div><code>2001:<wbr>db8:<wbr>a1::/64</code></div>",
+                ),
                 # Numbers, short parts and repeated marks
                 ("<div><code>1.2.3</code></div>", "<div><code>1.2.3</code></div>"),
                 ("<div><code>a.b</code></div>", "<div><code>a.b</code></div>"),

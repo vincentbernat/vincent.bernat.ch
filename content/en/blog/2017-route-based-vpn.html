@@ -30,8 +30,8 @@ configuration:[^libreswan]
 
 The same configuration can be used on both sides. Each side will figure out if
 it is "left" or "right." The IPsec site-to-site tunnel endpoints are
-`2001:db8:­1::1` and `2001:db8:­2::1`. The protected subnets are
-`2001:db8:­a1::/64` and `2001:db8:­a2::/64`. As a result, *strongSwan*
+`2001:db8:1::1` and `2001:db8:2::1`. The protected subnets are
+`2001:db8:a1::/64` and `2001:db8:a2::/64`. As a result, *strongSwan*
 configures the following policies in the kernel:
 
     ::console
@@ -108,8 +108,8 @@ A possible configuration between `V1-1` and `V2-1` could be:
       auto        = route
 
 Each time a subnet is modified on one site, the configurations need to be
-updated on all sites. Moreover, overlapping subnets (`2001:db8:­a6::/64` on one
-side and `2001:db8:­a6::cc:1/128` at the other) can also be problematic.
+updated on all sites. Moreover, overlapping subnets (`2001:db8:a6::/64` on one
+side and `2001:db8:a6::cc:1/128` at the other) can also be problematic.
 
 The alternative is to use **route-based VPNs**: any packet traversing a
 pseudo-interface will be encapsulated using a security policy bound to the
@@ -200,7 +200,7 @@ The second step is to configure the VPN:
 
 We get a route-based VPN because we bind the `st0.1` interface to the
 `VPN-V1-1` VPN. Once the VPN is up, any packet entering `st0.1` will be
-encapsulated and sent to the `2001:db8:­1::1` endpoint.
+encapsulated and sent to the `2001:db8:1::1` endpoint.
 
 The last step is to configure BGP in the "private" routing instance to exchange
 routes with the remote site:
@@ -251,7 +251,7 @@ the other peers. For example:
 The configuration needs to be repeated for the other peers. The complete version
 is available on [GitHub][junos-conf]. Once the BGP sessions are up, we start
 learning routes from the other sites. For example, here is the route for
-`2001:db8:­a1::/64`:
+`2001:db8:a1::/64`:
 
     ::console
     > show route 2001:db8:a1::/64 protocol bgp table private.inet6.0 best-path

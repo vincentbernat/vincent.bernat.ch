@@ -32,8 +32,8 @@ configuration[^libreswan] :
 
 La même configuration peut être utilisée des deux côtés. Chacun sait déterminer
 s'il est « *left* » ou « *right* ». Les terminaisons du tunnel sont
-`2001:db8:­1::1` et `2001:db8:­2::1`. Les réseaux protégés sont
-`2001:db8:­a1::/64` et `2001:db8:­a2::/64`. En utilisant cette configuration,
+`2001:db8:1::1` et `2001:db8:2::1`. Les réseaux protégés sont
+`2001:db8:a1::/64` et `2001:db8:a2::/64`. En utilisant cette configuration,
 *strongSwan* met en place les politiques de sécurité suivantes dans le noyau :
 
     ::console
@@ -112,7 +112,7 @@ Une configuration possible pour le tunnel entre `V1-1` et `V2-1` serait :
 
 À chaque fois qu'un réseau est ajouté ou retiré d'un site, les configurations de
 tous les sites doivent être mises à jour. De plus, le chevauchement de certains
-réseaux (`2001:db8:­a6::/64` d'un côté et `2001:db8:­a6::cc:1/128` de l'autre)
+réseaux (`2001:db8:a6::/64` d'un côté et `2001:db8:a6::cc:1/128` de l'autre)
 pose quelques problèmes supplémentaires.
 
 L'alternative est d'utiliser des **tunnels routés** : tout paquet traversant une
@@ -204,7 +204,7 @@ La seconde étape consiste à configurer le VPN :
 
 Il s'agit d'un VPN routé car l'interface `st0.1` est associée au VPN
 `VPN-V1-1`. Une fois le tunnel fonctionnel, tout paquet entrant dans `st0.1`
-sera encapsulé et envoyé vers la terminaison `2001:db8:­1::1`.
+sera encapsulé et envoyé vers la terminaison `2001:db8:1::1`.
 
 La dernière étape est de configurer BGP dans l'instance `private` pour échanger
 les routes avec le site distant :
@@ -255,7 +255,7 @@ autres sites. Par exemple :
 La configuration pour les autres terminaisons est similaire. La version complète
 est disponible sur [GitHub][junos-conf]. Une fois les sessions BGP
 opérationnelles, les routes des autres sites sont apprises localement. Par
-exemple, voici la route pour `2001:db8:­a1::/64`:
+exemple, voici la route pour `2001:db8:a1::/64`:
 
     ::console
     > show route 2001:db8:a1::/64 protocol bgp table private.inet6.0 best-path
