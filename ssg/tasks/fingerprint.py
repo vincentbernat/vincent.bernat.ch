@@ -14,11 +14,29 @@ import xxhash
 
 from .. import config
 from ..images import optimize
-from ..tools import write
+from ..tools import run, write
 from . import files
 
 if TYPE_CHECKING:
     from ..model.site import Site
+
+# Compressed copies of stylesheets, scripts and SVG images, served by the
+# origin in production
+PRECOMPRESSED = (".css", ".js", ".svg")
+COMPRESSORS = {
+    ".br": ["brotli", "-c", "-q", "11"],
+    ".zst": ["zstd", "-c", "-q", "-19"],
+}
+
+
+def precompress(target: Path) -> list[Path]:
+    """Write compressed copies of target and return them."""
+    outputs = []
+    for suffix, command in COMPRESSORS.items():
+        output = Path(f"{target}{suffix}")
+        write(output, run(*command, target, text=False))
+        outputs.append(output)
+    return outputs
 
 
 def image(site: Site, path: str, manifest: Path) -> None:
@@ -31,6 +49,8 @@ def image(site: Site, path: str, manifest: Path) -> None:
     else:
         files.copy(raw, target)
         outputs = [target]
+    if site.mode.production and target.suffix in PRECOMPRESSED:
+        outputs += precompress(target)
     names = [o.relative_to(site.output("media")).as_posix() for o in outputs]
     write(manifest, json.dumps({"path": name, "files": names}))
 
@@ -48,6 +68,9 @@ def file(site: Site, path: str, manifest: Path, content: bytes | None = None) ->
         names.append(path)
     for n in names:
         write(site.output(f"media/{n}"), content)
+    if site.mode.production and ext in PRECOMPRESSED:
+        target = site.output(f"media/{name_with_digest}")
+        names += [f"{name_with_digest}{o.suffix}" for o in precompress(target)]
     write(
         manifest,
         json.dumps(
@@ -86,9 +109,12 @@ def css(site: Site, path: str, manifest: Path) -> None:
 def exist(site: Site, path: str, manifest: Path) -> bool:
     """Check the files listed in a manifest exist."""
     try:
-        files = json.loads(manifest.read_text())["files"]
+        data = json.loads(manifest.read_text())
     except FileNotFoundError:
         return False
+    files = data["files"]
     if not site.mode.production and not path.startswith("images/"):
         files.append(path)
+    if site.mode.production and path.endswith(PRECOMPRESSED):
+        files += [f"{data['path']}{suffix}" for suffix in COMPRESSORS]
     return all(site.output(f"media/{f}").exists() for f in files)
