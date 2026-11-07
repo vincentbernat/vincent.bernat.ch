@@ -60,9 +60,7 @@ def convert(
     return Markdown(
         extensions=[
             CodeHiliteExtension(guess_lang=False),
-            ExtraExtension(
-                footnotes={"BACKLINK_TEXT": "&#x2766;", "USE_DEFINITION_ORDER": False}
-            ),
+            ExtraExtension(footnotes={"BACKLINK_TEXT": "&#x2766;"}),
             TocExtension(permalink="#"),
             admonition.makeExtension(),
             glyphs.makeExtension(),
