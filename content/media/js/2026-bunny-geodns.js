@@ -261,8 +261,7 @@
     const theme = () => {
       sprites.data = `${src}#${dark.matches ? "sprites-dark" : "sprites"}`;
     };
-    theme();
-    dark.addListener(theme);
+    const icons = [];
 
     const overlay = svg(
       "svg",
@@ -295,9 +294,7 @@
         },
         link,
       );
-      const href = `${src}#${s.provider.toLowerCase()}`;
-      icon.setAttribute("href", href);
-      icon.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", href);
+      icons.push([icon, `${src}#${s.provider.toLowerCase()}`]);
       svg("path", { d: `M${x - 3.5},${y - 3.5}l7,7m0,-7l-7,7` }, g);
       const label = svg(
         "text",
@@ -394,6 +391,18 @@
     });
 
     render();
+
+    // Wait for the lazy image to load before setting sprites and icons.
+    const load = () => {
+      theme();
+      dark.addListener(theme);
+      for (const [icon, href] of icons) {
+        icon.setAttribute("href", href);
+        icon.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", href);
+      }
+    };
+    if (img.complete) load();
+    else img.addEventListener("load", load);
   }
 }
 
