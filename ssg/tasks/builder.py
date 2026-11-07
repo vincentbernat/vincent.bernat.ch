@@ -427,13 +427,17 @@ class Builder:
                 "uptodate": uptodate,
             }
 
+    def compressed_pages(self) -> Iterator[Resource]:
+        """HTML pages and feeds."""
+        for resource in self.pages:
+            if resource.kind == "html" or resource.meta.get("layout") == "atom.j2":
+                yield resource
+
     def compress_tasks(self) -> Iterator[Task]:
-        """Compressed copies of HTML pages and fingerprinted files. The names of
+        """Compressed copies of pages and fingerprinted files. The names of
         fingerprinted files are only known once they are fingerprinted."""
         uptodate = environment(compressors=json.dumps(compress.COMPRESSORS))
-        for resource in self.pages:
-            if resource.kind != "html":
-                continue
+        for resource in self.compressed_pages():
             target = self.out / resource.path
             yield {
                 "basename": "compress",
@@ -502,8 +506,7 @@ class Builder:
             result.add(self.out / "bundle-sizes.txt")
             result.update(
                 self.out / f"{r.path}{s}"
-                for r in self.pages
-                if r.kind == "html"
+                for r in self.compressed_pages()
                 for s in compress.COMPRESSORS
             )
         for path in self.fingerprinted:
