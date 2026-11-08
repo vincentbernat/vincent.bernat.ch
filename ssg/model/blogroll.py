@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import xxhash
 import yaml
 
 from .. import config
@@ -126,7 +127,7 @@ def related(
     tags: Iterable[str], language: str, seed: str, file: str = str(FEEDS)
 ) -> tuple[Feed, FeedArticle | None] | None:
     """A feed in a language, and one of its articles if any, picked at random
-    with the same seed for the same result. When some feeds are in the
+    with the same seed and file for the same result. When some feeds are in the
     categories of the tags, pick one of them with a MATCHING_SHARE probability,
     and one in Computing otherwise. Feeds in other categories are never
     picked. Starred feeds weigh STARRED_WEIGHT."""
@@ -143,7 +144,8 @@ def related(
         else:
             continue
         pool.extend(f for f in shown if f.language in (None, language))
-    rng = random.Random(seed)
+    digest = xxhash.xxh3_128_hexdigest(Path(file).read_bytes())
+    rng = random.Random(f"{seed}:{digest}")
     if matching and (not computing or rng.random() < MATCHING_SHARE):
         pool = matching
     elif computing:
