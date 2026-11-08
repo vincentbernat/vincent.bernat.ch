@@ -81,6 +81,7 @@ def pull(file: str = str(FEEDS), dry_run: bool = False) -> None:
                 hidden=old.hidden,
                 language=old.language,
                 note=old.note,
+                articles=old.articles,
             )
         result.setdefault(feed["category"]["title"], []).append(entry.dump())
     output = yaml.dump(

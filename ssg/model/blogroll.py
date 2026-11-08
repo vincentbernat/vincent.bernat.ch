@@ -4,7 +4,7 @@ import locale
 import random
 import re
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
@@ -20,6 +20,14 @@ STARRED_WEIGHT = 2
 
 
 @dataclass(frozen=True)
+class FeedArticle:
+    """One article of a feed to highlight."""
+
+    url: str
+    title: str
+
+
+@dataclass(frozen=True)
 class Feed:
     """One feed in feeds.yaml."""
 
@@ -27,9 +35,11 @@ class Feed:
     url: str  # URL of the site
     feed: str  # URL of the feed
     description: str = ""  # Description of the blog
+    language: Literal["fr", "en"] | None = None  # Language of the blog (local)
     starred: bool = False  # One of my favorites (local)
     hidden: bool = False  # Do not publish (local)
-    language: Literal["fr", "en"] | None = None  # Language of the blog (local)
+    # Articles to highlight (local)
+    articles: list[FeedArticle] = field(default_factory=list)
     note: str = ""  # Free-form note, "#" in feeds.yaml (local)
 
     def __post_init__(self) -> None:
@@ -55,13 +65,15 @@ def load(file: str) -> dict[str, list[Feed]]:
     if not path.exists():
         return {}
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return {
-        category: [
-            Feed(**{("note" if k == "#" else k): v for k, v in entry.items()})
-            for entry in entries
-        ]
-        for category, entries in data.items()
-    }
+    result = {}
+    for category, entries in data.items():
+        feeds = []
+        for entry in entries:
+            entry = {("note" if k == "#" else k): v for k, v in entry.items()}
+            entry["articles"] = [FeedArticle(**a) for a in entry.get("articles", [])]
+            feeds.append(Feed(**entry))
+        result[category] = feeds
+    return result
 
 
 def tag_index(category: str) -> int | None:
@@ -112,11 +124,12 @@ def published(file: str = str(FEEDS)) -> list[tuple[str, list[Feed]]]:
 
 def related(
     tags: Iterable[str], language: str, seed: str, file: str = str(FEEDS)
-) -> Feed | None:
-    """A feed in a language, picked at random with the same seed for the same
-    result. When some feeds are in the categories of the tags, pick one of them
-    with a MATCHING_SHARE probability, and one in Computing otherwise. Feeds in
-    other categories are never picked. Starred feeds weigh STARRED_WEIGHT."""
+) -> tuple[Feed, FeedArticle | None] | None:
+    """A feed in a language, and one of its articles if any, picked at random
+    with the same seed for the same result. When some feeds are in the
+    categories of the tags, pick one of them with a MATCHING_SHARE probability,
+    and one in Computing otherwise. Feeds in other categories are never
+    picked. Starred feeds weigh STARRED_WEIGHT."""
     names = list(config.TAGS)
     general = {tag.partition("-")[0] for tag in tags}
     matching: list[Feed] = []
@@ -137,4 +150,5 @@ def related(
         pool = computing
     else:
         return None
-    return rng.choices(pool, [STARRED_WEIGHT if f.starred else 1 for f in pool])[0]
+    feed = rng.choices(pool, [STARRED_WEIGHT if f.starred else 1 for f in pool])[0]
+    return feed, rng.choice(feed.articles) if feed.articles else None

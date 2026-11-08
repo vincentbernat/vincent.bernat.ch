@@ -48,13 +48,18 @@
     <a href="{{ content_url(random.url) }}" class="lf-title">{{ random.meta.title|e }}</a></li>
 {% endif %}
 {% if resource.post and resource.meta.language == "en" %}
-{% set blog = related_blog(resource) %}
-{% if blog %}
+{% set pick = related_blog(resource) %}
+{% if pick %}
+{% set blog, article = pick %}
 <li><span class="lf-sym">🪢</span>
   <span>
     {{ resource.meta.l10n.from_blogroll.format(content_url(resource.meta.language ~ '/blogroll.html')) }}:
+{% if article %}
+    “<a href="{{ article.url|e }}">{{ article.title|replace("“", "‘")|replace("”", "’")|e }}</a>,” by {{ blog.title|e }}
+{%- else %}
     <a href="{{ blog.url|e }}">{{ blog.title|e }}</a>
 {%- if blog.summary %}, {{ blog.summary|e }}{% endif %}
+{%- endif %}
   </span>
 </li>
 {% endif %}
