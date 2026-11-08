@@ -102,7 +102,7 @@ def task(name: str) -> dict[str, Any]:
             continue
         option = {
             "name": parameter.name,
-            "long": parameter.name,
+            "long": parameter.name.replace("_", "-"),
             "default": parameter.default,
         }
         if isinstance(parameter.default, bool):
