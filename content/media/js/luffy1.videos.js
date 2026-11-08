@@ -59,6 +59,36 @@ luffy.do(() => {
         { once: true },
       );
 
+      // Firefox does not have ::-webkit-media-text-track-container that is used
+      // by Video.js to position subtitles when controls are displayed. Move
+      // them up while the controls are visible.
+      // https://github.com/videojs/video.js/issues/9303
+      if (!CSS.supports("selector(::-webkit-media-text-track-container)")) {
+        const container = skin.shadowRoot.querySelector("media-container");
+        const controls = container.querySelector(".video-controls-content");
+        const gap = 12;
+        const place = () => {
+          // Bottom of the cues, as a percentage of the player height.
+          const height = container.clientHeight;
+          const bottom = container.hasAttribute("data-controls-visible")
+            ? controls.offsetTop
+            : height;
+          const line = ((bottom - gap) / height) * 100;
+          for (const track of video.textTracks)
+            for (const cue of track.mode === "showing" ? track.cues : []) {
+              cue.snapToLines = false;
+              cue.lineAlign = "center"; // this should be "end"
+              cue.line = line;
+            }
+        };
+        video.textTracks.addEventListener("change", place);
+        video.target.addEventListener("load", place, true);
+        new MutationObserver(place).observe(container, {
+          attributeFilter: ["data-controls-visible"],
+        });
+        new ResizeObserver(place).observe(container);
+      }
+
       // Drop the picture-in-picture button.
       skin.shadowRoot.querySelector("media-pip-button")?.remove();
 
