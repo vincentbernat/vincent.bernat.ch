@@ -1,30 +1,22 @@
 """Blogroll, from feeds.yaml."""
 
-from __future__ import annotations
-
-import functools
 import locale
 import random
 import re
-from collections import Counter
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import yaml
 
-from .. import config, deps
-from .meta import digest
-
-if TYPE_CHECKING:
-    from .site import Site
+from .. import config
 
 FEEDS = config.ROOT / "feeds.yaml"
 # Share of picks among feeds in the categories of an article
 MATCHING_SHARE = 3 / 4
 # How much more often starred feeds are picked
-STARRED_WEIGHT = 3
+STARRED_WEIGHT = 2
 
 
 @dataclass(frozen=True)
@@ -118,66 +110,31 @@ def published(file: str = str(FEEDS)) -> list[tuple[str, list[Feed]]]:
     return result
 
 
-def assign(
-    articles: Iterable[tuple[str, Iterable[str]]],
-    language: str,
-    seed: str,
-    file: str = str(FEEDS),
-) -> dict[str, Feed]:
-    """Pick a feed in a language for each article, given as a key and its tags,
-    from the oldest to the newest. When some feeds are in the categories of the
-    tags, pick one of them with a MATCHING_SHARE probability, and one in
-    Computing otherwise. Feeds in other categories are never picked. In the
-    chosen group, pick among the least used feeds, the use of starred feeds
-    being divided by STARRED_WEIGHT.
-
-    """
+def related(
+    tags: Iterable[str], language: str, seed: str, file: str = str(FEEDS)
+) -> Feed | None:
+    """A feed in a language, picked at random with the same seed for the same
+    result. When some feeds are in the categories of the tags, pick one of them
+    with a MATCHING_SHARE probability, and one in Computing otherwise. Feeds in
+    other categories are never picked. Starred feeds weigh STARRED_WEIGHT."""
     names = list(config.TAGS)
+    general = {tag.partition("-")[0] for tag in tags}
+    matching: list[Feed] = []
     computing: list[Feed] = []
-    categories: dict[str, list[Feed]] = {}
     for category, shown in published(file):
-        shown = [f for f in shown if f.language in (None, language)]
         index = tag_index(category)
-        if index is not None:
-            categories[names[index]] = shown
-        elif category == "Computing":
-            computing = shown
-    rng = random.Random(seed)
-    usage: Counter[str] = Counter()
-    result = {}
-    for key, tags in articles:
-        general = {tag.partition("-")[0] for tag in tags}
-        matching = [f for name in sorted(general) for f in categories.get(name, [])]
-        if matching and (not computing or rng.random() < MATCHING_SHARE):
+        if index is not None and names[index] in general:
             pool = matching
-        elif computing:
+        elif category == "Computing":
             pool = computing
         else:
             continue
-        weights = {f.feed: STARRED_WEIGHT if f.starred else 1 for f in pool}
-        least = min(usage[f.feed] / weights[f.feed] for f in pool)
-        candidates = [f for f in pool if usage[f.feed] / weights[f.feed] == least]
-        feed = rng.choice(candidates)
-        usage[feed.feed] += 1
-        result[key] = feed
-    return result
-
-
-@functools.cache
-def picks(site: Site, language: str) -> dict[str, Feed]:
-    """Feed picked for each blog post in a language."""
-    articles = reversed(site.content._sorted(f"time_{language}"))
-    return assign(
-        ((r.path, [str(t) for t in r.tags]) for r in articles),
-        language,
-        deps.file_hash(FEEDS),
-    )
-
-
-def pick_digest(site: Site, path: str) -> str:
-    """Digest of what a blog post displays about its picked feed."""
-    resource = site.resources.get(path)
-    if resource is None:
-        return ""
-    feed = picks(site, resource.meta.language).get(path)
-    return digest([feed.title, feed.url, feed.summary]) if feed else ""
+        pool.extend(f for f in shown if f.language in (None, language))
+    rng = random.Random(seed)
+    if matching and (not computing or rng.random() < MATCHING_SHARE):
+        pool = matching
+    elif computing:
+        pool = computing
+    else:
+        return None
+    return rng.choices(pool, [STARRED_WEIGHT if f.starred else 1 for f in pool])[0]

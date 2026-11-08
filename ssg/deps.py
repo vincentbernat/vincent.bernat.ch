@@ -266,8 +266,6 @@ KINDS = {
     "y": "year",
     # empty → "1" if CSS, JS or font files changed recently, in development
     "a": "assets",
-    # blog post path → hash of the feed of the blogroll it displays
-    "b": "blogroll",
 }
 
 
@@ -306,10 +304,6 @@ def state(site: Site, key: str) -> str | None:
             return str(datetime.now().year)
         case "a":
             return recent_assets(site)
-        case "b":
-            from .model.blogroll import pick_digest
-
-            return pick_digest(site, what)
     return None
 
 

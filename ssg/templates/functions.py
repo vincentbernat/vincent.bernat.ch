@@ -10,7 +10,7 @@ from markupsafe import Markup
 
 from .. import config, deps
 from ..images import thumbnails
-from ..model.blogroll import FEEDS, Feed, favorites, pick_digest, picks, published
+from ..model.blogroll import FEEDS, Feed, favorites, published, related
 from . import jinja_global
 
 if TYPE_CHECKING:
@@ -81,12 +81,11 @@ def blogroll_favorites(categories: list[tuple[str, list[Feed]]]) -> list[Feed]:
 
 
 @jinja_global
-@jinja2.pass_context
-def related_blog(ctx: jinja2.runtime.Context, resource: Resource) -> Feed | None:
+def related_blog(resource: Resource) -> Feed | None:
     """A feed of the blogroll related to the tags of a blog post."""
-    site = ctx["site"]
-    deps.record(f"b:{resource.path}", pick_digest(site, resource.path))
-    return picks(site, resource.meta.language).get(resource.path)
+    deps.record_file(FEEDS)
+    seed = resource.meta.get("uuid") or resource.path
+    return related(resource.tags, resource.meta.language, seed, str(FEEDS))
 
 
 @jinja_global
