@@ -31,7 +31,8 @@ uuid: {uuid.uuid4()}
 @command()
 def new(finalize: str = "") -> None:
     """Create a draft article in content/en/blog/wip.html. With --finalize,
-    rename the draft and merge its branch into main."""
+    rename the draft and merge its branch into main. --finalize takes one name,
+    or an English and a French name separated by a comma."""
     if finalize:
         publish(finalize)
         return
@@ -48,9 +49,12 @@ def git(command: str, check: bool = True) -> str:
     return result.stdout.strip()
 
 
-def publish(name: str) -> None:
-    if not re.fullmatch(r"[12][0-9]{3}-[a-z0-9-]+", name) or name == "wip":
-        raise Exit(f"invalid name {name}")
+def publish(names: str) -> None:
+    en, _, fr = names.partition(",")
+    fr = fr or en
+    for name in (en, fr):
+        if not re.fullmatch(r"[12][0-9]{3}-[a-z0-9-]+", name):
+            raise Exit(f"invalid name {name}")
     branch = git("branch --show-current")
     if not branch.startswith("article/"):
         raise Exit("not on an article branch")
@@ -82,24 +86,32 @@ def publish(name: str) -> None:
         editor = shlex.quote(f"cp {shlex.quote(f.name)}")
         run(f"GIT_SEQUENCE_EDITOR={editor} git rebase -i main", cwd=config.ROOT)
 
-    # Rename files and update references to them.
-    replacements = []
+    # Rename files and update references to them. Files in fr/ use the French
+    # name, other files use the English name.
+    def slug(path: str) -> str:
+        return fr if "fr" in path.split("/") else en
+
+    suffixes = set()
     for path in sorted(config.CONTENT.glob("**/wip.*")):
-        target = path.with_name(f"{name}{path.suffix}")
+        target = path.with_name(
+            f"{slug(str(path.relative_to(config.CONTENT)))}{path.suffix}"
+        )
         if target.exists():
             raise Exit(f"{target.relative_to(config.ROOT)} already exists")
         git(f"mv {path} {target}")
-        old = re.escape(path.name)
-        replacements.append((re.compile(rf"(?<![\w-]){old}\b"), target.name))
-    replacements.append(
-        (re.compile(r"(self://[^\s)\]\"]*/)wip(?![\w.-])"), rf"\g<1>{name}")
-    )
+        suffixes.add(path.suffix)
+    suffix = "|".join(re.escape(s) for s in sorted(suffixes))
+    by_name = re.compile(rf"(?<![\w-])((?:[\w.-]+/)*)wip({suffix})\b")
+    by_url = re.compile(r"(self://([^\s)\]\"]*/))wip(?![\w.-])")
     files = git("grep -I -l -e wip -- content REUSE.toml", check=False).splitlines()
     for file in files:
         path = config.ROOT / file
         text = original = path.read_text(encoding="utf-8")
-        for pattern, replacement in replacements:
-            text = pattern.sub(replacement, text)
+        # Without a directory, a file name is in the language of the file.
+        text = by_name.sub(
+            lambda mo, file=file: f"{mo[1]}{slug(mo[1] or file)}{mo[2]}", text
+        )
+        text = by_url.sub(lambda mo: f"{mo[1]}{slug(mo[2])}", text)
         if text != original:
             path.write_text(text, encoding="utf-8")
     frontmatter(fix=True)
