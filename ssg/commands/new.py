@@ -4,6 +4,7 @@ import re
 import shlex
 import tempfile
 import uuid
+from collections.abc import Callable
 
 import yaml
 
@@ -101,17 +102,23 @@ def publish(names: str) -> None:
         git(f"mv {path} {target}")
         suffixes.add(path.suffix)
     suffix = "|".join(re.escape(s) for s in sorted(suffixes))
-    by_name = re.compile(rf"(?<![\w-])((?:[\w.-]+/)*)wip({suffix})\b")
-    by_url = re.compile(r"(self://([^\s)\]\"]*/))wip(?![\w.-])")
+    wip_file = re.compile(rf"(?<![\w-])((?:[\w.-]+/)*)wip({suffix})\b")
+    wip_url = re.compile(r"(self://([^\s)\]\"]*/))wip(?![\w.-])")
     files = git("grep -I -l -e wip -- content REUSE.toml", check=False).splitlines()
+
+    # Without a directory, a file name is in the language of the file.
+    def file_replacer(file: str) -> Callable[[re.Match[str]], str]:
+        def replace(mo: re.Match[str]) -> str:
+            return f"{mo[1]}{slug(mo[1] or file)}{mo[2]}"
+
+        return replace
+
     for file in files:
         path = config.ROOT / file
         text = original = path.read_text(encoding="utf-8")
-        # Without a directory, a file name is in the language of the file.
-        text = by_name.sub(
-            lambda mo, file=file: f"{mo[1]}{slug(mo[1] or file)}{mo[2]}", text
-        )
-        text = by_url.sub(lambda mo: f"{mo[1]}{slug(mo[2])}", text)
+        text = wip_file.sub(file_replacer(file), text)
+        text = wip_url.sub(lambda mo: f"{mo[1]}{slug(mo[2])}", text)
+
         if text != original:
             path.write_text(text, encoding="utf-8")
     frontmatter(fix=True)
