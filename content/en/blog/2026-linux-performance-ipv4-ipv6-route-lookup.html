@@ -1,0 +1,232 @@
+---
+title: "Performance evolution of route lookup on Linux"
+description: |
+  IPv4 and IPv6 route lookup performance from Linux 4.14 to 7.3.
+  This includes a regression of mine!
+uuid: 93bc9033-706a-4bf6-8bc5-fa748b9f80e8
+cover: linux/ipv6-radix-perf-2026.svg
+tags:
+  - linux
+  - network
+---
+
+In previous articles, I explained how the Linux kernel implements [IPv4][] and
+[IPv6][] routing tables, and I showed the performance improvement of route
+lookups [from Linux 2.6.32 to 4.16 for IPv4][ipv4-perf]—including the impact of
+the [Meltdown and Spectre mitigations][]—as well as [from Linux 2.6.39 to 4.18
+for IPv6][ipv6-perf]. This article updates the numbers through Linux 7.3 and
+investigates the perpetrator responsible for the performance regressions! 🕵️‍♂️
+
+I ran the following benchmarks on an [**AMD EPYC 8024P**][EPYC], a [Zen 4c
+CPU][], rented from [Scaleway][], running at 2.4 GHz with CPU boost disabled. I
+compiled the kernels with GCC 10.2: this version can compile older kernels as
+well as the current ones.
+
+[ipv4]: self://en/blog/2017-ipv4-route-lookup-linux
+[ipv6]: self://en/blog/2017-ipv6-route-lookup-linux
+[ipv4-perf]: self://en/blog/2017-performance-progression-ipv4-route-lookup-linux
+[ipv6-perf]: self://en/blog/2017-performance-progression-ipv6-route-lookup-linux
+[meltdown and spectre mitigations]: https://meltdownattack.com/ "Meltdown and Spectre"
+[epyc]: https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-8024p.html "AMD EPYC™ 8024P"
+[scaleway]: https://www.scaleway.com/en/elastic-metal/ "Scaleway Elastic Metal: bare metal servers in the cloud"
+[zen 4c cpu]: https://en.wikipedia.org/wiki/Zen_4#Zen_4c "Zen 4 on Wikipedia"
+
+# IPv6
+
+![Performance evolution of IPv6 route lookups from Linux 4.14 to
+7.3](self://media/images/linux/ipv6-radix-perf-2026.svg "Performance evolution of
+IPv6 route lookups. Versions with an asterisk have SRSO mitigation disabled.")
+
+I tested four scenarios:
+
+- a recent full view with about 260,000 prefixes,
+- a full view from 2017 with about 40,000 prefixes,
+- a set of 40,000 /48 prefixes, such that 2 lookups out of 3 match, and
+- a set of 40,000 random /128 prefixes, such that 1 lookup out of 400 matches.
+
+In Linux **4.15**, Wei Wang improved the lookup performance by replacing the
+read-write lock with an RCU and a spinlock in [commit 66f5d6ce53e6][]. In Linux
+**4.18**, David Ahern [improved the data structures used by route lookup][]. In
+Linux **5.9**, Brian Vazquez removed expensive indirect calls in [commit
+55cced4f813b][].
+
+The major 200 ns regression introduced in Linux **6.5** wiped out all these
+improvements. This version implements a mitigation for "[Speculative Return
+Stack Overflow][SRSO]," a vulnerability affecting AMD processors, in [commit
+fb3bd914b3ec][]. This mitigation adds about 20 cycles on each function return.
+It was backported to older kernels (5.10, 5.15, 6.1, and 6.4). To keep the
+results legible, I disabled the mitigation for these versions with
+`spec_rstack_overflow=off` on the kernel command-line.
+
+You can check the vulnerabilities impacting your CPU and their mitigations with
+`lscpu`. Some mitigations may depend on the microcode or on the
+firmware.[^microcode]
+
+```console
+$ lscpu | grep '^Vuln'
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Mitigation; Safe RET
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; usercopy/swapgs barriers and __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; Retpolines; IBPB conditional; IBRS_FW; STIBP always-on; RSB filling; PBRSB-eIBRS Not affected; BHI Not affected
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Vulnerable: Clear CPU buffers attempted, no microcode
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Mitigation; IBPB before exit to userspace
+```
+
+[^microcode]:
+    The microcode was out of date on my machine as I forgot to install the
+    `amd64-microcode` package. As it only impacts [TSA][], our benchmark is
+    unaffected. Spectre v2 mitigation did not enable [automatic IBRS][], because
+    of [SEV-SNP being enabled in the firmware][]. With automatic IBRS, the
+    impact of SRSO should be smaller.
+
+[srso]: https://docs.kernel.org/admin-guide/hw-vuln/srso.html "Speculative Return Stack Overflow (SRSO)"
+[commit fb3bd914b3ec]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=fb3bd914b3ec28f5fb697ac55c4846ac2d542855 "x86/srso: Add a Speculative RAS Overflow mitigation"
+[commit 66f5d6ce53e6]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=66f5d6ce53e665477d2a33e8f539d4fa4ca81c83 "ipv6: replace rwlock with rcu and spinlock in fib6_table"
+[improved the data structures used by route lookup]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=0565de29cbd65b378147d36f9642f93a046240dc "net/ipv6: Separate data structures for FIB and data path"
+[commit 55cced4f813b]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=55cced4f813bece01f96256d96f283b9210d19ee "ipv6: fib6: avoid indirect calls from fib6_rule_lookup"
+[automatic IBRS]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=e7862eda309ecfccc36bb5558d937ed3ace07f3f "x86/cpu: Support AMD Automatic IBRS"
+[SEV-SNP being enabled in the firmware]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=acaa4b5c4c854b5009f4d4a5395b2609ad0f4937 "x86/speculation: Do not enable Automatic IBRS if SEV-SNP is enabled"
+[TSA]: https://www.amd.com/en/resources/product-security/bulletin/amd-sb-7029.html "AMD Transient Scheduler Attacks"
+
+# IPv4
+
+![Performance evolution of IPv4 route lookups from Linux 4.14 to
+7.3](self://media/images/linux/lpc-trie-perf-2026.svg "Performance evolution of
+IPv4 route lookups. Versions with an asterisk have SRSO mitigation disabled.")
+
+I tested three scenarios:
+
+- a recent full view with more than 1,000,000 prefixes,
+- a subset of a full view from 2017 with 500,000 prefixes, and
+- a set of 500,000 contiguous /32 prefixes.
+
+The 30 ns impact of the mitigation for SRSO in Linux **6.5** is smaller than for
+IPv6 because IPv4 route lookups traverse fewer functions: around 4 function
+calls for IPv4 compared to 25 for IPv6.
+
+In Linux **5.11**, I introduced a regression in [commit c0c5a60f0f13][] after
+fixing the behavior of `net.ipv4.conf.all.ignore_routes_with_linkdown`![^ipv6]
+As a result, the [`ip_ignore_linkdown()`][ip_ignore_linkdown] function spends
+around 5 additional cycles to return a result as it needs to follow three
+additional pointers. [`fib_lookup()`][fib_lookup] eventually calls it in the
+[following code][fib_lookup_good_nhc]:
+
+[^ipv6]:
+    Despite `ipvX` in its title, the commit only changes the behavior of the
+    IPv4 code. The IPv6 version overwrites the value of each device in
+    [`addrconf_fixup_linkdown()`][addrconf_fixup_linkdown].
+
+```c hl_lines="1"
+if (ip_ignore_linkdown(nhc->nhc_dev) &&
+    nhc->nhc_flags & RTNH_F_LINKDOWN &&
+    !(fib_flags & FIB_LOOKUP_IGNORE_LINKSTATE))
+    return false;
+```
+
+If we reorder the conditions, we avoid calling `ip_ignore_linkdown()` for the
+most common case where the link isn't down:
+
+```c hl_lines="3"
+if (nhc->nhc_flags & RTNH_F_LINKDOWN &&
+    !(fib_flags & FIB_LOOKUP_IGNORE_LINKSTATE) &&
+    ip_ignore_linkdown(nhc->nhc_dev))
+    return false;
+```
+
+Here's the distribution of lookup times before applying the [patch][] on top of
+net-next:[^release]
+
+[^release]: Linux 7.5 will be the first stable release including this fix.
+
+```text
+min=128 max=4657 count=994104 95th=134 90th=133 50th=132 mad=0
+    value │                         ┊                            count
+      128 │                                                        120
+      129 │                                                       2232
+      130 │▒                                                     25224
+      131 │▒▒▒▒▒▒▒▒▒▒▒▒▒░                                       264264
+      132 │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░             516480
+      133 │▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░      126864
+      134 │▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░      21624
+```
+
+The lighter shade depicts the cumulative distribution function. After applying
+the patch, the median improved from 132 to 126 cycles:[^cycle]
+
+[^cycle]: At 2.4 GHz, one cycle is about 0.42 ns.
+
+```text
+min=124 max=208839 count=994104 95th=128 90th=127 50th=126 mad=0
+    value │                         ┊                            count
+      124 │                                                        576
+      125 │▒▒                                                    49440
+      126 │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░                      584904
+      127 │▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░       284592
+      128 │▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░      45288
+```
+
+# Impact of mitigations
+
+To reduce the impact of mitigations, you can disable all of them with
+`mitigations=off`, disable only a specific one like with
+`spec_rstack_overflow=off`, or protect against only some [attack vectors][] with
+`mitigations=auto,no_user_kernel`, starting from Linux 6.17.
+
+The impact is also quite different depending on the CPU. For example, on a [Xeon
+W-2295][], an Intel desktop CPU from 2020, the impact of the mitigations is only
+a few cycles for IPv4, and less than 3% for IPv6. The main contributor is the
+mitigation for the [Indirect Target Selection][] vulnerability, which is fixed
+since the [Sapphire Rapids][fourth generation Xeon CPU] architecture.
+
+---
+
+If we set aside the regressions introduced by the [mitigations against CPU
+attacks][], the performance of IPv4 is declining slowly over time while IPv6 has
+improved in the past and is currently stable. If routing performance is
+important, you have several options: choose a different CPU like an [AMD Zen 5
+CPU][], a [fourth generation Xeon CPU][], or maybe an [ARM Neoverse V2][];
+disable some or all the mitigations; bypass routing with XDP/eBPF;[^ebpf] or
+[offload routing][] to the network card.
+
+[^ebpf]:
+    This requires avoiding [`bpf_fib_lookup()`][bpf_fib_lookup], which relies on
+    the same kernel lookup.
+
+!!! "Note"
+    [Maytham Alsudany][] reviewed a first draft of this article. Any errors are still mine!
+
+[ip_ignore_linkdown]: https://elixir.bootlin.com/linux/v7.3.1/source/include/linux/inetdevice.h#L265 "Definition of ip_ignore_linkdown()"
+[fib_lookup]: https://elixir.bootlin.com/linux/v7.3.1/source/include/net/ip_fib.h#L374 "Definition of fib_lookup()"
+[fib_lookup_good_nhc]: https://elixir.bootlin.com/linux/v7.3.1/source/net/ipv4/fib_trie.c#L1406 "Definition of fib_lookup_good_nhc()"
+[addrconf_fixup_linkdown]: https://elixir.bootlin.com/linux/v7.3.1/source/net/ipv6/addrconf.c#L940 "Definition of addrconf_fixup_linkdown()"
+[commit c0c5a60f0f13]: https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=c0c5a60f0f1311bcf08bbe735122096d6326fb5b "net: evaluate net.ipvX.conf.all.ignore_routes_with_linkdown"
+[patch]: https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/commit/?id=5fe3653f13b9d0549d8e8f6c181cf2dcbc67b06a "net/ipv4: check RTNH_F_LINKDOWN before ip_ignore_linkdown() - kernel/git/netdev/net-next.git - Netdev Group's -next networking tree"
+[amd zen 5 cpu]: https://en.wikipedia.org/wiki/Zen_5 "Zen 5 on Wikipedia"
+[fourth generation xeon cpu]: https://en.wikipedia.org/wiki/Sapphire_Rapids "Sapphire Rapids on Wikipedia"
+[offload routing]: https://www.gtp-guard.org/articles/5g-upf-pump-up-the-volume/ "5G UPF: Pump Up the Volume!"
+[mitigations against cpu attacks]: https://docs.kernel.org/admin-guide/hw-vuln/ "Hardware vulnerabilities — The Linux Kernel documentation"
+[arm neoverse v2]: https://en.wikipedia.org/wiki/ARM_Neoverse#Neoverse_V2 "ARM Neoverse on Wikipedia"
+[attack vectors]: https://docs.kernel.org/admin-guide/hw-vuln/attack_vector_controls.html "Attack Vector Controls"
+[bpf_fib_lookup]: https://docs.ebpf.io/linux/helper-function/bpf_fib_lookup/ "Helper function bpf_fib_lookup"
+[xeon w-2295]: https://www.intel.com/content/www/us/en/products/sku/198011/intel-xeon-w2295-processor-24-75m-cache-3-00-ghz/specifications.html "Intel® Xeon® W-2295 Processor (24.75M Cache, 3.00 GHz) Specifications"
+[indirect target selection]: https://docs.kernel.org/admin-guide/hw-vuln/indirect-target-selection.html "Indirect Target Selection (ITS) — The Linux Kernel documentation"
+[maytham alsudany]: https://maytham.aezign.au/ "Maytham Alsudany: Dev and Sysadmin"
+
+*[SRSO]: Speculative Return Stack Overflow
+*[TSA]: Transient Scheduler Attacks
+*[IBRS]: Indirect Branch Restricted Speculation
+*[SEV-SNP]: Secure Encrypted Virtualization-Secure Nested Paging
+*[RCU]: Read-Copy-Update
+*[XDP]: eXpress Data Path
+*[eBPF]: Extended Berkeley Packet Filter
