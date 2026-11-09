@@ -64,6 +64,15 @@ class TestTypography(unittest.TestCase):
                     '<div>Run <code>echo "a"</code></div>',
                     '<div>Run <code>echo "a"</code></div>',
                 ),
+                # Across inline elements
+                ("<div>wait<em>..</em>.</div>", "<div>wait<em>…</em></div>"),
+                ("<div>In the <em>'80s</em></div>", "<div>In the <em>’80s</em></div>"),
+                # Hidden elements and footnote marks are left out
+                (f'<div>({H}"yes")</div>', f"<div>({H}“yes”)</div>"),
+                (
+                    '<div><sup class="lf-sidenote-refmark">1</sup>"Yes"</div>',
+                    '<div><sup class="lf-sidenote-refmark">1</sup>“Yes”</div>',
+                ),
             ]
         )
 
@@ -74,10 +83,44 @@ class TestTypography(unittest.TestCase):
                     "<div>« Oui ! » dit-il : non ; 50 %</div>",
                     "<div>«^Oui^!^» dit-il^: non^; 50^%</div>",
                 ),
+                (
+                    '<div>la « <a href="x">Indirect Target Selection</a> » ici</div>',
+                    '<div>la «^<a href="x">Indirect Target Selection</a>^» ici</div>',
+                ),
+                (
+                    '<div>sur net-next<sup id="fnref:r"><a>1</a></sup> : oui</div>',
+                    '<div>sur net-next<sup id="fnref:r"><a>1</a></sup>^: oui</div>',
+                ),
                 ("<div>about 1 000 users</div>", "<div>about 1^000 users</div>"),
                 ("<div>Use Python 3 now</div>", "<div>Use Python^3 now</div>"),
+                (
+                    "<div>In Linux <strong>4.18</strong>, yes</div>",
+                    "<div>In Linux^<strong>4.18</strong>, yes</div>",
+                ),
+                (
+                    "<div>In <em>Linux</em> 4.18, yes</div>",
+                    "<div>In <em>Linux</em>^4.18, yes</div>",
+                ),
+                (
+                    "<div>In Linux <code>4.18</code>, no</div>",
+                    "<div>In Linux <code>4.18</code>, no</div>",
+                ),
+                ("<div>oui <em>!</em></div>", "<div>oui^<em>!</em></div>"),
+                (
+                    "<div>at 10 <abbr>GHz</abbr></div>",
+                    "<div>at 10^<abbr>GHz</abbr></div>",
+                ),
+                (
+                    "<div>about 1 000 000 users</div>",
+                    "<div>about 1^000^000 users</div>",
+                ),
+                (
+                    '<div>Python<sup id="fnref:x"><a>1</a></sup> 3</div>',
+                    '<div>Python<sup id="fnref:x"><a>1</a></sup>^3</div>',
+                ),
                 ("<div>It is 10\u00a0km away</div>", "<div>It is 10^km away</div>"),
                 ("<div>at 2.4 GHz, 3 Mb/s</div>", "<div>at 2.4^GHz, 3^Mb/s</div>"),
+                ("<div>à 2,4 GHz, 3 Mio/s</div>", "<div>à 2,4^GHz, 3^Mio/s</div>"),
                 ("<div>costs 5 € or 6\u00a0€</div>", "<div>costs 5^€ or 6^€</div>"),
                 ("<div>It is 10 kmh</div>", "<div>It is 10 kmh</div>"),
                 ("<div>step 1 A or 2 V</div>", "<div>step 1 A or 2 V</div>"),
@@ -141,6 +184,15 @@ class TestTypography(unittest.TestCase):
                     '<p><span lang="xx">hyphenation</span> rules</p>',
                     '<p><span lang="xx">hyphenation</span>_rules</p>',
                 ),
+                # Words across inline elements
+                (
+                    "<p><em>hyphen</em>ation is nice to have</p>",
+                    "<p><em>hy~phen~</em>ation is nice_to_have</p>",
+                ),
+                (
+                    f"<p>hyphen{H}ation is nice to have</p>",
+                    f"<p>hy~phen~{H}ation is nice_to_have</p>",
+                ),
             ]
         )
         self.check(
@@ -200,6 +252,23 @@ class TestTypography(unittest.TestCase):
                     "<ul><li><p>in_para</p></li></ul>",
                 ),
             ]
+        )
+        detective = "\U0001f575\ufe0f\u200d\u2642\ufe0f"
+        party = "\U0001f389"
+        self.check(
+            # There is a difference that shouldn't be there. We just document it
+            # here.
+            [
+                (
+                    f"<p>Bon, c'est fini ! {detective}</p>",
+                    f"<p>Bon, c’est_fini^!_{detective}</p>",
+                ),
+                (
+                    f"<p>Bon, c'est fini ! {party}</p>",
+                    f"<p>Bon, c’est_fini^!_{party}</p>",
+                ),
+            ],
+            lang="fr",
         )
 
     def test_code_breaks(self) -> None:
