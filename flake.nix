@@ -174,8 +174,7 @@
             buildPhase = ''
               cp $src ctypography.pyx
               cython -3 --module-name ssg.html.ctypography ctypography.pyx
-              $CC -O2 -shared -fPIC \
-                -I${python}/include/python${python.pythonVersion} \
+              $CC $(${python}/bin/python3-config --cflags) -fPIC -shared \
                 ctypography.c -o ctypography.so
             '';
             installPhase = ''
