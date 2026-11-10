@@ -162,12 +162,15 @@ def record_file(path: str | os.PathLike[str]) -> None:
 
 def file_hash(path: str | os.PathLike[str]) -> str:
     """Digest of the content of a file. For a file in git annex, the name of the
-    link target is its key, which already identifies the content."""
+    link target is its key, which already identifies the content. For a file
+    in the Nix store, the link target changes with the inputs of its build."""
     path = Path(path)
     if path.is_symlink():
-        target = path.readlink()
-        if "/annex/objects/" in target.as_posix():
+        target = Path(os.path.normpath(path.absolute().parent / path.readlink()))
+        if target.is_relative_to(config.ROOT / ".git" / "annex" / "objects"):
             return xxhash.xxh3_128_hexdigest(target.name.encode())
+        if target.is_relative_to("/nix/store"):
+            return xxhash.xxh3_128_hexdigest(target.as_posix().encode())
     with path.open("rb", buffering=0) as f:
         # The xxhash stubs do not match the protocol expected by hashlib
         digest = hashlib.file_digest(f, xxhash.xxh3_128)
