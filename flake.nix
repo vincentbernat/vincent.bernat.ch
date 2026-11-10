@@ -165,6 +165,23 @@
               '';
             };
           };
+          # Typography helpers compiled with Cython
+          ctypography = pkgs.stdenv.mkDerivation {
+            name = "ctypography";
+            src = ./ssg/html/ctypography.pyx;
+            dontUnpack = true;
+            nativeBuildInputs = [ python.pkgs.cython ];
+            buildPhase = ''
+              cp $src ctypography.pyx
+              cython -3 --module-name ssg.html.ctypography ctypography.pyx
+              $CC -O2 -shared -fPIC \
+                -I${python}/include/python${python.pythonVersion} \
+                ctypography.c -o ctypography.so
+            '';
+            installPhase = ''
+              install -Dm444 ctypography.so $out/ctypography.so
+            '';
+          };
           # Titles for RFC links.
           rfcIndex =
             let
@@ -444,6 +461,8 @@
                   || ln -nsfT ${nodeEnv}/node_modules node_modules
                 [ "$(readlink ssg/markdown/rfc-index.json.gz)" = ${rfcIndex} ] \
                   || ln -nsfT ${rfcIndex} ssg/markdown/rfc-index.json.gz
+                [ "$(readlink ssg/html/ctypography.so)" = ${ctypography}/ctypography.so ] \
+                  || ln -nsfT ${ctypography}/ctypography.so ssg/html/ctypography.so
               '';
             };
         };

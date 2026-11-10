@@ -117,6 +117,7 @@ def code_files() -> list[str]:
         if p.relative_to(ssg).parts[0] not in NOT_BUILD
     ) + [
         str(ssg / "markdown" / "rfc-index.json.gz"),
+        str(ssg / "html" / "ctypography.so"),
     ]
 
 

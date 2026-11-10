@@ -2,29 +2,23 @@
 
 from __future__ import annotations
 
-import bisect
 import dataclasses
 import functools
 import itertools
 import re
-import unicodedata
 from typing import TYPE_CHECKING, Literal
 
 import pyphen
 
-from .dom import INLINE_TAGS, WHITESPACE, classes, localname, select
+from . import ctypography
+from .dom import INLINE_TAGS, classes, localname, select
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
-
     import lxml.etree
 
-OBJECT = "\ufffc"  # OBJECT REPLACEMENT CHARACTER
 NBSP = "\u00a0"  # NO-BREAK SPACE
 NNBSP = "\u202f"  # NARROW NO-BREAK SPACE
-SHY = "\u00ad"  # SOFT HYPHEN
 ZWSP = "\u200b"  # ZERO WIDTH SPACE
-ZWJ = "\u200d"  # ZERO WIDTH JOINER
 BREAKING_SPACES = (
     "\u1680"  # OGHAM SPACE MARK
     "\u2000"  # EN QUAD
@@ -59,7 +53,6 @@ SKIPPED = frozenset({
 HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
 HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
-LAST_LINE = 8  # Minimum length of the last line of a paragraph
 
 # Units after a figure, separated by a normal space. Units with one letter
 # are often found in text, so they need a no-break space.
@@ -107,9 +100,6 @@ known_unit = re.compile(
 )
 # Cheating, the no-break space is already here
 unknown_unit = re.compile(r"\b[0-9,.]+(\u00a0)(?=\w)")
-chunk = re.compile(r"\S+")
-url = re.compile(r"[/@]|\w\.\w")
-word = re.compile(r"\b[^\W\d_]{5,}\b")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -126,140 +116,7 @@ class Slot:
         setattr(self.el, self.attr, value)
 
 
-class Run:
-    """Text of several slots as one string, so patterns work across inline
-    elements. OBJECT stands for an element whose text is not part of the
-    run. write() puts the result back in the slots.
-
-    The chars of a slot are next to each other. starts has the position of
-    the first char of each slot. For <p>Say <em>"yes</em>" now</p>, the
-    slots are p.text, em.text and em.tail:
-
-        text    S a y ␣ " y e s " ␣ n o w
-        starts  0       4       8
-
-    """
-
-    def __init__(self) -> None:
-        self.slots: list[Slot] = []
-        self.dictionaries: list[pyphen.Pyphen | None] = []  # for hyphenation
-        self.chars: list[str] = []
-        self.starts: list[int] = []
-
-    def add(self, slot: Slot, d: pyphen.Pyphen | None = None) -> None:
-        """Add the text of a slot at the end. d is the dictionary for the
-        hyphenation of this text. An empty slot is not added.
-
-        In the example, the run is built with:
-
-            run.add(Slot(p, "text"))
-            run.add(Slot(em, "text"))
-            run.add(Slot(em, "tail"))
-
-        """
-        text = slot.get()
-        if not text:
-            return
-        self.starts.append(len(self.chars))
-        self.chars += text
-        self.slots.append(slot)
-        self.dictionaries.append(d)
-
-    def opaque(self) -> None:
-        """Add an element whose text is kept as is, like <code>. It becomes
-        one OBJECT char, inside the slot before it. write() drops it.
-        Patterns see it as a word but cannot change it.
-
-            <p>Run <code>ls</code>.</p>
-
-            text    R u n ␣ ￼ .
-            starts  0         5
-
-        """
-        self.chars.append(OBJECT)
-
-    @property
-    def text(self) -> str:
-        """The text of the run, for patterns. A position in this string is
-        also a position in chars."""
-        return "".join(self.chars)
-
-    def owner(self, i: int) -> int:
-        """Slot of the char at i."""
-        return bisect.bisect_right(self.starts, i) - 1
-
-    def edit(self, changes: Iterable[tuple[int, int, str]]) -> None:
-        """Replace spans of the text, in order and without overlap. The new
-        text goes to the slot of the first replaced char. An insertion goes
-        to the slot of the char before it, unless this char is OBJECT. Spans
-        with OBJECT are not changed.
-
-        In the example, (3, 4, "_") and (8, 8, "!") give:
-
-            text    S a y _ " y e s ! " ␣ n o w
-            starts  0       4         9
-
-        """
-        chars: list[str] = []
-        starts: list[int] = []
-        last = k = 0
-        for start, end, value in changes:
-            first = start if start < end else start - 1
-            if OBJECT in self.chars[first:end]:
-                continue
-            chars += self.chars[last:start]
-            # Slots starting up to the first char keep their place, the
-            # next ones up to the end of the span start after the new text
-            while k < len(self.starts) and self.starts[k] <= first:
-                starts.append(self.starts[k] + len(chars) - start)
-                k += 1
-            chars += value
-            while k < len(self.starts) and self.starts[k] <= end:
-                starts.append(len(chars))
-                k += 1
-            last = end
-        if not last and not chars:
-            return
-        starts += [s + len(chars) - last for s in self.starts[k:]]
-        self.chars = chars + self.chars[last:]
-        self.starts = starts
-
-    def sub(
-        self, pattern: re.Pattern[str], repl: str | Callable[[re.Match[str]], str]
-    ) -> None:
-        """Replace matches of a pattern, or their first group, with edit().
-        repl is a string or a function returning a string from a match.
-        Groups are used when the part to replace needs a lookbehind with a
-        variable width. In the example:
-
-            run.sub(re.compile(r"(?<=\\w)\\""), "”")
-
-        """
-        changes = []
-        for m in pattern.finditer(self.text):
-            start, end = m.span(1) if pattern.groups else m.span()
-            changes.append((start, end, repl if isinstance(repl, str) else repl(m)))
-        self.edit(changes)
-
-    def write(self) -> None:
-        """Put the chars back in their slots, using starts. OBJECT chars are
-        dropped. Only slots with a different text are changed. A slot left
-        empty becomes None. In the example:
-
-            p.text   "Say "
-            em.text  "“yes"
-            em.tail  "” now"
-
-        """
-        for slot, start, end in zip(
-            self.slots, self.starts, [*self.starts[1:], len(self.chars)]
-        ):
-            text = "".join(self.chars[start:end]).replace(OBJECT, "")
-            if text != slot.get():
-                slot.put(text or None)
-
-
-def smarten(run: Run) -> None:
+def smarten(run: ctypography.Run) -> None:
     """Quotes and ellipses."""
     text = run.text
     if "'" in text or '"' in text:
@@ -270,7 +127,7 @@ def smarten(run: Run) -> None:
         run.sub(ellipsis, "…")
 
 
-def space(run: Run) -> None:
+def space(run: ctypography.Run) -> None:
     """French punctuation and figures."""
     # A pattern turns a space into NNBSP. This cannot create a match for
     # another one, so the text is searched once.
@@ -288,7 +145,7 @@ def space(run: Run) -> None:
 
 
 @functools.cache
-def dictionary(lang: str) -> pyphen.Pyphen | None:
+def dictionary(lang: str) -> ctypography.Hyphenator | None:
     name = pyphen.language_fallback(lang)
     if name is None:
         return None
@@ -296,39 +153,7 @@ def dictionary(lang: str) -> pyphen.Pyphen | None:
         # "en" alone is British English
         name = "en_US"
     # The Elements of Typographic Style, 2.4.1
-    return pyphen.Pyphen(lang=name, left=2, right=3)
-
-
-@functools.cache
-def hyphen_positions(w: str, d: pyphen.Pyphen) -> tuple[int, ...]:
-    """Positions of soft hyphens in a word. Words with a capital letter after
-    the first one have none, unless they are in NAMES."""
-    if w in names:
-        return names[w]
-    if w.endswith("s") and w[:-1] in names:
-        return names[w[:-1]]
-    if any(c.isupper() for c in w[1:]):
-        return ()
-    return tuple(p for p in d.positions(w) if p.data is None)
-
-
-def hyphenate(run: Run) -> None:
-    """Add soft hyphens in words of hyphenated slots, except in URLs."""
-    if all(d is None for d in run.dictionaries):
-        return
-    text = run.text
-    changes: list[tuple[int, int, str]] = []
-    for c in chunk.finditer(text):
-        if url.search(c[0]):
-            continue
-        for m in word.finditer(text, c.start(), c.end()):
-            d = run.dictionaries[run.owner(m.start())]
-            if d is not None:
-                changes += [
-                    (m.start() + p, m.start() + p, SHY)
-                    for p in hyphen_positions(m[0], d)
-                ]
-    run.edit(changes)
+    return ctypography.Hyphenator(pyphen.LANGUAGES[name], names, left=2, right=3)
 
 
 def ignored(el: lxml.etree._Element) -> bool:
@@ -346,7 +171,7 @@ def ignored(el: lxml.etree._Element) -> bool:
 def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
     """Fix quotes and spaces in the text of an element, outside of code. When
     hyphens is true, also add soft hyphens in paragraphs and lists."""
-    run = Run()
+    run = ctypography.Run()
 
     def flush() -> None:
         nonlocal run
@@ -354,12 +179,12 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
         # Nothing to change with only ASCII spaces, like between blocks
         if text.strip(" \t\n\r"):
             # One char for one char, starts stay the same
-            run.chars = list(text.translate(source_spaces))
+            run.text = text.translate(source_spaces)
             smarten(run)
             space(run)
-            hyphenate(run)
+            run.hyphenate()
             run.write()
-        run = Run()
+        run = ctypography.Run()
 
     def walk(el: lxml.etree._Element, lang: str | None, hyphenated: bool) -> None:
         if ignored(el):
@@ -395,66 +220,33 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
     flush()
 
 
-def inline_run(el: lxml.etree._Element) -> Run | None:
-    """Run with the visible text of an element. None when it contains an
-    element that is not inline."""
-    run = Run()
-
-    def walk(el: lxml.etree._Element) -> bool:
-        run.add(Slot(el, "text"))
-        for child in el:
-            if isinstance(child.tag, str):
-                if localname(child) not in INLINE_TAGS:
-                    return False
-                if "hidden" not in child.attrib and not walk(child):
-                    return False
-            run.add(Slot(child, "tail"))
-        return True
-
-    return run if walk(el) else None
-
-
-def joined(chars: list[str], j: int) -> bool:
-    """Whether chars[j] belongs to the grapheme cluster of the character
-    before it. This is an approximation: marks, format characters, skin
-    tones and characters after a ZWJ."""
-    c = chars[j]
-    if unicodedata.category(c) in ("Mn", "Mc", "Me", "Cf"):
-        return True
-    if "\U0001f3fb" <= c <= "\U0001f3ff":
-        return True
-    return j > 0 and chars[j - 1] == ZWJ
+def inline_slots(el: lxml.etree._Element) -> list[Slot] | None:
+    """Slots with the visible text of an element, in order. None when it
+    contains an element that is not inline."""
+    result = [Slot(el, "text")]
+    for child in el:
+        if isinstance(child.tag, str):
+            if localname(child) not in INLINE_TAGS:
+                return None
+            if "hidden" not in child.attrib:
+                inner = inline_slots(child)
+                if inner is None:
+                    return None
+                result += inner
+        result.append(Slot(child, "tail"))
+    return result
 
 
 def keep_last_line(block: lxml.etree._Element) -> None:
     """Remove line break opportunities at the end of a block, so the last
-    line has at least LAST_LINE grapheme clusters. Spaces become no-break
-    spaces. Soft hyphens and zero-width spaces are removed."""
-    run = inline_run(block)
-    if run is None:
+    line is not too short."""
+    slots = inline_slots(block)
+    if slots is None:
         return
-    chars = run.chars
-    count = 0
-    spaces: list[int] = []
-    for j in range(len(chars) - 1, -1, -1):
-        if count >= LAST_LINE:
-            break
-        c = chars[j]
-        if c in (SHY, ZWSP):
-            chars[j] = ""
-        elif WHITESPACE.match(c):
-            if count:
-                spaces.append(j)
-        else:
-            # Spaces between two words: keep one, as a no-break space
-            if spaces:
-                for s in spaces:
-                    chars[s] = ""
-                chars[spaces[-1]] = NBSP
-                spaces = []
-            if not c.isspace() and not joined(chars, j):
-                count += 1
-    run.write()
+    texts = [slot.get() for slot in slots]
+    for slot, text, new in zip(slots, texts, ctypography.last_line(texts)):
+        if new != text:
+            slot.put(new or None)
 
 
 def code_cuts(text: str) -> list[int]:
