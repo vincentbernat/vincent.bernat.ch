@@ -1,4 +1,4 @@
-# cython: language_level=3, boundscheck=False
+# cython: language_level=3
 """Typography helpers compiled with Cython."""
 
 import unicodedata
@@ -6,8 +6,11 @@ import unicodedata
 import pyphen
 
 OBJECT = "\ufffc"  # OBJECT REPLACEMENT CHARACTER
-NBSP = "\u00a0"  # NO-BREAK SPACE
-SHY = "\u00ad"  # SOFT HYPHEN
+NNBSP = "\u202f"  # NARROW NO-BREAK SPACE
+cdef Py_UCS4 NBSP = u"\u00a0"  # NO-BREAK SPACE
+cdef Py_UCS4 SHY = u"\u00ad"  # SOFT HYPHEN
+cdef Py_UCS4 ZWSP = u"\u200b"  # ZERO WIDTH SPACE
+cdef Py_UCS4 ZWJ = u"\u200d"  # ZERO WIDTH JOINER
 
 cdef Py_ssize_t LAST_LINE = 8  # Minimum length of the last line of a paragraph
 
@@ -146,14 +149,102 @@ cdef list hyphen_positions(str text, list starts, list hyphenators):
     return result
 
 
+# Units after a figure, separated by a normal space. Units with one letter
+# are often found in text, so they need a no-break space.
+UNITS = (
+    "KB", "MB", "GB", "TB", "KiB", "MiB", "GiB", "TiB",
+    "Ko", "Mo", "Go", "To", "Kio", "Mio", "Gio", "Tio",
+    "Kbps", "Mbps", "Gbps", "Tbps", "Kb/s", "Mb/s", "Gb/s", "Tb/s",
+    "Hz", "kHz", "MHz", "GHz",
+    "ns", "µs", "ms",
+    "nm", "mm", "cm", "km", "mi", "kg",
+    "W", "mW", "kW", "dB", "dBm", "°C",
+    "€", "$",
+)
+
+
+cdef inline bint is_figure(Py_UCS4 c):
+    """Same as [0-9] in Python regular expressions."""
+    return u"0" <= c <= u"9"
+
+
+cdef bint boundary(str text, Py_ssize_t i):
+    """Whether there is a word boundary (\\b) before text[i]."""
+    cdef bint before = i > 0 and is_word(text[i - 1])
+    cdef bint after = i < len(text) and is_word(text[i])
+    return before != after
+
+
+cdef bint figures_at(str text, Py_ssize_t i):
+    """Whether text[i:] starts with figures, followed by the end or by a char
+    that is not part of a word."""
+    cdef Py_ssize_t j = i, n = len(text)
+    while j < n and is_figure(text[j]):
+        j += 1
+    return j > i and (j == n or not is_word(text[j]))
+
+
+cdef bint unit_at(str text, Py_ssize_t i):
+    """Whether text[i:] starts with a unit, not followed by a word char."""
+    cdef Py_ssize_t end, n = len(text)
+    for unit in UNITS:
+        if text.startswith(unit, i):
+            end = i + len(<str>unit)
+            if end == n or not is_word(text[end]):
+                return True
+    return False
+
+
+cdef bint narrow_space(str text, Py_ssize_t i):
+    """Whether the space at i becomes a narrow no-break space."""
+    cdef Py_ssize_t j, start, n = len(text)
+    cdef Py_UCS4 c = text[i]
+    # Before some punctuation marks
+    if i + 1 < n and text[i + 1] in u":;!?%»":
+        return True
+    # After an opening guillemet
+    if i > 0 and text[i - 1] == u"«":
+        return True
+    if figures_at(text, i + 1):
+        # Between figures, like "1 000"
+        if i > 0 and is_figure(text[i - 1]):
+            return True
+        # Version numbers, like "Python 3"
+        start = i
+        while start > 0 and is_word(text[start - 1]):
+            start -= 1
+        if i - start >= 2 and u"A" <= text[start] <= u"Z":
+            for j in range(start + 1, i):
+                if not (u"a" <= text[j] <= u"z" or u"A" <= text[j] <= u"Z"):
+                    break
+            else:
+                return True
+    # Known units, like "10 km"
+    if c == u" " or c == NBSP:
+        start = i
+        while start > 0 and is_figure(text[start - 1]):
+            start -= 1
+        if start < i and boundary(text, start) and unit_at(text, i + 1):
+            return True
+    # Other units, already with a no-break space in the source
+    if c == NBSP and i + 1 < n and is_word(text[i + 1]):
+        start = i
+        while start > 0 and (is_figure(text[start - 1]) or text[start - 1] in u",."):
+            start -= 1
+        for j in range(start, i):
+            if boundary(text, j):
+                return True
+    return False
+
+
 cdef class Run:
     """Text of several slots as one string, so patterns work across inline
-    elements. OBJECT stands for an element whose text is not part of the
-    run. write() puts the result back in the slots.
+    elements. OBJECT stands for an element whose text is not part of the run.
+    write() puts the result back in the slots.
 
-    The chars of a slot are next to each other. starts has the position of
-    the first char of each slot. For <p>Say <em>"yes</em>" now</p>, the
-    slots are p.text, em.text and em.tail:
+    The chars of a slot are next to each other. starts has the position of the
+    first char of each slot. For <p>Say <em>"yes</em>" now</p>, the slots are
+    p.text, em.text and em.tail:
 
         text    S a y ␣ " y e s " ␣ n o w
         starts  0       4       8
@@ -172,8 +263,8 @@ cdef class Run:
         self.text = ""
 
     def add(self, slot, Hyphenator hyphenator=None):
-        """Add the text of a slot at the end. The hyphenator is used for
-        this text. An empty slot is not added.
+        """Add the text of a slot at the end. The hyphenator is used for this
+        text. An empty slot is not added.
 
         In the example, the run is built with:
 
@@ -191,9 +282,9 @@ cdef class Run:
         self.hyphenators.append(hyphenator)
 
     def opaque(self):
-        """Add an element whose text is kept as is, like <code>. It becomes
-        one OBJECT char, inside the slot before it. write() drops it.
-        Patterns see it as a word but cannot change it.
+        """Add an element whose text is kept as is, like <code>. It becomes one
+        OBJECT char, inside the slot before it. write() drops it. Patterns see
+        it as a word but cannot change it.
 
             <p>Run <code>ls</code>.</p>
 
@@ -204,10 +295,10 @@ cdef class Run:
         self.text += OBJECT
 
     def edit(self, list changes):
-        """Replace spans of the text, in order and without overlap. The new
-        text goes to the slot of the first replaced char. An insertion goes
-        to the slot of the char before it, unless this char is OBJECT. Spans
-        with OBJECT are not changed.
+        """Replace spans of the text, in order and without overlap. The new text
+        goes to the slot of the first replaced char. An insertion goes to the
+        slot of the char before it, unless this char is OBJECT. Spans with
+        OBJECT are not changed.
 
         In the example, (3, 4, "_") and (8, 8, "!") give:
 
@@ -249,26 +340,87 @@ cdef class Run:
         self.text = "".join(pieces)
         self.starts = starts
 
-    def sub(self, pattern, repl):
-        """Replace matches of a pattern, or their first group, with edit().
-        repl is a string or a function returning a string from a match.
-        Groups are used when the part to replace needs a lookbehind with a
-        variable width. In the example:
+    def smarten(self):
+        """Quotes and ellipses."""
+        cdef str text = self.text
+        cdef Py_ssize_t i, n = len(text)
+        cdef Py_UCS4 c, before
+        cdef list changes
+        if u"'" in text or u'"' in text:
+            # '80s
+            changes = []
+            for i in range(n - 3):
+                if (
+                    text[i] == u"'"
+                    and (i == 0 or text[i - 1].isspace())
+                    and text[i + 1].isdecimal()
+                    and text[i + 2].isdecimal()
+                    and text[i + 3] == u"s"
+                ):
+                    changes.append((i, i + 1, "’"))
+            self.edit(changes)
+            # A quote is opening at the start, after a space, a bracket or
+            # another opening quote, and before a non-space character. After
+            # a dash, it needs a letter after it.
+            text = self.text
+            changes = []
+            for i in range(n):
+                c = text[i]
+                if c != u"'" and c != u'"':
+                    continue
+                if i + 1 < n and text[i + 1].isspace():
+                    continue
+                if i > 0:
+                    before = text[i - 1]
+                    if not (
+                        before.isspace()
+                        or before in u"([{“‘«"
+                        or (before in u"—–" and i + 1 < n and is_word(text[i + 1]))
+                    ):
+                        continue
+                changes.append((i, i + 1, "‘" if c == u"'" else "“"))
+            self.edit(changes)
+            # Other quotes are closing
+            text = self.text
+            changes = []
+            for i in range(n):
+                c = text[i]
+                if c == u"'" or c == u'"':
+                    changes.append((i, i + 1, "’" if c == u"'" else "”"))
+            self.edit(changes)
+        text = self.text
+        if u"..." in text:
+            changes = []
+            i = 0
+            n = len(text)
+            while i + 3 <= n:
+                if text[i] == u"." and text[i + 1] == u"." and text[i + 2] == u".":
+                    changes.append((i, i + 3, "…"))
+                    i += 3
+                else:
+                    i += 1
+            self.edit(changes)
 
-            run.sub(re.compile(r"(?<=\\w)\\""), "”")
+    def space(self):
+        """French punctuation and figures. Some spaces become narrow no-break
+        spaces. A rule only turns a space into a narrow no-break space. This
+        cannot create or remove a match for another rule, so all rules look at
+        the same text.
 
         """
+        cdef str text = self.text
+        cdef Py_ssize_t i
         cdef list changes = []
-        cdef bint group = pattern.groups > 0
-        cdef bint fixed = isinstance(repl, str)
-        for m in pattern.finditer(self.text):
-            start, end = m.span(1) if group else m.span()
-            changes.append((start, end, repl if fixed else repl(m)))
+        for i in range(len(text)):
+            if text[i].isspace() and narrow_space(text, i):
+                changes.append((i, i + 1, NNBSP))
         self.edit(changes)
 
     def hyphenate(self):
         """Add soft hyphens in words of slots with a hyphenator, except in
-        URLs."""
+        URLs.
+
+        """
         if all(h is None for h in self.hyphenators):
             return
         self.edit([
@@ -278,8 +430,8 @@ cdef class Run:
 
     def write(self):
         """Put the text back in the slots, using starts. OBJECT chars are
-        dropped. Only slots with a different text are changed. A slot left
-        empty becomes None. In the example:
+        dropped. Only slots with a different text are changed. A slot left empty
+        becomes None. In the example:
 
             p.text   "Say "
             em.text  "“yes"
@@ -302,7 +454,7 @@ cdef bint joined(Py_UCS4 c, Py_UCS4 before):
     """Whether c belongs to the grapheme cluster of the char before it. This
     is an approximation: marks, format chars, skin tones and chars after a
     ZWJ."""
-    if before == u"\u200d":
+    if before == ZWJ:
         return True
     if c < u"\x80":
         return False
@@ -312,10 +464,12 @@ cdef bint joined(Py_UCS4 c, Py_UCS4 before):
 
 
 def last_line(list texts):
-    """Remove line break opportunities at the end of a block, so the last
-    line has at least LAST_LINE grapheme clusters. Spaces become no-break
-    spaces. Soft hyphens and zero-width spaces are removed. texts has the
-    text of each slot of the block. Return the new text of each slot."""
+    """Remove line break opportunities at the end of a block, so the last line
+    has at least LAST_LINE grapheme clusters. Spaces become no-break spaces.
+    Soft hyphens and zero-width spaces are removed. texts has the text of each
+    slot of the block. Return the new text of each slot.
+
+    """
     cdef list chars = list("".join(texts))
     cdef list spaces = []
     cdef Py_ssize_t count = 0, j, start = 0
@@ -324,7 +478,7 @@ def last_line(list texts):
         if count >= LAST_LINE:
             break
         c = chars[j]
-        if c == u"\u00ad" or c == u"\u200b":
+        if c == SHY or c == ZWSP:
             chars[j] = ""
         elif c in u" \t\n\x0c\r":
             if count:

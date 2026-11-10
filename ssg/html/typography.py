@@ -5,7 +5,6 @@ from __future__ import annotations
 import dataclasses
 import functools
 import itertools
-import re
 from typing import TYPE_CHECKING, Literal
 
 import pyphen
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
     import lxml.etree
 
 NBSP = "\u00a0"  # NO-BREAK SPACE
-NNBSP = "\u202f"  # NARROW NO-BREAK SPACE
 ZWSP = "\u200b"  # ZERO WIDTH SPACE
 BREAKING_SPACES = (
     "\u1680"  # OGHAM SPACE MARK
@@ -54,19 +52,6 @@ HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
 HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
 
-# Units after a figure, separated by a normal space. Units with one letter
-# are often found in text, so they need a no-break space.
-UNITS = [
-    "KB", "MB", "GB", "TB", "KiB", "MiB", "GiB", "TiB",
-    "Ko", "Mo", "Go", "To", "Kio", "Mio", "Gio", "Tio",
-    "Kbps", "Mbps", "Gbps", "Tbps", "Kb/s", "Mb/s", "Gb/s", "Tb/s",
-    "Hz", "kHz", "MHz", "GHz",
-    "ns", "µs", "ms",
-    "nm", "mm", "cm", "km", "mi", "kg",
-    "W", "mW", "kW", "dB", "dBm", "°C",
-    "€", "$",
-]  # fmt: skip
-
 # Hyphenation of names with capital letters inside, in any language. A
 # trailing "s" is allowed.
 NAMES = [
@@ -82,25 +67,6 @@ names = {
 CODE_MARKS = "._/=:"  # Line breaks in code are allowed after them
 CODE_PART = 3  # Minimum length of each part around a break in code
 
-# Patterns for a run. When a pattern has groups, only the first one is
-# replaced.
-# A quote is opening at the start, after a space, a bracket or another
-# opening quote, and before a non-space character. After a dash, it needs a
-# letter after it.
-opening_quote = re.compile(r"(?:(?<![^\s(\[{“‘«])|(?<=[—–])(?=.\w))['\"](?!\s)")
-closing_quote = re.compile(r"['\"]")
-decade = re.compile(r"(?<!\S)'(?=\d\ds)")  # '80s
-ellipsis = re.compile(r"\.\.\.")
-space_before_punct = re.compile(r"\s(?=[:;!?%»])")
-space_after_punct = re.compile(r"(?<=«)\s")
-space_between_figures = re.compile(r"(?<=[0-9])\s(?=[0-9]+(?:\W|$))")
-version_number = re.compile(r"\b[A-Z][a-zA-Z]+(\s)(?=[0-9]+(?:\W|$))")
-known_unit = re.compile(
-    rf"\b[0-9]+(?:[,.][0-9]+)*([ \u00a0])(?=(?:{'|'.join(map(re.escape, UNITS))})(?!\w))"
-)
-# Cheating, the no-break space is already here
-unknown_unit = re.compile(r"\b[0-9,.]+(\u00a0)(?=\w)")
-
 
 @dataclasses.dataclass(frozen=True)
 class Slot:
@@ -114,34 +80,6 @@ class Slot:
 
     def put(self, value: str | None) -> None:
         setattr(self.el, self.attr, value)
-
-
-def smarten(run: ctypography.Run) -> None:
-    """Quotes and ellipses."""
-    text = run.text
-    if "'" in text or '"' in text:
-        run.sub(decade, "’")
-        run.sub(opening_quote, lambda m: "‘" if m[0] == "'" else "“")
-        run.sub(closing_quote, lambda m: "’" if m[0] == "'" else "”")
-    if "..." in text:
-        run.sub(ellipsis, "…")
-
-
-def space(run: ctypography.Run) -> None:
-    """French punctuation and figures."""
-    # A pattern turns a space into NNBSP. This cannot create a match for
-    # another one, so the text is searched once.
-    text = run.text
-    for pattern in (
-        space_before_punct,
-        space_after_punct,
-        space_between_figures,
-        version_number,
-        known_unit,
-        unknown_unit,
-    ):
-        if pattern.search(text):
-            run.sub(pattern, NNBSP)
 
 
 @functools.cache
@@ -180,8 +118,8 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
         if text.strip(" \t\n\r"):
             # One char for one char, starts stay the same
             run.text = text.translate(source_spaces)
-            smarten(run)
-            space(run)
+            run.smarten()
+            run.space()
             run.hyphenate()
             run.write()
         run = ctypography.Run()
