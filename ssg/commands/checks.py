@@ -72,18 +72,21 @@ def frontmatter(fix: bool = False) -> None:
 
 
 @command("checks:python")
-def python() -> None:
-    """Check Python code with ruff and mypy, and run unit tests."""
+def python(benchmark: bool = False) -> None:
+    """Check Python code with ruff and mypy, and run unit tests. With
+    benchmark, also run benchmarks."""
+    tests = "python -m unittest discover -s ssg/tests -t ."
+    steps = [
+        ("ruff", "ruff check ssg"),
+        ("format", "ruff format --check ssg"),
+        ("mypy", "mypy"),
+        ("tests", tests),
+    ]
+    if benchmark:
+        steps.append(("bench", f"{tests} -p 'bench_*.py'"))
     failed = [
         name
-        for i, (name, args) in enumerate(
-            (
-                ("ruff", "ruff check ssg"),
-                ("format", "ruff format --check ssg"),
-                ("mypy", "mypy"),
-                ("tests", "python -m unittest discover -s ssg/tests -t ."),
-            )
-        )
+        for i, (name, args) in enumerate(steps)
         if run(
             args,
             cwd=config.ROOT,
