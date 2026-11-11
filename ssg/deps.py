@@ -103,6 +103,10 @@ def record_content(resource: Resource) -> None:
         recorder.items[f"c:{resource.path}"] = content_digest(resource)
 
 
+def blogroll_digest(resource: Resource) -> str:
+    return repr(resource.blogroll_group())
+
+
 def content_digest(resource: Resource) -> str:
     return xxhash.xxh3_128_hexdigest(resource.source_text.encode("utf-8"))
 
@@ -258,6 +262,8 @@ KINDS = {
     "w": "sorted",
     # resource path and neighbor, like "…:next_by_time_en" → hash of the neighbor
     "n": "neighbor",
+    # post path → rank of the post and tags of its blogroll group
+    "b": "blogroll",
     # video name → names of its chapter and subtitle files
     "v": "tracks",
     # empty → hash of content of code files
@@ -296,6 +302,9 @@ def state(site: Site, key: str) -> str | None:
                 return ""
             other = resource.neighbors.get(attr)
             return other.digest if other else ""
+        case "b":
+            resource = site.resources.get(what)
+            return blogroll_digest(resource) if resource else ""
         case "v":
             return ",".join(r.name for r in site._tracks(what))
         case "k":

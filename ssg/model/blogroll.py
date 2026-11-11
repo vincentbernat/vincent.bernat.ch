@@ -1,9 +1,9 @@
 """Blogroll, from feeds.yaml."""
 
+import functools
 import locale
-import random
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -14,8 +14,9 @@ import yaml
 from .. import config
 
 FEEDS = config.ROOT / "feeds.yaml"
-# Share of picks among feeds in the categories of an article
-MATCHING_SHARE = 3 / 4
+# Number of posts exchanging their feeds to match their tags
+GROUP = 8
+PHI = (5**0.5 - 1) / 2
 # How much more often starred feeds are picked
 STARRED_WEIGHT = 2
 
@@ -123,34 +124,78 @@ def published(file: str = str(FEEDS)) -> list[tuple[str, list[Feed]]]:
     return result
 
 
-def related(
-    tags: Iterable[str], language: str, seed: str, file: str = str(FEEDS)
-) -> tuple[Feed, FeedArticle | None] | None:
-    """A feed in a language, and one of its articles if any, picked at random
-    with the same seed and file for the same result. When some feeds are in the
-    categories of the tags, pick one of them with a MATCHING_SHARE probability,
-    and one in Computing otherwise. Feeds in other categories are never
-    picked. Starred feeds weigh STARRED_WEIGHT."""
+@functools.cache
+def line(file: str, digest: str, language: str) -> list[tuple[str | None, Feed]]:
+    """Feeds in a language which can be picked for a post, each with the tag of
+    its category, None for Computing.
+
+    """
     names = list(config.TAGS)
-    general = {tag.partition("-")[0] for tag in tags}
-    matching: list[Feed] = []
-    computing: list[Feed] = []
+    result = []
     for category, shown in published(file):
         index = tag_index(category)
-        if index is not None and names[index] in general:
-            pool = matching
-        elif category == "Computing":
-            pool = computing
-        else:
+        if index is None and category != "Computing":
+            # Only a valid category is allowed, or computing
             continue
-        pool.extend(f for f in shown if f.language in (None, language))
+        tag = None if index is None else names[index]
+        for feed in shown:
+            if feed.language in (None, language):
+                # Starred feeds are weighted more
+                result.extend([(tag, feed)] * (STARRED_WEIGHT if feed.starred else 1))
+    result.sort(
+        key=lambda item: xxhash.xxh3_64_intdigest(f"{digest}:{item[1].feed}".encode())
+    )
+    return result
+
+
+def assign(scores: list[list[int]]) -> list[int]:
+    """Slot of each post for the highest total score, with scores[post][slot]."""
+    size = len(scores)
+    best: dict[int, tuple[int, list[int]]] = {0: (0, [])}
+    for mask in range(1, 1 << size):
+        post = mask.bit_count() - 1
+        best[mask] = max(
+            (
+                best[mask ^ (1 << slot)][0] + scores[post][slot],
+                best[mask ^ (1 << slot)][1] + [slot],
+            )
+            for slot in range(size)
+            if mask >> slot & 1
+        )
+    return best[(1 << size) - 1][1]
+
+
+def related(
+    rank: int,
+    group: Sequence[Iterable[str]],
+    language: str,
+    seed: str,
+    file: str = str(FEEDS),
+) -> tuple[Feed, FeedArticle | None] | None:
+    """A feed in a language for a post, and one of its articles if any."""
     digest = xxhash.xxh3_128_hexdigest(Path(file).read_bytes())
-    rng = random.Random(f"{seed}:{digest}")
-    if matching and (not computing or rng.random() < MATCHING_SHARE):
-        pool = matching
-    elif computing:
-        pool = computing
-    else:
+    feeds = line(file, digest, language)
+    if not feeds:
         return None
-    feed = rng.choices(pool, [STARRED_WEIGHT if f.starred else 1 for f in pool])[0]
-    return feed, rng.choice(feed.articles) if feed.articles else None
+
+    # The rank is the number of newer posts. Posts are grouped by GROUP ranks.
+    first = rank - rank % GROUP
+
+    # Each rank gets a feed, with all feeds used as often as the others
+    slots = [feeds[int((first + i) * PHI % 1 * len(feeds))] for i in range(len(group))]
+
+    # Posts of a group exchange their feeds to match their tags, or to get one
+    # in Computing otherwise
+    scores = []
+    for tags in group:
+        general = {tag.partition("-")[0] for tag in tags}
+        scores.append(
+            [2 if tag in general else 1 if tag is None else 0 for tag, _ in slots]
+        )
+    _, feed = slots[assign(scores)[rank - first]]
+    article = min(
+        feed.articles,
+        key=lambda a: xxhash.xxh3_64_intdigest(f"{digest}:{seed}:{a.url}".encode()),
+        default=None,
+    )
+    return feed, article

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .. import config, deps
+from . import blogroll
 from .meta import FRONTMATTER, Meta, digest
 
 if TYPE_CHECKING:
@@ -79,6 +80,17 @@ class Resource:
 
     def next(self, sorter: str) -> Resource | None:
         return self.neighbor(f"next_by_{sorter}")
+
+    def blogroll_group(self) -> tuple[int, list[list[str]]] | None:
+        """Rank of a post, as the number of newer posts in its language, and
+        tags of the posts in the same blogroll group, by rank."""
+        try:
+            posts = self.site.content._sorted(f"time_{self.meta.get('language')}")
+            rank = posts.index(self)
+        except KeyError, ValueError:
+            return None
+        first = rank - rank % blogroll.GROUP
+        return rank, [list(p.tags) for p in posts[first : first + blogroll.GROUP]]
 
     def cover_image(self) -> str:
         """Path of the cover image, relative to media."""

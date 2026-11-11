@@ -85,8 +85,13 @@ def related_blog(resource: Resource) -> tuple[Feed, FeedArticle | None] | None:
     """A feed of the blogroll related to the tags of a blog post, and one of its
     articles if any."""
     deps.record_file(FEEDS)
+    deps.record(f"b:{resource.path}", deps.blogroll_digest(resource))
+    found = resource.blogroll_group()
+    if found is None:
+        return None
+    rank, group = found
     seed = resource.meta.get("uuid") or resource.path
-    return related(resource.tags, resource.meta.language, seed, str(FEEDS))
+    return related(rank, group, resource.meta.language, seed, str(FEEDS))
 
 
 @jinja_global
