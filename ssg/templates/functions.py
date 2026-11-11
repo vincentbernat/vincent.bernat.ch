@@ -10,7 +10,15 @@ from markupsafe import Markup
 
 from .. import config, deps
 from ..images import thumbnails
-from ..model.blogroll import FEEDS, Feed, FeedArticle, favorites, published, related
+from ..model.blogroll import (
+    FEEDS,
+    Feed,
+    FeedArticle,
+    favorites,
+    published,
+    related,
+    tag_index,
+)
 from . import jinja_global
 
 if TYPE_CHECKING:
@@ -78,6 +86,26 @@ def blogroll() -> list[tuple[str, list[Feed]]]:
 def blogroll_favorites(categories: list[tuple[str, list[Feed]]]) -> list[Feed]:
     """Starred feeds of the blogroll, sorted by title."""
     return favorites(categories)
+
+
+@jinja_global
+@jinja2.pass_context
+def blogroll_category(ctx: jinja2.runtime.Context, category: str) -> str:
+    """Name of a blogroll category in the language of the resource."""
+    meta = ctx["resource"].meta
+    if meta.language == "en":
+        return category
+    index = tag_index(category)
+    if index is None:
+        try:
+            return meta.l10n.categories[category]
+        except AttributeError, KeyError:
+            raise ValueError(
+                f"no {meta.language} translation for blogroll category {category}"
+            ) from None
+    info = list(config.TAGS.values())[index]
+    name = str(info.get(f"descr_{meta.language}") or info.get("descr"))
+    return name[:1].upper() + name[1:]
 
 
 @jinja_global

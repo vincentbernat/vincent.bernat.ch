@@ -108,17 +108,19 @@
 {% macro blogroll_feed(feed, star=True) %}
 {% set lang = resource.meta.language %}
 {% set other = feed.language and feed.language != lang %}
+{# Descriptions are in English, only other languages get a note #}
+{% set foreign = feed.language and feed.language != "en" %}
 <li>
-  <a href="{{ feed.url|e }}"{% if other %} lang="{{ feed.language }}" hreflang="{{ feed.language }}"{% endif %} class="lf-title">{{ feed.title|e }}</a>
-{%- if star and feed.starred %} <span role="img" aria-label="{{ resource.meta.l10n.starred|e }}" title="{{ resource.meta.l10n.starred|e }}">⭐</span>{% endif %}
+  <a href="{{ feed.url|e }}"{% if other %} hreflang="{{ feed.language }}"{% endif %} class="lf-title">{{ feed.title|e }}</a>
+{%- if star and feed.starred %} <span role="img" lang="{{ lang }}" aria-label="{{ resource.meta.l10n.starred|e }}" title="{{ resource.meta.l10n.starred|e }}">⭐</span>{% endif %}
 
-{% if feed.description or feed.articles or other %}
+{% if feed.description or feed.articles or foreign %}
   <span class="lf-description"><span>{{ (feed.description[:1]|upper ~ feed.description[1:])|e }}
 {%- for article in feed.articles %}
 {%- if loop.first and feed.description %}{{ " " if feed.description[-1] in ".!?" else ". " }}{% endif -%}
-“<a href="{{ article.url|e }}">{{ article.title|replace("“", "‘")|replace("”", "’")|e }}</a>{{ "" if loop.last else "," }}”{{ "" if loop.last else " " }}
+“<a href="{{ article.url|e }}" lang="{{ feed.language }}">{{ article.title|replace("“", "‘")|replace("”", "’")|e }}</a>{{ "" if loop.last else "," }}”{{ "" if loop.last else " " }}
 {%- endfor %}
-{%- if other %} ({{ resource.meta.l10n.language[feed.language] }}){% endif -%}
+{%- if foreign %} (<span lang="{{ lang }}">{{ resource.meta.l10n.language[feed.language] }}</span>){% endif -%}
   </span></span>
 {% endif %}
 </li>
@@ -129,7 +131,7 @@
 {% set categories = blogroll() %}
 {% if favorites %}
 <div class="lf-blogroll">
-  <ul>
+  <ul lang="en">
 {% for feed in blogroll_favorites(categories) %}
     {{ blogroll_feed(feed, star=False)|indent(4) }}
 {% endfor %}
@@ -138,14 +140,14 @@
 {% else %}
 <div class="toc"><ul>
 {%- for category, feeds in categories %}
-<li><a href="#blogroll-{{ category|lower }}">{{ category|e }}</a>
+<li><a href="#blogroll-{{ category|lower }}">{{ blogroll_category(category)|e }}</a>
 {%- endfor -%}
 </ul></div>
 <div class="lf-blogroll">
 {% for category, feeds in categories %}
   <div class="lf-blogroll-category" id="blogroll-{{ category|lower }}">
-    <h2>{{ category|e }}</h2>
-    <ul>
+    <h2>{{ blogroll_category(category)|e }}</h2>
+    <ul lang="en">
 {% for feed in feeds %}
       {{ blogroll_feed(feed)|indent(6) }}
 {% endfor %}
