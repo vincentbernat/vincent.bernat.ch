@@ -62,7 +62,11 @@ def miniflux(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
 def pull(file: str = str(FEEDS), dry_run: bool = False) -> None:
     """Pull Miniflux feeds to a YAML file."""
     feeds = miniflux("GET", "feeds")
-    previous = {e.feed: e for entries in load(file).values() for e in entries}
+    previous = {
+        e.feed: (category, e)
+        for category, entries in load(file).items()
+        for e in entries
+    }
     result: dict[str, list[dict[str, Any]]] = {}
     for feed in sorted(
         feeds,
@@ -74,7 +78,20 @@ def pull(file: str = str(FEEDS), dry_run: bool = False) -> None:
             feed=feed["feed_url"],
             description=feed.get("description") or "",
         )
-        if old := previous.get(entry.feed):
+        category = feed["category"]["title"]
+        if entry.feed not in previous:
+            print(f"add feed {entry.feed}")
+        else:
+            old_category, old = previous.pop(entry.feed)
+            changes = [
+                k
+                for k in ("title", "url", "description")
+                if getattr(old, k) != getattr(entry, k)
+            ]
+            if old_category != category:
+                changes.append("category")
+            if changes:
+                print(f"update feed {entry.feed}: {', '.join(changes)}")
             entry = replace(
                 entry,
                 starred=old.starred,
@@ -83,7 +100,9 @@ def pull(file: str = str(FEEDS), dry_run: bool = False) -> None:
                 note=old.note,
                 articles=old.articles,
             )
-        result.setdefault(feed["category"]["title"], []).append(entry.dump())
+        result.setdefault(category, []).append(entry.dump())
+    for url in previous:
+        print(f"delete feed {url}")
     output = yaml.dump(
         result,
         Dumper=IndentedDumper,
