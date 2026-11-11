@@ -139,7 +139,8 @@ def line(file: str, digest: str, language: str) -> list[tuple[str | None, Feed]]
             continue
         tag = None if index is None else names[index]
         for feed in shown:
-            if feed.language in (None, language):
+            # Feeds in English are picked for all languages
+            if feed.language in (None, "en", language):
                 # Starred feeds are weighted more
                 result.extend([(tag, feed)] * (STARRED_WEIGHT if feed.starred else 1))
     result.sort(
@@ -172,7 +173,7 @@ def related(
     seed: str,
     file: str = str(FEEDS),
 ) -> tuple[Feed, FeedArticle | None] | None:
-    """A feed in a language for a post, and one of its articles if any."""
+    """A feed for a post in a language, and one of its articles if any."""
     digest = xxhash.xxh3_128_hexdigest(Path(file).read_bytes())
     feeds = line(file, digest, language)
     if not feeds:
