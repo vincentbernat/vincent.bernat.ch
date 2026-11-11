@@ -125,6 +125,29 @@ def natural_sort(resources: Iterable[Resource]) -> list[Resource]:
     return sorted(resources, key=lambda r: natural_key(r.path))
 
 
+# Closing quotes, closing HTML tags and Markdown link targets at the end
+CLOSING_RE = re.compile(r'(?:[”’"»\s]|</\w+>|\]\([^()\s]*\)(?:\{[^{}]*\})?)*$')
+QUOTES_RE = re.compile(r'[”’"]*$')
+
+
+@jinja_filter
+def punctuate(text: str, mark: str = ".") -> str:
+    """Add a punctuation mark at the end of a text, unless it already ends
+    with one."""
+    content = CLOSING_RE.sub("", text, count=1)
+    if not content or content[-1] in ".!?…":
+        return text
+    # In English, the mark goes inside the closing quotes
+    end = len(QUOTES_RE.sub("", text, count=1))
+    return text[:end] + mark + text[end:]
+
+
+@jinja_filter
+def capitalize(text: str) -> str:
+    """Uppercase the first letter of a text, without changing the others."""
+    return text[:1].upper() + text[1:]
+
+
 @jinja_filter
 def mastodon_href(handle: str) -> str:
     """Turn a mastodon handle into an href (very naive)."""

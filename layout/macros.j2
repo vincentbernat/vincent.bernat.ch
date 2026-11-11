@@ -29,15 +29,16 @@
 {%- set title = article.meta.title|replace("“", "‘")|replace("”", "’")|e -%}
 {%- set link = "[" ~ title ~ "](" ~ content_url(article.url) ~ "){ .lf-title }" -%}
 {%- if lang == "fr" -%}
-« {{ link }} »{{ "." if loop.last else (" et " if loop.revindex == 2 else ", ") }}
+{%- set cite = "« " ~ link ~ " »" -%}
+{{ cite|punctuate if loop.last else cite ~ (" et " if loop.revindex == 2 else ", ") }}
 {%- else -%}
-“{{ link }}{{ "." if loop.last else "," }}”{{ "" if loop.last else (" and " if loop.revindex == 2 else " ") }}
+{{ ("“" ~ link ~ "”")|punctuate("." if loop.last else ",") }}{{ "" if loop.last else (" and " if loop.revindex == 2 else " ") }}
 {%- endif -%}
 {%- endfor -%}
 {% endmacro %}
 
 {% macro tagfmt_plain(resource, tag, text, disabled) %}
-{{ text[0]|upper }}{{ text[1:] }}
+{{ text|capitalize }}
 {% endmacro %}
 {% macro tagfmt_link(resource, tag, text, disabled) %}
 {%- if tag != "outdated" and not disabled %}<a href="{{ content_url(resource.meta.language + '/blog') }}#tag-{{ tag }}">{% endif -%}
@@ -115,12 +116,18 @@
 {%- if star and feed.starred %} <span role="img" lang="{{ lang }}" aria-label="{{ resource.meta.l10n.starred|e }}" title="{{ resource.meta.l10n.starred|e }}">⭐</span>{% endif %}
 
 {% if feed.description or feed.articles or foreign %}
-  <span class="lf-description"><span>{{ (feed.description[:1]|upper ~ feed.description[1:])|e }}
+{% set description = feed.description|capitalize|e %}
+  <span class="lf-description"><span>{{ description|punctuate if feed.articles or foreign else description }}
 {%- for article in feed.articles %}
-{%- if loop.first and feed.description %}{{ " " if feed.description[-1] in ".!?" else ". " }}{% endif -%}
-“<a href="{{ article.url|e }}" lang="{{ feed.language }}">{{ article.title|replace("“", "‘")|replace("”", "’")|e }}</a>{{ "" if loop.last else "," }}”{{ "" if loop.last else " " }}
+{%- if loop.first and feed.description %} {% endif -%}
+{%- set cite %}“<a href="{{ article.url|e }}" lang="{{ feed.language }}">{{ article.title|replace("“", "‘")|replace("”", "’")|e }}</a>”{% endset -%}
+{{ cite|punctuate("." if loop.last else ",") }}{{ "" if loop.last else " " }}
 {%- endfor %}
-{%- if foreign %} (<span lang="{{ lang }}">{{ resource.meta.l10n.language[feed.language] }}</span>){% endif -%}
+{%- if foreign %}
+{%- if feed.description or feed.articles %} {% endif -%}
+{%- set note = resource.meta.l10n.language[feed.language] -%}
+<span lang="{{ lang }}">{{ note|capitalize|punctuate }}</span>
+{%- endif -%}
   </span></span>
 {% endif %}
 </li>
