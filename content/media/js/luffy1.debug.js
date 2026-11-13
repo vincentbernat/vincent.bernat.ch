@@ -68,7 +68,6 @@ luffy.debug = {
     // Show special spaces and hyphens.
     spacesShown = !spacesShown;
     if (!spacesShown) {
-      console.log("hello?");
       spacesObserver?.disconnect();
       spacesLayer?.remove();
       spacesLayer = null;
