@@ -4,13 +4,15 @@ let gridState = 0;
 
 // Characters added by ssg/html/typography.py, with the class to show them
 const spaces = {
-  "­": "lf-debug-shy",
-  "​": "lf-debug-zwsp",
-  " ": "lf-debug-nbsp",
-  " ": "lf-debug-nnbsp",
+  "\u00AD": "lf-debug-shy",
+  "\u200B": "lf-debug-zwsp",
+  "\u00A0": "lf-debug-nbsp",
+  "\u202F": "lf-debug-nnbsp",
 };
 const spacesRe = new RegExp(`[${Object.keys(spaces).join("")}]`, "g");
+let spacesShown = false;
 let spacesLayer = null;
+let spacesObserver = null;
 
 // Font descent, to find the baseline at the bottom of a text box
 const descents = {};
@@ -25,8 +27,7 @@ const descent = (style) => {
 };
 
 const drawSpaces = () => {
-  // Marks go in a layer above the text, as changing the text changes the
-  // layout
+  // Marks go in a layer above the text
   spacesLayer?.remove();
   spacesLayer = document.createElement("div");
   spacesLayer.className = "lf-debug-spaces";
@@ -65,13 +66,15 @@ luffy.debug = {
   },
   s() {
     // Show special spaces and hyphens.
-    if (spacesLayer) {
-      spacesLayer.remove();
+    spacesShown = !spacesShown;
+    if (!spacesShown) {
+      console.log("hello?");
+      spacesObserver?.disconnect();
+      spacesLayer?.remove();
       spacesLayer = null;
-      removeEventListener("resize", drawSpaces);
     } else {
-      drawSpaces();
-      addEventListener("resize", drawSpaces);
+      spacesObserver = new ResizeObserver(drawSpaces);
+      spacesObserver.observe(document.body);
     }
   },
 };
