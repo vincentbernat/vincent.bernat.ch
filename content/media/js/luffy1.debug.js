@@ -14,6 +14,11 @@ let spacesShown = false;
 let spacesLayer = null;
 let spacesObserver = null;
 
+// Lines of left-aligned text in these blocks show their rag. A rag of this
+// part of the block width is red.
+const ragBlocks = "p, li, dt, dd";
+const ragMax = 0.15;
+
 // Font descent, to find the baseline at the bottom of a text box
 const descents = {};
 const descent = (style) => {
@@ -26,6 +31,54 @@ const descent = (style) => {
   return descents[font];
 };
 
+const drawRags = (layer, blocks) => {
+  for (const [block, rects] of blocks) {
+    const style = getComputedStyle(block);
+    // Only for ragged-right blocks (but it would work for justify as well).
+    if (!["start", "left"].includes(style.textAlign)) continue;
+    // Fragments are in text order. A fragment below the current line starts
+    // a new one.
+    const lines = [];
+    for (const r of rects) {
+      if (!r.width) continue;
+      const line = lines[lines.length - 1];
+      if (line && (r.top + r.bottom) / 2 < line.bottom) {
+        line.top = Math.min(line.top, r.top);
+        line.bottom = Math.max(line.bottom, r.bottom);
+        line.right = Math.max(line.right, r.right);
+      } else {
+        lines.push({ top: r.top, bottom: r.bottom, right: r.right });
+      }
+    }
+    // The last line is not a rag
+    lines.pop();
+    const box = block.getBoundingClientRect();
+    const left =
+      box.left +
+      parseFloat(style.borderLeftWidth) +
+      parseFloat(style.paddingLeft);
+    const right =
+      box.right -
+      parseFloat(style.borderRightWidth) -
+      parseFloat(style.paddingRight);
+    for (const line of lines) {
+      const rag = right - line.right;
+      if (rag <= 0) continue;
+      const bad = Math.min(rag / ((right - left) * ragMax), 1);
+      const mark = document.createElement("div");
+      mark.className = "lf-debug-rag";
+      mark.style.left = `${line.right + scrollX}px`;
+      mark.style.top = `calc(${line.bottom - descent(style) + scrollY}px - 1ex)`;
+      mark.style.width = `${rag}px`;
+      mark.style.height = "1ex";
+      mark.style.fontFamily = style.fontFamily;
+      mark.style.fontSize = style.fontSize;
+      mark.style.backgroundColor = `hsl(${120 * (1 - bad)} 80% 45%)`;
+      layer.appendChild(mark);
+    }
+  }
+};
+
 const drawSpaces = () => {
   // Marks go in a layer above the text
   spacesLayer?.remove();
@@ -33,8 +86,15 @@ const drawSpaces = () => {
   spacesLayer.className = "lf-debug-spaces";
   const range = document.createRange();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const blocks = new Map();
   for (let node; (node = walker.nextNode());) {
     if (node.parentElement.closest("script, style")) continue;
+    const block = node.parentElement.closest(ragBlocks);
+    if (block?.closest("main.lf-main") && node.data.trim()) {
+      if (!blocks.has(block)) blocks.set(block, []);
+      range.selectNodeContents(node);
+      blocks.get(block).push(...range.getClientRects());
+    }
     const style = getComputedStyle(node.parentElement);
     spacesRe.lastIndex = 0;
     for (let m; (m = spacesRe.exec(node.data));) {
@@ -52,6 +112,7 @@ const drawSpaces = () => {
       spacesLayer.appendChild(mark);
     }
   }
+  drawRags(spacesLayer, blocks);
   document.body.appendChild(spacesLayer);
 };
 
