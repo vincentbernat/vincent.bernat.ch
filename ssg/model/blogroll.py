@@ -139,6 +139,9 @@ def line(file: str, digest: str, language: str) -> list[tuple[str | None, Feed]]
             continue
         tag = None if index is None else names[index]
         for feed in shown:
+            # Exclude myself
+            if feed.url.startswith(config.BASE):
+                continue
             # Feeds in English are picked for all languages
             if feed.language in (None, "en", language):
                 # Starred feeds are weighted more
