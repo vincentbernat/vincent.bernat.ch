@@ -27,23 +27,25 @@ class AdmonitionProcessor(BaseProcessor):
 
 
 class AdmonitionClassProcessor(Treeprocessor):
-    """Move the classes of the last paragraph of an admonition to the
-    admonition itself. This way, an attribute list at the end of an admonition
-    applies to the whole block."""
+    """Move the classes of the first paragraph of an admonition to the
+    admonition itself. This way, an attribute list at the end of this paragraph
+    applies to the whole block.
+
+    """
 
     def run(self, doc: Element) -> None:
         for div in doc.iter("div"):
             classes = div.get("class", "").split()
             if "admonition" not in classes:
                 continue
-            last = div[-1] if len(div) else None
-            if (
-                last is not None
-                and last.tag == "p"
-                and "admonition-title" not in last.get("class", "").split()
-                and last.get("class")
-            ):
-                classes += last.attrib.pop("class").split()
+            children = [
+                child
+                for child in div
+                if "admonition-title" not in child.get("class", "").split()
+            ]
+            first = children[0] if children else None
+            if first is not None and first.tag == "p" and first.get("class"):
+                classes += first.attrib.pop("class").split()
             div.set("class", " ".join(classes))
 
 

@@ -225,7 +225,7 @@ def ai_usage_emoji(entry: str, emojis: Mapping[str, str] | None) -> str | None:
 @jinja_filter
 def clean_rss(html: str) -> Markup:
     root = lxml.html.fragment_fromstring(html, create_parent="div")
-    for el in select(root, ".when-js, .when-nojs"):
+    for el in select(root, ".when-js, .when-nojs, .when-norss"):
         remove(el)
     for el in select(root, "a"):
         if text(el) == "#":
