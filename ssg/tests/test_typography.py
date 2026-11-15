@@ -92,14 +92,14 @@ class TestTypography(unittest.TestCase):
                     '<div>sur net-next<sup id="fnref:r"><a>1</a></sup>^: oui</div>',
                 ),
                 ("<div>about 1 000 users</div>", "<div>about 1^000 users</div>"),
-                ("<div>Use Python 3 now</div>", "<div>Use Python^3 now</div>"),
+                ("<div>Use Python 3 now</div>", "<div>Use Python_3 now</div>"),
                 (
                     "<div>In Linux <strong>4.18</strong>, yes</div>",
-                    "<div>In Linux^<strong>4.18</strong>, yes</div>",
+                    "<div>In Linux_<strong>4.18</strong>, yes</div>",
                 ),
                 (
                     "<div>In <em>Linux</em> 4.18, yes</div>",
-                    "<div>In <em>Linux</em>^4.18, yes</div>",
+                    "<div>In <em>Linux</em>_4.18, yes</div>",
                 ),
                 (
                     "<div>In Linux <code>4.18</code>, no</div>",
@@ -116,7 +116,7 @@ class TestTypography(unittest.TestCase):
                 ),
                 (
                     '<div>Python<sup id="fnref:x"><a>1</a></sup> 3</div>',
-                    '<div>Python<sup id="fnref:x"><a>1</a></sup>^3</div>',
+                    '<div>Python<sup id="fnref:x"><a>1</a></sup>_3</div>',
                 ),
                 ("<div>It is 10\u00a0km away</div>", "<div>It is 10^km away</div>"),
                 ("<div>at 2.4 GHz, 3 Mb/s</div>", "<div>at 2.4^GHz, 3^Mb/s</div>"),

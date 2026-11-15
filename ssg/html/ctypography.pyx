@@ -205,20 +205,9 @@ cdef bint narrow_space(str text, Py_ssize_t i):
     # After an opening guillemet
     if i > 0 and text[i - 1] == u"«":
         return True
-    if figures_at(text, i + 1):
-        # Between figures, like "1 000"
-        if i > 0 and is_figure(text[i - 1]):
-            return True
-        # Version numbers, like "Python 3"
-        start = i
-        while start > 0 and is_word(text[start - 1]):
-            start -= 1
-        if i - start >= 2 and u"A" <= text[start] <= u"Z":
-            for j in range(start + 1, i):
-                if not (u"a" <= text[j] <= u"z" or u"A" <= text[j] <= u"Z"):
-                    break
-            else:
-                return True
+    # Between figures, like "1 000"
+    if figures_at(text, i + 1) and i > 0 and is_figure(text[i - 1]):
+        return True
     # Known units, like "10 km"
     if c == u" " or c == NBSP:
         start = i
@@ -235,6 +224,23 @@ cdef bint narrow_space(str text, Py_ssize_t i):
             if boundary(text, j):
                 return True
     return False
+
+
+cdef bint version_space(str text, Py_ssize_t i):
+    """Whether the space at i is in a version number, like "Python 3", and
+    becomes a no-break space."""
+    cdef Py_ssize_t j, start
+    if not figures_at(text, i + 1):
+        return False
+    start = i
+    while start > 0 and is_word(text[start - 1]):
+        start -= 1
+    if i - start < 2 or not u"A" <= text[start] <= u"Z":
+        return False
+    for j in range(start + 1, i):
+        if not (u"a" <= text[j] <= u"z" or u"A" <= text[j] <= u"Z"):
+            return False
+    return True
 
 
 cdef class Run:
@@ -403,17 +409,21 @@ cdef class Run:
 
     def space(self):
         """French punctuation and figures. Some spaces become narrow no-break
-        spaces. A rule only turns a space into a narrow no-break space. This
-        cannot create or remove a match for another rule, so all rules look at
-        the same text.
+        spaces, spaces in version numbers become no-break spaces. A rule only
+        turns a space into a no-break space. This cannot create or remove a
+        match for another rule, so all rules look at the same text.
 
         """
         cdef str text = self.text
         cdef Py_ssize_t i
         cdef list changes = []
         for i in range(len(text)):
-            if text[i].isspace() and narrow_space(text, i):
+            if not text[i].isspace():
+                continue
+            if narrow_space(text, i):
                 changes.append((i, i + 1, NNBSP))
+            elif version_space(text, i):
+                changes.append((i, i + 1, NBSP))
         self.edit(changes)
 
     def hyphenate(self):
