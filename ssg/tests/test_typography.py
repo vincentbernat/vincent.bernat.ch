@@ -122,6 +122,11 @@ class TestTypography(unittest.TestCase):
                 ("<div>at 2.4 GHz, 3 Mb/s</div>", "<div>at 2.4^GHz, 3^Mb/s</div>"),
                 ("<div>à 2,4 GHz, 3 Mio/s</div>", "<div>à 2,4^GHz, 3^Mio/s</div>"),
                 ("<div>costs 5 € or 6\u00a0€</div>", "<div>costs 5^€ or 6^€</div>"),
+                (
+                    "<div>coûte 0,65 FF ou 2 CHF</div>",
+                    "<div>coûte 0,65^FF ou 2^CHF</div>",
+                ),
+                ("<div>It is 10 FFT</div>", "<div>It is 10 FFT</div>"),
                 ("<div>It is 10 kmh</div>", "<div>It is 10 kmh</div>"),
                 ("<div>step 1 A or 2 V</div>", "<div>step 1 A or 2 V</div>"),
                 # Spaces from the source
