@@ -68,6 +68,10 @@ def bundle_sizes(site: Site, bundles: list[str], target: Path) -> None:
             found |= nested.get(bundle, set())
         for bundle in found:
             counts[bundle] += 1
+    # Debug assets are loaded on-demand, act as if they are only used on one page.
+    for bundle in counts:
+        if Path(bundle).name.startswith("luffy1.debug."):
+            counts[bundle] = 1
     sizes.sort(key=lambda item: (counts[item[0]], item[1][2]), reverse=True)
     totals = []
     for percent in (100, 90, 50, 10, 5, 1):

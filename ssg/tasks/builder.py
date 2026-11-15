@@ -476,7 +476,9 @@ class Builder:
             "basename": "bundle-sizes",
             "doc": SINGLES["bundle-sizes"][0],
             "actions": [(sizes.bundle_sizes, [self.site, bundles, target])],
-            "file_dep": pages + [str(self.site.manifest(b)) for b in bundles],
+            "file_dep": pages
+            + [str(SSG / "tasks" / "sizes.py")]
+            + [str(self.site.manifest(b)) for b in bundles],
             "task_dep": ["compress"],
             "targets": [str(target)],
             "uptodate": [environment()],
