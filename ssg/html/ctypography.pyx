@@ -159,7 +159,7 @@ UNITS = (
     "ns", "µs", "ms",
     "nm", "mm", "cm", "km", "mi", "kg",
     "W", "mW", "kW", "dB", "dBm", "°C",
-    "€", "$", "FF", "CHF",
+    "€", "$", "F", "FF", "CHF",
 )
 
 
