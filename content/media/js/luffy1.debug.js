@@ -218,15 +218,22 @@ luffy.debug = {
     classes.toggle("lf-debug-grid-2", gridState === 2);
   },
   s() {
+    // Some inputs in an article may change the text layout
+    const inputs = document.querySelectorAll('input[id^="lf1-typo-"]');
+
     // Show special spaces and hyphens.
     spacesShown = !spacesShown;
     if (!spacesShown) {
       spacesObserver?.disconnect();
+      inputs.forEach((input) =>
+        input.removeEventListener("change", drawSpaces),
+      );
       spacesLayer?.remove();
       spacesLayer = null;
     } else {
       spacesObserver = new ResizeObserver(drawSpaces);
       spacesObserver.observe(document.body);
+      inputs.forEach((input) => input.addEventListener("change", drawSpaces));
     }
   },
 };
