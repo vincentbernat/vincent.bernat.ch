@@ -66,6 +66,8 @@ names = {
 
 CODE_MARKS = "._/=:"  # Line breaks in code are allowed after them
 CODE_PART = 3  # Minimum length of each part around a break in code
+LAST_LINE = 8  # Minimum length of the last line of a paragraph
+HYPHEN_LEFT, HYPHEN_RIGHT = 2, 3  # The Element of Typographic Style 2.4.1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -90,8 +92,9 @@ def dictionary(lang: str) -> ctypography.Hyphenator | None:
     if name == "en":
         # "en" alone is British English
         name = "en_US"
-    # The Elements of Typographic Style, 2.4.1
-    return ctypography.Hyphenator(pyphen.LANGUAGES[name], names, left=2, right=3)
+    return ctypography.Hyphenator(
+        pyphen.LANGUAGES[name], names, left=HYPHEN_LEFT, right=HYPHEN_RIGHT
+    )
 
 
 def ignored(el: lxml.etree._Element) -> bool:
@@ -182,7 +185,8 @@ def keep_last_line(block: lxml.etree._Element) -> None:
     if slots is None:
         return
     texts = [slot.get() for slot in slots]
-    for slot, text, new in zip(slots, texts, ctypography.last_line(texts)):
+    news = ctypography.last_line(texts, LAST_LINE)
+    for slot, text, new in zip(slots, texts, news):
         if new != text:
             slot.put(new or None)
 

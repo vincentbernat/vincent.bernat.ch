@@ -12,8 +12,6 @@ cdef Py_UCS4 SHY = u"\u00ad"  # SOFT HYPHEN
 cdef Py_UCS4 ZWSP = u"\u200b"  # ZERO WIDTH SPACE
 cdef Py_UCS4 ZWJ = u"\u200d"  # ZERO WIDTH JOINER
 
-cdef Py_ssize_t LAST_LINE = 8  # Minimum length of the last line of a paragraph
-
 
 cdef inline bint is_word(Py_UCS4 c):
     """Same as \\w in Python regular expressions."""
@@ -473,9 +471,9 @@ cdef bint joined(Py_UCS4 c, Py_UCS4 before):
     return unicodedata.category(c) in ("Mn", "Mc", "Me", "Cf")
 
 
-def last_line(list texts):
+def last_line(list texts, Py_ssize_t minimum):
     """Remove line break opportunities at the end of a block, so the last line
-    has at least LAST_LINE grapheme clusters. Spaces become no-break spaces.
+    has at least minimum grapheme clusters. Spaces become no-break spaces.
     Soft hyphens and zero-width spaces are removed. texts has the text of each
     slot of the block. Return the new text of each slot.
 
@@ -485,7 +483,7 @@ def last_line(list texts):
     cdef Py_ssize_t count = 0, j, start = 0
     cdef Py_UCS4 c, before
     for j in range(len(chars) - 1, -1, -1):
-        if count >= LAST_LINE:
+        if count >= minimum:
             break
         c = chars[j]
         if c == SHY or c == ZWSP:
