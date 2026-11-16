@@ -290,7 +290,10 @@ class Builder:
             target = self.site.generated[resource.cover_image()]
             cover = resource.meta.get("cover")
             file_dep = COVER_DEPS + [str(FAVICON)]
+            fragment = ""
             if cover:
+                # A fragment selects a view of an SVG
+                cover, _, fragment = cover.partition("#")
                 image = self.site.resources.get(f"media/images/{cover}")
                 if image is None:
                     raise ValueError(f"{resource}: unknown cover {cover}")
@@ -300,10 +303,14 @@ class Builder:
             yield {
                 "basename": "cover",
                 "name": resource.path,
-                "actions": [(covers.generate, [title, author, cover, target])],
+                "actions": [
+                    (covers.generate, [title, author, cover, target, fragment])
+                ],
                 "file_dep": file_dep,
                 "targets": [str(target)],
-                "uptodate": [environment(title=title, author=author)],
+                "uptodate": [
+                    environment(title=title, author=author, fragment=fragment)
+                ],
             }
 
     def fragment_tasks(self) -> Iterator[Task]:

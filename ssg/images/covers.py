@@ -94,22 +94,25 @@ class Cover:
         sk_img.readPixels(info, data, width * 4)
         return Image.frombytes("RGBA", (width, height), bytes(data))
 
-    def load(self, path: pathlib.Path, width: int) -> Image.Image:
-        """Load a cover image (SVG or raster) and return as RGBA."""
+    def load(self, path: pathlib.Path, width: int, fragment: str) -> Image.Image:
+        """Load a cover image (SVG or raster) and return as RGBA. The fragment
+        selects a view of an SVG."""
         match pathlib.Path(path).suffix:
             case ".svg":
-                return self.load_svg(path, width)
+                return self.load_svg(path, width, fragment)
             case _:
                 return self.load_raster(path)
 
     def load_raster(self, path: pathlib.Path) -> Image.Image:
         return Image.open(path).convert("RGBA")
 
-    def load_svg(self, path: pathlib.Path, width: int) -> Image.Image:
+    def load_svg(self, path: pathlib.Path, width: int, fragment: str) -> Image.Image:
         """Render an SVG image with Firefox, twice the given width."""
         width *= 2
         r, g, b = self.BG_COLOR
         src = pathlib.Path(path).resolve().as_uri()
+        if fragment:
+            src += f"#{fragment}"
         with tempfile.TemporaryDirectory() as tmp:
             html = pathlib.Path(tmp) / "cover.html"
             html.write_text(
@@ -178,7 +181,12 @@ class Cover:
         return wrap(hi)
 
     def generate(
-        self, title: str, author: str, cover: pathlib.Path | None, target: pathlib.Path
+        self,
+        title: str,
+        author: str,
+        cover: pathlib.Path | None,
+        target: pathlib.Path,
+        fragment: str = "",
     ) -> None:
         """Generate a 1200x630 OG cover image."""
         # Fonts are found with Fontconfig
@@ -214,7 +222,7 @@ class Cover:
             block_y = H - bottom_margin - block_h
 
             # Load cover and crop to fill 1200x630
-            image = self.load(cover, W)
+            image = self.load(cover, W, fragment)
             target_ratio = W / H
             cover_ratio = image.width / image.height
             if cover_ratio > target_ratio:
