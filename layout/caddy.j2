@@ -8,6 +8,10 @@
 @icons path_regexp ^/(?:favicon\.ico$|apple-touch-icon(?:-\d+x\d+|precomposed|)\.png)
 @slash path_regexp slash ^(.+)/(?:index\.html)?$
 @html path_regexp html ^(.*)\.html$
+{% if not site.mode.production %}
+@media path /media/*
+@notmedia not path /media/*
+{% endif %}
 
 handle_errors 404 {
 {% for code in languages %}
@@ -23,12 +27,18 @@ handle_errors 404 {
 }
 
 route {
-  header {
+  header {% if not site.mode.production %}@notmedia {% endif %}{
     X-Content-Type-Options nosniff
     Content-Security-Policy "{{ csp()|striptags }}"
     Cache-Control {% if site.mode.production %}max-age=3600{% else %}no-cache{% endif %}
 
   }
+{% if not site.mode.production %}
+  header @media {
+    Access-Control-Allow-Origin *
+    Cache-Control no-cache
+  }
+{% endif %}
   error @hidden 404
 
 {# language selection #}
