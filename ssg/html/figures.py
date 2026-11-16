@@ -76,6 +76,8 @@ def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
         width_attr = img.get("width")
         height_attr = img.get("height")
         src = urllib.parse.unquote(img.get("src", ""))
+        # A fragment selects a view of the image, like in an interactive SVG
+        src, _, fragment = src.partition("#")
         props = None
         dims: tuple[int, int] | None
         if width_attr is None or height_attr is None:
@@ -122,7 +124,7 @@ def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
         if src.endswith(".svg") and props and props.get("interactive"):
             rename(img, "object")
             img.set("type", "image/svg+xml")
-            img.set("data", src)
+            img.set("data", f"{src}#{fragment}" if fragment else src)
             img.text = f"\U0001f5bc {img.get('alt') or ''}"
             img.attrib.pop("src", None)
             img.attrib.pop("alt", None)

@@ -57,7 +57,7 @@ def rewrite(site: Site, root: lxml.etree._Element) -> None:
 def rewrite_images(site: Site, value: str) -> str:
     media = re.escape(site.mode.media_url)
     return re.sub(
-        rf"(?:(?<=^)|(?<=,)){media}(images/[^ ,]+)(?=$| |,)",
-        lambda mo: site.mode.media_url + site.hashed(mo.group(1)),
+        rf"(?:(?<=^)|(?<=,)){media}(images/[^ ,#]+)(#[^ ,]*)?(?=$| |,)",
+        lambda mo: site.mode.media_url + site.hashed(mo.group(1)) + (mo.group(2) or ""),
         value,
     )
