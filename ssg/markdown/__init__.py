@@ -55,6 +55,7 @@ def convert(
     site: Site,
     l10n: Meta | None = None,
     sources: str | None = None,
+    ref: str | None = None,
     page: str | None = None,
 ) -> str:
     return Markdown(
@@ -65,7 +66,9 @@ def convert(
             admonition.makeExtension(),
             glyphs.makeExtension(),
             katex.makeExtension(),
-            shortlinks.makeExtension(site, l10n=l10n, sources=sources, page=page),
+            shortlinks.makeExtension(
+                site, l10n=l10n, sources=sources, ref=ref or "main", page=page
+            ),
             html_comments.makeExtension(),
             responsive_table.makeExtension(),
             codehilite_lang.makeExtension(),

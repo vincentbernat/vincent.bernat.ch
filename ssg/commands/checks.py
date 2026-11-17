@@ -8,7 +8,7 @@ from . import Exit, command, run
 FRONTMATTER_KEYS = (
     "layout",  # templating
     "title", "description", "uuid", "alias", "cover",  # identity
-    "created", "attachments", "galleries", "tags",  # metadata
+    "created", "attachments", "galleries", "tags", "src-ref",  # metadata
     "author", "bluesky", "github", "mastodon",  # attribution
     "featured", "popular", "listable", "notitle", "noindex",  # listing/visibility
     "comments", "share", "subscribe", "sidenotes",  # listing/visibility

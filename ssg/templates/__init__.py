@@ -103,7 +103,12 @@ def render_article(site: Site, resource: Resource) -> str:
     text = render_body(site, resource)
     meta = resource.meta
     return markdown.convert(
-        text, site, meta.get("l10n"), meta.get("sources"), resource.path
+        text,
+        site,
+        meta.get("l10n"),
+        meta.get("sources"),
+        meta.get("src-ref"),
+        resource.path,
     )
 
 

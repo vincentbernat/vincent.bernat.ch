@@ -34,6 +34,7 @@ class ShortLinksExtension(Extension):
         self.config = {
             "l10n": [{}, "Translated strings, from the resource meta"],
             "sources": ["", "URL of the sources of the site, from the resource meta"],
+            "ref": ["main", "Default commit or tag for src://, from the resource meta"],
             "page": ["", "Path of the page, for self:// alone"],
         }
         super().__init__(**kwargs)
@@ -45,6 +46,7 @@ class ShortLinksExtension(Extension):
                 md,
                 self.getConfig("l10n"),
                 self.getConfig("sources"),
+                self.getConfig("ref"),
                 self.getConfig("page"),
                 self.site,
             ),
@@ -87,12 +89,14 @@ class ShortLinksPreprocessor(Preprocessor):
         md: Any,
         l10n: Meta | None,
         sources: str | None,
+        ref: str,
         page: str | None,
         site: Site,
     ) -> None:
         super().__init__(md)
         self.l10n = l10n
         self.sources = sources
+        self.ref = ref
         self.page = page
         self.site = site
         # Titles of the pages from self:// links, by URL
@@ -135,7 +139,7 @@ class ShortLinksPreprocessor(Preprocessor):
         if schema == "src":
             if not self.sources:
                 raise ValueError(f"{mo.group(0)}: no sources in metadata")
-            ref = "main"
+            ref = self.ref
             if m := self.SRC_REF_RE.fullmatch(path):
                 ref, path = m.group("ref", "path")
                 if path is None:
