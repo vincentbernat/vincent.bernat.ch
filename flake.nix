@@ -68,15 +68,6 @@
                   from = python.pkgs.lxml;
                   prev = prev.lxml;
                 };
-                # xxhash from source, as the wheel only uses SSE2, not AVX2
-                xxhash = (prev.xxhash.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
-                  nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
-                    setuptools = [ ];
-                  };
-                  env = (old.env or { }) // l.optionalAttrs pkgs.stdenv.hostPlatform.isx86_64 {
-                    NIX_CFLAGS_COMPILE = "-march=x86-64-v3";
-                  };
-                });
                 # doit from source, to patch it
                 doit = (prev.doit.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
                   nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
