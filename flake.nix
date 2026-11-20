@@ -68,6 +68,10 @@
                   from = python.pkgs.lxml;
                   prev = prev.lxml;
                 };
+                # cython from nixpkgs
+                cython = hacks.nixpkgsPrebuilt {
+                  from = python.pkgs.cython;
+                };
                 # doit from source, to patch it
                 doit = (prev.doit.override { sourcePreference = "sdist"; }).overrideAttrs (old: {
                   nativeBuildInputs = old.nativeBuildInputs ++ final.resolveBuildSystem {
@@ -159,12 +163,12 @@
           # Typography helpers compiled with Cython
           ctypography = pkgs.stdenv.mkDerivation {
             name = "ctypography";
-            src = ./ssg/html/ctypography.pyx;
+            src = ./ssg/html/ctypography.py;
             dontUnpack = true;
             nativeBuildInputs = [ python.pkgs.cython ];
             buildPhase = ''
-              cp $src ctypography.pyx
-              cython -3 --module-name ssg.html.ctypography ctypography.pyx
+              cp $src ctypography.py
+              cython -3 --module-name ssg.html.ctypography ctypography.py
               $CC $(${python}/bin/python3-config --cflags) -fPIC -shared \
                 ctypography.c -o ctypography.so
             '';

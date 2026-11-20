@@ -1,40 +1,51 @@
 # cython: language_level=3
-"""Typography helpers compiled with Cython."""
+"""Typography helpers, compiled with Cython in pure Python mode."""
 
 import unicodedata
 
+import cython
 import pyphen
 
+cython.declare(
+    NBSP=cython.Py_UCS4, SHY=cython.Py_UCS4, ZWSP=cython.Py_UCS4, ZWJ=cython.Py_UCS4
+)
 OBJECT = "\ufffc"  # OBJECT REPLACEMENT CHARACTER
 NNBSP = "\u202f"  # NARROW NO-BREAK SPACE
-cdef Py_UCS4 NBSP = u"\u00a0"  # NO-BREAK SPACE
-cdef Py_UCS4 SHY = u"\u00ad"  # SOFT HYPHEN
-cdef Py_UCS4 ZWSP = u"\u200b"  # ZERO WIDTH SPACE
-cdef Py_UCS4 ZWJ = u"\u200d"  # ZERO WIDTH JOINER
+NBSP = "\u00a0"  # NO-BREAK SPACE
+SHY = "\u00ad"  # SOFT HYPHEN
+ZWSP = "\u200b"  # ZERO WIDTH SPACE
+ZWJ = "\u200d"  # ZERO WIDTH JOINER
 
 
-cdef inline bint is_word(Py_UCS4 c):
+@cython.cfunc
+@cython.inline
+def is_word(c: cython.Py_UCS4) -> cython.bint:
     """Same as \\w in Python regular expressions."""
-    return c.isalnum() or c == u"_"
+    return c.isalnum() or c == "_"
 
 
-cdef inline bint is_letter(Py_UCS4 c):
+@cython.cfunc
+@cython.inline
+def is_letter(c: cython.Py_UCS4) -> cython.bint:
     """Same as [^\\W\\d_] in Python regular expressions."""
-    return c.isalnum() and not c.isdecimal() and c != u"_"
+    return c.isalnum() and not c.isdecimal() and c != "_"
 
 
-cdef class Hyphenator:
+@cython.cclass
+class Hyphenator:
     """Hyphenation of words with the patterns of a pyphen dictionary (Liang's
     algorithm). Positions are cached for each word."""
 
-    cdef dict patterns  # pattern -> (offset, values)
-    cdef Py_ssize_t maxlen
-    cdef Py_ssize_t left
-    cdef Py_ssize_t right
-    cdef dict names
-    cdef dict cache
+    patterns: dict  # pattern -> (offset, values)
+    maxlen: cython.Py_ssize_t
+    left: cython.Py_ssize_t
+    right: cython.Py_ssize_t
+    names: dict
+    cache: dict
 
-    def __init__(self, path, dict names, Py_ssize_t left, Py_ssize_t right):
+    def __init__(
+        self, path, names: dict, left: cython.Py_ssize_t, right: cython.Py_ssize_t
+    ):
         """path is the path of a pyphen dictionary. names has the positions
         of soft hyphens for some words, in any language. left and right are
         the minimum number of characters before the first hyphen and after
@@ -50,13 +61,13 @@ cdef class Hyphenator:
         self.names = names
         self.cache = {}
 
-    cdef tuple positions(self, str word):
+    @cython.cfunc
+    def positions(self, word: str) -> tuple:
         """Positions of soft hyphens in a word. Words with a capital letter
         after the first one have none, unless they are in names."""
-        cdef Py_UCS4 c
         result = self.cache.get(word)
         if result is not None:
-            return <tuple>result
+            return cython.cast(tuple, result)
         if word in self.names:
             result = self.names[word]
         elif word.endswith("s") and word[: len(word) - 1] in self.names:
@@ -66,15 +77,20 @@ cdef class Hyphenator:
         else:
             result = self.liang(word)
         self.cache[word] = result
-        return <tuple>result
+        return cython.cast(tuple, result)
 
-    cdef tuple liang(self, str word):
+    @cython.cfunc
+    def liang(self, word: str) -> tuple:
         """Positions of soft hyphens in a word, from the patterns."""
-        cdef str pointed = "." + word.lower() + "."
-        cdef Py_ssize_t m = len(pointed)
-        cdef Py_ssize_t i, j, k, offset, stop
-        cdef Py_ssize_t right = len(word) - self.right
-        cdef list values = [0] * (m + 1)
+        pointed: str = "." + word.lower() + "."
+        m: cython.Py_ssize_t = len(pointed)
+        i: cython.Py_ssize_t
+        j: cython.Py_ssize_t
+        k: cython.Py_ssize_t
+        offset: cython.Py_ssize_t
+        stop: cython.Py_ssize_t
+        right: cython.Py_ssize_t = len(word) - self.right
+        values: list = [0] * (m + 1)
         for i in range(m - 1):
             stop = min(i + self.maxlen, m) + 1
             for j in range(i + 1, stop):
@@ -83,25 +99,28 @@ cdef class Hyphenator:
                     continue
                 offset = pattern[0]
                 for k, v in enumerate(pattern[1]):
-                    if v > values[i + offset + k]:
-                        values[i + offset + k] = v
+                    values[i + offset + k] = max(values[i + offset + k], v)
         return tuple(
-            i - 1
-            for i in range(m + 1)
-            if values[i] % 2 and self.left <= i - 1 <= right
+            i - 1 for i in range(m + 1) if values[i] % 2 and self.left <= i - 1 <= right
         )
 
 
-cdef list hyphen_positions(str text, list starts, list hyphenators):
+@cython.cfunc
+def hyphen_positions(text: str, starts: list, hyphenators: list) -> list:
     """Positions where soft hyphens go in the words of text, except in URLs.
     starts has the position of the first char of each slot and hyphenators the
     Hyphenator of each slot, or None."""
-    cdef Py_ssize_t n = len(text)
-    cdef Py_ssize_t slots = len(starts)
-    cdef Py_ssize_t i = 0, j, start, word, owner = 0
-    cdef Py_UCS4 c
-    cdef bint url, letters
-    cdef list result = []
+    n: cython.Py_ssize_t = len(text)
+    slots: cython.Py_ssize_t = len(starts)
+    i: cython.Py_ssize_t = 0
+    j: cython.Py_ssize_t
+    start: cython.Py_ssize_t
+    word: cython.Py_ssize_t
+    owner: cython.Py_ssize_t = 0
+    c: cython.Py_UCS4
+    url: cython.bint
+    letters: cython.bint
+    result: list = []
     while i < n:
         # A chunk is a sequence of non-space chars
         if text[i].isspace():
@@ -113,11 +132,15 @@ cdef list hyphen_positions(str text, list starts, list hyphenators):
         url = False
         for j in range(start, i):
             c = text[j]
-            if c == u"/" or c == u"@" or (
-                c == u"."
-                and start < j < i - 1
-                and is_word(text[j - 1])
-                and is_word(text[j + 1])
+            if (
+                c == "/"
+                or c == "@"
+                or (
+                    c == "."
+                    and start < j < i - 1
+                    and is_word(text[j - 1])
+                    and is_word(text[j + 1])
+                )
             ):
                 url = True
                 break
@@ -137,12 +160,15 @@ cdef list hyphen_positions(str text, list starts, list hyphenators):
             if not letters or j - word < 5:
                 continue
             # Words come in order, so the slot only moves forward
-            while owner + 1 < slots and <Py_ssize_t>starts[owner + 1] <= word:
+            while (
+                owner + 1 < slots
+                and cython.cast(cython.Py_ssize_t, starts[owner + 1]) <= word
+            ):
                 owner += 1
             hyphenator = hyphenators[owner]
             if hyphenator is None:
                 continue
-            for p in (<Hyphenator>hyphenator).positions(text[word:j]):
+            for p in cython.cast(Hyphenator, hyphenator).positions(text[word:j]):
                 result.append(word + p)
     return result
 
@@ -158,56 +184,66 @@ UNITS = (
     "nm", "mm", "cm", "km", "mi", "kg",
     "W", "mW", "kW", "dB", "dBm", "°C",
     "€", "$", "F", "FF", "CHF",
-)
+)  # fmt: skip
 
 
-cdef inline bint is_figure(Py_UCS4 c):
+@cython.cfunc
+@cython.inline
+def is_figure(c: cython.Py_UCS4) -> cython.bint:
     """Same as [0-9] in Python regular expressions."""
-    return u"0" <= c <= u"9"
+    return "0" <= c <= "9"
 
 
-cdef bint boundary(str text, Py_ssize_t i):
+@cython.cfunc
+def boundary(text: str, i: cython.Py_ssize_t) -> cython.bint:
     """Whether there is a word boundary (\\b) before text[i]."""
-    cdef bint before = i > 0 and is_word(text[i - 1])
-    cdef bint after = i < len(text) and is_word(text[i])
+    before: cython.bint = i > 0 and is_word(text[i - 1])
+    after: cython.bint = i < len(text) and is_word(text[i])
     return before != after
 
 
-cdef bint figures_at(str text, Py_ssize_t i):
+@cython.cfunc
+def figures_at(text: str, i: cython.Py_ssize_t) -> cython.bint:
     """Whether text[i:] starts with figures, followed by the end or by a char
     that is not part of a word."""
-    cdef Py_ssize_t j = i, n = len(text)
+    j: cython.Py_ssize_t = i
+    n: cython.Py_ssize_t = len(text)
     while j < n and is_figure(text[j]):
         j += 1
     return j > i and (j == n or not is_word(text[j]))
 
 
-cdef bint unit_at(str text, Py_ssize_t i):
+@cython.cfunc
+def unit_at(text: str, i: cython.Py_ssize_t) -> cython.bint:
     """Whether text[i:] starts with a unit, not followed by a word char."""
-    cdef Py_ssize_t end, n = len(text)
+    end: cython.Py_ssize_t
+    n: cython.Py_ssize_t = len(text)
     for unit in UNITS:
         if text.startswith(unit, i):
-            end = i + len(<str>unit)
+            end = i + len(cython.cast(str, unit))
             if end == n or not is_word(text[end]):
                 return True
     return False
 
 
-cdef bint narrow_space(str text, Py_ssize_t i):
+@cython.cfunc
+def narrow_space(text: str, i: cython.Py_ssize_t) -> cython.bint:
     """Whether the space at i becomes a narrow no-break space."""
-    cdef Py_ssize_t j, start, n = len(text)
-    cdef Py_UCS4 c = text[i]
+    j: cython.Py_ssize_t
+    start: cython.Py_ssize_t
+    n: cython.Py_ssize_t = len(text)
+    c: cython.Py_UCS4 = text[i]
     # Before some punctuation marks
-    if i + 1 < n and text[i + 1] in u":;!?%»":
+    if i + 1 < n and text[i + 1] in ":;!?%»":
         return True
     # After an opening guillemet
-    if i > 0 and text[i - 1] == u"«":
+    if i > 0 and text[i - 1] == "«":
         return True
     # Between figures, like "1 000"
     if figures_at(text, i + 1) and i > 0 and is_figure(text[i - 1]):
         return True
     # Known units, like "10 km"
-    if c == u" " or c == NBSP:
+    if c == " " or c == NBSP:
         start = i
         while start > 0 and is_figure(text[start - 1]):
             start -= 1
@@ -216,7 +252,7 @@ cdef bint narrow_space(str text, Py_ssize_t i):
     # Other units, already with a no-break space in the source
     if c == NBSP and i + 1 < n and is_word(text[i + 1]):
         start = i
-        while start > 0 and (is_figure(text[start - 1]) or text[start - 1] in u",."):
+        while start > 0 and (is_figure(text[start - 1]) or text[start - 1] in ",."):
             start -= 1
         for j in range(start, i):
             if boundary(text, j):
@@ -224,24 +260,27 @@ cdef bint narrow_space(str text, Py_ssize_t i):
     return False
 
 
-cdef bint version_space(str text, Py_ssize_t i):
+@cython.cfunc
+def version_space(text: str, i: cython.Py_ssize_t) -> cython.bint:
     """Whether the space at i is in a version number, like "Python 3", and
     becomes a no-break space."""
-    cdef Py_ssize_t j, start
+    j: cython.Py_ssize_t
+    start: cython.Py_ssize_t
     if not figures_at(text, i + 1):
         return False
     start = i
     while start > 0 and is_word(text[start - 1]):
         start -= 1
-    if i - start < 2 or not u"A" <= text[start] <= u"Z":
+    if i - start < 2 or not "A" <= text[start] <= "Z":
         return False
     for j in range(start + 1, i):
-        if not (u"a" <= text[j] <= u"z" or u"A" <= text[j] <= u"Z"):
+        if not ("a" <= text[j] <= "z" or "A" <= text[j] <= "Z"):
             return False
     return True
 
 
-cdef class Run:
+@cython.cclass
+class Run:
     """Text of several slots as one string, so patterns work across inline
     elements. OBJECT stands for an element whose text is not part of the run.
     write() puts the result back in the slots.
@@ -255,10 +294,10 @@ cdef class Run:
 
     """
 
-    cdef public list slots
-    cdef public list hyphenators  # for each slot, or None
-    cdef public list starts
-    cdef public str text
+    slots = cython.declare(list, visibility="public")
+    hyphenators = cython.declare(list, visibility="public")  # for each slot, or None
+    starts = cython.declare(list, visibility="public")
+    text = cython.declare(str, visibility="public")
 
     def __init__(self):
         self.slots = []
@@ -266,7 +305,7 @@ cdef class Run:
         self.starts = []
         self.text = ""
 
-    def add(self, slot, Hyphenator hyphenator=None):
+    def add(self, slot, hyphenator: Hyphenator | None = None):
         """Add the text of a slot at the end. The hyphenator is used for this
         text. An empty slot is not added.
 
@@ -277,7 +316,7 @@ cdef class Run:
             run.add(Slot(em, "tail"))
 
         """
-        cdef str text = slot.get()
+        text: str = slot.get()
         if not text:
             return
         self.starts.append(len(self.text))
@@ -298,7 +337,7 @@ cdef class Run:
         """
         self.text += OBJECT
 
-    def edit(self, list changes):
+    def edit(self, changes: list):
         """Replace spans of the text, in order and without overlap. The new text
         goes to the slot of the first replaced char. An insertion goes to the
         slot of the char before it, unless this char is OBJECT. Spans with
@@ -310,13 +349,18 @@ cdef class Run:
             starts  0       4         9
 
         """
-        cdef str text = self.text
-        cdef list old = self.starts
-        cdef list pieces = []
-        cdef list starts = []
-        cdef Py_ssize_t last = 0, k = 0, n = len(old), length = 0
-        cdef Py_ssize_t start, end, first
-        cdef str value
+        text: str = self.text
+        old: list = self.starts
+        pieces: list = []
+        starts: list = []
+        last: cython.Py_ssize_t = 0
+        k: cython.Py_ssize_t = 0
+        n: cython.Py_ssize_t = len(old)
+        length: cython.Py_ssize_t = 0
+        start: cython.Py_ssize_t
+        end: cython.Py_ssize_t
+        first: cython.Py_ssize_t
+        value: str
         for start, end, value in changes:
             first = start if start < end else start - 1
             if OBJECT in text[first:end]:
@@ -326,12 +370,12 @@ cdef class Run:
             length += start - last
             # Slots starting up to the first char keep their place, the
             # next ones up to the end of the span start after the new text
-            while k < n and <Py_ssize_t>old[k] <= first:
-                starts.append(<Py_ssize_t>old[k] + length - start)
+            while k < n and cython.cast(cython.Py_ssize_t, old[k]) <= first:
+                starts.append(cython.cast(cython.Py_ssize_t, old[k]) + length - start)
                 k += 1
             pieces.append(value)
             length += len(value)
-            while k < n and <Py_ssize_t>old[k] <= end:
+            while k < n and cython.cast(cython.Py_ssize_t, old[k]) <= end:
                 starts.append(length)
                 k += 1
             last = end
@@ -339,27 +383,29 @@ cdef class Run:
             return
         pieces.append(text[last:])
         while k < n:
-            starts.append(<Py_ssize_t>old[k] + length - last)
+            starts.append(cython.cast(cython.Py_ssize_t, old[k]) + length - last)
             k += 1
         self.text = "".join(pieces)
         self.starts = starts
 
     def smarten(self):
         """Quotes and ellipses."""
-        cdef str text = self.text
-        cdef Py_ssize_t i, n = len(text)
-        cdef Py_UCS4 c, before
-        cdef list changes
-        if u"'" in text or u'"' in text:
+        text: str = self.text
+        i: cython.Py_ssize_t
+        n: cython.Py_ssize_t = len(text)
+        c: cython.Py_UCS4
+        before: cython.Py_UCS4
+        changes: list
+        if "'" in text or '"' in text:
             # '80s
             changes = []
             for i in range(n - 3):
                 if (
-                    text[i] == u"'"
+                    text[i] == "'"
                     and (i == 0 or text[i - 1].isspace())
                     and text[i + 1].isdecimal()
                     and text[i + 2].isdecimal()
-                    and text[i + 3] == u"s"
+                    and text[i + 3] == "s"
                 ):
                     changes.append((i, i + 1, "’"))
             self.edit(changes)
@@ -370,7 +416,7 @@ cdef class Run:
             changes = []
             for i in range(n):
                 c = text[i]
-                if c != u"'" and c != u'"':
+                if c != "'" and c != '"':
                     continue
                 if i + 1 < n and text[i + 1].isspace():
                     continue
@@ -378,27 +424,27 @@ cdef class Run:
                     before = text[i - 1]
                     if not (
                         before.isspace()
-                        or before in u"([{“‘«"
-                        or (before in u"—–" and i + 1 < n and is_word(text[i + 1]))
+                        or before in "([{“‘«"
+                        or (before in "—–" and i + 1 < n and is_word(text[i + 1]))
                     ):
                         continue
-                changes.append((i, i + 1, "‘" if c == u"'" else "“"))
+                changes.append((i, i + 1, "‘" if c == "'" else "“"))
             self.edit(changes)
             # Other quotes are closing
             text = self.text
             changes = []
             for i in range(n):
                 c = text[i]
-                if c == u"'" or c == u'"':
-                    changes.append((i, i + 1, "’" if c == u"'" else "”"))
+                if c == "'" or c == '"':
+                    changes.append((i, i + 1, "’" if c == "'" else "”"))
             self.edit(changes)
         text = self.text
-        if u"..." in text:
+        if "..." in text:
             changes = []
             i = 0
             n = len(text)
             while i + 3 <= n:
-                if text[i] == u"." and text[i + 1] == u"." and text[i + 2] == u".":
+                if text[i] == "." and text[i + 1] == "." and text[i + 2] == ".":
                     changes.append((i, i + 3, "…"))
                     i += 3
                 else:
@@ -412,9 +458,9 @@ cdef class Run:
         match for another rule, so all rules look at the same text.
 
         """
-        cdef str text = self.text
-        cdef Py_ssize_t i
-        cdef list changes = []
+        text: str = self.text
+        i: cython.Py_ssize_t
+        changes: list = []
         for i in range(len(text)):
             if not text[i].isspace():
                 continue
@@ -431,10 +477,12 @@ cdef class Run:
         """
         if all(h is None for h in self.hyphenators):
             return
-        self.edit([
-            (p, p, SHY)
-            for p in hyphen_positions(self.text, self.starts, self.hyphenators)
-        ])
+        self.edit(
+            [
+                (p, p, SHY)
+                for p in hyphen_positions(self.text, self.starts, self.hyphenators)
+            ]
+        )
 
     def write(self):
         """Put the text back in the slots, using starts. OBJECT chars are
@@ -446,9 +494,11 @@ cdef class Run:
             em.tail  "” now"
 
         """
-        cdef Py_ssize_t k, n = len(self.slots)
-        cdef Py_ssize_t start, end
-        cdef str text
+        k: cython.Py_ssize_t
+        n: cython.Py_ssize_t = len(self.slots)
+        start: cython.Py_ssize_t
+        end: cython.Py_ssize_t
+        text: str
         for k in range(n):
             start = self.starts[k]
             end = self.starts[k + 1] if k + 1 < n else len(self.text)
@@ -458,37 +508,41 @@ cdef class Run:
                 slot.put(text or None)
 
 
-cdef bint joined(Py_UCS4 c, Py_UCS4 before):
+@cython.cfunc
+def joined(c: cython.Py_UCS4, before: cython.Py_UCS4) -> cython.bint:
     """Whether c belongs to the grapheme cluster of the char before it. This
     is an approximation: marks, format chars, skin tones and chars after a
     ZWJ."""
     if before == ZWJ:
         return True
-    if c < u"\x80":
+    if c < "\x80":
         return False
-    if u"\U0001f3fb" <= c <= u"\U0001f3ff":
+    if "\U0001f3fb" <= c <= "\U0001f3ff":
         return True
     return unicodedata.category(c) in ("Mn", "Mc", "Me", "Cf")
 
 
-def last_line(list texts, Py_ssize_t minimum):
+def last_line(texts: list, minimum: cython.Py_ssize_t):
     """Remove line break opportunities at the end of a block, so the last line
     has at least minimum grapheme clusters. Spaces become no-break spaces.
     Soft hyphens and zero-width spaces are removed. texts has the text of each
     slot of the block. Return the new text of each slot.
 
     """
-    cdef list chars = list("".join(texts))
-    cdef list spaces = []
-    cdef Py_ssize_t count = 0, j, start = 0
-    cdef Py_UCS4 c, before
+    chars: list = list("".join(texts))
+    spaces: list = []
+    count: cython.Py_ssize_t = 0
+    j: cython.Py_ssize_t
+    start: cython.Py_ssize_t = 0
+    c: cython.Py_UCS4
+    before: cython.Py_UCS4
     for j in range(len(chars) - 1, -1, -1):
         if count >= minimum:
             break
         c = chars[j]
         if c == SHY or c == ZWSP:
             chars[j] = ""
-        elif c in u" \t\n\x0c\r":
+        elif c in " \t\n\x0c\r":
             if count:
                 spaces.append(j)
         else:
