@@ -90,18 +90,20 @@ class Hyphenator:
         offset: cython.Py_ssize_t
         stop: cython.Py_ssize_t
         right: cython.Py_ssize_t = len(word) - self.right
-        values: list = [0] * (m + 1)
+        references: list = [0] * (m + 1)
         for i in range(m - 1):
             stop = min(i + self.maxlen, m) + 1
             for j in range(i + 1, stop):
                 pattern = self.patterns.get(pointed[i:j])
                 if pattern is None:
                     continue
-                offset = pattern[0]
-                for k, v in enumerate(pattern[1]):
-                    values[i + offset + k] = max(values[i + offset + k], v)
+                offset, values = pattern
+                for k, v in enumerate(values):
+                    references[i + offset + k] = max(references[i + offset + k], v)
         return tuple(
-            i - 1 for i in range(m + 1) if values[i] % 2 and self.left <= i - 1 <= right
+            i - 1
+            for i in range(m + 1)
+            if references[i] % 2 and self.left <= i - 1 <= right
         )
 
 
