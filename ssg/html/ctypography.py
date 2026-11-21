@@ -45,7 +45,7 @@ class Hyphenator:
 
     def __init__(
         self, path, names: dict, left: cython.Py_ssize_t, right: cython.Py_ssize_t
-    ):
+    ) -> None:
         """path is the path of a pyphen dictionary. names has the positions
         of soft hyphens for some words, in any language. left and right are
         the minimum number of characters before the first hyphen and after
@@ -299,13 +299,13 @@ class Run:
     starts = cython.declare(list, visibility="public")
     text = cython.declare(str, visibility="public")
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.slots = []
         self.hyphenators = []
         self.starts = []
         self.text = ""
 
-    def add(self, slot, hyphenator: Hyphenator | None = None):
+    def add(self, slot, hyphenator: Hyphenator | None = None) -> None:
         """Add the text of a slot at the end. The hyphenator is used for this
         text. An empty slot is not added.
 
@@ -324,7 +324,7 @@ class Run:
         self.slots.append(slot)
         self.hyphenators.append(hyphenator)
 
-    def opaque(self):
+    def opaque(self) -> None:
         """Add an element whose text is kept as is, like <code>. It becomes one
         OBJECT char, inside the slot before it. write() drops it. Patterns see
         it as a word but cannot change it.
@@ -337,7 +337,7 @@ class Run:
         """
         self.text += OBJECT
 
-    def edit(self, changes: list):
+    def edit(self, changes: list) -> None:
         """Replace spans of the text, in order and without overlap. The new text
         goes to the slot of the first replaced char. An insertion goes to the
         slot of the char before it, unless this char is OBJECT. Spans with
@@ -388,7 +388,7 @@ class Run:
         self.text = "".join(pieces)
         self.starts = starts
 
-    def smarten(self):
+    def smarten(self) -> None:
         """Quotes and ellipses."""
         text: str = self.text
         i: cython.Py_ssize_t
@@ -451,7 +451,7 @@ class Run:
                     i += 1
             self.edit(changes)
 
-    def space(self):
+    def space(self) -> None:
         """French punctuation and figures. Some spaces become narrow no-break
         spaces, spaces in version numbers become no-break spaces. A rule only
         turns a space into a no-break space. This cannot create or remove a
@@ -470,7 +470,7 @@ class Run:
                 changes.append((i, i + 1, NBSP))
         self.edit(changes)
 
-    def hyphenate(self):
+    def hyphenate(self) -> None:
         """Add soft hyphens in words of slots with a hyphenator, except in
         URLs.
 
@@ -484,7 +484,7 @@ class Run:
             ]
         )
 
-    def write(self):
+    def write(self) -> None:
         """Put the text back in the slots, using starts. OBJECT chars are
         dropped. Only slots with a different text are changed. A slot left empty
         becomes None. In the example:
@@ -522,7 +522,7 @@ def joined(c: cython.Py_UCS4, before: cython.Py_UCS4) -> cython.bint:
     return unicodedata.category(c) in ("Mn", "Mc", "Me", "Cf")
 
 
-def last_line(texts: list, minimum: cython.Py_ssize_t):
+def last_line(texts: list, minimum: cython.Py_ssize_t) -> list:
     """Remove line break opportunities at the end of a block, so the last line
     has at least minimum grapheme clusters. Spaces become no-break spaces.
     Soft hyphens and zero-width spaces are removed. texts has the text of each
