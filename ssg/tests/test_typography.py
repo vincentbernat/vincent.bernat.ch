@@ -180,6 +180,13 @@ class TestTypography(unittest.TestCase):
                     "<ul><li>hyphenation rules</li></ul>",
                     "<ul><li>hy~phen~ation_rules</li></ul>",
                 ),
+                # Not in the table of contents
+                (
+                    '<div class="toc"><ul><li>"Hyphenation" rules'
+                    "<ul><li>hyphenation rules</li></ul></li></ul></div>",
+                    '<div class="toc"><ul><li>“Hyphenation” rules'
+                    "<ul><li>hyphenation rules</li></ul></li></ul></div>",
+                ),
                 # Other languages
                 (
                     '<p><span lang="fr">typographie</span> rules</p>',

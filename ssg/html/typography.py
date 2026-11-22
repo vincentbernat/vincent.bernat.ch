@@ -47,7 +47,8 @@ SKIPPED = frozenset({
     "pre", "samp", "code", "tt", "kbd", "script", "style", "math", "svg",
     "x-latex", "input",
 })  # fmt: skip
-# Elements whose text is hyphenated, except in headings
+# Elements whose text is hyphenated, except in headings and in the table of
+# contents
 HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
 HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
 
@@ -127,7 +128,11 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
             run.write()
         run = ctypography.Run()
 
-    def walk(el: lxml.etree._Element, lang: str | None, hyphenated: bool) -> None:
+    def walk(
+        el: lxml.etree._Element, lang: str | None, hyphens: bool, hyphenated: bool
+    ) -> None:
+        # hyphens: hyphenation is allowed here, false inside headings and the
+        # table of contents. hyphenated: we are inside a hyphenated element.
         if ignored(el):
             return
         name = localname(el)
@@ -142,14 +147,13 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
         if block:
             flush()
         lang = el.get("lang") or lang
-        hyphenated = (
-            hyphens and (hyphenated or name in HYPHENATED) and name not in HEADINGS
-        )
+        hyphens = hyphens and name not in HEADINGS and "toc" not in classes(el)
+        hyphenated = hyphens and (hyphenated or name in HYPHENATED)
         d = dictionary(lang) if hyphenated and lang else None
         run.add(Slot(el, "text"), d)
         for child in el:
             if isinstance(child.tag, str):
-                walk(child, lang, hyphenated)
+                walk(child, lang, hyphens, hyphenated)
             run.add(Slot(child, "tail"), d)
         if block:
             flush()
@@ -157,7 +161,7 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
     lang = next(
         (a.get("lang") for a in container.iterancestors() if a.get("lang")), None
     )
-    walk(container, lang, False)
+    walk(container, lang, hyphens, False)
     flush()
 
 
@@ -237,5 +241,7 @@ def fix(root: lxml.etree._Element) -> None:
             continue
         punctuate(container, hyphens=True)
         code_break(container)
+        toc = set(select(container, ".toc li"))
         for block in select(container, "p, li, dd"):
-            keep_last_line(block)
+            if block not in toc:
+                keep_last_line(block)
