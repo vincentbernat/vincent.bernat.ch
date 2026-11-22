@@ -182,10 +182,14 @@ class TestTypography(unittest.TestCase):
                 ),
                 # Not in the table of contents
                 (
-                    '<div class="toc"><ul><li>"Hyphenation" rules'
-                    "<ul><li>hyphenation rules</li></ul></li></ul></div>",
-                    '<div class="toc"><ul><li>“Hyphenation” rules'
-                    "<ul><li>hyphenation rules</li></ul></li></ul></div>",
+                    (
+                        '<div class="toc"><ul><li>"Hyphenation" rules'
+                        "<ul><li>hyphenation rules</li></ul></li></ul></div>"
+                    ),
+                    (
+                        '<div class="toc"><ul><li>“Hyphenation” rules'
+                        "<ul><li>hyphenation rules</li></ul></li></ul></div>"
+                    ),
                 ),
                 # Other languages
                 (
