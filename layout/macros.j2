@@ -262,14 +262,30 @@
 {%- endmacro %}
 {% set nojs_script = 'if ("noModule" in HTMLScriptElement.prototype) document.documentElement.classList.remove("nojs");' %}
 {% set reload_script -%}
+function reload() {
+  // Save position
+  try {
+    sessionStorage.setItem("reload-scroll", scrollY);
+  } catch (e) {}
+  // Reload
+  location.reload();
+}
 function listen(reconnected) {
   const events = new EventSource("/_reload");
-  events.onopen = () => reconnected && location.reload();
-  events.onmessage = () => location.reload();
+  events.onopen = () => reconnected && reload();
+  events.onmessage = reload;
   events.onerror = () => {
     if (events.readyState === EventSource.CLOSED) setTimeout(() => listen(true), 5000);
   };
 }
+try {
+  // Restore position
+  const y = sessionStorage.getItem("reload-scroll");
+  if (y !== null) {
+    sessionStorage.removeItem("reload-scroll");
+    addEventListener("load", () => scrollTo(0, +y));
+  }
+} catch (e) {}
 if (!navigator.webdriver && !/Headless/.test(navigator.userAgent)) listen(false);
 {%- endset %}
 {% macro csp(extra={}) %}
