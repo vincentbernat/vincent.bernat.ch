@@ -47,10 +47,11 @@ SKIPPED = frozenset({
     "pre", "samp", "code", "tt", "kbd", "script", "style", "math", "svg",
     "x-latex", "input",
 })  # fmt: skip
-# Elements whose text is hyphenated, except in headings and in the table of
-# contents
-HYPHENATED = frozenset({"p", "ul", "ol", "dl"})
-HEADINGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+# Elements whose text is hyphenated, except inside excluded elements and
+# classes
+HYPHENATED_TAGS_INCLUDE = frozenset({"p", "ul", "ol", "dl"})
+HYPHENATED_TAGS_EXCLUDE = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+HYPHENATED_CLASS_EXCLUDE = frozenset({"toc"})
 
 
 # Hyphenation of names with capital letters inside, in any language. A
@@ -131,8 +132,8 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
     def walk(
         el: lxml.etree._Element, lang: str | None, hyphens: bool, hyphenated: bool
     ) -> None:
-        # hyphens: hyphenation is allowed here, false inside headings and the
-        # table of contents. hyphenated: we are inside a hyphenated element.
+        # hyphens: hyphenation is allowed here, false inside excluded elements
+        # and classes. hyphenated: we are inside a hyphenated element.
         if ignored(el):
             return
         name = localname(el)
@@ -147,8 +148,12 @@ def punctuate(container: lxml.etree._Element, hyphens: bool = False) -> None:
         if block:
             flush()
         lang = el.get("lang") or lang
-        hyphens = hyphens and name not in HEADINGS and "toc" not in classes(el)
-        hyphenated = hyphens and (hyphenated or name in HYPHENATED)
+        hyphens = (
+            hyphens
+            and name not in HYPHENATED_TAGS_EXCLUDE
+            and HYPHENATED_CLASS_EXCLUDE.isdisjoint(classes(el))
+        )
+        hyphenated = hyphens and (hyphenated or name in HYPHENATED_TAGS_INCLUDE)
         d = dictionary(lang) if hyphenated and lang else None
         run.add(Slot(el, "text"), d)
         for child in el:
