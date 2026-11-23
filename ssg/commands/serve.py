@@ -313,7 +313,22 @@ def serve() -> None:
     caddy = None
     with tempfile.TemporaryDirectory(prefix="caddy-") as run:
         conf = Path(run) / "Caddyfile"
+
+        def start() -> subprocess.Popen[str]:
+            process = spawn(
+                "caddy",
+                ["caddy", "run", "--config", str(conf)],
+                env=os.environ | {"XDG_CONFIG_HOME": run, "XDG_DATA_HOME": run},
+            )
+            status("serving on http://localhost:8080")
+            return process
+
         try:
+            # Serve the previous build while building
+            previous = output / "Caddyfile"
+            if previous.exists():
+                conf.write_text(previous.read_text())
+                caddy = start()
             first = True
             while True:
                 if caddy is not None and caddy.poll() is not None:
@@ -349,13 +364,7 @@ def serve() -> None:
                 if not conf.exists() or conf.read_text() != new:
                     conf.write_text(new)
                     if caddy is None:
-                        caddy = spawn(
-                            "caddy",
-                            ["caddy", "run", "--config", str(conf)],
-                            env=os.environ
-                            | {"XDG_CONFIG_HOME": run, "XDG_DATA_HOME": run},
-                        )
-                        status("serving on http://localhost:8080")
+                        caddy = start()
                     else:
                         os.kill(caddy.pid, signal.SIGUSR1)
                         status("caddy reloaded")
