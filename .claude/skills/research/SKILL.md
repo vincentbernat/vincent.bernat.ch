@@ -25,7 +25,8 @@ HTML comments at the beginning.
    - Identify important aspects the article may have missed.
    - Find authoritative sources that could strengthen it (official
      documentation, RFCs, man pages, research papers, well-known blog posts).
-3. Produce a report (do **not** modify the article).
+3. If there is an appropriate XKCD cartoon matching the article, cite it.
+4. Produce a report (do **not** modify the article).
 
 ## Report format
 
