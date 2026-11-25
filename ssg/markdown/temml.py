@@ -1,4 +1,4 @@
-r"""Render LaTeX formulas with KaTeX.
+r"""Render LaTeX formulas as MathML with Temml.
 
 A formula is written between $` and `$, like $`\sqrt{2}`$. This syntax is from
 GitLab.
@@ -18,12 +18,17 @@ from ..tools import ProcessHelper
 # Read one formula per line as a JSON string, write one answer per line as
 # JSON
 RENDERER = """
-const katex = require("katex");
+const temml = require("temml");
 const lines = require("readline").createInterface({ input: process.stdin });
 lines.on("line", (line) => {
   let answer;
   try {
-    answer = { html: katex.renderToString(JSON.parse(line)) };
+    answer = {
+      html: temml.renderToString(JSON.parse(line), {
+        annotate: true,
+        throwOnError: true,
+      }),
+    };
   } catch (e) {
     answer = { error: e.message };
   }
@@ -35,7 +40,7 @@ renderer = ProcessHelper("node", "-e", RENDERER)
 
 
 def render(formula: str) -> str:
-    """Turn one LaTeX formula into HTML."""
+    """Turn one LaTeX formula into MathML."""
     deps.tool("node")
     with renderer:
         renderer.send(json.dumps(formula) + "\n")
@@ -45,23 +50,22 @@ def render(formula: str) -> str:
     return answer["html"]
 
 
-class KaTeXPattern(markdown.inlinepatterns.InlineProcessor):
+class TemmlPattern(markdown.inlinepatterns.InlineProcessor):
     def __init__(self, md: Any) -> None:
         super().__init__(r"(?<!\\)\$`(.+?)`\$", md)
 
     def handleMatch(  # type: ignore[override]
         self, m: re.Match[str], data: str
     ) -> tuple[Element | str | None, int | None, int | None]:
-        formula = f"<x-latex>{render(m.group(1))}</x-latex>"
-        return self.md.htmlStash.store(formula), m.start(0), m.end(0)
+        return self.md.htmlStash.store(render(m.group(1))), m.start(0), m.end(0)
 
 
-class KaTeXExtension(markdown.Extension):
+class TemmlExtension(markdown.Extension):
     def extendMarkdown(self, md: Any) -> None:
         # Needs to come before backtick and escape matching: a formula is not
         # code and \ is pretty important in LaTeX
-        md.inlinePatterns.register(KaTeXPattern(md), "katex", 195)
+        md.inlinePatterns.register(TemmlPattern(md), "temml", 195)
 
 
-def makeExtension(**kwargs: Any) -> KaTeXExtension:
-    return KaTeXExtension(**kwargs)
+def makeExtension(**kwargs: Any) -> TemmlExtension:
+    return TemmlExtension(**kwargs)

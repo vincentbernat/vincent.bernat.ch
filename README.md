@@ -92,7 +92,7 @@ npm outdated
 Add or upgrade a dependency:
 
 ```
-npm install --package-lock-only katex@latest
+npm install --package-lock-only temml@latest
 ```
 
 Update all dependencies:

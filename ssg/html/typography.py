@@ -45,7 +45,7 @@ source_spaces = str.maketrans(
 # text around them, like a word.
 SKIPPED = frozenset({
     "pre", "samp", "code", "tt", "kbd", "script", "style", "math", "svg",
-    "x-latex", "input",
+    "input",
 })  # fmt: skip
 # Elements whose text is hyphenated, except inside excluded elements and
 # classes

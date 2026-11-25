@@ -86,7 +86,7 @@ LOAD = (
     ),
     (".lf-gallery", ["css/gallery.css", "js/gallery.js"], False),
     (".lf-listing", ["css/luffy1.listing.css"], False),
-    ("x-latex", ["css/katex.css"], False),
+    ("math", ["css/temml.css"], False),
     ("body", ["js/luffy1.debug.js", "css/luffy1.debug.css"], True),
 )
 

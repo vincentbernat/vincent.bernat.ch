@@ -65,7 +65,7 @@ def convert(
             TocExtension(permalink="#"),
             admonition.makeExtension(),
             glyphs.makeExtension(),
-            katex.makeExtension(),
+            temml.makeExtension(),
             shortlinks.makeExtension(
                 site, l10n=l10n, sources=sources, ref=ref or "main", page=page
             ),
@@ -85,9 +85,9 @@ from . import (
     codehilite_lang,
     glyphs,
     html_comments,
-    katex,
     no_shortcut_links,
     references,
     responsive_table,
     shortlinks,
+    temml,
 )
