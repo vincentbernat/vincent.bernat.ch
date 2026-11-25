@@ -157,6 +157,15 @@
                     | esbuild --bundle --loader=js --format=iife \
                       --outfile=node_modules/@videojs/html/dist/videojs.bundle.js
                 )
+
+                # Temml only uses PostScript names for math fonts. Linux
+                # needs family names.
+                (
+                  cd $out/node_modules/temml/dist
+                  grep -q "'STIXTwoMath-Regular', 'NotoSansMath-Regular'" Temml-Local.css
+                  sed -i "s/'STIXTwoMath-Regular', 'NotoSansMath-Regular'/'STIX Two Math', 'STIXTwoMath-Regular', 'Noto Sans Math', 'NotoSansMath-Regular'/" \
+                    Temml-Local.css
+                )
               '';
             };
           };
