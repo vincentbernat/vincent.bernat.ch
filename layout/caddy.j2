@@ -11,6 +11,7 @@
 {% if not site.mode.production %}
 @media path /media/*
 @notmedia not path /media/*
+@mediadocument path_regexp ^/media/.*\.(?:svg|html)$
 {% endif %}
 
 handle_errors 404 {
@@ -38,6 +39,9 @@ route {
     Access-Control-Allow-Origin *
     Cache-Control no-cache
   }
+{# media come from another origin in production, a sandbox gives documents
+   an opaque origin to behave the same #}
+  header @mediadocument Content-Security-Policy "sandbox allow-scripts"
 {% endif %}
   error @hidden 404
 
