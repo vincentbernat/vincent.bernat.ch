@@ -162,9 +162,15 @@
                 # needs family names.
                 (
                   cd $out/node_modules/temml/dist
-                  grep -q "'STIXTwoMath-Regular', 'NotoSansMath-Regular'" Temml-Local.css
-                  sed -i "s/'STIXTwoMath-Regular', 'NotoSansMath-Regular'/'STIX Two Math', 'STIXTwoMath-Regular', 'Noto Sans Math', 'NotoSansMath-Regular'/" \
-                    Temml-Local.css
+                  sed -E -i "/font-family/{
+                    s/'([A-Za-z]+)-Regular'/'\1', &/g
+                    :a
+                    s/'([A-Za-z ]*[a-z])([A-Z][A-Za-z ]*)'/'\1 \2'/
+                    ta
+                    s/'([A-Za-z ]*[A-Z])([A-Z][a-z][A-Za-z ]*)'/'\1 \2'/
+                    ta
+                  }" Temml-*.css
+                  grep -q "'STIX Two Math', 'STIXTwoMath-Regular'" Temml-Local.css
                 )
               '';
             };
