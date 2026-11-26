@@ -120,8 +120,14 @@ def fix(site: Site, resource: Resource, root: lxml.etree._Element) -> None:
             img.set("width", f"{dims[0]}")
             img.set("height", f"{dims[1]}")
 
-        # Interactive SVG are turned into objects
-        if src.endswith(".svg") and props and props.get("interactive"):
+        # Interactive SVG are turned into objects, except in feeds as readers
+        # remove them
+        if (
+            src.endswith(".svg")
+            and props
+            and props.get("interactive")
+            and isinstance(img, lxml.html.HtmlElement)
+        ):
             rename(img, "object")
             img.set("type", "image/svg+xml")
             img.set("data", f"{src}#{fragment}" if fragment else src)
