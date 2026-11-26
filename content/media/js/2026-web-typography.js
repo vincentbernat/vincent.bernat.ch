@@ -46,8 +46,9 @@ luffy.do(() => {
     outer.parentNode.insertBefore(controls, outer.nextSibling);
 
     // Communication with SVG object through postMessage
+    let target = null;
     const send = (message) =>
-      object.contentWindow?.postMessage({ lf1LineBreak: message }, "*");
+      target?.postMessage({ lf1LineBreak: message }, "*");
     boxes.forEach((box) =>
       box.addEventListener("change", () => {
         const index = boxes.reduce((n, b, i) => n | (b.checked << i), 0);
@@ -59,8 +60,10 @@ luffy.do(() => {
     // Until a box is changed, the SVG plays all combinations and the boxes
     // follow it
     window.addEventListener("message", (event) => {
-      if (event.source !== object.contentWindow) return;
-      const index = event.data?.lf1LineBreak?.index;
+      const message = event.data?.lf1LineBreak;
+      if (message?.name !== name) return;
+      target = event.source;
+      const index = message.index;
       if (typeof index !== "number") return;
       boxes.forEach((box, i) => (box.checked = (index >> i) & 1));
     });

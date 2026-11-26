@@ -599,12 +599,11 @@ svg { font-variant-ligatures: none; }
 
   // The fragment of the URL selects the animation, the first one by default
   const animations = JSON.parse(document.getElementById("data").textContent);
-  const data =
-    animations[location.hash.slice(1)] ||
-    animations[Object.keys(animations)[0]];
+  const name = location.hash.slice(1);
+  const data = animations[name] || animations[Object.keys(animations)[0]];
   const parent = window.parent !== window ? window.parent : null;
   const animation = player(document.documentElement, data, (index) => {
-    if (parent) parent.postMessage({ lf1LineBreak: { index } }, "*");
+    if (parent) parent.postMessage({ lf1LineBreak: { name, index } }, "*");
   });
   window.addEventListener("message", (event) => {
     if (event.source !== parent) return;
