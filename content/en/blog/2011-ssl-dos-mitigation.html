@@ -26,11 +26,17 @@ There are two different aspects in the presented attack:
    connection can therefore bomb a server with a lot of renegotiation
    requests.
 
-!!! "Update (2015-02)"
-    While the content of this article is still technically sound, ensure you
-    understand it was written by the end of 2011 and therefore doesn't take into
-    account many important aspects, like the fall of RC4 as an appropriate
-    cipher.
+!!! "Update (2026-11)"
+    This article was written at the end of 2011. The analysis of RSA is still
+    valid, but the protocol landscape has changed a lot. [RC4 is
+    prohibited][rfc7465]. [TLS 1.3][rfc8446] removed renegotiation, and OpenSSL
+    3.0 refuses client-initiated renegotiation for TLS 1.2 by default. The THC
+    tool and the Netfilter rules below do not work anymore. TLS 1.3 also removed
+    RSA key exchange: with an ECDSA certificate, the server work is a lot
+    cheaper. However, the attack is also cheaper: a single canned _Client Hello_
+    makes a TLS 1.3 server do all its expensive operations. The [D(HE)at
+    attack][dheat] forces the server to compute large modular exponentiations
+    with bogus key: use ECDHE only.
 
 [TOC]
 
@@ -353,6 +359,9 @@ may just be ineffective.
 [wiener]: https://en.wikipedia.org/wiki/Wiener%27s_Attack "Article on Wikipedia for Wiener's attack"
 [thc]: https://web.archive.org/web/2011/http://www.thc.org/thc-ssl-dos/        "THC-SSL-DOS tool"
 [rfc5746]: rfc://5746
+[rfc8446]: rfc://8446
+[rfc7465]: rfc://7465
+[dheat]: https://dheatattack.com/ "D(HE)at attack"
 [studreneg]: https://github.com/bumptech/stud/pull/47 "CVE-2009-3555 fix for stud"
 [educated]: https://web.archive.org/web/2011/http://www.educatedguesswork.org/2011/10/ssltls_and_computational_dos.html "Educated Guesswork: SSL/TLS and Computational DoS"
 [f5]: https://www.f5.com "F5 Networks website"

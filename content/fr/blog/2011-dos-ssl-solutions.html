@@ -28,11 +28,18 @@ L'attaque s'appuie sur deux aspects importants :
    poignée de mains. De fait, un client derrière une simple connexion
    ADSL peut bombarder le serveur de demandes de renégociation.
 
-!!! "Mise à jour (02.2015)"
-    Bien que le contenu de cet article soit toujours pertinent, il est important
-    de comprendre qu'il a été rédigé en 2011 et qu'il ne prend pas en compte
-    certains aspects contemporains, notamment la chute de RC4 en tant
-    qu'algorithme approprié.
+!!! "Mise à jour (11.2026)"
+    Cet article a été rédigé fin 2011. L'analyse de RSA reste valable, mais le
+    paysage a beaucoup évolué. [RC4 est désormais banni][rfc7465]. [TLS
+    1.3][rfc8446] a supprimé la renégociation et OpenSSL 3.0 refuse par défaut
+    la renégociation à l'initiative du client en TLS 1.2. L'outil de THC et les
+    règles Netfilter ci-dessous ne fonctionnent plus. TLS 1.3 a également retiré
+    l'échange de clés RSA : avec un certificat ECDSA, le travail du serveur est
+    bien moins coûteux. Cependant, l'attaque est aussi moins onéreuse : un
+    message _Client Hello_ préparé à l'avance suffit à faire exécuter à un
+    serveur TLS 1.3 toutes ses opérations coûteuses. L'[attaque D(HE)at][dheat]
+    force le serveur à calculer d'importantes exponentiations modulaires avec
+    des clés factices : utilisez uniquement ECDHE.
 
 [TOC]
 
@@ -396,6 +403,9 @@ sont inefficaces, à l'exception des limitations via Netfilter.
 [wiener]: https://en.wikipedia.org/wiki/Wiener%27s_Attack "Article Wikipédia sur l'attaque de Wiener"
 [thc]: https://web.archive.org/web/2011/http://www.thc.org/thc-ssl-dos/        "Outil THC-SSL-DOS"
 [rfc5746]: rfc://5746
+[rfc8446]: rfc://8446
+[rfc7465]: rfc://7465
+[dheat]: https://dheatattack.com/ "Attaque D(HE)at"
 [studreneg]: https://github.com/bumptech/stud/pull/47 "Patch pour stud pour CVE-2009-3555"
 [educated]: https://web.archive.org/web/2011/http://www.educatedguesswork.org/2011/10/ssltls_and_computational_dos.html "Educated Guesswork: SSL/TLS and Computational DoS"
 [f5]: https://www.f5.com "F5 Networks"
