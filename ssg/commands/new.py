@@ -93,6 +93,7 @@ def publish(names: str) -> None:
         return fr if "fr" in path.split("/") else en
 
     suffixes = set()
+    fr_suffixes = set()
     for path in sorted(config.CONTENT.glob("**/wip.*")):
         target = path.with_name(
             f"{slug(str(path.relative_to(config.CONTENT)))}{path.suffix}"
@@ -101,15 +102,20 @@ def publish(names: str) -> None:
             raise Exit(f"{target.relative_to(config.ROOT)} already exists")
         git(f"mv {path} {target}")
         suffixes.add(path.suffix)
+        if slug(str(path.relative_to(config.CONTENT))) == fr:
+            fr_suffixes.add(path.suffix)
     suffix = "|".join(re.escape(s) for s in sorted(suffixes))
     wip_file = re.compile(rf"(?<![\w-])((?:[\w.-]+/)*)wip({suffix})\b")
     wip_url = re.compile(r"(self://([^\s)\]\"]*/))wip(?![\w.-])")
     files = git("grep -I -l -e wip -- content REUSE.toml", check=False).splitlines()
 
-    # Without a directory, a file name is in the language of the file.
+    # Without a directory, a file name is in the language of the file, unless
+    # there is no French file with this suffix, like JS and CSS files.
     def file_replacer(file: str) -> Callable[[re.Match[str]], str]:
         def replace(mo: re.Match[str]) -> str:
-            return f"{mo[1]}{slug(mo[1] or file)}{mo[2]}"
+            if mo[1] or mo[2] not in fr_suffixes:
+                return f"{mo[1]}{slug(mo[1])}{mo[2]}"
+            return f"{mo[1]}{slug(file)}{mo[2]}"
 
         return replace
 
