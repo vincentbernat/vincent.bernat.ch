@@ -127,6 +127,15 @@ const server = http.createServer((req, res) => {
     if (n % 30 === 0) process.stdout.write(`\rframe ${n}`);
     return res.end("ok");
   }
+  if (route === "data") {
+    const chunks = [];
+    req.on("data", (d) => chunks.push(d));
+    req.on("end", () => {
+      fs.writeFileSync(path.join(outDir, `${name}.json`), Buffer.concat(chunks));
+      res.end("ok");
+    });
+    return;
+  }
   if (route === "log") {
     let body = "";
     req.on("data", (d) => (body += d));

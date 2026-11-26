@@ -59,7 +59,7 @@ HYPHENATED_CLASS_EXCLUDE = frozenset({"toc"})
 NAMES = [
     "Java-Script", "Type-Script", "Click-House", "Goat-Counter", "Duck-DuckGo",
     "Cloud-Front", "Wire-Guard", "Think-Pad", "Track-Point", "Yubi-Key",
-    "Pulse-Audio", "Postgre-SQL", "Lucas-Arts",
+    "Pulse-Audio", "Postgre-SQL", "Lucas-Arts", "Web-Kit-GTK",
 ]  # fmt: skip
 names = {
     n.replace("-", ""): tuple(itertools.accumulate(len(p) for p in n.split("-")[:-1]))

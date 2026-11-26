@@ -1,0 +1,399 @@
+---
+title: "Couper les lignes sur le web avec des caractères invisibles"
+description: |
+  Les navigateurs n'ont toujours pas de bon algorithme pour couper les lignes.
+  Pour éviter un mot isolé sur la dernière ligne, il est possible d'insérer
+  des espaces insécables en fin de paragraphe et des césures conditionnelles
+  partout ailleurs.
+uuid: 6487cb90-bced-46df-9d8c-954c856dbdde
+cover: xkcd-1015.png
+tags:
+  - web
+  - programming-python
+src-ref: d2f41d4cd55080db009fbf1cab6ab8b5f5f1af52
+css:
+  - 2026-web-typography.css
+js:
+  - 2026-web-typography.js
+ai-usage: Traduit de l'anglais (Claude Opus 5.5)
+---
+
+Il est difficile d'obtenir une bonne typographie sur le web. Comparés à des
+moteurs tels que [LaTeX][] ou [Typst][], les navigateurs ne disposent toujours
+pas d'un bon algorithme pour couper les lignes. La directive CSS `text-wrap:
+pretty` tente d'améliorer la situation, mais elle n'est toujours [pas
+implémentée dans Firefox][not implemented in firefox] et [produit d'étranges
+paragraphes étroits avec Safari][webkit-pretty]. [Plusieurs][kp1] [bonnes][kp2]
+[implémentations][kp3] de l'[algorithme de Knuth-Plass][knuth-plass] existent en
+JavaScript, mais elles provoquent un retard de l'affichage ou un changement
+intempestif de la mise en page. Ma solution consiste à insérer des césures
+conditionnelles et des espaces insécables à des endroits stratégiques pour
+obtenir un résultat potable mais prévisible.
+
+!!! "🎟️ Offre spéciale à durée limitée"
+    Les articles de ce blog utilisent l'alignement à gauche des paragraphes.
+    Pour cet article, vous pouvez changer leur mise en forme :
+    {.when-norss}
+
+    - <label><input type="checkbox" id="lf1-typo-justify" /> paragraphes
+      justifiés</label> ;
+    - <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-manual" checked /> césure manuelle</label>,
+      <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-auto" /> césure automatique</label> ou
+      <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-none" /> sans césure</label> ;
+    - <label><input type="checkbox" id="lf1-typo-text-wrap-pretty" />
+      `text-wrap: pretty`</label><span
+      id="lf1-typo-text-wrap-pretty-support"> (votre navigateur ne le prend pas
+      en charge, cela ne change donc rien)</span>.
+
+[TOC]
+
+# Comparaison avec les solutions existantes
+
+Prenons comme référence un court paragraphe de « [L'Île mystérieuse][] » de
+Jules Verne :
+
+> Le marin pressa la main du reporter, dont il ne pouvait se faire entendre, et
+> d'une façon qui signifiait : « Attendez ! » puis, il rentra dans le couloir. Un
+> instant après, il ressortait avec un fagot allumé, il le projetait dans les
+> ténèbres, et il poussait des sifflements aigus.
+
+Les animations ci-dessous montrent le rendu pour les trois principaux
+moteurs[^render]. Elles se mettent automatiquement en pause au survol de la
+souris. Approchez la souris des barres verticales rouges pour ajuster la largeur
+des paragraphes. Activez ou désactivez les directives CSS avec les cases à
+cocher situées en dessous.
+{.when-js}
+
+[^render]:
+    Pour chaque moteur, chaque largeur de paragraphe et chaque fonctionnalité,
+    la position de chaque lettre a été enregistrée. Un bout de code JavaScript
+    recompose le résultat.
+
+Les images ci-dessous montrent le rendu pour les trois principaux moteurs web.
+JavaScript est nécessaire pour animer la largeur des paragraphes et comparer les
+effets des différentes fonctionnalités.
+{.when-nojs}
+
+Commençons par Firefox 160. Le « problème » le plus visible de ce paragraphe
+concerne le mot « _aigus_ » : il peut se retrouver seul sur la dernière ligne,
+voire être coupé. En anglais, il s'agit d'un « _runt_{lang=en} », mais je ne
+pense pas que nous ayons un terme spécifique en français[^runt]. Sans césure, ce
+cas est plus rare, mais la composition fait apparaître un grand blanc entre la
+fin d'une ligne et la marge droite, comme sur la deuxième ligne quand le
+paragraphe mesure 825 pixels de large. Quand le paragraphe est justifié, ces
+blancs se transforment en espaces plus larges entre les mots. Ces défauts
+donnent un aspect insatisfaisant au texte et sont à éviter[^short].
+
+[^runt]:
+    Diverses sources confondent ces lignes très courtes avec les veuves ou les
+    orphelines. Dans « [The Elements of Typographic Style][] », Robert
+    Bringhurst explique la différence entre veuves et orphelines, qui sont moins
+    un problème pour le web en l'absence de pages :
+
+    > Les lignes isolées créées quand un paragraphe _commence_ sur la
+    > _dernière_ ligne d'une page sont appelées _orphelines_. Elles n'ont pas de
+    > passé, mais elles ont un avenir, et elles ne doivent pas inquiéter le
+    > typographe. Les bouts de paragraphe laissés quand celui-ci se _termine_
+    > sur la _première_ ligne d'une page sont appelés _veuves_. Elles ont un
+    > passé, mais pas d'avenir, et elles ont l'air tronquées et abandonnées.
+
+[^short]:
+    [Robert Bringhurst][The Elements of Typographic Style] fixe à quatre lettres
+    la longueur minimale d'un mot isolé sur la dernière ligne, mais beaucoup
+    préfèrent davantage.
+
+    > _2.4.2._ Évitez de laisser en dernière ligne d'un paragraphe la fin d'un
+    > mot coupé ou un mot de moins de quatre lettres.
+
+    Le « [Lexique des règles typographiques en usage à l'Imprimerie nationale][]
+    » fixe une règle proche :
+
+    > La dernière ligne d'un alinéa doit comporter un mot ou une fin de mot de
+    > longueur au moins égale au double du renfoncement de l'alinéa suivant.
+
+![Coupure des lignes dans Firefox 160](self://media/images/line-break.svg#firefox){.lf1-line-break}
+
+Contrairement à Firefox, Chromium 157 implémente `text-wrap: pretty`. Il
+[corrige les paragraphes qui se terminent par un mot isolé sur la dernière
+ligne][pretty-chromium] en ajustant les points de coupure des quatre dernières
+lignes pour garder les deux derniers mots ensemble, comme « _sifflements aigus_
+» dans notre exemple.
+
+![Coupure des lignes dans Chromium 157](self://media/images/line-break.svg#chrome){.lf1-line-break}
+
+Comme Firefox, WebKitGTK 2.54[^safari] peut couper « _aigus_ » et laisser une
+ligne très courte en fin de paragraphe. Avec `text-wrap: pretty` et sans
+justification, il [produit souvent des paragraphes plus étroits][creates shorter
+paragraphs]. Sur cet exemple, avec la justification, WebKitGTK fait pire que
+tous les autres navigateurs, car il insère trop d'espace entre les mots.
+
+[^safari]:
+    Le comportement devrait être identique à celui d'un Safari 26 récent, sauf
+    peut-être pour le dictionnaire utilisé pour les césures.
+
+![Coupure des lignes dans WebKitGTK 2.54](self://media/images/line-break.svg#webkit){.lf1-line-break}
+
+Ma solution consiste à insérer des **césures conditionnelles** ([U+00AD][shy]),
+sauf pour la fin du paragraphe, et des **espaces insécables** ([U+00A0][nbsp])
+pour éviter une ligne trop courte en fin de paragraphe. Dans mon cas, j'ai fixé
+la limite à 8 caractères, ponctuation comprise.
+
+L'animation ci-dessous indique une espace insécable par un triangle violet et
+une césure conditionnelle par un trait vertical rouge[^debug]. Avec `hyphens:
+manual`, le navigateur peut couper une ligne là où se trouve une césure
+conditionnelle.
+
+[^debug]:
+    Pour afficher ces marques sur n'importe quelle page de ce site, utilisez le
+    raccourci <kbd>←</kbd> <kbd>←</kbd> <kbd>s</kbd>.
+
+![Coupure des lignes dans Firefox 160 avec le texte
+prétraité](self://media/images/line-break.svg#preprocess){.lf1-line-break}
+
+Cette approche ne peut pas rivaliser avec un vrai algorithme de coupure des
+lignes, mais elle fonctionne dans Firefox, évite les paragraphes étroits de
+Safari et donne parfois de meilleurs résultats que Chromium, car elle autorise
+la césure de « _sif‐fle‐ments_ ». De plus, tous les navigateurs coupent les
+lignes aux mêmes endroits : avec `hyphens: auto`, chaque navigateur utilise son
+propre dictionnaire de césure et Safari ignore
+[`hyphenate-limit-chars`][hyphenate-limit-chars], tandis que chaque navigateur
+est libre du choix de l'algorithme pour `text-wrap: pretty`.
+
+[Lexique des règles typographiques en usage à l'Imprimerie nationale]: https://fr.wikipedia.org/wiki/Lexique_des_r%C3%A8gles_typographiques_en_usage_%C3%A0_l'Imprimerie_nationale "Lexique des règles typographiques en usage à l'Imprimerie nationale sur Wikipédia"
+[the elements of typographic style]: https://en.wikipedia.org/wiki/The_Elements_of_Typographic_Style "The Elements of Typographic Style on Wikipedia"
+[latex]: https://www.latex-project.org/ "LaTeX: a document preparation system"
+[typst]: https://typst.app/ "Typst: the new foundation for documents"
+[not implemented in firefox]: https://bugzilla.mozilla.org/show_bug.cgi?id=1960910 "1960910: Implement CSS text-wrap: pretty"
+[supported]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/text-wrap#browser_compatibility "text-wrap CSS property on MDN"
+[kp1]: https://github.com/robertknight/tex-linebreak "robertknight/tex-linebreak: JavaScript implementation of the Knuth-Plass linebreaking algorithm"
+[kp2]: https://justif.lyall.co/ "justif: text justification for perfectionists"
+[kp3]: https://github.com/egilll/tex-linebreak2 "egilll/tex-linebreak2: JavaScript implementation of the Knuth-Plass linebreaking algorithm"
+[knuth-plass]: https://gwern.net/doc/design/typography/tex/1981-knuth.pdf "Breaking Paragraphs into Lines"
+[l'île mystérieuse]: https://www.gutenberg.org/ebooks/14287 "L'île mystérieuse by Jules Verne on Project Gutenberg"
+[donald knuth]: https://www-cs-faculty.stanford.edu/~knuth/ "Don Knuth's home page"
+[michael plass]: https://mathgenealogy.org/id.php?id=47210 "Michael Plass on the Mathematics Genealogy Project"
+[not justify web text]: https://maxwellforbes.com/posts/web-justified-text/ "Don't Justify Web Text: Or at least hyphenate"
+[hanging punctuations]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/hanging-punctuation "hanging-punctuation CSS property on MDN"
+[css-text-4]: https://drafts.csswg.org/css-text-4/#text-wrap-style "CSS Text Module Level 4"
+[creates shorter paragraphs]: https://matklad.github.io/2026/02/14/justifying-text-wrap-pretty.html "Justifying text-wrap: pretty"
+[webkit-pretty]: https://mjtsai.com/blog/2025/04/11/css-text-wrap-pretty-in-webkit/ "CSS “text-wrap: pretty” in WebKit"
+[pretty-chromium]: https://chromestatus.com/feature/5145771917180928 "CSS text-wrap: pretty — Chrome Platform Status"
+[hyphenate-limit-chars]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/hyphenate-limit-chars "hyphenate-limit-chars CSS property on MDN"
+[shy]: https://www.compart.com/fr/unicode/U+00AD "U+00AD TRAIT D'UNION CONDITIONNEL sur Compart"
+[nbsp]: https://www.compart.com/fr/unicode/U+00A0 "U+00A0 ESPACE INSÉCABLE sur Compart"
+
+# Implémentation
+
+Mon [générateur de site statique][static site generator] maison comprend une
+étape pour modifier les fichiers HTML : [ajouter une table des matières][add a
+table of contents], [transformer les notes de bas de page en notes de
+marge][turn footnotes to sidenotes], [ajouter les liens pour la version
+imprimée][add links for the print version], [inclure les scripts et les fichiers
+CSS nécessaires au rendu de la page][include the script and css files required
+to render the page], etc. C'est l'endroit idéal pour ajouter les césures et
+insérer les espaces insécables.
+
+Je saupoudre aussi quelques modifications typographiques : je convertis les
+apostrophes droites `'…'` et les guillemets droits `"…"` en leurs équivalents
+courbes : `‘…’` et `“…”` ; je remplace les points de suspension `...` par le
+caractère dédié `…` ; j'ajoute une espace fine insécable avant une ponctuation
+double ou entre deux groupes de chiffres, comme dans « _Ça fait donc 501 622
+731._ »
+
+Ces transformations peuvent s'écrire avec une combinaison d'expressions
+régulières et une bibliothèque de césure comme [Pyphen][] :
+
+```python
+NNBSP = "\u202f" # NARROW NO-BREAK SPACE
+SHY = "\u00ad"   # SOFT HYPHEN
+NBSP = "\u00a0"  # NO-BREAK SPACE
+
+opening_quote = re.compile(r"""(?<![^\s(\[{])(['"])(?!\s)""")
+closing_quote = re.compile(r"""(?<=[^\s(\[{])(['"])""")
+space_before_punct = re.compile(r"\s([:;!?%»])")
+space_after_punct = re.compile(r"«\s")
+last_chars = re.compile(r"(?:[^\s\xad][\s\xad]*){1,8}$")
+word = re.compile(r"\w+")
+
+def typography(text: str, lang: str) -> str:
+    r"""Appliquer les règles typographiques au texte.
+
+    >>> typography('"Don\'t panic," he said.', "en_US")
+    '“Don’t panic,”\xa0he\xa0said.'
+    >>> typography("« Attendez ! »", "fr")
+    '«\u202fAt\xadtendez\u202f!\u202f»'
+    """
+    text = opening_quote.sub(lambda m: "‘" if m[1] == "'" else "“", text)
+    text = closing_quote.sub(lambda m: "’" if m[1] == "'" else "”", text)
+    text = space_before_punct.sub(NNBSP + r"\1", text)
+    text = space_after_punct.sub("«" + NNBSP, text)
+    text = text.replace("...", "…")
+    # Césure
+    hyphenator = pyphen.Pyphen(lang=lang, left=2, right=3)
+    text = word.sub(lambda m: hyphenator.inserted(m[0], SHY), text)
+    # Pas de retour à la ligne dans les 8 derniers caractères
+    text = last_chars.sub(
+        lambda m: m[0].replace(SHY, "").replace(" ", NBSP), text
+    )
+    return text
+```
+
+Cependant, cela fonctionne moins bien quand des balises HTML se trouvent sur le
+chemin :
+
+```html
+<p>I have read "<a href="https://en.wikipedia.org/wiki/Dune_(novel)">Dune</a>".</p>
+```
+
+L'expression régulière transforme les guillemets de l'attribut `href`. Si nous
+appliquons l'expression régulière à chaque nœud texte, nous obtenons `I have
+read “Dune“.`{lang=en}
+
+[add a table of contents]: src://ssg/html/toc.py
+[turn footnotes to sidenotes]: src://ssg/html/sidenotes.py
+[add links for the print version]: src://ssg/html/print.py
+[include the script and css files required to render the page]: src://ssg/html/asset.py
+[static site generator]: src://ssg
+[pyphen]: https://pyphen.org/ "Pyphen: Hyphenation in pure Python"
+
+## Prise en charge du HTML
+
+On pourrait ajuster les expressions régulières, mais cette approche reste
+fragile. Il est plus robuste d'appliquer les transformations au texte brut puis
+de réintégrer le balisage HTML dans le résultat. J'utilise la [bibliothèque
+`lxml`][lxml] pour analyser et manipuler le HTML. Parcourir chaque bloc et en
+extraire le texte est simple, mais tout le balisage interne est alors perdu :
+
+```python
+for block in root.iter("p", "li", "h1", "h2", "h3"):
+    text = typography("".join(block.itertext()), "en_US")
+```
+
+À la place, nous allons garder la position de chaque groupe de lettres lors d'un
+parcours en profondeur de l'arbre HTML. Par exemple, le texte de l'extrait HTML
+précédent se découpe en trois :
+
+```python
+slots = [
+    ["p.text", 0, 'I have read "'],
+    ["a.text", 13, "Dune"],
+    ["a.tail", 17, '".'],
+]
+text = "".join(slot[2] for slot in slots)
+```
+
+Les modifications du texte se traduisent en une liste de substitutions :
+position de début, position de fin et nouveau texte.
+
+```python
+changes = []
+for m in opening_quote.finditer(text):
+    start, end = m.span(1)
+    changes.append((start, end, "‘" if m[1] == "'" else "“"))
+for m in closing_quote.finditer(text):
+    start, end = m.span(1)
+    changes.append((start, end, "’" if m[1] == "'" else "”"))
+# changes = [(12, 13, "“"), (17, 18, "”")]
+```
+
+Pour appliquer une substitution, il suffit de retrouver l'emplacement concerné
+et d'en modifier le texte[^position].
+
+[^position]:
+    L'exemple ne montre que des substitutions de même longueur. Dans le cas
+    général, il faut aussi mettre à jour les positions.
+
+```python
+for start, end, new in changes:
+    slot = next(slot for slot in reversed(slots) if slot[1] <= start)
+    offset = start - slot[1]
+    slot[2] = slot[2][:offset] + new + slot[2][offset + end - start :]
+# slots = [["p.text", 0, "I have read “"],
+#  ["a.text", 13, "Dune"],
+#  ["a.tail", 17, "”."]]
+```
+
+Un second parcours en profondeur réintègre les modifications dans l'arbre HTML,
+en corrigeant les nœuds texte qui ont été mis à jour.
+
+[lxml]: https://lxml.de "lxml: Processing XML and HTML with Python"
+
+## Plus rapide avec Cython
+
+Pour cette tâche, Python n'est pas le langage le plus rapide au monde[^jit].
+Mais certaines parties du code peuvent être sensiblement accélérées avec
+[Cython][], un compilateur qui transforme du code Python en extensions C.
+
+[^jit]:
+    Le JIT de Python aurait pu donner de bons résultats. Comme il [risque
+    d'être supprimé][jit], je ne l'ai pas essayé.
+
+J'ai remplacé les expressions régulières par des boucles écrites à la main,
+emprunté l'[algorithme de césure de Liang][liang hyphenation algorithm] à
+*Pyphen* et [déplacé le tout dans Cython](src://ssg/html/ctypography.py) en
+utilisant la [syntaxe Python][pure python syntax]. Le code est alors _quatre
+fois_ plus rapide ! 🚀
+
+[jit]: https://lwn.net/Articles/1102102/ "Python's experimental JIT to be removed"
+[cython]: https://cython.org/ "Cython: C-Extensions for Python"
+[liang hyphenation algorithm]: https://www.tug.org/docs/liang/liang-thesis.pdf "Word Hy‐phen‐a‐tion by Com‐put‐er by Franklin Mark Liang"
+[pure python syntax]: https://docs.cython.org/en/latest/src/tutorial/pure.html "Pure Python Mode in Cython documentation"
+
+## Code en ligne
+
+Les extraits de code dans le texte sont traités un peu différemment : des espaces
+invisibles sont insérés avant certains marqueurs : `.`, `_`, `/`, `=` et `:`. Le
+navigateur peut ainsi couper une longue adresse IPv6, telle que
+`2a01:e0e:c03c:f44e:dabc:7337:38fa:ff40`, ou un nom de méthode Python, comme
+`xxhash.xxh3_128_hexdigest()`. À ma connaissance, ce n'est pas possible
+uniquement avec CSS.
+
+## Copier-coller
+
+Lors d'une copie de texte, certains navigateurs conservent les césures
+conditionnelles ou les espaces invisibles. C'est gênant lorsqu'on colle le
+résultat dans un terminal. Pour contourner ce problème, l'évènement «
+_copy_{lang=en} » est intercepté afin de retirer ces caractères spéciaux de la
+version `text/plain` placée dans le presse-papiers :
+
+```javascript
+document.addEventListener("copy", (event) => {
+  const selection = document.getSelection();
+  const raw = selection.toString();
+  const text = raw
+    // SOFT HYPHEN, ZERO WIDTH SPACE
+    .replace(/[\u00ad\u200b]/g, "")
+    // NO-BREAK SPACE, NARROW NO-BREAK SPACE
+    .replace(/[\u00a0\u202f]/g, " ");
+  if (text === raw) return;
+  const div = document.createElement("div");
+  for (let i = 0; i < selection.rangeCount; i++)
+    div.appendChild(selection.getRangeAt(i).cloneContents());
+  event.clipboardData.setData("text/plain", text);
+  event.clipboardData.setData("text/html", div.innerHTML);
+  event.preventDefault();
+});
+```
+
+Les césures conditionnelles n'interfèrent pas avec les autres fonctionnalités,
+comme la recherche dans la page des navigateurs ou l'indexation par
+[Pagefind][].
+
+[pagefind]: https://pagefind.app/ "Pagefind: fully static search library"
+
+# Est-ce que ça en vaut la peine ?
+
+Comme pour le [rythme vertical][vertical rhythm], sans cet article, personne
+n'aurait remarqué ces combines typographiques. Mais vous savez quoi ? Moi, je
+les remarque, et ça me rend heureux. Je vais donc continuer à passer du temps
+sur des futilités parce que ça me change les idées. 🍃
+
+![Je n'ai jamais été aussi gêné par mon écriture que lorsque j'ai dessiné la
+légende de cette BD.](self://media/images/xkcd-1015.png "xkcd: Kerning")
+
+[vertical rhythm]: self://fr/blog/2026-css-rythme-vertical
+
+*[JIT]: Just-In-Time

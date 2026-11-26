@@ -60,10 +60,13 @@
         background: #b80f28;
         opacity: 0.5;
       }
+      /* The SVG only embeds upright Literata with kerning */
       #text {
         margin: 0;
         font-family: Literata, serif;
-        font-style: italic;
+        font-variant-ligatures: none;
+      }
+      #text {
         font-size: 20px;
         line-height: 1.5;
         font-variant-numeric: oldstyle-nums;
@@ -107,7 +110,7 @@
       const PRETTY = (params.get("pretty") || "0,1").split(",").map(Number);
       // Starting width for each hyphenation mode, where the last line is a
       // runt in every browser
-      const WIDTHS = { none: 770, auto: 770, manual: 770 };
+      const WIDTHS = { none: 810, auto: 810, manual: 810 };
       for (const item of (params.get("width") || "").split(",").filter(Boolean)) {
         const [mode, width] = item.split(":");
         WIDTHS[mode] = Number(width);
@@ -120,6 +123,7 @@
       const HOLD_END = 0.5; // seconds at the wide width
       const SPACES = params.get("spaces") !== "0";
       const MEASURE = params.get("measure");
+      const LAYOUT = params.get("layout");
       const PAD = 24;
       const LABEL = 36;
       // Same height for every video: lines of 20px × 1.5
@@ -175,7 +179,7 @@
       // Lines and last line for each width, to choose the starting width
       async function measure(content) {
         text.textContent = content;
-        await document.fonts.load("italic 20px Literata");
+        await document.fonts.load("20px Literata");
         await document.fonts.ready;
         const [from, to] = MEASURE.split("-").map(Number);
         const rows = [];
@@ -208,11 +212,73 @@
         await fetch("done");
       }
 
+      // Position of each word for each combination and each width, for the
+      // SVG version of the videos. A word is a run of characters between
+      // spaces. For each word: line, start and end in tenths of pixel and,
+      // when the word is broken over two lines, the offset of the break with
+      // the line, start and end of the second part.
+      async function layout(content) {
+        text.textContent = content;
+        await document.fonts.load("20px Literata");
+        await document.fonts.ready;
+        const node = text.firstChild;
+        const words = [];
+        const re = /[^ \u00a0\u202f]+/g;
+        for (let m; (m = re.exec(content)); ) words.push([m.index, m.index + m[0].length]);
+        const range = document.createRange();
+        // WebKit may also give the end of the previous line for the first
+        // character of a line, keep the last box
+        const rectOf = (i) => {
+          range.setStart(node, i);
+          range.setEnd(node, i + 1);
+          return [...range.getClientRects()].filter((r) => r.width > 0).pop();
+        };
+        const result = { text: content, widths: [], combos: [] };
+        const from = WIDTHS[HYPHENS[0]];
+        const to = Math.ceil(from * (1 + GROW));
+        for (let w = from; w <= to; w++) result.widths.push(w);
+        for (const combo of combos) {
+          const layouts = [];
+          for (const width of result.widths) {
+            apply(combo, width);
+            const box = text.getBoundingClientRect();
+            const lineOf = (r) => ((r.top + r.bottom) / 2 - box.top) / 30 | 0;
+            const tenths = (x) => Math.round((x - box.left) * 10);
+            layouts.push(
+              words.map(([start, end]) => {
+                const parts = [];
+                for (let i = start; i < end; i++) {
+                  const r = rectOf(i);
+                  if (!r) continue;
+                  const part = parts[parts.length - 1];
+                  if (part && part.line === lineOf(r)) {
+                    part.end = tenths(r.right);
+                  } else {
+                    parts.push({ line: lineOf(r), x: tenths(r.left), end: tenths(r.right), at: i - start });
+                  }
+                }
+                // WebKit boxes are one pixel too wide, the separator after
+                // the word gives its end
+                const last = parts[parts.length - 1];
+                const after = end < content.length ? rectOf(end) : null;
+                if (after && lineOf(after) === last.line) last.end = Math.min(last.end, tenths(after.left));
+                const [a, b] = parts;
+                return b ? [a.line, a.x, a.end, b.at, b.line, b.x, b.end] : [a.line, a.x, a.end];
+              }),
+            );
+          }
+          result.combos.push({ ...combo, layouts });
+        }
+        await fetch("data", { method: "POST", body: JSON.stringify(result) });
+        await fetch("done");
+      }
+
       async function main() {
         const texts = await (await fetch("texts.json")).json();
         if (MEASURE) return measure(texts[VARIANT]);
+        if (LAYOUT) return layout(texts[VARIANT]);
         text.textContent = texts[VARIANT];
-        await document.fonts.load("italic 20px Literata");
+        await document.fonts.load("20px Literata");
         await document.fonts.ready;
 
         stage.style.padding = `${PAD}px`;

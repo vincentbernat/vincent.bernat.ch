@@ -1,0 +1,415 @@
+---
+title: "Steering browser line breaks with invisible characters"
+description: |
+  Browsers still lack a good line-breaking algorithm. We can avoid a runt—a word
+  alone on the last line—with non-breaking spaces at the end of a paragraph and
+  soft hyphens everywhere else.
+uuid: 6487cb90-bced-46df-9d8c-954c856dbdde
+cover: xkcd-1015.png
+tags:
+  - web
+  - programming-python
+src-ref: d2f41d4cd55080db009fbf1cab6ab8b5f5f1af52
+css:
+  - 2026-web-typography.css
+js:
+  - 2026-web-typography.js
+---
+
+<!--
+  Target audiences:
+    - Typography enthusiasts. They should learn that instead of relying on CSS
+      features that are not well-supported accross browsers, text can be
+      pre-processed to add soft hyphens and non breaking space.
+    - Web developers. They should learn what's missing and how to workaround
+      that without relying on JavaScript.
+
+  Vocabulary:
+    - A runt is a short word alone as last line (or part of).
+    - A rag is the space between the end of a line and the margin. There is good
+      rag and bad rag.
+    - A river is a succession of vertically aligned white gaps on justified
+      texts.
+
+-->
+
+Good typography is difficult to achieve on the web. Compared to typesetting
+engines like [LaTeX][] or [Typst][], the web still lacks a good line-breaking
+algorithm. The CSS directive `text-wrap: pretty` tries to improve the situation
+but is still [not implemented in Firefox][] and [produces eerie narrower
+paragraphs with Safari][webkit-pretty]. [Various][kp1] [good][kp2]
+[implementations][kp3] of the [Knuth-Plass algorithm][knuth-plass] exist in
+JavaScript, but they either reflow the text or delay its display. Instead, I
+taught my static site generator to manually insert soft hyphens and
+non-breaking spaces at tactical locations to achieve a predictable, okayish
+result.
+
+!!! "🎟️ Special time-limited offer"
+    The articles on this blog are flushed left and ragged right, but for this
+    one, you can change how the paragraphs are set:
+    {.when-norss}
+
+    - <label><input type="checkbox" id="lf1-typo-justify" /> justified
+      paragraphs</label>;
+    - <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-manual" checked /> manual hyphenation</label>,
+      <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-auto" /> automatic hyphenation</label>, or
+      <label><input type="radio" name="lf1-typo-hyphens"
+      id="lf1-typo-hyphens-none" /> no hyphenation</label>;
+    - <label><input type="checkbox" id="lf1-typo-text-wrap-pretty" />
+      `text-wrap: pretty`</label><span
+      id="lf1-typo-text-wrap-pretty-support"> (as your browser does not
+      support it, it shouldn't change anything)</span>.
+
+[TOC]
+
+# Comparison with existing solutions
+
+Let's benchmark with a short paragraph in French from Jules Verne's "[L'Île
+mystérieuse][]{lang=fr}":
+
+> Le marin pressa la main du reporter, dont il ne pouvait se faire entendre, et
+> d'une façon qui signifiait : « Attendez ! » puis, il rentra dans le couloir. Un
+> instant après, il ressortait avec un fagot allumé, il le projetait dans les
+> ténèbres, et il poussait des sifflements aigus.
+> {lang=fr}
+
+The animations below show the rendered layout for the three main web
+engines.[^render] Hover the animations and they will pause. Move the mouse near
+the vertical red bars to adjust the paragraph widths. Enable or disable CSS
+directives with the checkboxes below.
+{.when-js}
+
+[^render]:
+    For each browser engine, paragraph width, and feature, a test harness
+    recorded the position of each letter. Some JavaScript code replays the
+    rendered layout.
+
+The images below show the rendered layout for the three main web engines. You
+need JavaScript to animate the paragraph widths and compare the effects of the
+various features.
+{.when-nojs}
+
+Let's try Firefox 160 first. The most notable "defect" for this paragraph is the
+word "_aigus_{lang=fr}": it may stay alone on the last line—or even be
+hyphenated. This is a "_runt_."[^runt] With hyphenation disabled, _runts_ are
+rarer, but the layout introduces "_bad rags_": a large blank space between the
+end of a line and the right margin, like in the second line when the paragraph
+width is 825 pixels. When the paragraph is justified, bad rags are translated
+into larger spaces between words. These traits make your text look poor and
+should be avoided.[^short]
+
+[^runt]:
+    Various sources incorrectly refer to *runts* as *widows* or *orphans*. In
+    [The Elements of Typographic Style][], Robert Bringhurst explains the
+    difference between *widows* and *orphans*, which are less of a concern on
+    the web without the concept of pages:
+    
+    > Isolated lines created when paragraphs _begin_ on the _last_ line of a
+    > page are known as _orphans_. They have no past, but they do have a future,
+    > and they need not trouble the typographer. The stub-ends left when
+    > paragraphs _end_ on the _first_ line of a page are called _widows_. They
+    > have a past but no future, and they look foreshortened and forlorn.
+
+[^short]:
+    [Robert Bringhurst][The Elements of Typographic Style] dictates four as the
+    minimum word length alone on the last line, but many prefer more than that.
+
+    > _2.4.2._ Avoid leaving the stub-end of a hyphenated word, or any word
+    > shorter than four letters as the last line of a paragraph.
+
+![Line-breaking in Firefox 160](self://media/images/line-break.svg#firefox){.lf1-line-break}
+
+Unlike Firefox, Chromium 157 implements `text-wrap: pretty`. It [adjusts
+paragraphs ending with a word alone on the last line][pretty-chromium] by
+adjusting the break points for the last four lines to hold two last words
+together, like "_sifflements aigus_{lang=fr}" in our example.
+
+![Line-breaking in Chromium 157](self://media/images/line-break.svg#chrome){.lf1-line-break}
+
+Like Firefox, WebKitGTK 2.54[^safari] may hyphenate "_aigus_{lang=fr}," leaving
+a very short _runt_ on the last line. With `text-wrap: pretty` and without
+justification, it often [creates shorter paragraphs][]. When enabling both
+pretty wrapping and justification, WebKitGTK performs worse than any other
+browser in this example as it inserts too much space.
+
+[^safari]:
+    It should match the behavior of a recent Safari 26, except maybe on the
+    hyphenation dictionary.
+
+![Line-breaking in WebKitGTK 2.54](self://media/images/line-break.svg#webkit){.lf1-line-break}
+
+My solution is to insert **soft hyphens** ([U+00AD][shy]), except near the end
+of the paragraph, and to insert **non-breaking spaces** ([U+00A0][nbsp]) to meet
+the minimal requirement to prevent a runt. In my case, I set the limit to 8
+characters, punctuation included.
+
+The animation below marks each non-breaking space with a purple triangle and
+every soft hyphen with a vertical red line.[^debug] With `hyphens: manual`, the
+browser may insert a line break anywhere a soft hyphen is present.
+
+[^debug]:
+    To show these marks on any page of this blog, type <kbd>←</kbd>
+    <kbd>←</kbd> <kbd>s</kbd>.
+
+![Line-breaking in Firefox 160 with preprocessed text](self://media/images/line-break.svg#preprocess){.lf1-line-break}
+
+Such an approach cannot match a proper line-breaking algorithm, but it works in
+Firefox, prevents the shortened paragraphs in Safari, and sometimes provides
+better results than what Chromium did, as it allows hyphenation of
+"_sif‐fle‐ments_{lang=fr}." Moreover, all browsers will break lines at the same
+places: with `hyphens: auto`, each browser uses its own hyphenation dictionary
+and Safari ignores [`hyphenate-limit-chars`][hyphenate-limit-chars], while [the
+specification for `text-wrap: pretty`][css-text-4] leaves the algorithm to each
+browser.
+
+[the elements of typographic style]: https://en.wikipedia.org/wiki/The_Elements_of_Typographic_Style "The Elements of Typographic Style on Wikipedia"
+[latex]: https://www.latex-project.org/ "LaTeX: a document preparation system"
+[typst]: https://typst.app/ "Typst: the new foundation for documents"
+[not implemented in firefox]: https://bugzilla.mozilla.org/show_bug.cgi?id=1960910 "1960910: Implement CSS text-wrap: pretty"
+[supported]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/text-wrap#browser_compatibility "text-wrap CSS property on MDN"
+[kp1]: https://github.com/robertknight/tex-linebreak "robertknight/tex-linebreak: JavaScript implementation of the Knuth-Plass linebreaking algorithm"
+[kp2]: https://justif.lyall.co/ "justif: text justification for perfectionists"
+[kp3]: https://github.com/egilll/tex-linebreak2 "egilll/tex-linebreak2: JavaScript implementation of the Knuth-Plass linebreaking algorithm"
+[knuth-plass]: https://gwern.net/doc/design/typography/tex/1981-knuth.pdf "Breaking Paragraphs into Lines"
+[l'île mystérieuse]: https://www.gutenberg.org/ebooks/14287 "L'île mystérieuse by Jules Verne on Project Gutenberg"
+[donald knuth]: https://www-cs-faculty.stanford.edu/~knuth/ "Don Knuth's home page"
+[michael plass]: https://mathgenealogy.org/id.php?id=47210 "Michael Plass on the Mathematics Genealogy Project"
+[not justify web text]: https://maxwellforbes.com/posts/web-justified-text/ "Don't Justify Web Text: Or at least hyphenate"
+[hanging punctuations]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/hanging-punctuation "hanging-punctuation CSS property on MDN"
+[css-text-4]: https://drafts.csswg.org/css-text-4/#text-wrap-style "CSS Text Module Level 4"
+[creates shorter paragraphs]: https://matklad.github.io/2026/02/14/justifying-text-wrap-pretty.html "Justifying text-wrap: pretty"
+[webkit-pretty]: https://mjtsai.com/blog/2025/04/11/css-text-wrap-pretty-in-webkit/ "CSS “text-wrap: pretty” in WebKit"
+[pretty-chromium]: https://chromestatus.com/feature/5145771917180928 "CSS text-wrap: pretty — Chrome Platform Status"
+[hyphenate-limit-chars]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/hyphenate-limit-chars "hyphenate-limit-chars CSS property on MDN"
+[shy]: https://www.compart.com/en/unicode/U+00AD "U+00AD SOFT HYPHEN on Compart"
+[nbsp]: https://www.compart.com/en/unicode/U+00A0 "U+00A0 NO-BREAK SPACE on Compart"
+
+# Implementation
+
+My custom [static site generator][] includes a step to alter HTML files: [add a
+table of contents][], [turn footnotes to sidenotes][], [add links for the print
+version][], [include the script and CSS files required to render the page][],
+etc. This looks like a good place to fix the HTML code to hyphenate words and
+insert non-breaking spaces.
+
+I also add a bit of typographic sugar: I convert the straight single quotes
+`'…'` and double quotes `"…"` to their curly equivalents: `‘…’` and `“…”`; I
+turn an ellipsis `...` into its dedicated equivalent `…`; I add a narrow
+non-breaking space before a double punctuation or between two groups of digits
+in French, like in "_Ça fait donc 501 622 731._{lang=fr}"
+
+We could implement these transformations with regular expressions and a
+hyphenation library like [Pyphen][]:
+
+```python
+NNBSP = "\u202f" # NARROW NO-BREAK SPACE
+SHY = "\u00ad"   # SOFT HYPHEN
+NBSP = "\u00a0"  # NO-BREAK SPACE
+
+opening_quote = re.compile(r"""(?<![^\s(\[{])(['"])(?!\s)""")
+closing_quote = re.compile(r"""(?<=[^\s(\[{])(['"])""")
+space_before_punct = re.compile(r"\s([:;!?%»])")
+space_after_punct = re.compile(r"«\s")
+last_chars = re.compile(r"(?:[^\s\xad][\s\xad]*){1,8}$")
+word = re.compile(r"\w+")
+
+def typography(text: str, lang: str) -> str:
+    r"""Apply typographic rules to text.
+
+    >>> typography('"Don\'t panic," he said.', "en_US")
+    '“Don’t panic,”\xa0he\xa0said.'
+    >>> typography("« Attendez ! »", "fr")
+    '«\u202fAt\xadtendez\u202f!\u202f»'
+    """
+    text = opening_quote.sub(lambda m: "‘" if m[1] == "'" else "“", text)
+    text = closing_quote.sub(lambda m: "’" if m[1] == "'" else "”", text)
+    text = space_before_punct.sub(NNBSP + r"\1", text)
+    text = space_after_punct.sub("«" + NNBSP, text)
+    text = text.replace("...", "…")
+    # Hyphenation
+    hyphenator = pyphen.Pyphen(lang=lang, left=2, right=3)
+    text = word.sub(lambda m: hyphenator.inserted(m[0], SHY), text)
+    # No line break in the last 8 characters
+    text = last_chars.sub(
+        lambda m: m[0].replace(SHY, "").replace(" ", NBSP), text
+    )
+    return text
+```
+
+However, it breaks if we have HTML tags in the middle:
+
+```html
+<p>I have read "<a href="https://en.wikipedia.org/wiki/Dune_(novel)">Dune</a>".</p>
+```
+
+The naive regular expression transforms the quotes of the `href` attribute. If
+we apply the regular expression to each text node, we get `I have read
+“Dune“.`
+
+[add a table of contents]: src://ssg/html/toc.py
+[turn footnotes to sidenotes]: src://ssg/html/sidenotes.py
+[add links for the print version]: src://ssg/html/print.py
+[include the script and css files required to render the page]: src://ssg/html/asset.py
+[static site generator]: src://ssg
+[pyphen]: https://pyphen.org/ "Pyphen: Hyphenation in pure Python"
+
+## Dealing with HTML
+
+While we could tune the regular expressions, this approach is quite fragile. We
+need to apply the transformations to the plain text and stitch the HTML markup
+back into the result. I use the [`lxml` library][lxml] to parse and manipulate
+HTML. Iterating over each block and extracting the text is straightforward, but we
+lose all the inner markup:
+
+```python
+for block in root.iter("p", "li", "h1", "h2", "h3"):
+    text = typography("".join(block.itertext()), "en_US")
+```
+
+Instead, we need to keep track of the position of each group of letters in a
+depth-first walk of the HTML tree. For example, we split the text from the
+previous HTML specimen into three slots:
+
+```python
+slots = [
+    ["p.text", 0, 'I have read "'],
+    ["a.text", 13, "Dune"],
+    ["a.tail", 17, '".'],
+]
+text = "".join(slot[2] for slot in slots)
+```
+
+We translate modifications to the text into a list of substitutions: start
+position, end position, and new text.
+
+```python
+changes = []
+for m in opening_quote.finditer(text):
+    start, end = m.span(1)
+    changes.append((start, end, "‘" if m[1] == "'" else "“"))
+for m in closing_quote.finditer(text):
+    start, end = m.span(1)
+    changes.append((start, end, "’" if m[1] == "'" else "”"))
+# changes = [(12, 13, "“"), (17, 18, "”")]
+```
+
+To apply a substitution, we locate the slot it applies to and update the
+text.[^position]
+
+[^position]:
+    The example only shows same-length substitutions. To handle the general
+    case, we must also refresh the positions.
+
+```python
+for start, end, new in changes:
+    slot = next(slot for slot in reversed(slots) if slot[1] <= start)
+    offset = start - slot[1]
+    slot[2] = slot[2][:offset] + new + slot[2][offset + end - start :]
+# slots = [["p.text", 0, "I have read “"],
+#  ["a.text", 13, "Dune"], 
+#  ["a.tail", 17, "”."]]
+```
+
+We can stitch the modifications back into the HTML tree with a second
+depth-first walk, amending the text nodes when they are different from what we
+recorded in the slots.
+
+[lxml]: https://lxml.de "lxml: Processing XML and HTML with Python"
+
+## Faster with Cython
+
+For this task, Python is not the fastest language on this side of the
+galaxy.[^jit] But we can significantly speed up some parts of the code with
+[Cython][], a compiler to turn Python code into C extensions.
+
+[^jit]:
+    The Python JIT could have given good results. As it is [likely to be
+    removed][jit], I didn't try.
+
+I converted the regular expressions to hand-written loops, stole the [Liang
+hyphenation algorithm][] from *Pyphen*, and [moved them to
+Cython](src://ssg/html/ctypography.py) using the [pure Python syntax][] along
+with the code keeping track of the HTML structure. As a result, the code is
+_four times_ faster! 🚀
+
+<!--
+
+  ┌────────────────────┬─────────────────────┬────────────────┐
+  │      Version       │ Median (µs/article) │ vs Cython+scan │
+  ├────────────────────┼─────────────────────┼────────────────┤
+  │ Cython + scan code │ 330–332             │ 1×             │
+  ├────────────────────┼─────────────────────┼────────────────┤
+  │ Cython + regex     │ 555–556             │ 1.7×           │
+  ├────────────────────┼─────────────────────┼────────────────┤
+  │ Python + regex     │ 1355–1360           │ 4.1×           │
+  ├────────────────────┼─────────────────────┼────────────────┤
+  │ Python + scan code │ 1473–1497           │ 4.5×           │
+  └────────────────────┴─────────────────────┴────────────────┘
+
+-->
+
+[jit]: https://lwn.net/Articles/1102102/ "Python's experimental JIT to be removed"
+[cython]: https://cython.org/ "Cython: C-Extensions for Python"
+[liang hyphenation algorithm]: https://www.tug.org/docs/liang/liang-thesis.pdf "Word Hy‐phen‐a‐tion by Com‐put‐er by Franklin Mark Liang"
+[pure python syntax]: https://docs.cython.org/en/latest/src/tutorial/pure.html "Pure Python Mode in Cython documentation"
+
+## Inline code
+
+I handle inline code a bit differently: I insert zero-width spaces before some
+markers: `.`, `_`, `/`, `=`, and `:`. This lets the browser split a long IPv6
+address, like `2a01:e0e:c03c:f44e:dabc:7337:38fa:ff40`, or a Python method name,
+like `xxhash.xxh3_128_hexdigest()`, at those markers. As far as I know, this is
+not something possible with just CSS.
+
+## Copy/paste
+
+When copying text, some browsers may keep the soft hyphens or zero-width spaces.
+This is annoying when pasting into a terminal. We can intercept the "copy" event
+and strip these special characters from the `text/plain` version recorded in the
+clipboard:
+
+```javascript
+document.addEventListener("copy", (event) => {
+  const selection = document.getSelection();
+  const raw = selection.toString();
+  const text = raw
+    // SOFT HYPHEN, ZERO WIDTH SPACE
+    .replace(/[\u00ad\u200b]/g, "")
+    // NO-BREAK SPACE, NARROW NO-BREAK SPACE
+    .replace(/[\u00a0\u202f]/g, " ");
+  if (text === raw) return;
+  const div = document.createElement("div");
+  for (let i = 0; i < selection.rangeCount; i++)
+    div.appendChild(selection.getRangeAt(i).cloneContents());
+  event.clipboardData.setData("text/plain", text);
+  event.clipboardData.setData("text/html", div.innerHTML);
+  event.preventDefault();
+});
+```
+
+Soft hyphens don't interfere with other features, like browsers' find-in-page
+or indexing by [Pagefind][].
+
+[pagefind]: https://pagefind.app/ "Pagefind: fully static search library"
+
+# Is it worth it?
+
+As with [vertical rhythm][], no one would notice this small arrangement if it
+weren't for this article. But, you know what? I notice it, and it makes me
+happy. So I'll keep spending time on pointless stuff like this because it
+soothes me. 🍃
+
+![I have never been as self-conscious about my handwriting as when I was inking
+in the caption for this comic.](self://media/images/xkcd-1015.png "xkcd:
+Kerning")
+
+[vertical rhythm]: self://en/blog/2026-css-vertical-rhythm
+
+!!! "Note"
+    [Maytham Alsudany][] reviewed a first draft of this article. Any errors are still mine!
+
+[maytham alsudany]: https://maytham.aezign.au/ "Maytham Alsudany: Dev and Sysadmin"
+
+*[JIT]: Just-In-Time
