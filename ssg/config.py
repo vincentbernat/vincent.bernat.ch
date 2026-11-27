@@ -93,6 +93,7 @@ LOAD = (
 TAGS: dict[str, dict[str, str | bool]] = {
     "network": {"descr_en": "network", "descr_fr": "réseau", "feed": True},
     "network-bgp": {"descr": "BGP"},
+    "network-dns": {"descr": "DNS"},
     "network-automation": {"descr_en": "automation", "descr_fr": "automatisation"},
     "network-monitoring": {"descr_en": "monitoring", "descr_fr": "supervision"},
     "network-vxlan": {"descr": "VXLAN"},
@@ -113,6 +114,8 @@ TAGS: dict[str, dict[str, str | bool]] = {
     "retro": {"descr_en": "retrocomputing", "descr_fr": "rétrocomputing", "feed": True},
     "retro-wguide": {"descr": "W"},
     "web": {"descr": "web", "feed": True},
+    "web-typography": {"descr_en": "typography", "descr_fr": "typographie"},
+    "web-hosting": {"descr_en": "hosting", "descr_fr": "hébergement"},
     "security": {"descr_en": "security", "descr_fr": "sécurité"},
     "desktop": {
         "descr_en": "desktop environment",
