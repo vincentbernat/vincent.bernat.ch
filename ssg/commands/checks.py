@@ -1,6 +1,9 @@
 """Check content and code."""
 
 import re
+from pathlib import Path
+
+import yaml
 
 from .. import config
 from . import Exit, command, run
@@ -69,6 +72,31 @@ def frontmatter(fix: bool = False) -> None:
             raise
     if unordered and not fix:
         raise Exit(f"unordered frontmatter: {', '.join(unordered)}")
+
+
+@command("checks:tags")
+def tags() -> None:
+    """Check translations of a page have the same tags."""
+    pages: dict[str, dict[str, tuple[Path, list[str]]]] = {}
+    for path in sorted(config.CONTENT.glob("??/**/*.html")):
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("---\n"):
+            continue
+        meta = yaml.safe_load(text[4 : text.index("\n---\n", 3)]) or {}
+        if uuid := meta.get("uuid"):
+            language = path.relative_to(config.CONTENT).parts[0]
+            pages.setdefault(uuid, {})[language] = (path, meta.get("tags") or [])
+    different = []
+    for translations in pages.values():
+        if len({tuple(sorted(t)) for _, t in translations.values()}) > 1:
+            different.append(
+                " vs ".join(
+                    f"{p.relative_to(config.CONTENT)} ({', '.join(t)})"
+                    for p, t in translations.values()
+                )
+            )
+    if different:
+        raise Exit("different tags:\n" + "\n".join(different))
 
 
 @command("checks:python")
